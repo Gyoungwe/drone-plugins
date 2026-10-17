@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "drone-desktop-ui-pack",
+  "version": "0.1.0",
+  "pi": {
+    "apiVersion": 1,
+    "minHostVersion": "0.32.0"
+  },
+  "drone": {
+    "pluginApi": 1,
+    "resultContract": "drone-result/v3"
+  },
+  "entrypoints": {
+    "ui": "./dist/index.js"
+  },
+  "capabilities": ["ui"],
+  "hosts": ["drone-desktop"],
+  "permissions": {
+    "filesystem": [],
+    "network": [],
+    "subprocess": [],
+    "externalWrites": false
+  }
+}

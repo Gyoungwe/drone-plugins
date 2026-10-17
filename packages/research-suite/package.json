@@ -1,0 +1,10 @@
+{
+  "name": "@drone/research-suite",
+  "version": "0.1.0",
+  "description": "Drone capability plugin aggregate",
+  "type": "module",
+  "files": ["plugin.manifest.json", "README.md"],
+  "dependencies": {
+    "@drone/desktop-ui-pack": "0.1.0"
+  }
+}

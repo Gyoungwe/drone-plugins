@@ -1,0 +1,20 @@
+{
+  "name": "@drone/plugins-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Drone capability and Desktop UI plugins",
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "check:manifests": "node scripts/check-manifests.mjs",
+    "typecheck": "tsc --noEmit",
+    "pack:check": "npm pack --workspaces --dry-run",
+    "check": "npm run check:manifests && npm run typecheck && npm run pack:check"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
