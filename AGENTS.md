@@ -1,6 +1,6 @@
 # Drone Plugins 协作规则
 
-- 插件只能依赖已发布的 `@drone/plugin-api`、公开结果/证据合同和声明过的 Pi `peerDependencies`。
+- 插件只能依赖已发布的 `@gyoungwe/plugin-api`、公开结果/证据合同和声明过的 Pi `peerDependencies`。
 - 禁止 import Drone 源码相对路径、Electron、backend 私有模块、renderer 私有模块或 Pi runtime 的重复副本。
 - 每个可发布插件必须有 `plugin.manifest.json`，声明 `pluginApi`、`resultContract`、宿主、能力、权限和 entrypoints。
 - manifest 是声明，不是安全边界；高风险写入、远程执行、删除和发布仍由宿主授权。
