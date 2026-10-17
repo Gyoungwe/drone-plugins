@@ -1,5 +1,5 @@
 {
-  "name": "@drone/desktop-ui-pack",
+  "name": "@gyoungwe/desktop-ui-pack",
   "version": "0.1.0",
   "description": "Optional Drone Desktop UI contributions",
   "type": "module",
@@ -8,10 +8,10 @@
     "build": "tsc --outDir dist --declaration --emitDeclarationOnly"
   },
   "peerDependencies": {
-    "@drone/plugin-api": ">=1.0.0 <2.0.0"
+    "@gyoungwe/plugin-api": ">=1.0.0 <2.0.0"
   },
   "peerDependenciesMeta": {
-    "@drone/plugin-api": {
+    "@gyoungwe/plugin-api": {
       "optional": true
     }
   }

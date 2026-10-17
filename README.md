@@ -9,8 +9,8 @@ Drone 的独立插件 workspace。它承载可独立安装、升级、禁用和�
 | 包 | 目的 | 状态 |
 |---|---|---|
 | `@gyoungwe/pi-knowledge` | 原生 Pi 知识 / Vault 闭环 | artifact、manifest、package-local build/check/smoke 已通过 |
-| `@drone/desktop-ui-pack` | Desktop UI 插件集合 | manifest / package skeleton |
-| `@drone/research-suite` | 聚合包 | package skeleton |
+| `@gyoungwe/desktop-ui-pack` | Desktop UI 插件集合 | manifest / package skeleton |
+| `@gyoungwe/research-suite` | 聚合包 | package skeleton |
 
 ## 开发门槛
 
