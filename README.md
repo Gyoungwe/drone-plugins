@@ -4,10 +4,11 @@ Drone 的独立插件 workspace。它承载可独立安装、升级、禁用和�
 
 ## 当前状态
 
-这是迁移前骨架。第一阶段只冻结包边界、manifest、发布检查和外部安装流程，不假装 `@drone/plugin-api` 已经完成。
+仓库已进入首个插件迁移阶段：`pi-knowledge` 作为独立的 `@gyoungwe` 包发布，运行时使用提交在本仓库内的自包含 bundle；宿主实现和私有源代码不作为外部依赖。
 
 | 包 | 目的 | 状态 |
 |---|---|---|
+| `@gyoungwe/pi-knowledge` | 原生 Pi 知识 / Vault 闭环 | artifact、manifest、package-local build/check/smoke 已通过 |
 | `@drone/desktop-ui-pack` | Desktop UI 插件集合 | manifest / package skeleton |
 | `@drone/research-suite` | 聚合包 | package skeleton |
 
@@ -18,4 +19,4 @@ npm install
 npm run check
 ```
 
-迁移插件前必须先在 Drone 主仓库完成合同闸门和 `npm pack` 外部安装 smoke。插件仓库的 CI 以后将针对 Pi `1.1.0`、Desktop 锁定版本、最新稳定版和 canary 运行兼容矩阵。
+`packages/pi-knowledge` 的 `npm run build:check` 验证 bundle、worker、skill 和内容 manifest；`npm run smoke` 从实际 npm tarball 解包后加载扩展，检查未配置 Vault 的降级回执。插件仓库的 CI 以后将针对 Pi `1.1.0`、Desktop 锁定版本、最新稳定版和 canary 运行兼容矩阵。

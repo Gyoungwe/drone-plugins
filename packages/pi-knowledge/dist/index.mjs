@@ -3526,7 +3526,7 @@ function configureKnowledgeExtensionRuntime() {
   });
   configureKnowledgeWorker((_url, options) => {
     const sibling = new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url);
-    const workerUrl = sibling.protocol === "file:" && !existsSync(fileURLToPath(sibling)) ? pathToFileURL2(resolve5(dirname3(fileURLToPath(import.meta.url)), "../../../../.pi/lib/knowledge/runtime/worker.mjs")) : sibling;
+    const workerUrl = sibling;
     return new Worker(workerUrl, options);
   });
 }

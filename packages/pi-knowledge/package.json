@@ -1,5 +1,5 @@
 {
-	"name": "@drone/pi-knowledge",
+	"name": "@gyoungwe/pi-knowledge",
 	"version": "0.1.0",
 	"description": "Knowledge and Vault tools for native Pi hosts",
 	"keywords": [
@@ -12,6 +12,7 @@
 		"dist",
 		"lib",
 		"skills",
+		"plugin.manifest.json",
 		"package.json",
 		"README.md",
 		"build-manifest.json"
@@ -25,19 +26,15 @@
 		]
 	},
 	"scripts": {
-		"build": "node ../../scripts/build-pi-knowledge.mjs",
-		"build:check": "node ../../scripts/build-pi-knowledge.mjs --check",
+		"build": "node scripts/build.mjs",
+		"build:check": "node scripts/build.mjs --check",
+		"smoke": "node scripts/smoke.mjs",
 		"typecheck": "tsc --noEmit"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
 	},
 	"devDependencies": {
-		"@drone/extensions": "*",
-		"@drone/knowledge": "*",
-		"@drone/research": "*",
-		"@drone/shared": "*",
-		"@drone/tasks": "*",
 		"typescript": "^5.9.0"
 	}
 }

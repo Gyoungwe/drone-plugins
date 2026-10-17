@@ -7,9 +7,11 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "check:manifests": "node scripts/check-manifests.mjs",
+    "check:pi-knowledge": "npm run --workspace @gyoungwe/pi-knowledge build:check",
+    "smoke:pi-knowledge": "npm run --workspace @gyoungwe/pi-knowledge smoke",
     "typecheck": "tsc --noEmit",
     "pack:check": "npm pack --workspaces --dry-run",
-    "check": "npm run check:manifests && npm run typecheck && npm run pack:check"
+    "check": "npm run check:manifests && npm run typecheck && npm run check:pi-knowledge && npm run pack:check"
   },
   "engines": {
     "node": ">=20"

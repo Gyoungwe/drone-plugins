@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "drone-pi-knowledge",
+  "version": "0.1.0",
+  "pi": {
+    "apiVersion": 1,
+    "minHostVersion": "1.1.0",
+    "testedHosts": ["1.1.0", "latest"]
+  },
+  "drone": {
+    "pluginApi": 1,
+    "resultContract": "drone-result/v3"
+  },
+  "entrypoints": {
+    "extension": "./dist/index.mjs",
+    "worker": "./lib/knowledge/runtime/worker.mjs",
+    "skills": "./skills"
+  },
+  "capabilities": ["knowledge", "search", "evidence-context"],
+  "hosts": ["native-pi", "drone-desktop"],
+  "permissions": {
+    "filesystem": ["workspace", "configured-vault"],
+    "network": [],
+    "subprocess": [],
+    "externalWrites": true
+  }
+}
