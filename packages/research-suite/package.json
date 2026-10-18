@@ -1,10 +1,41 @@
 {
   "name": "@gyoungwe/research-suite",
-  "version": "0.1.0",
-  "description": "Drone capability plugin aggregate",
+  "version": "0.1.1",
+  "description": "Bundled Drone native Pi research suite",
+  "keywords": ["pi-package", "research", "evidence"],
+  "license": "MIT",
+  "publishConfig": {"access": "public"},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gyoungwe/drone-plugins.git",
+    "directory": "packages/research-suite"
+  },
   "type": "module",
-  "files": ["plugin.manifest.json", "README.md"],
+  "files": ["package.json", "plugin.manifest.json", "README.md", "prompts"],
+  "pi": {
+    "extensions": [
+      "./node_modules/@gyoungwe/pi-core/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-research/dist/index.mjs"
+    ],
+    "skills": [
+      "./node_modules/@gyoungwe/pi-core/skills/*",
+      "./node_modules/@gyoungwe/pi-knowledge/skills/*",
+      "./node_modules/@gyoungwe/pi-research/skills/*"
+    ],
+    "prompts": ["./prompts/*.md"]
+  },
   "dependencies": {
-    "@gyoungwe/desktop-ui-pack": "0.1.0"
+    "@gyoungwe/pi-core": "0.1.0",
+    "@gyoungwe/pi-knowledge": "0.1.0",
+    "@gyoungwe/pi-research": "0.1.0"
+  },
+  "bundleDependencies": [
+    "@gyoungwe/pi-core",
+    "@gyoungwe/pi-knowledge",
+    "@gyoungwe/pi-research"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
   }
 }
