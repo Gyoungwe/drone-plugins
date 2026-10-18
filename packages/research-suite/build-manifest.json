@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "generator": "packages/research-suite/scripts/build.mjs",
+  "packageVersion": "0.1.2",
+  "bundled": [
+    "@gyoungwe/pi-core",
+    "@gyoungwe/pi-knowledge",
+    "@gyoungwe/pi-research"
+  ],
+  "dependenciesSha256": "226c3c4a28a71df1f571ff6a977d3798d9ccc0914297292772a636f45abf5716"
+}

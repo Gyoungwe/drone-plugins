@@ -1,6 +1,6 @@
 {
   "name": "@gyoungwe/research-suite",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Bundled Drone native Pi research suite",
   "keywords": ["pi-package", "research", "evidence"],
   "license": "MIT",
@@ -11,7 +11,12 @@
     "directory": "packages/research-suite"
   },
   "type": "module",
-  "files": ["package.json", "plugin.manifest.json", "README.md", "prompts"],
+  "files": ["package.json", "plugin.manifest.json", "README.md", "build-manifest.json", "prompts"],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:check": "node scripts/build.mjs --check",
+    "typecheck": "node -e \"process.exit(0)\""
+  },
   "pi": {
     "extensions": [
       "./node_modules/@gyoungwe/pi-core/dist/index.mjs",
@@ -27,7 +32,7 @@
   },
   "dependencies": {
     "@gyoungwe/pi-core": "0.1.0",
-    "@gyoungwe/pi-knowledge": "0.1.0",
+    "@gyoungwe/pi-knowledge": "0.1.1",
     "@gyoungwe/pi-research": "0.1.0"
   },
   "bundleDependencies": [

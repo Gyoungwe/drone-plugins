@@ -11126,7 +11126,10 @@ function explainerCard(event) {
 function registerKnowledgeInterface(pi, { readOnly: readOnly2 = false, runtime = null } = {}) {
   bindAcceptanceVerifierEvents(pi);
   registerWikiReviewAcceptance();
-  const taskRuntime = readOnly2 ? null : registerTaskRuntime(pi, { readKnowledgeBinding });
+  // Task authorization/status tools belong to @gyoungwe/pi-core. Keeping the
+  // knowledge extension focused on Vault/research avoids duplicate task_*
+  // registrations when both packages are loaded by a native Pi host.
+  const taskRuntime = null;
   const recovery = /* @__PURE__ */ new Map();
   let recoveryScope = null;
   const saveRecovery = () => {
