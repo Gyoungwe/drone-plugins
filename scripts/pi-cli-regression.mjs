@@ -6,14 +6,11 @@
 // package resolution, module roots, or conflict diagnostics.
 
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const piVersions = (process.env.PI_CLI_VERSIONS ?? "1.1.0,latest")
@@ -29,30 +26,54 @@ assert(piVersions.length > 0, "PI_CLI_VERSIONS must contain at least one version
 assert(Number.isSafeInteger(timeoutMs) && timeoutMs > 0, "PI_CLI_TIMEOUT_MS must be a positive integer");
 
 async function run(file, args, options = {}) {
-	try {
-		const result = await execFileAsync(file, args, {
+	return await new Promise((resolve) => {
+		const child = spawn(file, args, {
 			cwd: options.cwd,
 			env: options.env,
-			maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
-			timeout: options.timeout ?? timeoutMs,
-			killSignal: "SIGTERM",
-			encoding: "utf8",
+			// Pi must see EOF on stdin: a real non-interactive CLI regression must
+			// never inherit the runner's open pipe and wait for user input.
+			stdio: ["ignore", "pipe", "pipe"],
+			windowsHide: true,
 		});
-		return {
-			exitCode: 0,
-			stdout: result.stdout ?? "",
-			stderr: result.stderr ?? "",
-			timedOut: false,
+		const stdout = [];
+		const stderr = [];
+		let settled = false;
+		let timedOut = false;
+		const maxBuffer = options.maxBuffer ?? 16 * 1024 * 1024;
+		const finish = (value) => {
+			if (settled) return;
+			settled = true;
+			resolve(value);
 		};
-	} catch (error) {
-		const timedOut = error?.code === "ETIMEDOUT" || error?.signal === "SIGTERM" || error?.killed === true;
-		return {
-			exitCode: timedOut ? 124 : typeof error.code === "number" ? error.code : 1,
-			stdout: typeof error.stdout === "string" ? error.stdout : "",
-			stderr: typeof error.stderr === "string" ? error.stderr : String(error.message ?? error),
-			timedOut,
-		};
-	}
+		const timer = setTimeout(() => {
+			timedOut = true;
+			child.kill("SIGTERM");
+		}, options.timeout ?? timeoutMs);
+		child.stdout.on("data", (chunk) => {
+			stdout.push(chunk);
+		});
+		child.stderr.on("data", (chunk) => {
+			stderr.push(chunk);
+		});
+		child.on("error", (error) => {
+			clearTimeout(timer);
+			finish({
+				exitCode: 1,
+				stdout: Buffer.concat(stdout).subarray(0, maxBuffer).toString("utf8"),
+				stderr: Buffer.concat(stderr).subarray(0, maxBuffer).toString("utf8") || String(error.message ?? error),
+				timedOut,
+			});
+		});
+		child.on("close", (code) => {
+			clearTimeout(timer);
+			finish({
+				exitCode: timedOut ? 124 : code ?? 1,
+				stdout: Buffer.concat(stdout).subarray(0, maxBuffer).toString("utf8"),
+				stderr: Buffer.concat(stderr).subarray(0, maxBuffer).toString("utf8"),
+				timedOut,
+			});
+		});
+	});
 }
 
 function commandEnvironment(home, npmCache) {
