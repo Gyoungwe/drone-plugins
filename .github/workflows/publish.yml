@@ -8,6 +8,8 @@ on:
         required: true
         type: choice
         options:
+          - pi-knowledge
+          - research-suite
           - pi-evidence
           - pi-connectors
           - desktop-ui-pack
@@ -51,6 +53,12 @@ jobs:
             npm publish --workspace "$1" --access public --provenance
           }
           case "$PACKAGE" in
+            pi-knowledge)
+              publish @gyoungwe/pi-knowledge
+              ;;
+            research-suite)
+              publish @gyoungwe/research-suite
+              ;;
             pi-evidence)
               publish @gyoungwe/pi-evidence
               ;;
@@ -61,6 +69,8 @@ jobs:
               publish @gyoungwe/desktop-ui-pack
               ;;
             all-pending)
+              publish @gyoungwe/pi-knowledge
+              publish @gyoungwe/research-suite
               publish @gyoungwe/pi-evidence
               publish @gyoungwe/pi-connectors
               publish @gyoungwe/desktop-ui-pack
