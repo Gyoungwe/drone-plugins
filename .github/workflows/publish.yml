@@ -1,0 +1,72 @@
+name: Publish npm plugins
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to publish after the validation gate
+        required: true
+        type: choice
+        options:
+          - pi-evidence
+          - pi-connectors
+          - desktop-ui-pack
+          - all-pending
+        default: all-pending
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the exact release commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node and npm trusted publishing
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the complete plugin gate
+        run: npm run check
+
+      - name: Publish the selected package through npm OIDC
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          set -euo pipefail
+          publish() {
+            npm publish --workspace "$1" --access public --provenance
+          }
+          case "$PACKAGE" in
+            pi-evidence)
+              publish @gyoungwe/pi-evidence
+              ;;
+            pi-connectors)
+              publish @gyoungwe/pi-connectors
+              ;;
+            desktop-ui-pack)
+              publish @gyoungwe/desktop-ui-pack
+              ;;
+            all-pending)
+              publish @gyoungwe/pi-evidence
+              publish @gyoungwe/pi-connectors
+              publish @gyoungwe/desktop-ui-pack
+              ;;
+            *)
+              echo "Unsupported package selection: $PACKAGE" >&2
+              exit 2
+              ;;
+          esac
