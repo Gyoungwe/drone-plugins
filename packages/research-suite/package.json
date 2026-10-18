@@ -1,6 +1,6 @@
 {
   "name": "@gyoungwe/research-suite",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Bundled Drone native Pi research suite",
   "keywords": ["pi-package", "research", "evidence"],
   "license": "MIT",
@@ -31,7 +31,7 @@
     "prompts": ["./prompts/*.md"]
   },
   "dependencies": {
-    "@gyoungwe/pi-core": "0.1.0",
+    "@gyoungwe/pi-core": "0.1.1",
     "@gyoungwe/pi-knowledge": "0.1.1",
     "@gyoungwe/pi-research": "0.1.0"
   },

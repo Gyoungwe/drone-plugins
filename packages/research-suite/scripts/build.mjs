@@ -38,7 +38,11 @@ if (!checkOnly) {
 		const key = `${targetRoot}\0${name}`;
 		if (copied.has(key)) return;
 		copied.add(key);
-		const source = join(workspaceRoot, "node_modules", ...name.split("/"));
+		const rootSource = join(workspaceRoot, "node_modules", ...name.split("/"));
+		const nestedSource = join(packageRoot, "node_modules", ...name.split("/"));
+		// npm may keep a bundled dependency nested below the aggregate package
+		// instead of hoisting it. Both layouts are valid clean installs.
+		const source = existsSync(rootSource) ? rootSource : nestedSource;
 		const target = join(targetRoot, ...name.split("/"));
 		if (!existsSync(source)) fail(`dependency ${name} is unavailable; run npm ci first`);
 		await mkdir(join(target, ".."), { recursive: true });

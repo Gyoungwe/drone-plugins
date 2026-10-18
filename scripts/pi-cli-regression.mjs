@@ -18,7 +18,7 @@ const piVersions = (process.env.PI_CLI_VERSIONS ?? "1.1.0,latest")
 	.map((value) => value.trim())
 	.filter(Boolean);
 const timeoutMs = Number.parseInt(process.env.PI_CLI_TIMEOUT_MS ?? "120000", 10);
-const positiveSource = process.env.RESEARCH_SUITE_PACKAGE ?? "@gyoungwe/research-suite@0.1.2";
+const positiveSource = process.env.RESEARCH_SUITE_PACKAGE ?? "@gyoungwe/research-suite@0.1.3";
 const legacySource = process.env.RESEARCH_SUITE_LEGACY_PACKAGE ?? "@gyoungwe/research-suite@0.1.1";
 const evidencePath = process.env.PI_CLI_EVIDENCE;
 
@@ -194,7 +194,7 @@ async function installPi(version, prefix, env) {
 	return { bin, resolvedVersion: versionResult.stdout.trim() };
 }
 
-async function invokePi({ pi, packageSource, runRoot, env }) {
+async function invokePi({ pi, packageSource, runRoot, env, expected }) {
 	const install = await run(pi.bin, ["install", packageSource], { cwd: runRoot, env });
 	if (install.exitCode !== 0) {
 		return {
@@ -209,16 +209,29 @@ async function invokePi({ pi, packageSource, runRoot, env }) {
 
 	// Keep this invocation literal and visible in evidence. It is the actual
 	// regression target, rather than a loader-only approximation.
-	const command = ["pi", "-p", "--no-session", "/task-status"];
-	const execution = await run(pi.bin, ["-p", "--no-session", "/task-status"], { cwd: runRoot, env });
+	const requestedCommands = expected === "pass" ? ["/task-status", "/drone-doctor", "/drone-example"] : ["/task-status"];
+	const probes = [];
+	for (const requested of requestedCommands) {
+		const execution = await run(pi.bin, ["-p", "--no-session", requested], { cwd: runRoot, env });
+		probes.push({
+			command: ["pi", "-p", "--no-session", requested],
+			exitCode: execution.exitCode,
+			stdout: execution.stdout,
+			stderr: execution.stderr,
+			conflicts: isConflict(execution.stderr),
+			timedOut: execution.timedOut,
+		});
+	}
+	const failedProbe = probes.find((probe) => probe.exitCode !== 0 || probe.conflicts);
 	return {
 		phase: "run",
-		command,
-		exitCode: execution.exitCode,
-		stdout: execution.stdout,
-		stderr: execution.stderr,
-		conflicts: isConflict(execution.stderr),
-		timedOut: execution.timedOut,
+		command: probes[0].command,
+		commands: probes,
+		exitCode: failedProbe?.exitCode ?? 0,
+		stdout: probes.map((probe) => `${probe.command.at(-1)}\n${probe.stdout}`).join("\n"),
+		stderr: probes.map((probe) => `${probe.command.at(-1)}\n${probe.stderr}`).join("\n"),
+		conflicts: probes.some((probe) => probe.conflicts),
+		timedOut: probes.some((probe) => probe.timedOut),
 	};
 }
 
@@ -257,7 +270,7 @@ async function runCase({ label, source, expected }) {
 			const env = commandEnvironment(home, npmCache);
 			try {
 				const pi = await installPi(version, piRoot, env);
-				const probe = await invokePi({ pi, packageSource: result.installSource, runRoot, env });
+				const probe = await invokePi({ pi, packageSource: result.installSource, runRoot, env, expected });
 				const failed = probe.exitCode !== 0 || probe.conflicts;
 				result.pi.push({ version, resolvedVersion: pi.resolvedVersion, ...probe, failed });
 			} catch (error) {

@@ -54,7 +54,7 @@ jobs:
       - name: Run research-suite through Pi 1.1.0 and latest
         env:
           PI_CLI_VERSIONS: 1.1.0,latest
-          RESEARCH_SUITE_PACKAGE: '@gyoungwe/research-suite@0.1.2'
+          RESEARCH_SUITE_PACKAGE: '@gyoungwe/research-suite@0.1.3'
           RESEARCH_SUITE_LEGACY_PACKAGE: '@gyoungwe/research-suite@0.1.1'
           REQUIRE_LEGACY_REGRESSION: '1'
           PI_CLI_EVIDENCE: artifacts/pi-cli-regression.json
