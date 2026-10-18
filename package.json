@@ -8,13 +8,15 @@
   "scripts": {
     "check:manifests": "node scripts/check-manifests.mjs",
     "check:pi-knowledge": "npm run --workspace @gyoungwe/pi-knowledge build:check",
+    "check:desktop-ui-pack": "npm run --workspace @gyoungwe/desktop-ui-pack build:check",
     "smoke:pi-knowledge": "npm run --workspace @gyoungwe/pi-knowledge smoke",
     "check:pi-analysis": "npm run --workspace @gyoungwe/pi-analysis check",
     "smoke:pi-analysis": "npm run --workspace @gyoungwe/pi-analysis smoke",
+    "smoke:desktop-ui-pack": "npm run --workspace @gyoungwe/desktop-ui-pack smoke",
     "smoke:install": "node scripts/smoke-install.mjs",
     "typecheck": "tsc --noEmit",
     "pack:check": "npm pack --workspaces --dry-run",
-    "check": "npm run check:manifests && npm run typecheck && npm run check:pi-knowledge && npm run check:pi-analysis && npm run smoke:install && npm run pack:check"
+    "check": "npm run check:manifests && npm run typecheck && npm run check:pi-knowledge && npm run check:pi-analysis && npm run check:desktop-ui-pack && npm run smoke:install && npm run smoke:desktop-ui-pack && npm run pack:check"
   },
   "engines": {
     "node": ">=20"

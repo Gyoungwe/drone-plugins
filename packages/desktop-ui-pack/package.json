@@ -1,11 +1,22 @@
 {
   "name": "@gyoungwe/desktop-ui-pack",
   "version": "0.1.0",
-  "description": "Optional Drone Desktop UI contributions",
+	"description": "Optional Drone Desktop UI contributions loaded by the installed package boundary",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Gyoungwe/drone-plugins.git",
+		"directory": "packages/desktop-ui-pack"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"license": "MIT",
   "type": "module",
-  "files": ["dist", "plugin.manifest.json", "README.md"],
+	"files": ["ui", "plugin.manifest.json", "README.md", "package.json"],
   "scripts": {
-    "build": "tsc --outDir dist --declaration --emitDeclarationOnly"
+		"build": "node scripts/build.mjs",
+		"build:check": "node scripts/build.mjs --check",
+		"smoke": "node scripts/smoke.mjs"
   },
   "peerDependencies": {
     "@gyoungwe/plugin-api": ">=1.0.0 <2.0.0"

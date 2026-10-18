@@ -11,7 +11,7 @@
     "resultContract": "drone-result/v3"
   },
   "entrypoints": {
-    "ui": "./dist/index.js"
+		"ui": "./ui/plugin.json"
   },
   "capabilities": ["ui"],
   "hosts": ["drone-desktop"],

@@ -1,0 +1,16 @@
+{
+	"name": "drone-research-ui",
+	"version": "0.1.0",
+	"displayName": "Research status",
+	"description": "A small host-rendered research workbench status panel.",
+	"droneUi": 1,
+	"main": "src/index.ts",
+	"contributions": [
+		{
+			"id": "research-status",
+			"region": "panel.tab",
+			"export": "ResearchStatusPanel",
+			"title": "Research"
+		}
+	]
+}
