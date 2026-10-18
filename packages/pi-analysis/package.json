@@ -1,0 +1,50 @@
+{
+	"name": "@gyoungwe/pi-analysis",
+	"version": "0.1.0",
+	"description": "Portable scientific analysis adapters and readiness gates for native Pi",
+	"keywords": ["pi-package", "analysis", "bioinformatics"],
+	"license": "MIT",
+	"publishConfig": {"access": "public"},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Gyoungwe/drone-plugins.git",
+		"directory": "packages/pi-analysis"
+	},
+	"type": "module",
+	"main": "./dist/index.mjs",
+	"files": [
+		"dist",
+		"package.json",
+		"README.md",
+		"build-manifest.json",
+		"plugin.manifest.json"
+	],
+	"pi": {
+		"extensions": ["./dist/index.mjs"]
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"default": "./dist/index.mjs"
+		}
+	},
+	"scripts": {
+		"build": "node scripts/build.mjs",
+		"build:check": "node scripts/build.mjs --check",
+		"typecheck": "tsc --noEmit",
+		"test": "npm run build && node --test test/registration.test.mjs",
+		"smoke": "node scripts/smoke.mjs",
+		"check": "npm run typecheck && npm run build:check && npm test && npm run smoke"
+	},
+	"dependencies": {
+		"@gyoungwe/plugin-api": "^1.0.0"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
+	},
+	"devDependencies": {
+		"esbuild": "^0.25.12",
+		"typescript": "^5.9.0"
+	}
+}

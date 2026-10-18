@@ -9,15 +9,27 @@
     "check:manifests": "node scripts/check-manifests.mjs",
     "check:pi-knowledge": "npm run --workspace @gyoungwe/pi-knowledge build:check",
     "smoke:pi-knowledge": "npm run --workspace @gyoungwe/pi-knowledge smoke",
+    "check:pi-analysis": "npm run --workspace @gyoungwe/pi-analysis check",
+    "smoke:pi-analysis": "npm run --workspace @gyoungwe/pi-analysis smoke",
     "smoke:install": "node scripts/smoke-install.mjs",
     "typecheck": "tsc --noEmit",
     "pack:check": "npm pack --workspaces --dry-run",
-    "check": "npm run check:manifests && npm run typecheck && npm run check:pi-knowledge && npm run smoke:install && npm run pack:check"
+    "check": "npm run check:manifests && npm run typecheck && npm run check:pi-knowledge && npm run check:pi-analysis && npm run smoke:install && npm run pack:check"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@types/node": "^22.19.19",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "@earendil-works/chord": "1.1.0",
+    "@earendil-works/pi-agent-core": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-codemode": "1.1.0",
+    "@earendil-works/pi-mcp": "1.1.0",
+    "@earendil-works/pi-tui": "1.1.0"
   }
 }

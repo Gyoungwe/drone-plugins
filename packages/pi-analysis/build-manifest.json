@@ -1,0 +1,9 @@
+{
+	"version": 1,
+	"generator": "packages/pi-analysis/scripts/build.mjs",
+	"inputsSha256": "781c23034d11998bbe256622568b810f28ea414023f8d046fd6674d2bd84df7d",
+	"outputs": {
+		"dist/index.mjs": "59b9fc253497f409014fdbed18a7e5c4c9d2d661714121ed46fab17b4deb6c07",
+		"dist/index.d.ts": "8eccfe0a09ef9ffe1a30dc1629267b90fb4309a54a95936a8bef2beee26db411"
+	}
+}

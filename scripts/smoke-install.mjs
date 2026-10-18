@@ -14,7 +14,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
-const packageNames = ["pi-knowledge", "desktop-ui-pack", "research-suite"];
+const packageNames = ["pi-knowledge", "pi-analysis", "desktop-ui-pack", "research-suite"];
 const smokeRoot = await mkdtemp(join(tmpdir(), "drone-plugin-install-smoke-"));
 const tarballRoot = join(smokeRoot, "tarballs");
 const installRoot = join(smokeRoot, "install");
@@ -59,6 +59,31 @@ try {
 		await readFile(join(installedRoot, "plugin.manifest.json"));
 	}
 
+	const piAnalysisRoot = join(installRoot, "node_modules", "@gyoungwe", "pi-analysis");
+	const piAnalysisPackage = JSON.parse(await readFile(join(piAnalysisRoot, "package.json"), "utf8"));
+	const piAnalysisExtensionPath = join(
+		installRoot,
+		"node_modules",
+		"@gyoungwe",
+		"pi-analysis",
+		piAnalysisPackage.pi.extensions[0],
+	);
+	const { DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+	const loader = new DefaultResourceLoader({
+		cwd: installRoot,
+		agentDir: join(installRoot, "agent"),
+		settingsManager: SettingsManager.inMemory(),
+		noExtensions: true,
+		noSkills: true,
+		additionalExtensionPaths: [piAnalysisExtensionPath],
+	});
+	await loader.reload();
+	const loaded = loader.getExtensions();
+	assert.deepEqual(loaded.errors, [], JSON.stringify(loaded.errors));
+	const piAnalysis = loaded.extensions.find((item) => item.path === piAnalysisExtensionPath);
+	assert(piAnalysis, "installed pi-analysis extension was not discovered by Pi loader");
+	assert.deepEqual([...piAnalysis.tools.keys()], ["analysis_list_adapters", "analysis_assess_readiness"]);
+
 	const piRoot = join(installRoot, "node_modules", "@gyoungwe", "pi-knowledge");
 	const previousKnowledgeDir = process.env.DRONE_KNOWLEDGE_DIR;
 	process.env.DRONE_KNOWLEDGE_DIR = join(smokeRoot, "unconfigured");
@@ -98,6 +123,8 @@ try {
 				packages: packageNames.map((name) => tarballs[name].packageJson.name),
 				installed: true,
 				piKnowledgeTools: tools.size,
+				piAnalysisTools: [...piAnalysis.tools.keys()],
+				piAnalysisLoaderDiscovered: true,
 				knowledgeStatus: status.details.status,
 			}),
 		);

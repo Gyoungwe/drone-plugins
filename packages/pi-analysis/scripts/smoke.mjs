@@ -1,0 +1,70 @@
+#!/usr/bin/env node
+
+// Pack and install pi-analysis in a clean prefix, then discover the installed
+// extension through the real Pi resource loader. No model call or user state
+// is used; the temporary directory is removed before the script exits.
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+const packageRoot = resolve(import.meta.dirname, "..");
+const workspaceRoot = resolve(packageRoot, "../..");
+const temp = await mkdtemp(join(tmpdir(), "drone-pi-analysis-smoke-"));
+const installRoot = join(temp, "install");
+await mkdir(installRoot, { recursive: true });
+
+try {
+	const packOutput = await execFileAsync(
+		"npm",
+		["pack", "--json", "--ignore-scripts", "--pack-destination", temp],
+		{ cwd: packageRoot, maxBuffer: 8 * 1024 * 1024 },
+	);
+	const metadata = JSON.parse(packOutput.stdout.trim())[0];
+	assert(metadata?.filename?.endsWith(".tgz"), "npm pack did not produce a tarball");
+	const tarball = join(temp, metadata.filename);
+	await execFileAsync(
+		"npm",
+		["install", "--prefix", installRoot, "--ignore-scripts", "--no-audit", "--no-fund", tarball],
+		{ cwd: workspaceRoot, maxBuffer: 16 * 1024 * 1024 },
+	);
+	const packageJson = JSON.parse(
+		await readFile(join(installRoot, "node_modules/@gyoungwe/pi-analysis/package.json"), "utf8"),
+	);
+	assert.equal(packageJson.name, "@gyoungwe/pi-analysis");
+	assert.equal(packageJson.dependencies?.["@gyoungwe/plugin-api"], "^1.0.0");
+	assert.equal(packageJson.peerDependencies?.["@earendil-works/pi-coding-agent"], ">=1.1.0 <2.0.0");
+	assert.equal(packageJson.dependencies?.["@earendil-works/pi-coding-agent"], undefined);
+	await readFile(join(installRoot, "node_modules/@gyoungwe/plugin-api/package.json"), "utf8");
+	await readFile(join(installRoot, "node_modules/@gyoungwe/pi-analysis/dist/index.d.ts"), "utf8");
+	const extensionPath = join(installRoot, "node_modules/@gyoungwe/pi-analysis", packageJson.pi.extensions[0]);
+	const { DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+	const loader = new DefaultResourceLoader({
+		cwd: installRoot,
+		agentDir: join(installRoot, "agent"),
+		settingsManager: SettingsManager.inMemory(),
+		noExtensions: true,
+		noSkills: true,
+		additionalExtensionPaths: [extensionPath],
+	});
+	await loader.reload();
+	const { extensions, errors } = loader.getExtensions();
+	assert.deepEqual(errors, [], JSON.stringify(errors));
+	const extension = extensions.find((item) => item.path === extensionPath);
+	assert(extension, "installed pi-analysis extension was not discovered");
+	assert.deepEqual([...extension.tools.keys()], ["analysis_list_adapters", "analysis_assess_readiness"]);
+	console.log(
+		JSON.stringify({
+			package: packageJson.name,
+			version: packageJson.version,
+			installed: true,
+			loaderDiscovered: true,
+			tools: [...extension.tools.keys()],
+		}),
+	);
+} finally {
+	await rm(temp, { recursive: true, force: true });
+}
