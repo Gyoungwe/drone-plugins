@@ -14,7 +14,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
-const packageNames = ["pi-knowledge", "pi-analysis", "desktop-ui-pack", "research-suite"];
+const packageNames = ["pi-knowledge", "pi-analysis", "pi-evidence", "pi-connectors", "desktop-ui-pack", "research-suite"];
 const smokeRoot = await mkdtemp(join(tmpdir(), "drone-plugin-install-smoke-"));
 const tarballRoot = join(smokeRoot, "tarballs");
 const installRoot = join(smokeRoot, "install");
@@ -84,6 +84,33 @@ try {
 	assert(piAnalysis, "installed pi-analysis extension was not discovered by Pi loader");
 	assert.deepEqual([...piAnalysis.tools.keys()], ["analysis_list_adapters", "analysis_assess_readiness"]);
 
+	async function discoverInstalled(name, expectedTools) {
+		const packageRoot = join(installRoot, "node_modules", "@gyoungwe", name);
+		const packageJson = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
+		const extensionPath = join(packageRoot, packageJson.pi.extensions[0]);
+		const extensionLoader = new DefaultResourceLoader({
+			cwd: installRoot,
+			agentDir: join(installRoot, "agent"),
+			settingsManager: SettingsManager.inMemory(),
+			noExtensions: true,
+			noSkills: true,
+			additionalExtensionPaths: [extensionPath],
+		});
+		await extensionLoader.reload();
+		const discovered = extensionLoader.getExtensions();
+		assert.deepEqual(discovered.errors, [], JSON.stringify(discovered.errors));
+		const extension = discovered.extensions.find((item) => item.path === extensionPath);
+		assert(extension, `${name} extension was not discovered by Pi loader`);
+		assert.deepEqual([...extension.tools.keys()], expectedTools);
+		return extension;
+	}
+	const piEvidence = await discoverInstalled("pi-evidence", [
+		"evidence_validate_manifest",
+		"evidence_validate_capsule",
+		"evidence_verify_replay",
+	]);
+	const piConnectors = await discoverInstalled("pi-connectors", ["connector_list", "connector_get"]);
+
 	const piRoot = join(installRoot, "node_modules", "@gyoungwe", "pi-knowledge");
 	const previousKnowledgeDir = process.env.DRONE_KNOWLEDGE_DIR;
 	process.env.DRONE_KNOWLEDGE_DIR = join(smokeRoot, "unconfigured");
@@ -124,6 +151,8 @@ try {
 				installed: true,
 				piKnowledgeTools: tools.size,
 				piAnalysisTools: [...piAnalysis.tools.keys()],
+				piEvidenceTools: [...piEvidence.tools.keys()],
+				piConnectorTools: [...piConnectors.tools.keys()],
 				piAnalysisLoaderDiscovered: true,
 				knowledgeStatus: status.details.status,
 			}),

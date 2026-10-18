@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
+const execFileAsync = promisify(execFile);
+const packageRoot = resolve(import.meta.dirname, "..");
+const temp = await mkdtemp(join(tmpdir(), "drone-pi-connectors-smoke-"));
+const installRoot = join(temp, "install");
+await mkdir(installRoot, { recursive: true });
+try {
+  const packed = await execFileAsync("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", temp], { cwd: packageRoot, maxBuffer: 8 * 1024 * 1024 });
+  const metadata = JSON.parse(packed.stdout.trim())[0];
+  assert(metadata?.filename?.endsWith(".tgz"), "npm pack did not produce a tarball");
+  const tarball = join(temp, metadata.filename);
+  await execFileAsync("npm", ["install", "--prefix", installRoot, "--ignore-scripts", "--no-audit", "--no-fund", tarball], { cwd: packageRoot, maxBuffer: 16 * 1024 * 1024 });
+  const packageDir = join(installRoot, "node_modules/@gyoungwe/pi-connectors");
+  const packageJson = JSON.parse(await readFile(join(packageDir, "package.json"), "utf8"));
+  assert(existsSync(join(packageDir, "plugin.manifest.json")), "plugin manifest missing from tarball");
+  const installed = await import(pathToFileURL(join(packageDir, "dist/index.mjs")).href);
+  const registry = installed.createConnectorRegistry();
+  assert.deepEqual(registry.list().map((descriptor) => descriptor.id), ["browser", "generic-mcp", "institutional", "search", "webdav", "zotero"]);
+  const tools = [];
+  const registration = installed.registerPiConnectors({ registerTool: (tool) => tools.push(tool) });
+  assert.deepEqual(registration.tools, ["connector_list", "connector_get"]);
+  assert.deepEqual(packageJson.pi.extensions, ["./dist/index.mjs"]);
+  const { DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+  const extensionPath = join(packageDir, packageJson.pi.extensions[0]);
+  const loader = new DefaultResourceLoader({ cwd: installRoot, agentDir: join(installRoot, "agent"), settingsManager: SettingsManager.inMemory(), noExtensions: true, noSkills: true, additionalExtensionPaths: [extensionPath] });
+  await loader.reload();
+  const { extensions, errors } = loader.getExtensions();
+  assert.deepEqual(errors, [], JSON.stringify(errors));
+  const extension = extensions.find((item) => item.path === extensionPath);
+  assert(extension, "installed pi-connectors extension was not discovered");
+  assert.deepEqual([...extension.tools.keys()], ["connector_list", "connector_get"]);
+  await execFileAsync("npm", ["uninstall", "--prefix", installRoot, "--ignore-scripts", "--no-audit", "--no-fund", "@gyoungwe/pi-connectors"], { cwd: packageRoot, maxBuffer: 8 * 1024 * 1024 });
+  assert.equal(existsSync(packageDir), false, "tarball install was not removed");
+  console.log(JSON.stringify({ package: "@gyoungwe/pi-connectors", tarball: metadata.filename, connectors: registry.list().length, tools: [...extension.tools.keys()], loader: true, uninstall: true }));
+} finally { await rm(temp, { recursive: true, force: true }); }
