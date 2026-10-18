@@ -3,12 +3,11 @@
 	"generator": "packages/pi-knowledge/scripts/build.mjs",
 	"artifactSource": "drone-host-bundle",
 	"outputs": {
-		"dist/index.mjs": "337d61d65cb5cca8a393d1151fc87fb6a01a3f1aab6e82b2eaec413c7e100f31",
+		"dist/index.mjs": "4264546d37c0962cd595eb30b4cfa648528bdb3c6ac91b1b26636a2075dde65a",
 		"lib/knowledge/runtime/worker.mjs": "c513d323bcd7827158c4463ca2a2661bd093dc2b2730d2bed48bfb05dd388f44"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",
-		"skills/research-workflow/SKILL.md",
 		"skills/research-show-me/SKILL.md"
 	]
 }

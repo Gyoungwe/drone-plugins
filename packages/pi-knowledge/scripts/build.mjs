@@ -11,7 +11,9 @@ import { join, resolve } from "node:path";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 const checkOnly = process.argv.includes("--check");
-const expectedSkills = ["research-vault", "research-workflow", "research-show-me"];
+// `research-workflow` is owned by @gyoungwe/pi-research. Keeping it out of
+// this package prevents duplicate skill discovery when the suite is loaded.
+const expectedSkills = ["research-vault", "research-show-me"];
 const packageJson = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 const manifestPath = join(packageRoot, "plugin.manifest.json");
 const buildManifestPath = join(packageRoot, "build-manifest.json");

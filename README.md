@@ -11,13 +11,14 @@ Drone 的独立插件 workspace。它承载可独立安装、升级、禁用和�
 | `@gyoungwe/pi-knowledge` | 原生 Pi 知识 / Vault 闭环 | artifact、manifest、package-local build/check/smoke 已通过 |
 | `@gyoungwe/pi-analysis` | 原生 Pi 科学分析 adapter/readiness 门禁 | 自包含 bundle、manifest、registration test、tarball + Pi loader smoke 已通过 |
 | `@gyoungwe/desktop-ui-pack` | Desktop UI 插件集合 | manifest / package skeleton |
-| `@gyoungwe/research-suite` | 聚合包 | package skeleton |
+| `@gyoungwe/research-suite` | 聚合包 | 0.1.2，捆绑 pi-core / pi-knowledge / pi-research |
 
 ## 开发门槛
 
 ```sh
-npm install
+npm ci
+npm run build
 npm run check
 ```
 
-`packages/pi-knowledge` 的 `npm run build:check` 验证 bundle、worker、skill 和内容 manifest；`packages/pi-analysis` 的 `npm run check` 验证 adapter contract、bundle freshness、registration test，以及实际 npm tarball 安装后的 Pi loader discovery；根 `npm run smoke:install` 会在干净 prefix 中联合安装这些 tarball 并再次验证原生扩展发现。插件仓库的 CI 以后将针对 Pi `1.1.0`、Desktop 锁定版本、最新稳定版和 canary 运行兼容矩阵。
+`npm run build` 先刷新各插件 bundle；`packages/pi-knowledge` 的 `npm run build:check` 验证 bundle、worker、skill 和内容 manifest；`research-suite` 的构建会把发布版本依赖复制到包内 staging tree，确保 npm tarball 真正包含 bundled dependencies，并检查 `research-workflow` 只由 `pi-research` 提供。`npm run check` 随后运行所有包级检查、干净安装 smoke 和 tarball 形状校验。插件仓库的 CI 以后将针对 Pi `1.1.0`、Desktop 锁定版本、最新稳定版和 canary 运行兼容矩阵。

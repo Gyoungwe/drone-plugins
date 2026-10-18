@@ -29,9 +29,9 @@ for (const required of [
 	"plugin.manifest.json",
 	"build-manifest.json",
 	"skills/research-vault/SKILL.md",
-	"skills/research-workflow/SKILL.md",
 	"skills/research-show-me/SKILL.md",
 ]) assert(files.has(required), `npm pack is missing ${required}`);
+assert(!files.has("skills/research-workflow/SKILL.md"), "npm pack includes the pi-research-owned research-workflow skill");
 for (const forbidden of ["src/index.ts", "types/host-shims.d.ts"]) assert(!files.has(forbidden), `npm pack includes ${forbidden}`);
 const tarball = join(packRoot, pack[0]?.filename || "");
 assert(tarball.endsWith(".tgz"), "npm pack did not produce a tarball");
@@ -64,6 +64,10 @@ try {
 	register(pi);
 	assert(tools.has("knowledge_status"), "knowledge_status was not registered");
 	assert(tools.has("knowledge_search"), "knowledge_search was not registered");
+	for (const name of ["task_status", "task_plan", "task_wait", "task_reconcile", "task_evidence_restore"])
+		assert(!tools.has(name), `${name} must be owned by pi-core, not pi-knowledge`);
+	for (const name of ["task-status", "task-action"])
+		assert(!commands.has(name), `${name} must be owned by pi-core, not pi-knowledge`);
 	assert(commands.has("drone-init"), "drone-init was not registered");
 	const ctx = {
 		cwd: root,

@@ -58,6 +58,25 @@ try {
 		assert.equal(installed.name, packageJson.name, `${name} installed under the wrong package name`);
 		await readFile(join(installedRoot, "plugin.manifest.json"));
 	}
+	const suiteTarball = tarballs["research-suite"].path;
+	const suiteListing = new Set(
+		(await execFileAsync("tar", ["-tzf", suiteTarball], { maxBuffer: 8 * 1024 * 1024 })).stdout
+			.split(/\r?\n/)
+			.filter(Boolean),
+	);
+	for (const required of [
+		"package/node_modules/@gyoungwe/pi-core/dist/index.mjs",
+		"package/node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
+		"package/node_modules/@gyoungwe/pi-research/dist/index.mjs",
+		"package/node_modules/@gyoungwe/plugin-api/package.json",
+		"package/node_modules/@gyoungwe/pi-knowledge/skills/research-vault/SKILL.md",
+		"package/node_modules/@gyoungwe/pi-research/skills/research-workflow/SKILL.md",
+	])
+		assert(suiteListing.has(required), `research-suite tarball is missing ${required}`);
+	assert(
+		![...suiteListing].some((entry) => entry.endsWith("pi-knowledge/skills/research-workflow/SKILL.md")),
+		"research-suite tarball contains a duplicate pi-knowledge research-workflow skill",
+	);
 
 	const piAnalysisRoot = join(installRoot, "node_modules", "@gyoungwe", "pi-analysis");
 	const piAnalysisPackage = JSON.parse(await readFile(join(piAnalysisRoot, "package.json"), "utf8"));
@@ -110,6 +129,27 @@ try {
 		"evidence_verify_replay",
 	]);
 	const piConnectors = await discoverInstalled("pi-connectors", ["connector_list", "connector_get"]);
+	const suiteRoot = join(installRoot, "node_modules", "@gyoungwe", "research-suite");
+	const suitePackage = JSON.parse(await readFile(join(suiteRoot, "package.json"), "utf8"));
+	const suiteExtensions = suitePackage.pi.extensions.map((entry) => join(suiteRoot, entry));
+	const suiteLoader = new DefaultResourceLoader({
+		cwd: installRoot,
+		agentDir: join(installRoot, "agent-suite"),
+		settingsManager: SettingsManager.inMemory(),
+		noExtensions: true,
+		noSkills: true,
+		additionalExtensionPaths: suiteExtensions,
+	});
+	await suiteLoader.reload();
+	const suiteLoaded = suiteLoader.getExtensions();
+	assert.deepEqual(suiteLoaded.errors, [], JSON.stringify(suiteLoaded.errors));
+	const suiteCore = suiteLoaded.extensions.find((item) => item.path.endsWith("@gyoungwe/pi-core/dist/index.mjs"));
+	const suiteKnowledge = suiteLoaded.extensions.find((item) => item.path.endsWith("@gyoungwe/pi-knowledge/dist/index.mjs"));
+	assert(suiteCore, "research-suite did not load bundled pi-core");
+	assert(suiteKnowledge, "research-suite did not load bundled pi-knowledge");
+	assert(suiteCore.tools.has("task_plan"), "bundled pi-core did not register task_plan");
+	for (const name of ["task_status", "task_plan", "task_wait", "task_reconcile", "task_evidence_restore"])
+		assert(!suiteKnowledge.tools.has(name), `${name} leaked into bundled pi-knowledge`);
 
 	const piRoot = join(installRoot, "node_modules", "@gyoungwe", "pi-knowledge");
 	const previousKnowledgeDir = process.env.DRONE_KNOWLEDGE_DIR;

@@ -10,6 +10,11 @@ The package is intentionally honest on first run: `knowledge_status` returns
 exists. The package does not create a Vault implicitly and does not change the
 existing `.pi/` or Vault file formats.
 
+Task authorization and progress tools (`task_*`, `task-status` and
+`task-action`) are provided by `@gyoungwe/pi-core`; this package registers only
+knowledge and research tools. The `research-workflow` skill is owned by
+`@gyoungwe/pi-research` and is intentionally not bundled here.
+
 The bundle is produced by the host build and committed here as the release
 artifact. The external repository deliberately does not rebuild private Drone
 source; `npm run build` verifies the checked-in artifact and refreshes its
