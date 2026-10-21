@@ -1,13 +1,22 @@
 // @ts-nocheck
 import { join, resolve } from "node:path";
 import { publishExplainer } from "../core/runtime-host.js";
+import type { KnowledgeExtensionHost } from "@gyoungwe/plugin-api/knowledge";
 
-function bindAcceptanceVerifierEvents(_pi: any): void {}
-function registerAcceptanceVerifier(_name: string, definition: any): any { return definition; }
-function registerTaskRuntime(_pi: any, _options: any): any {
+const defaultHost: KnowledgeExtensionHost = {};
+let extensionHost: KnowledgeExtensionHost = defaultHost;
+export function configureKnowledgeExtensionHost(host: KnowledgeExtensionHost = {}): void {
+	extensionHost = { ...defaultHost, ...host };
+}
+function bindAcceptanceVerifierEvents(pi: any): void { extensionHost.bindAcceptanceVerifierEvents?.(pi); }
+function registerAcceptanceVerifier(name: string, definition: any): any {
+	return extensionHost.registerAcceptanceVerifier?.(name, definition) ?? definition;
+}
+function registerTaskRuntime(pi: any, options: any): any {
+	if (extensionHost.registerTaskRuntime) return extensionHost.registerTaskRuntime(pi, options);
 	return { snapshot: () => ({ id: null, goal: "" }), isAutoContinuation: () => false };
 }
-function registerTool(pi: any, definition: any): void { pi.registerTool(definition); }
+function registerTool(pi: any, definition: any): void { (extensionHost.registerTool || ((target: any, value: any) => target.registerTool(value)))(pi, definition); }
 import { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } from "../core/config.js";
 import {
 	continuesTopic,

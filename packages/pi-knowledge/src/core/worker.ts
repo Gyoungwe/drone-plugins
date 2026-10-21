@@ -24,6 +24,7 @@ import { parseFrontmatter } from "./ingest-frontmatter.js";
 import { noteDisplayTitle } from "./note-title.js";
 import { createSemanticModel } from "./semantic-model.js";
 import { createRevisionCache } from "./graph-cache.js";
+import { recentByCategory as groupRecentByCategory } from "./recent-by-category.js";
 
 await mkdir(dirname(workerData.database), { recursive: true, mode: 0o700 });
 const db = new DatabaseSync(workerData.database, { timeout: 1500 });
@@ -473,28 +474,12 @@ function pending(project, limit = 20, kind = null) {
 async function recentByCategory(project, limit = 10) {
 	await flushDirty();
 	const scope = project || "";
-	const groups = { paper: [], software: [], method: [], idea: [] };
 	const rows = db
 		.prepare(
 			"SELECT path,title,kind,signature,body FROM notes WHERE (scope='shared' OR scope=?) AND kind IN ('note','wiki')",
 		)
 		.all(scope);
-	for (const row of rows) {
-		const category = noteCategory(row);
-		if (!groups[category]) continue;
-		groups[category].push({
-			path: row.path,
-			title: row.title,
-			kind: row.kind,
-			updatedAt: Number.parseFloat(String(row.signature).split(":", 1)[0]) || 0,
-		});
-	}
-	const max = Math.max(1, Math.min(24, Math.floor(limit || 10)));
-	for (const key of Object.keys(groups))
-		groups[key] = groups[key]
-			.sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path))
-			.slice(0, max);
-	return groups;
+	return groupRecentByCategory(rows, limit);
 }
 async function recentNotes(project, limit = 8) {
 	// A deposit writes the Vault file before the watcher callback arrives.  Flush
@@ -942,7 +927,7 @@ async function knowledgeGraph(args) {
 	// Another request may have committed a revision while this worker was idle.
 	// Read it after the flush so a cached snapshot never crosses an index boundary.
 	revision = Number(db.prepare("SELECT value FROM meta WHERE key='revision'").get().value);
-	const limit = Math.max(10, Math.min(400, Math.floor(args.limit || 200)));
+	const limit = Math.max(10, Math.min(5000, Math.floor(args.limit || 200)));
 	const view = args.view === "all" ? "all" : "semantic";
 	const mergeMirrors = args.mergeMirrors !== false;
 	const cacheKey = `${view}\u0000${limit}\u0000${mergeMirrors ? "merge" : "raw"}`;
@@ -1046,7 +1031,17 @@ async function knowledgeGraph(args) {
 	const links = model.edges.filter(({ source, target }) => keep.has(source) && keep.has(target));
 	const relations = (model.relations || []).filter(({ source, target }) => keep.has(source) && keep.has(target));
 	const result = {
-		nodes: legacyChosen.map((path) => ({ path, title: notes.get(path).title, kind: notes.get(path).kind, degree: legacyDegree.get(path) || 0 })),
+		nodes: legacyChosen.map((path) => {
+			const row = notes.get(path);
+			const warnings = parseFrontmatter(row.body).warnings || [];
+			return {
+				path,
+				title: row.title,
+				kind: row.kind,
+				degree: legacyDegree.get(path) || 0,
+				...(warnings.length ? { warnings } : {}),
+			};
+		}),
 		edges: [...legacyEdges.values()]
 			.filter(([source, target]) => legacyKeep.has(source) && legacyKeep.has(target))
 			.map(([source, target]) => ({ source, target })),

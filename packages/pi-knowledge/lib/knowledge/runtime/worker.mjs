@@ -779,6 +779,39 @@ function createRevisionCache() {
   };
 }
 
+// src/core/recent-by-category.ts
+function noteCategory(row) {
+  const type = String(parseFrontmatter(row.body).data?.type || "").toLowerCase();
+  const value = `${type}/${row.path.toLowerCase()}`;
+  if (/paper|literature|文献|论文/.test(value)) return "paper";
+  if (/software|tool|软件/.test(value)) return "software";
+  if (/method|protocol|方法/.test(value)) return "method";
+  if (/idea|hypothes|想法|假设/.test(value)) return "idea";
+  return "other";
+}
+function recentByCategory(rows, limit = 10) {
+  const groups = {
+    paper: [],
+    software: [],
+    method: [],
+    idea: []
+  };
+  for (const row of rows) {
+    const category = noteCategory(row);
+    if (category === "other") continue;
+    groups[category].push({
+      path: row.path,
+      title: row.title,
+      kind: row.kind,
+      updatedAt: Number.parseFloat(String(row.signature).split(":", 1)[0]) || 0
+    });
+  }
+  const max = Math.max(1, Math.min(24, Math.floor(limit || 10)));
+  for (const key of Object.keys(groups))
+    groups[key] = groups[key].sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, max);
+  return groups;
+}
+
 // src/core/worker.ts
 await mkdir(dirname(workerData.database), { recursive: true, mode: 448 });
 var db = new DatabaseSync(workerData.database, { timeout: 1500 });
@@ -1160,7 +1193,7 @@ function status() {
     }
   };
 }
-function noteCategory(row) {
+function noteCategory2(row) {
   const type = String(parseFrontmatter(row.body)?.data?.type || "").toLowerCase();
   const value = `${type}/${String(row.path).toLowerCase()}`;
   if (/paper|literature|文献|论文/.test(value)) return "paper";
@@ -1172,7 +1205,7 @@ function noteCategory(row) {
 function categoryCounts() {
   const counts = { paper: 0, software: 0, method: 0, idea: 0, other: 0 };
   for (const row of db.prepare("SELECT path,body,kind FROM notes WHERE kind IN ('note','wiki')").all())
-    counts[noteCategory(row)]++;
+    counts[noteCategory2(row)]++;
   return counts;
 }
 function semanticStatus(fingerprint = null, project = null) {
@@ -1188,27 +1221,13 @@ function pending(project, limit = 20, kind = null) {
     "SELECT * FROM jobs WHERE (scope='shared' OR scope=?) AND (? IS NULL OR kind=?) ORDER BY updated DESC LIMIT ?"
   ).all(project || "", kind, kind, limit);
 }
-async function recentByCategory(project, limit = 10) {
+async function recentByCategory2(project, limit = 10) {
   await flushDirty();
   const scope = project || "";
-  const groups = { paper: [], software: [], method: [], idea: [] };
   const rows = db.prepare(
     "SELECT path,title,kind,signature,body FROM notes WHERE (scope='shared' OR scope=?) AND kind IN ('note','wiki')"
   ).all(scope);
-  for (const row of rows) {
-    const category = noteCategory(row);
-    if (!groups[category]) continue;
-    groups[category].push({
-      path: row.path,
-      title: row.title,
-      kind: row.kind,
-      updatedAt: Number.parseFloat(String(row.signature).split(":", 1)[0]) || 0
-    });
-  }
-  const max = Math.max(1, Math.min(24, Math.floor(limit || 10)));
-  for (const key of Object.keys(groups))
-    groups[key] = groups[key].sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, max);
-  return groups;
+  return recentByCategory(rows, limit);
 }
 async function recentNotes(project, limit = 8) {
   await flushDirty();
@@ -1566,7 +1585,7 @@ function noteIdentity(body) {
 async function knowledgeGraph(args) {
   await flushDirty();
   revision = Number(db.prepare("SELECT value FROM meta WHERE key='revision'").get().value);
-  const limit = Math.max(10, Math.min(400, Math.floor(args.limit || 200)));
+  const limit = Math.max(10, Math.min(5e3, Math.floor(args.limit || 200)));
   const view = args.view === "all" ? "all" : "semantic";
   const mergeMirrors = args.mergeMirrors !== false;
   const cacheKey = `${view}\0${limit}\0${mergeMirrors ? "merge" : "raw"}`;
@@ -1655,7 +1674,17 @@ async function knowledgeGraph(args) {
   const links = model.edges.filter(({ source, target }) => keep.has(source) && keep.has(target));
   const relations = (model.relations || []).filter(({ source, target }) => keep.has(source) && keep.has(target));
   const result = {
-    nodes: legacyChosen.map((path) => ({ path, title: notes.get(path).title, kind: notes.get(path).kind, degree: legacyDegree.get(path) || 0 })),
+    nodes: legacyChosen.map((path) => {
+      const row = notes.get(path);
+      const warnings = parseFrontmatter(row.body).warnings || [];
+      return {
+        path,
+        title: row.title,
+        kind: row.kind,
+        degree: legacyDegree.get(path) || 0,
+        ...warnings.length ? { warnings } : {}
+      };
+    }),
     edges: [...legacyEdges.values()].filter(([source, target]) => legacyKeep.has(source) && legacyKeep.has(target)).map(([source, target]) => ({ source, target })),
     totalNotes: notes.size,
     revision,
@@ -1739,7 +1768,7 @@ async function dispatch(op, args) {
     return { items, total, offset, nextOffset: offset + items.length < total ? offset + items.length : null };
   }
   if (op === "recentNotes") return { items: await recentNotes(args.project, args.limit), revision };
-  if (op === "recentByCategory") return { groups: await recentByCategory(args.project, args.limit), revision };
+  if (op === "recentByCategory") return { groups: await recentByCategory2(args.project, args.limit), revision };
   if (op === "jobs") return { ...status(), items: pending(args.project, 100, args.kind || null) };
   if (op === "completeJob") {
     db.prepare("DELETE FROM jobs WHERE key=? AND revision=?").run(args.key, args.revision);

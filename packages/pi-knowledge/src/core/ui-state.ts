@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { knowledgeDirectory } from "./config.js";
-import { emitProcessEvent } from "./runtime-host.js";
 import { runtimeSlot } from "./runtime-host.js";
 import { flowCardBuilder, toolMeta } from "./runtime-host.js";
 import { failureCard, flowCard } from "./flow-cards.js";
@@ -14,17 +13,12 @@ const state = runtimeSlot("knowledge", "ui", () => ({
 	seq: 0,
 	localAnswerStats: { answered: 0, total: 0, rate: null, updatedAt: null },
 }));
-// Dynamic Pi extensions and the bundled backend can load this module through
-// different ESM loaders.  Forward UI facts through a versioned process event so
-// both copies observe the same flow without a global Symbol registry.
-const UI_EVENT = "drone:knowledge-ui/v1";
-const uiModule = {};
 function deliverKnowledgeUi(value) {
 	if (value.kind === "flow" && value.flow?.sessionId) {
 		state.flows.set(value.flow.sessionId, structuredClone(value.flow));
 		while (state.flows.size > MAX_SESSIONS) state.flows.delete(state.flows.keys().next().value);
 	}
-	state.seq = Math.max(state.seq, Number(value.sequence) || 0);
+	state.seq = Number(value.sequence) || state.seq + 1;
 	for (const fn of state.listeners) {
 		try {
 			fn(structuredClone(value));
@@ -33,10 +27,6 @@ function deliverKnowledgeUi(value) {
 		}
 	}
 }
-process.on(UI_EVENT, (payload) => {
-	if (!payload || payload.origin === uiModule || !payload.event) return;
-	deliverKnowledgeUi(payload.event);
-});
 const MAX_SESSIONS = 64,
 	MAX_RECORDS = 40;
 const sessionId = (ctx) => ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || null;
@@ -47,7 +37,6 @@ export function subscribeKnowledgeUi(listener) {
 export function emitKnowledgeUi(event) {
 	const value = { ...event, sequence: ++state.seq };
 	deliverKnowledgeUi(value);
-	emitProcessEvent(UI_EVENT, { event: value, origin: uiModule });
 	return value;
 }
 export function flowFor(id) {
@@ -73,13 +62,12 @@ function loadAnswerStats() {
 		const saved = JSON.parse(readFileSync(file, "utf8"));
 		const answered = Math.max(0, Math.floor(Number(saved?.answered) || 0));
 		const total = Math.max(answered, Math.floor(Number(saved?.total) || 0));
-		if (total > state.localAnswerStats.total)
-			state.localAnswerStats = {
-				answered,
-				total,
-				rate: total ? answered / total : null,
-				updatedAt: Number(saved?.updatedAt) || null,
-			};
+		state.localAnswerStats = {
+			answered,
+			total,
+			rate: total ? answered / total : null,
+			updatedAt: Number(saved?.updatedAt) || null,
+		};
 	} catch {
 		/* missing or unreadable metrics start from zero */
 	}
@@ -98,8 +86,7 @@ function saveAnswerStats() {
 }
 /** Aggregate used by the knowledge overview when no session is selected. */
 export function knowledgeAnswerRate() {
-	// The extension and backend may load separate module copies; the file is the
-	// shared record, and the larger total always wins.
+	// The persisted file is the host-owned source of truth across restarts.
 	state.localAnswerStatsLoaded = false;
 	loadAnswerStats();
 	return structuredClone(state.localAnswerStats);

@@ -1151,7 +1151,7 @@ function deliverKnowledgeUi(value) {
     state.flows.set(value.flow.sessionId, structuredClone(value.flow));
     while (state.flows.size > MAX_SESSIONS) state.flows.delete(state.flows.keys().next().value);
   }
-  state.seq = Math.max(state.seq, Number(value.sequence) || 0);
+  state.seq = Number(value.sequence) || state.seq + 1;
   for (const fn of state.listeners) {
     try {
       fn(structuredClone(value));
@@ -1162,7 +1162,6 @@ function deliverKnowledgeUi(value) {
 function emitKnowledgeUi(event) {
   const value = { ...event, sequence: ++state.seq };
   deliverKnowledgeUi(value);
-  emitProcessEvent(UI_EVENT, { event: value, origin: uiModule });
   return value;
 }
 function loadAnswerStats() {
@@ -1174,13 +1173,12 @@ function loadAnswerStats() {
     const saved = JSON.parse(readFileSync2(file, "utf8"));
     const answered = Math.max(0, Math.floor(Number(saved?.answered) || 0));
     const total = Math.max(answered, Math.floor(Number(saved?.total) || 0));
-    if (total > state.localAnswerStats.total)
-      state.localAnswerStats = {
-        answered,
-        total,
-        rate: total ? answered / total : null,
-        updatedAt: Number(saved?.updatedAt) || null
-      };
+    state.localAnswerStats = {
+      answered,
+      total,
+      rate: total ? answered / total : null,
+      updatedAt: Number(saved?.updatedAt) || null
+    };
   } catch {
   }
 }
@@ -1444,12 +1442,11 @@ function noteKnowledgeSpecialist(ctx, run) {
   else specialists[at] = safe;
   updateKnowledgeFlow(ctx, { specialists: specialists.slice(-8) });
 }
-var state, UI_EVENT, uiModule, MAX_SESSIONS, MAX_RECORDS, sessionId, metricsFile, MAX_CARDS, empty;
+var state, MAX_SESSIONS, MAX_RECORDS, sessionId, metricsFile, MAX_CARDS, empty;
 var init_ui_state = __esm({
   "src/core/ui-state.ts"() {
     "use strict";
     init_config();
-    init_runtime_host();
     init_runtime_host();
     init_runtime_host();
     init_flow_cards();
@@ -1459,12 +1456,6 @@ var init_ui_state = __esm({
       seq: 0,
       localAnswerStats: { answered: 0, total: 0, rate: null, updatedAt: null }
     }));
-    UI_EVENT = "drone:knowledge-ui/v1";
-    uiModule = {};
-    process.on(UI_EVENT, (payload) => {
-      if (!payload || payload.origin === uiModule || !payload.event) return;
-      deliverKnowledgeUi(payload.event);
-    });
     MAX_SESSIONS = 64;
     MAX_RECORDS = 40;
     sessionId = (ctx) => ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || null;
@@ -6101,16 +6092,20 @@ init_runtime_host();
 init_topic_memory();
 init_ui_state();
 init_wiki_review();
-function bindAcceptanceVerifierEvents(_pi) {
+var defaultHost = {};
+var extensionHost = defaultHost;
+function bindAcceptanceVerifierEvents(pi) {
+  extensionHost.bindAcceptanceVerifierEvents?.(pi);
 }
-function registerAcceptanceVerifier(_name, definition) {
-  return definition;
+function registerAcceptanceVerifier(name, definition) {
+  return extensionHost.registerAcceptanceVerifier?.(name, definition) ?? definition;
 }
-function registerTaskRuntime(_pi, _options) {
+function registerTaskRuntime(pi, options) {
+  if (extensionHost.registerTaskRuntime) return extensionHost.registerTaskRuntime(pi, options);
   return { snapshot: () => ({ id: null, goal: "" }), isAutoContinuation: () => false };
 }
 function registerTool(pi, definition) {
-  pi.registerTool(definition);
+  (extensionHost.registerTool || ((target, value) => target.registerTool(value)))(pi, definition);
 }
 var LOCAL_FIRST_GUIDANCE = "Knowledge loop: (1) search the local Vault first with research_search_knowledge and read the best hits; (2) only if local notes do not answer the question, look it up on the web (web_search / fetch); (3) save what you learned from the web with research_deposit_knowledge as a new note of the right type (paper = a publication with authors/year/DOI; software = a tool, its version, install and usage; method = a protocol or analysis method; idea = a hypothesis with its basis and how to test it; dataset = a reference genome, annotation or database with its exact version, source URL and checksum), putting the URLs/DOIs in source_links \u2014 new notes go straight into the Vault without review; (4) answer citing the Vault note paths you used and the web sources. Say plainly which parts came from local knowledge and which from the web.";
 async function stageWikiUpdate(service, ticket, cwd, input) {
