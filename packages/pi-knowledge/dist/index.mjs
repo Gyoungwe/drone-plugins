@@ -1162,6 +1162,7 @@ function deliverKnowledgeUi(value) {
 function emitKnowledgeUi(event) {
   const value = { ...event, sequence: ++state.seq };
   deliverKnowledgeUi(value);
+  emitProcessEvent(UI_EVENT, { event: value, origin: uiModule });
   return value;
 }
 function loadAnswerStats() {
@@ -1442,7 +1443,7 @@ function noteKnowledgeSpecialist(ctx, run) {
   else specialists[at] = safe;
   updateKnowledgeFlow(ctx, { specialists: specialists.slice(-8) });
 }
-var state, MAX_SESSIONS, MAX_RECORDS, sessionId, metricsFile, MAX_CARDS, empty;
+var state, UI_EVENT, uiModule, MAX_SESSIONS, MAX_RECORDS, sessionId, metricsFile, MAX_CARDS, empty;
 var init_ui_state = __esm({
   "src/core/ui-state.ts"() {
     "use strict";
@@ -1456,6 +1457,12 @@ var init_ui_state = __esm({
       seq: 0,
       localAnswerStats: { answered: 0, total: 0, rate: null, updatedAt: null }
     }));
+    UI_EVENT = "drone:knowledge-ui/v1";
+    uiModule = {};
+    process.on(UI_EVENT, (payload) => {
+      if (!payload || payload.origin === uiModule || !payload.event) return;
+      deliverKnowledgeUi(payload.event);
+    });
     MAX_SESSIONS = 64;
     MAX_RECORDS = 40;
     sessionId = (ctx) => ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || null;

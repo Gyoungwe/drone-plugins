@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { knowledgeDirectory } from "./config.js";
-import { runtimeSlot } from "./runtime-host.js";
+import { emitProcessEvent, runtimeSlot } from "./runtime-host.js";
 import { flowCardBuilder, toolMeta } from "./runtime-host.js";
 import { failureCard, flowCard } from "./flow-cards.js";
 
@@ -13,6 +13,11 @@ const state = runtimeSlot("knowledge", "ui", () => ({
 	seq: 0,
 	localAnswerStats: { answered: 0, total: 0, rate: null, updatedAt: null },
 }));
+// The Pi extension and backend each bundle this package, so runtimeSlot does
+// not cross that module boundary. Forward UI facts through a versioned process
+// event so the backend copy can observe the extension copy.
+const UI_EVENT = "drone:knowledge-ui/v1";
+const uiModule = {};
 function deliverKnowledgeUi(value) {
 	if (value.kind === "flow" && value.flow?.sessionId) {
 		state.flows.set(value.flow.sessionId, structuredClone(value.flow));
@@ -27,6 +32,10 @@ function deliverKnowledgeUi(value) {
 		}
 	}
 }
+process.on(UI_EVENT, (payload) => {
+	if (!payload || payload.origin === uiModule || !payload.event) return;
+	deliverKnowledgeUi(payload.event);
+});
 const MAX_SESSIONS = 64,
 	MAX_RECORDS = 40;
 const sessionId = (ctx) => ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || null;
@@ -37,6 +46,7 @@ export function subscribeKnowledgeUi(listener) {
 export function emitKnowledgeUi(event) {
 	const value = { ...event, sequence: ++state.seq };
 	deliverKnowledgeUi(value);
+	emitProcessEvent(UI_EVENT, { event: value, origin: uiModule });
 	return value;
 }
 export function flowFor(id) {

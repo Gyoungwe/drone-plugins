@@ -50,7 +50,7 @@
 		"src/core/topic-memory.ts": "94f3ec85a7e56e338671a0db636aeed79546b78c12c33df0c7f2587fdc17c76f",
 		"src/core/topic-probe.ts": "b6b80e8aba33c8319eff5862524d0e54bc0ed70516cc3ef4706999a3f66c3e61",
 		"src/core/ui-service.ts": "603991ba9cb4375bddec74aa8b339db09576628f9ca86745f7323b7a047ab334",
-		"src/core/ui-state.ts": "2e5a3f20360b8a2d4e106b5f3bbf73c65435bb76d139ffc6efd25cb35c57c393",
+		"src/core/ui-state.ts": "9b54f9e406c3287fdae6073b65a1cf361d75185e7f15de77587023e7d1eeec39",
 		"src/core/wiki-model-review.ts": "d7c6d17e218c64ba8040190b8a84595e3411b99195923c46b654b4f9bbb6e719",
 		"src/core/wiki-policy.ts": "ffd5f16638d2f31b49ecbb944683a13b503dac91fd499fb901124dad8cec2ff8",
 		"src/core/wiki-review.ts": "634b6ad5efc3b15b569d1e429ca23aae5171200f7599cee0ca14d5e97fac6a4f",
@@ -65,11 +65,11 @@
 		"src/maintenance/run.ts": "2575e35c4a879955e0e0d6dae32456318a34fef8ea6d19a63797bbd06d2f3460"
 	},
 	"outputs": {
-		"dist/index.mjs": "c64a4143f4fd8c388bf2b022eebd9bc8141070233596d9e0193bd39471bdf962",
-		"dist/host.mjs": "c30b871272a8c839f8790699477c1876ece0fd5bfa964af0730b203560bf6c01",
+		"dist/index.mjs": "288560ce36b5ee78af1b16315d0185e4c9d15026b027fc2a4229f7687d3cef7e",
+		"dist/host.mjs": "833ae0c431fd38bd38b9bb959cbfb68d6ed2d9b832fbb20f7a7693e6afa8fb33",
 		"dist/host.d.ts": "e3c39a52cae72e221fe82c53390d9ccc6acb81a92a1723ef1a826d37bf7ebd81",
 		"lib/knowledge/runtime/worker.mjs": "0ba2740573429c6de789f495f2cddf06cc3801dfb7ffeca70ac0aeb512c461d0",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "d9e4c7fab608e878d5147836e41e36136533f09a7c8bb504a54930dcb5570954"
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "f91da3a88692c296185180fbf30860c2f6d362ba10dd64dc2250d3f3fe2d6c96"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",
