@@ -23,13 +23,13 @@ describe("maintenance execution", () => {
 	});
 	it("updates only topic for missing-topic", async () => {
 		const calls: string[] = [];
-		const result = await runMaintenance([{ id: "a", kind: "missing-topic", path: "a.md" }], { ...ports(), setTopic: async (_path, topic) => calls.push(topic) });
+		const result = await runMaintenance([{ id: "a", kind: "missing-topic", path: "a.md" }], { ...ports(), setTopic: async (_path, topic) => { calls.push(topic); } });
 		expect(calls).toEqual(["Topic"]);
 		expect(result.items[0]?.status).toBe("topic-updated");
 	});
 	it("submits body changes as Wiki candidates", async () => {
 		const calls: string[] = [];
-		const result = await runMaintenance([{ id: "a", kind: "orphan", path: "a.md" }], { ...ports(), proposeWiki: async () => calls.push("candidate") });
+		const result = await runMaintenance([{ id: "a", kind: "orphan", path: "a.md" }], { ...ports(), proposeWiki: async () => { calls.push("candidate"); } });
 		expect(calls).toEqual(["candidate"]);
 		expect(result.items[0]?.status).toBe("candidate-submitted");
 	});
