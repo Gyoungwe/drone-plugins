@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateMetacognitivePublication } from "../src/metacognitive-policy";
+import { evaluateMetacognitivePublication } from "../src/core/metacognitive-policy.js";
 
 const HASH = "a".repeat(64);
 const artifact = (path = "Runs/run-1/report.md", text = "n=12.3") => ({

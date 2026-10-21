@@ -6,7 +6,7 @@ import {
 	targetWikiPath,
 	validateSpecialistHtml,
 	validateWikiSourcePaths,
-} from "../src/wiki-policy";
+} from "../src/core/wiki-policy.js";
 
 describe("wiki policy", () => {
 	it("accepts only static bounded specialist explainers", () => {
@@ -24,7 +24,7 @@ describe("wiki policy", () => {
 	it("requires existing Vault-relative source notes", () => {
 		expect(() => validateWikiSourcePaths(["Library/Papers/source.md"])).not.toThrow();
 		expect(() => validateWikiSourcePaths([])).toThrow("1–12");
-		expect(() => validateWikiSourcePaths(["../source.md"])).toThrow("source_paths[0]");
+		expect(() => validateWikiSourcePaths(["../source.md.js"])).toThrow("source_paths[0]");
 		expect(() => validateWikiSourcePaths(["https://example.com/source.md"])).toThrow("source_paths[0]");
 	});
 

@@ -4,7 +4,7 @@ import {
 	centralityBoost,
 	expandWithGraph,
 	type GraphNeighbor,
-} from "../src/graph-retrieval";
+} from "../src/core/graph-retrieval.js";
 
 const n = (
 	from: string,

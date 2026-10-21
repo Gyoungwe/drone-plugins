@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendRelatedLinks } from "../src/related-notes";
+import { appendRelatedLinks } from "../src/core/related-notes.js";
 
 describe("appendRelatedLinks", () => {
 	it("adds a related-notes section with wiki links and skips links already in the text", () => {

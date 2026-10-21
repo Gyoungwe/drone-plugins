@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { knowledgeDirectory } from "./config";
+import { knowledgeDirectory } from "./config.js";
 
 export type ReviewMode = "automatic" | "strict";
 

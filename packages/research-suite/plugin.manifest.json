@@ -14,7 +14,7 @@
 	"entrypoints": {
 		"extensions": [
 			"./node_modules/@gyoungwe/pi-core/dist/index.mjs",
-			"./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
+		"./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
 			"./node_modules/@gyoungwe/pi-research/dist/index.mjs"
 		],
 		"skills": [

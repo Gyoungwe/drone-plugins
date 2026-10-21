@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { collectRecentNotes, ideaNoteMarkdown } from "../src/daily-discovery";
-import { buildDailyDiscoveryMessage, parseDailyIdeas } from "../src/daily-discovery-prompt";
+import { collectRecentNotes, ideaNoteMarkdown } from "../src/core/daily-discovery.js";
+import { buildDailyDiscoveryMessage, parseDailyIdeas } from "../src/core/daily-discovery-prompt.js";
 
 let vault = "";
 afterEach(async () => {

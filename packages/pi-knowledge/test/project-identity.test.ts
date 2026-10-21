@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { projectIdentity } from "../src/config";
-import { currentProject } from "../src/extension-helpers";
+import { projectIdentity } from "../src/core/config.js";
+import { currentProject } from "../src/core/extension-helpers.js";
 import {
 	dailyWorkspaceDir,
 	describeProject,
@@ -20,7 +20,7 @@ import {
 	sessionEntriesOf,
 	sessionProjectFromEntries,
 	workspaceProjectId,
-} from "../src/project-identity";
+} from "../src/core/project-identity.js";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -188,7 +188,7 @@ describe("runProject", () => {
 	it("maps legacy default, missing and invalid values to the current project", () => {
 		expect(runProject(LEGACY_DEFAULT_PROJECT, resolution)).toBe("current");
 		expect(runProject(undefined, resolution)).toBe("current");
-		expect(runProject("../x", resolution)).toBe("current");
+		expect(runProject("../x.js", resolution)).toBe("current");
 	});
 	it("keeps research-workbench when the workspace opted in to it", () => {
 		const optIn = resolveProjectIdentity({ cwd: join(tmpdir(), "w"), configured: LEGACY_DEFAULT_PROJECT });

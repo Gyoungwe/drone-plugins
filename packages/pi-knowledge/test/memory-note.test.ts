@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { memoryNoteMarkdown, memoryNoteSlug } from "../src/memory-note";
+import { memoryNoteMarkdown, memoryNoteSlug } from "../src/core/memory-note.js";
 
 it("renders a typed memory note with provenance and related links", () => {
 	const text = memoryNoteMarkdown(

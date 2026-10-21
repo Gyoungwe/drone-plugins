@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { proposedWikiText, stripManagedHeader } from "../src/wiki-policy";
+import { proposedWikiText, stripManagedHeader } from "../src/core/wiki-policy.js";
 
 describe("stripManagedHeader", () => {
 	it("drops a duplicated frontmatter + title from an agent draft", () => {

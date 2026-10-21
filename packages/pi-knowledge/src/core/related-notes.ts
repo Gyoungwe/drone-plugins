@@ -2,8 +2,8 @@
  * 入库时的自动关联：用新笔记的标题在本地检索最相关的已有笔记，返回可写成 [[双链]] 的路径。
  * 只读；未绑定 Vault、索引不可用或没有命中时返回空数组（沉淀照常进行）。
  */
-import { readKnowledgeBinding, withKnowledgeBinding } from "./config";
-import { getKnowledgeService } from "./service";
+import { readKnowledgeBinding, withKnowledgeBinding } from "./config.js";
+import { getKnowledgeService } from "./service.js";
 
 export async function findRelatedNotes(title: string, limit = 5): Promise<string[]> {
 	const query = String(title || "").trim().slice(0, 120);

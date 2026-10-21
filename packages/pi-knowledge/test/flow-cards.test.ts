@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardField, cardLink, failureCard, flowCard, literatureCard, statusTone } from "../src/index";
+import { cardField, cardLink, failureCard, flowCard, literatureCard, statusTone } from "../src/core/index.js";
 
 describe("knowledge flow cards", () => {
 	it("classifies statuses and bounds generic fields and links", () => {

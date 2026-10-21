@@ -40,9 +40,12 @@ try {
 		version: "0.0.0",
 		private: true,
 		type: "module",
-		dependencies: Object.fromEntries(
-			packageNames.map((name) => [tarballs[name].packageJson.name, `file:${tarballs[name].path}`]),
-		),
+		dependencies: {
+			...Object.fromEntries(
+				packageNames.map((name) => [tarballs[name].packageJson.name, `file:${tarballs[name].path}`]),
+			),
+			"@gyoungwe/plugin-api": `file:${join(root, "vendor", "gyoungwe-plugin-api-1.1.0.tgz")}`,
+		},
 	};
 	await writeFile(join(installRoot, "package.json"), `${JSON.stringify(installPackage, null, 2)}\n`);
 	await execFileAsync(
@@ -67,6 +70,7 @@ try {
 	for (const required of [
 		"package/node_modules/@gyoungwe/pi-core/dist/index.mjs",
 		"package/node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
+		"package/node_modules/@gyoungwe/pi-knowledge/lib/knowledge/runtime/.knowledge-worker-manifest.json",
 		"package/node_modules/@gyoungwe/pi-research/dist/index.mjs",
 		"package/node_modules/@gyoungwe/plugin-api/package.json",
 		"package/node_modules/@gyoungwe/pi-knowledge/skills/research-vault/SKILL.md",

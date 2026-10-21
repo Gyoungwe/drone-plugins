@@ -5,4 +5,4 @@
  * consumers to this single package subpath. P2 will replace the implementation
  * behind this entry with the installable plugin package.
  */
-export * from "./index";
+export * from "./index.js";

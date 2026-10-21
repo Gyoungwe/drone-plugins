@@ -7,7 +7,7 @@ import {
 	EXPERIENCE_LIMITS,
 	recordTerminalJobExperience,
 	searchExperiences,
-} from "../src/experience-store";
+} from "../src/core/experience-store.js";
 
 const binding = { vaultId: "0123456789abcdef01234567" };
 const roots: string[] = [];

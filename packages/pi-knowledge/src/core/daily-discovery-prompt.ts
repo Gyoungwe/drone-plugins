@@ -2,7 +2,7 @@
  * 每日发现的提示词与解析（只由宿主 backend 使用；与读 Vault 的 daily-discovery.ts 分开，
  * 避免把解析逻辑带进扩展的类型图）。
  */
-import { DAILY_DISCOVERY_LIMITS, type DailyIdea, type DiscoveryNote } from "./daily-discovery";
+import { DAILY_DISCOVERY_LIMITS, type DailyIdea, type DiscoveryNote } from "./daily-discovery.js";
 
 export const DAILY_DISCOVERY_SYSTEM = [
 	"You are a research colleague looking for ideas the user has not considered.",

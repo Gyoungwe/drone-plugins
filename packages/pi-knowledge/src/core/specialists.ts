@@ -1,21 +1,21 @@
 // @ts-nocheck
 import { randomUUID } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
-import { deliveryContract } from "./runtime-host";
-import { readKnowledgeBinding } from "./config";
-import { canRead, validateNote } from "./files";
+import { deliveryContract } from "./runtime-host.js";
+import { readKnowledgeBinding } from "./config.js";
+import { canRead, validateNote } from "./files.js";
 import {
 	createSpecialistBudget,
 	decideSpecialistRun,
 	specialistRequestSignature,
-} from "./orchestration-policy";
+} from "./orchestration-policy.js";
 import {
 	knowledgeSpecialistHost,
 	specialistQueueSnapshot,
 	specialistSettings,
 	withSpecialistSlot,
-} from "./specialist-host";
-import { noteKnowledgeSpecialist } from "./ui-state";
+} from "./specialist-host.js";
+import { noteKnowledgeSpecialist } from "./ui-state.js";
 
 const profiles = {
 	navigator: ["knowledge-navigator", "知识导航员"],

@@ -1,5 +1,4 @@
-// @ts-nocheck
-// packages/knowledge/src/worker.ts
+// src/core/worker.ts
 import { watch } from "node:fs";
 import { mkdir, readdir } from "node:fs/promises";
 import { dirname, join as join2 } from "node:path";
@@ -7,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { setImmediate as yieldTurn } from "node:timers/promises";
 import { parentPort, workerData } from "node:worker_threads";
 
-// packages/knowledge/src/files.ts
+// src/core/files.ts
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
@@ -130,7 +129,7 @@ function snippet(text, { startLine = 1, maxChars = 5e3 } = {}) {
   };
 }
 
-// packages/knowledge/src/graph-retrieval.ts
+// src/core/graph-retrieval.ts
 function backlinkContext(body, target, max = 240) {
   const bare = target.split("/").at(-1)?.replace(/\.md$/, "") || target;
   const full = target.replace(/\.md$/, "");
@@ -146,12 +145,12 @@ function backlinkContext(body, target, max = 240) {
   return void 0;
 }
 
-// packages/knowledge/src/search-policy.ts
+// src/core/search-policy.ts
 function tokenizeKnowledgeText(text) {
   const words = String(text).normalize("NFKC").toLowerCase().match(/[a-z0-9][a-z0-9._+-]*|[\p{Script=Han}]+/gu) || [];
   const output = [];
   for (const word of words) {
-    if (/\p{Script=Han}/u.test(word)) {
+    if (new RegExp("\\p{Script=Han}", "u").test(word)) {
       const characters = [...word];
       for (let index = 0; index < characters.length; index++) {
         const character = characters[index];
@@ -180,7 +179,10 @@ function splitKnowledgeChunks(text, maxChars = 1200) {
   return chunks;
 }
 
-// packages/knowledge/src/ingest-frontmatter.ts
+// src/core/ingest-identity.ts
+import { createHash as createHash2 } from "node:crypto";
+
+// src/core/ingest-frontmatter.ts
 var KNOWLEDGE_TYPES = [
   "paper",
   "method",
@@ -412,7 +414,31 @@ function parseFrontmatter(text) {
   }
 }
 
-// packages/knowledge/src/semantic-model.ts
+// src/core/note-title.ts
+var clean = (value) => typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 200) : "";
+function looksLikeFileName(title) {
+  const value = String(title || "").trim();
+  if (!value) return true;
+  if (/\.(?:pdf|html?|md|txt|docx?|xlsx?|csv|json|zip|tar|gz)$/i.test(value)) return true;
+  if (/^(?:PMC|PMID)?\d[\d.]*$/i.test(value)) return true;
+  return /^[a-z0-9]+(?:[-_][a-z0-9]+){2,}$/.test(value) && /\d{4,}|[a-f0-9]{12,}/.test(value);
+}
+function noteDisplayTitle(text, path) {
+  let data = null;
+  try {
+    data = parseFrontmatter(text).data;
+  } catch {
+    data = null;
+  }
+  const topic = clean(data?.topic);
+  if (topic) return topic;
+  const title = clean(data?.title);
+  const heading = clean(text.match(/^#\s+(.+)$/m)?.[1]);
+  if (title && (!heading || looksLikeFileName(heading))) return title;
+  return heading || title || path.split("/").at(-1)?.replace(/\.md$/i, "") || path;
+}
+
+// src/core/semantic-model.ts
 var WIDTH = 720;
 var HEIGHT = 440;
 var LAYOUT_MARGIN = 28;
@@ -726,7 +752,7 @@ function createSemanticModel(input, options = {}) {
   return { nodes, edges: linkRelations.map(({ source, target }) => ({ source, target })), relations, duplicates, communities, layout };
 }
 
-// packages/knowledge/src/graph-cache.ts
+// src/core/graph-cache.ts
 function createRevisionCache() {
   let activeRevision = null;
   const values = /* @__PURE__ */ new Map();
@@ -751,7 +777,7 @@ function createRevisionCache() {
   };
 }
 
-// packages/knowledge/src/worker.ts
+// src/core/worker.ts
 await mkdir(dirname(workerData.database), { recursive: true, mode: 448 });
 var db = new DatabaseSync(workerData.database, { timeout: 1500 });
 var priorSchemaVersion = Number(db.prepare("PRAGMA user_version").get().user_version ?? 0);
@@ -782,6 +808,26 @@ CREATE INDEX IF NOT EXISTS semantic_chunks_lookup ON semantic_chunks(fingerprint
 CREATE TABLE IF NOT EXISTS semantic_meta(fingerprint TEXT PRIMARY KEY, dimension INTEGER NOT NULL);
 `);
 if (priorSchemaVersion < 1) db.exec("PRAGMA user_version=1;");
+if (!db.prepare("SELECT value FROM meta WHERE key='titlePolicy'").get()) {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const setTitle = db.prepare("UPDATE notes SET title=? WHERE id=?");
+    const setSearchTitle = db.prepare("UPDATE search SET title=? WHERE rowid=?");
+    let refreshed = 0;
+    for (const row of db.prepare("SELECT id,path,title,body FROM notes").all()) {
+      const title = noteDisplayTitle(row.body, row.path);
+      if (title === row.title) continue;
+      setTitle.run(title, row.id);
+      setSearchTitle.run(tokenizeKnowledgeText(title).join(" "), row.id);
+      refreshed++;
+    }
+    if (refreshed) db.prepare("UPDATE meta SET value=value+1 WHERE key='revision'").run();
+    db.prepare("INSERT OR REPLACE INTO meta VALUES('titlePolicy',1)").run();
+    db.exec("COMMIT");
+  } catch {
+    db.exec("ROLLBACK");
+  }
+}
 var semanticColumns = db.prepare("PRAGMA table_info(semantic_chunks)").all().map((column) => column.name);
 if (!semanticColumns.includes("start_char"))
   db.exec("ALTER TABLE semantic_chunks ADD COLUMN start_char INTEGER");
@@ -899,7 +945,7 @@ async function updatePath(path, force = false) {
         statements.clearProblem.run(path);
         return statements.get.get(path);
       }
-      const title = file.text.match(/^#\s+(.+)$/m)?.[1]?.trim() || path.split("/").at(-1).slice(0, -3);
+      const title = noteDisplayTitle(file.text, path);
       const kind = /(?:^|\/)(?:Index|Context|Home)\.md$/i.test(path) ? "navigation" : /(?:^|\/)Wiki\//.test(path) ? "wiki" : path.startsWith("Library/Explainers/") ? "explainer" : "note";
       db.exec("BEGIN IMMEDIATE");
       try {
@@ -1104,12 +1150,28 @@ function status() {
     pendingChanges: dirty.size,
     jobs: Number(db.prepare("SELECT count(*) count FROM jobs").get().count),
     problems: db.prepare("SELECT * FROM problems ORDER BY path LIMIT 20").all(),
+    categoryCounts: categoryCounts(),
     stats: { ...stats },
     semantic: {
       vectors: Number(db.prepare("SELECT count(*) count FROM semantic_chunks").get().count),
       paths: Number(db.prepare("SELECT count(DISTINCT path) count FROM semantic_chunks").get().count)
     }
   };
+}
+function noteCategory(row) {
+  const type = String(parseFrontmatter(row.body)?.data?.type || "").toLowerCase();
+  const value = `${type}/${String(row.path).toLowerCase()}`;
+  if (/paper|literature|文献|论文/.test(value)) return "paper";
+  if (/software|tool|软件/.test(value)) return "software";
+  if (/method|protocol|方法/.test(value)) return "method";
+  if (/idea|hypothes|想法|假设/.test(value)) return "idea";
+  return "other";
+}
+function categoryCounts() {
+  const counts = { paper: 0, software: 0, method: 0, idea: 0, other: 0 };
+  for (const row of db.prepare("SELECT path,body,kind FROM notes WHERE kind IN ('note','wiki')").all())
+    counts[noteCategory(row)]++;
+  return counts;
 }
 function semanticStatus(fingerprint = null, project = null) {
   if (!fingerprint) return { vectors: 0, paths: 0, coverage: "unconfigured" };
@@ -1123,6 +1185,41 @@ function pending(project, limit = 20, kind = null) {
   return db.prepare(
     "SELECT * FROM jobs WHERE (scope='shared' OR scope=?) AND (? IS NULL OR kind=?) ORDER BY updated DESC LIMIT ?"
   ).all(project || "", kind, kind, limit);
+}
+async function recentByCategory(project, limit = 10) {
+  await flushDirty();
+  const scope = project || "";
+  const groups = { paper: [], software: [], method: [], idea: [] };
+  const rows = db.prepare(
+    "SELECT path,title,kind,signature,body FROM notes WHERE (scope='shared' OR scope=?) AND kind IN ('note','wiki')"
+  ).all(scope);
+  for (const row of rows) {
+    const category = noteCategory(row);
+    if (!groups[category]) continue;
+    groups[category].push({
+      path: row.path,
+      title: row.title,
+      kind: row.kind,
+      updatedAt: Number.parseFloat(String(row.signature).split(":", 1)[0]) || 0
+    });
+  }
+  const max = Math.max(1, Math.min(24, Math.floor(limit || 10)));
+  for (const key of Object.keys(groups))
+    groups[key] = groups[key].sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, max);
+  return groups;
+}
+async function recentNotes(project, limit = 8) {
+  await flushDirty();
+  const scope = project || "";
+  const rows = db.prepare(
+    "SELECT path,title,kind,signature FROM notes WHERE (scope='shared' OR scope=?) AND kind IN ('note','wiki')"
+  ).all(scope);
+  return rows.map((row) => ({
+    path: row.path,
+    title: row.title,
+    kind: row.kind,
+    updatedAt: Number.parseFloat(String(row.signature).split(":", 1)[0]) || 0
+  })).sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, Math.max(1, Math.min(24, Math.floor(limit || 8))));
 }
 async function read(path, project, options = {}) {
   if (!canRead(validateNote(path), project)) throw new Error("Note is outside shared/current-project scope");
@@ -1639,6 +1736,8 @@ async function dispatch(op, args) {
     const items = db.prepare(`SELECT * FROM jobs WHERE ${where} ORDER BY updated DESC,key LIMIT ? OFFSET ?`).all(scope, limit, offset);
     return { items, total, offset, nextOffset: offset + items.length < total ? offset + items.length : null };
   }
+  if (op === "recentNotes") return { items: await recentNotes(args.project, args.limit), revision };
+  if (op === "recentByCategory") return { groups: await recentByCategory(args.project, args.limit), revision };
   if (op === "jobs") return { ...status(), items: pending(args.project, 100, args.kind || null) };
   if (op === "completeJob") {
     db.prepare("DELETE FROM jobs WHERE key=? AND revision=?").run(args.key, args.revision);

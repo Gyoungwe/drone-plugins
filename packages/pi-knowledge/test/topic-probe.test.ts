@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mentionedWikiTitle } from "../src/topic-probe";
+import { mentionedWikiTitle } from "../src/core/topic-probe.js";
 
 describe("mentionedWikiTitle", () => {
 	it("matches a distinctive Latin token from the page title", () => {

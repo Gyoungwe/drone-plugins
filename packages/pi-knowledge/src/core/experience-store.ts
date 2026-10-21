@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { knowledgeDirectory } from "./config";
-import { runRuntimeExclusive } from "./runtime-host";
+import { knowledgeDirectory } from "./config.js";
+import { runRuntimeExclusive } from "./runtime-host.js";
 
 /** Durable format for terminal-job experience. It is intentionally separate from evidence and instructions. */
 export const EXPERIENCE_VERSION = 1;

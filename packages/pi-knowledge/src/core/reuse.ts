@@ -9,7 +9,7 @@ import {
 	type KnowledgeSnapshot,
 	type KnowledgeSourceReceipt,
 } from "@gyoungwe/plugin-api/knowledge";
-import { projectIdentity } from "./config";
+import { projectIdentity } from "./config.js";
 
 /**
  * The context carried by a knowledge snapshot.  A project id alone is not

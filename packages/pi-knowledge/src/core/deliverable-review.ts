@@ -4,7 +4,7 @@ import type {
 	MetacognitiveArtifact,
 	MetacognitiveArtifactNumber,
 	MetacognitiveSnapshot,
-} from "./metacognitive-policy";
+} from "./metacognitive-policy.js";
 
 export type ReviewerSeverity = "low" | "medium" | "high";
 export type ReviewerTrigger = "deliverable-write" | "milestone-complete" | "publication-projection";

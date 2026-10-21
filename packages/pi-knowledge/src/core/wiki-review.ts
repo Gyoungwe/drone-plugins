@@ -2,12 +2,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { link, lstat, mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { runRuntimeExclusive } from "./runtime-host";
-import { knowledgeDirectory, withKnowledgeBinding } from "./config";
-import { canRead, readNoteFile, validateNote } from "./files";
-import { readReviewMode } from "./review-policy";
-import { invalidateKnowledgeUi } from "./ui-state";
-import { stripManagedHeader } from "./wiki-policy";
+import { runRuntimeExclusive } from "./runtime-host.js";
+import { knowledgeDirectory, withKnowledgeBinding } from "./config.js";
+import { canRead, readNoteFile, validateNote } from "./files.js";
+import { readReviewMode } from "./review-policy.js";
+import { invalidateKnowledgeUi } from "./ui-state.js";
+import { stripManagedHeader } from "./wiki-policy.js";
 
 const AUTOMATIC_AUTHORITY = Symbol("host-automatic-wiki");
 const START = "<!-- pi-agent:managed:start -->",

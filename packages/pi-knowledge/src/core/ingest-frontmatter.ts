@@ -3,7 +3,7 @@
  * 只覆盖 Obsidian frontmatter 常见写法（映射、列表、行内列表、引号字符串、注释），不执行任何 YAML 标签或锚点。
  * 纯函数，不读写文件。
  */
-import { contentHash, type KnowledgeIdentity, identifyReference, normalizeIdentity } from "./ingest-identity";
+import { contentHash, type KnowledgeIdentity, identifyReference, normalizeIdentity } from "./ingest-identity.js";
 
 export const NOTE_SCHEMA = "drone-note/1";
 

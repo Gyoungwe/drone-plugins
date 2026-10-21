@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { link, lstat, mkdir, open, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { readNoteFile } from "./files";
+import { readNoteFile } from "./files.js";
 
 const MANAGED_START = "<!-- pi-agent:managed:start -->";
 const MANAGED_END = "<!-- pi-agent:managed:end -->";

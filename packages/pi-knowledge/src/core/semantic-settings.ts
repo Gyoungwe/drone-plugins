@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { knowledgeDirectory } from "./config";
+import { knowledgeDirectory } from "./config.js";
 
 export type SemanticProvider = "none" | "ollama" | "openai-compatible";
 

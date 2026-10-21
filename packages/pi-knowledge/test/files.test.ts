@@ -13,7 +13,7 @@ import {
 	safeNotePath,
 	snippet,
 	validateNote,
-} from "../src/files";
+} from "../src/core/files.js";
 
 let vault: string;
 
@@ -36,7 +36,7 @@ describe("knowledge file boundaries", () => {
 
 	it("accepts canonical markdown paths and rejects traversal or casing drift", () => {
 		expect(() => validateNote("Projects/alpha/Context.md")).not.toThrow();
-		expect(() => validateNote("../outside.md")).toThrow("allowed Vault-relative");
+		expect(() => validateNote("../outside.md.js")).toThrow("allowed Vault-relative");
 		expect(() => validateNote("projects/alpha/Context.md")).toThrow("canonical casing");
 		expect(() => validateNote("Projects/alpha/Context.txt")).toThrow("allowed Vault-relative");
 	});

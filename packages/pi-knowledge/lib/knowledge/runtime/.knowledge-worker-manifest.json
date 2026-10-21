@@ -1,0 +1,9 @@
+{
+	"version": 1,
+	"generator": "packages/pi-knowledge/scripts/build.mjs",
+	"output": "worker.mjs",
+	"source": "src/extension/knowledge-worker.ts",
+	"inputsSha256": "1e853e0f5ec7af62b13d1517942bb78bae323574fa55b8c02b41a547460434ca",
+	"knowledgeSourceSha256": "1e853e0f5ec7af62b13d1517942bb78bae323574fa55b8c02b41a547460434ca",
+	"outputSha256": "74cd7b500c66ccdc12f5e4cb75db05516b1cd7152b6b7539ed0eb9883e4e4ce4"
+}

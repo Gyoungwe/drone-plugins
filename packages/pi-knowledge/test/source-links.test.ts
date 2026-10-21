@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { normalizeSourceLinks, onlineSourceLink } from "../src/source-links";
+import { normalizeSourceLinks, onlineSourceLink } from "../src/core/source-links.js";
 
 let root: string;
 let cwd: string;

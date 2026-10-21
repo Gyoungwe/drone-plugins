@@ -9,8 +9,8 @@ import {
 	serializeFrontmatter,
 	splitFrontmatter,
 	validateFrontmatter,
-} from "../src/ingest-frontmatter";
-import { contentHash } from "../src/ingest-identity";
+} from "../src/core/ingest-frontmatter.js";
+import { contentHash } from "../src/core/ingest-identity.js";
 
 const NOTE = `---
 schema: drone-note/1
@@ -220,7 +220,7 @@ describe("validateFrontmatter", () => {
 			sources: [
 				"Smith 2020",
 				{ locator: "p. 3" },
-				{ vault: "../escape.md" },
+				{ vault: "../escape.md.js" },
 				{ file: "/etc/passwd" },
 				{ sha256: "xyz", url: "https://a.org" },
 			],

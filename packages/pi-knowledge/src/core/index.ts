@@ -4,8 +4,8 @@ export {
 	compareClaimSets,
 	compareClaims,
 	type KnowledgeClaim,
-} from "./claim-conflicts";
-export { readCapabilitySources, type CapabilityKnowledgeSourcePort } from "./capability-discovery";
+} from "./claim-conflicts.js";
+export { readCapabilitySources, type CapabilityKnowledgeSourcePort } from "./capability-discovery.js";
 export {
 	createKnowledgeConfigApi,
 	createKnowledgeConfigState,
@@ -21,7 +21,7 @@ export {
 	readKnowledgeBinding,
 	saveKnowledgeBinding,
 	withKnowledgeBinding,
-} from "./config";
+} from "./config.js";
 export {
 	continuationHint,
 	continuesTopic,
@@ -32,7 +32,7 @@ export {
 	type SessionIdentityContext,
 	sessionIdentity,
 	type TopicForContinuation,
-} from "./extension-helpers";
+} from "./extension-helpers.js";
 export {
 	allowedSegment,
 	canRead,
@@ -44,7 +44,7 @@ export {
 	safeNotePath,
 	snippet,
 	validateNote,
-} from "./files";
+} from "./files.js";
 export {
 	type CardFieldOptions,
 	cardField,
@@ -60,7 +60,7 @@ export {
 	flowCard,
 	literatureCard,
 	statusTone,
-} from "./flow-cards";
+} from "./flow-cards.js";
 export {
 	containedVaultFile,
 	createVaultFileOnly,
@@ -72,7 +72,7 @@ export {
 	type ReplaceVaultFileOptions,
 	VaultFileConflictError,
 	updateVaultNavigation,
-} from "./layout";
+} from "./layout.js";
 export {
 	createSpecialistBudget,
 	decideSpecialistRun,
@@ -86,7 +86,7 @@ export {
 	type SpecialistRunOptions,
 	type SpecialistUsage,
 	specialistRequestSignature,
-} from "./orchestration-policy";
+} from "./orchestration-policy.js";
 export {
 	advisoryLine,
 	advisoryNotice,
@@ -97,7 +97,7 @@ export {
 	publicationFallbackNotice,
 	publicationNotice,
 	publicationNotices,
-} from "./publication-policy";
+} from "./publication-policy.js";
 export {
 	evaluateMetacognitivePublication,
 	type MetacognitiveArtifact,
@@ -114,7 +114,7 @@ export {
 	type MetacognitiveNumberClaim,
 	type MetacognitiveSnapshot,
 	type MetacognitiveUseRole,
-} from "./metacognitive-policy";
+} from "./metacognitive-policy.js";
 export {
 	BackgroundReviewer,
 	type BackgroundReviewerBridge,
@@ -133,19 +133,19 @@ export {
 	type ReviewerProviderSelection,
 	type ReviewerSeverity,
 	type ReviewerTrigger,
-} from "./deliverable-review";
+} from "./deliverable-review.js";
 export {
 	advisoryCodes,
 	type ReviewMode,
 	readReviewMode,
 	saveReviewMode,
-} from "./review-policy";
+} from "./review-policy.js";
 export {
 	buildKnowledgeSearchExpression,
 	splitKnowledgeChunks,
 	tokenizeKnowledgeText,
-} from "./search-policy";
-export { embedTexts, validateSemanticConfig as validateSemanticProviderConfig } from "./semantic-provider";
+} from "./search-policy.js";
+export { embedTexts, validateSemanticConfig as validateSemanticProviderConfig } from "./semantic-provider.js";
 export {
 	createSemanticSettingsApi,
 	createSemanticSettingsState,
@@ -157,13 +157,13 @@ export {
 	type SemanticSettingsState,
 	saveSemanticSettings,
 	validateSemanticConfig,
-} from "./semantic-settings";
+} from "./semantic-settings.js";
 export {
 	normalizeSourceLinks,
 	onlineSourceLink,
 	type SourceLinkOptions,
 	type SourceLinksResult,
-} from "./source-links";
+} from "./source-links.js";
 export {
 	createTaskFeedback,
 	guardResearchToolResult,
@@ -175,19 +175,19 @@ export {
 	type TaskFeedbackFacts,
 	type TaskFeedbackFailure,
 	type TaskFeedbackFile,
-} from "./task-feedback";
+} from "./task-feedback.js";
 export {
 	createToolBudget,
 	type ToolBudget,
 	type ToolBudgetFailure,
 	type ToolBudgetOptions,
-} from "./tool-budget";
+} from "./tool-budget.js";
 export {
 	autoTopicCandidate,
 	type TopicCandidate,
 	type TopicCandidateInput,
 	type TopicCandidateResult,
-} from "./topic-candidate";
+} from "./topic-candidate.js";
 export {
 	immutableWikiProposalHash,
 	MANAGED_END,
@@ -199,7 +199,7 @@ export {
 	validateSpecialistHtml,
 	validateWikiSourcePaths,
 	type WikiProposalShape,
-} from "./wiki-policy";
+} from "./wiki-policy.js";
 
 export {
 	TOPIC_MEMORY_LIMITS,
@@ -211,13 +211,13 @@ export {
 	readTopic,
 	topicRunHash,
 	updateTopic,
-} from "./topic-memory";
-export { runNavigationMaintenance, updateNavigation } from "./maintenance";
-export * from "./daily-discovery";
-export * from "./daily-discovery-prompt";
-export * from "./memory-note";
-export * from "./project-identity";
-export * from "./related-notes";
+} from "./topic-memory.js";
+export { runNavigationMaintenance, updateNavigation } from "./maintenance.js";
+export * from "./daily-discovery.js";
+export * from "./daily-discovery-prompt.js";
+export * from "./memory-note.js";
+export * from "./project-identity.js";
+export * from "./related-notes.js";
 export {
 	configureKnowledgeWorker,
 	configureKnowledgeEvidence,
@@ -227,12 +227,12 @@ export {
 	emitKnowledgeWorkerLifecycle,
 	knowledgeWorkerMetadata,
 	KNOWLEDGE_WORKER_LIFECYCLE_EVENT,
-} from "./runtime-host";
+} from "./runtime-host.js";
 export type {
 	KnowledgeWorkerLifecycleEvent,
 	KnowledgeWorkerMetadata,
-} from "./runtime-host";
-export { configureKnowledgeRuntime } from "./runtime-host";
+} from "./runtime-host.js";
+export { configureKnowledgeRuntime } from "./runtime-host.js";
 export {
 	assignCommunities,
 	classifyRelation,
@@ -246,7 +246,7 @@ export {
 	type SemanticNodeInput,
 	type SemanticRelation,
 	type SemanticView,
-} from "./semantic-model";
+} from "./semantic-model.js";
 
 export {
 	beginKnowledgeFlow,
@@ -263,14 +263,14 @@ export {
 	requestWikiReviewUi,
 	subscribeKnowledgeUi,
 	updateKnowledgeFlow,
-} from "./ui-state";
+} from "./ui-state.js";
 export {
 	projectKnowledgeEvent,
 	projectKnowledgeSnapshot,
 	registerAnswerPublication,
-} from "./publication";
+} from "./publication.js";
 
-export { KnowledgeService, closeKnowledgeServices, getKnowledgeService, notifyKnowledgeChange } from "./service";
+export { KnowledgeService, closeKnowledgeServices, getKnowledgeService, notifyKnowledgeChange } from "./service.js";
 
 export {
 	checkKnowledgeReceiptFreshness,
@@ -294,7 +294,7 @@ export {
 	type KnowledgeReuseStatus,
 	type KnowledgeSnapshotInput,
 	type KnowledgeSourceState,
-} from "./reuse";
+} from "./reuse.js";
 
 export {
 	autoApplyWikiProposal,
@@ -306,7 +306,7 @@ export {
 	undoWikiUpdate,
 	wikiHistory,
 	validateWikiSourcePaths as validateRuntimeWikiSourcePaths,
-} from "./wiki-review";
+} from "./wiki-review.js";
 
 export {
 	SPECIALIST_LIMITS,
@@ -317,15 +317,15 @@ export {
 	specialistQueueSnapshot,
 	specialistSettings,	
 	withSpecialistSlot,
-} from "./specialist-host";
+} from "./specialist-host.js";
 
-export { createKnowledgeSpecialists, knowledgeReadStart, shouldOrientKnowledge } from "./specialists";
+export { createKnowledgeSpecialists, knowledgeReadStart, shouldOrientKnowledge } from "./specialists.js";
 
-export { saveSpecialistExplainer } from "./specialist-delivery";
+export { saveSpecialistExplainer } from "./specialist-delivery.js";
 
-export { lastWikiModelReview, reviewWikiWithModel } from "./wiki-model-review";
+export { lastWikiModelReview, reviewWikiWithModel } from "./wiki-model-review.js";
 
-export * from "./ui-service";
+export * from "./ui-service.js";
 
 export {
 	EXPERIENCE_LIMITS,
@@ -356,5 +356,5 @@ export {
 	type ExperienceStoreOptions,
 	type WorkflowSpecDiff,
 	type WorkflowSpecDiffValue,
-} from "./experience-store";
-export { EvolutionIndex, type EvolutionIndexStore } from "./evolution";
+} from "./experience-store.js";
+export { EvolutionIndex, type EvolutionIndexStore } from "./evolution.js";

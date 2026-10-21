@@ -4,33 +4,33 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { loadWorkspaceConfig } from "./runtime-host";
-import { inspectObsidianSetup, inspectSetupDirectory, resolveSetupVault } from "./runtime-host";
-import { researchSetupOptions } from "./runtime-host";
-import { runtimeSlot } from "./runtime-host";
-import { LAYOUT } from "./runtime-host";
+import { loadWorkspaceConfig } from "./runtime-host.js";
+import { inspectObsidianSetup, inspectSetupDirectory, resolveSetupVault } from "./runtime-host.js";
+import { researchSetupOptions } from "./runtime-host.js";
+import { runtimeSlot } from "./runtime-host.js";
+import { LAYOUT } from "./runtime-host.js";
 import {
 	knowledgeDirectory,
 	projectIdentity,
 	readKnowledgeBinding,
 	withKnowledgeBinding,
-} from "./config";
-import { collectRecentNotes, DAILY_DISCOVERY_LIMITS, ideaNoteMarkdown } from "./daily-discovery";
-import { safeNotePath } from "./files";
-import { memoryNoteMarkdown, memoryNoteSlug } from "./memory-note";
-import { runNavigationMaintenance } from "./maintenance";
-import { readReviewMode, saveReviewMode } from "./review-policy";
-import { getKnowledgeService } from "./service";
-import { normalizeSourceLinks } from "./source-links";
-import { setSpecialistSettings, specialistSettings } from "./specialist-host";
-import { flowFor, invalidateKnowledgeUi, knowledgeAnswerRate } from "./ui-state";
+} from "./config.js";
+import { collectRecentNotes, DAILY_DISCOVERY_LIMITS, ideaNoteMarkdown } from "./daily-discovery.js";
+import { safeNotePath } from "./files.js";
+import { memoryNoteMarkdown, memoryNoteSlug } from "./memory-note.js";
+import { runNavigationMaintenance } from "./maintenance.js";
+import { readReviewMode, saveReviewMode } from "./review-policy.js";
+import { getKnowledgeService } from "./service.js";
+import { normalizeSourceLinks } from "./source-links.js";
+import { setSpecialistSettings, specialistSettings } from "./specialist-host.js";
+import { flowFor, invalidateKnowledgeUi, knowledgeAnswerRate } from "./ui-state.js";
 import {
 	decideWikiProposal,
 	listWikiProposals,
 	previewWikiProposal,
 	undoWikiUpdate,
 	wikiHistory,
-} from "./wiki-review";
+} from "./wiki-review.js";
 
 const runtimeState = runtimeSlot("knowledge", "uiService", () => ({
 	previews: new Map(),
@@ -254,7 +254,7 @@ export async function knowledgePreviewReview({ cwd, id, revision }) {
 	});
 	while (runtimeState.previews.size > MAX_PREVIEWS)
 		runtimeState.previews.delete(runtimeState.previews.keys().next().value);
-	const { lastWikiModelReview } = await import("./wiki-model-review");
+	const { lastWikiModelReview } = await import("./wiki-model-review.js");
 	return {
 		...preview,
 		modelReview: await lastWikiModelReview(service, id, preview.proposalHash),
@@ -369,7 +369,7 @@ export async function knowledgeOpenTarget({ cwd = null, path = null, revision })
 	const { binding } = await bound(revision);
 	const { project } = await projectAt(cwd);
 	if (path) {
-		const { canRead, validateNote } = await import("./files");
+		const { canRead, validateNote } = await import("./files.js");
 		validateNote(path);
 		if (!canRead(path, project))
 			throw new Error("Note is outside shared/current-project scope");
@@ -465,7 +465,7 @@ export async function getKnowledgeTopics({ cwd, bindingRevision, query = "" } = 
 	if (!Number.isSafeInteger(bindingRevision)) throw new Error("Binding revision is required");
 	const { binding } = await bound(bindingRevision),
 		project = requireProject(await projectAt(cwd)),
-		mod = await import("./topic-memory"),
+		mod = await import("./topic-memory.js"),
 		memory = await mod.createTopicMemory({ binding, project });
 	return withKnowledgeBinding(binding, () =>
 		memory.list(typeof query === "string" ? query.slice(0, 200) : "", { includeArchived: true }),
@@ -480,7 +480,7 @@ export async function archiveKnowledgeTopic({ cwd, bindingRevision, id, expected
 	if (typeof id !== "string" || !id) throw new Error("Topic id is required");
 	const { binding } = await bound(bindingRevision),
 		project = requireProject(await projectAt(cwd)),
-		mod = await import("./topic-memory"),
+		mod = await import("./topic-memory.js"),
 		memory = await mod.createTopicMemory({ binding, project });
 	return withKnowledgeBinding(binding, () => memory.archive(id, expectedRevision));
 }

@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { renameWithRetry } from "../src/wiki-review";
+import { renameWithRetry } from "../src/core/wiki-review.js";
 
 const fail = (code: string) => Object.assign(new Error(code), { code });
 

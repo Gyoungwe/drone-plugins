@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -26,6 +27,7 @@ const files = new Set(pack[0]?.files?.map((file) => file.path) || []);
 for (const required of [
 	"dist/index.mjs",
 	"lib/knowledge/runtime/worker.mjs",
+	"lib/knowledge/runtime/.knowledge-worker-manifest.json",
 	"plugin.manifest.json",
 	"build-manifest.json",
 	"skills/research-vault/SKILL.md",
@@ -37,6 +39,9 @@ const tarball = join(packRoot, pack[0]?.filename || "");
 assert(tarball.endsWith(".tgz"), "npm pack did not produce a tarball");
 await execFileAsync("tar", ["-xzf", tarball, "-C", extractRoot]);
 const artifactRoot = join(extractRoot, "package");
+const worker = await readFile(join(artifactRoot, "lib/knowledge/runtime/worker.mjs"));
+const workerManifest = JSON.parse(await readFile(join(artifactRoot, "lib/knowledge/runtime/.knowledge-worker-manifest.json"), "utf8"));
+assert.equal(workerManifest.outputSha256, createHash("sha256").update(worker).digest("hex"));
 const previousKnowledgeDir = process.env.DRONE_KNOWLEDGE_DIR;
 try {
 	process.env.DRONE_KNOWLEDGE_DIR = join(root, "unconfigured");

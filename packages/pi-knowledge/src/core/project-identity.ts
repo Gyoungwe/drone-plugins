@@ -13,7 +13,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { projectIdentity } from "./config";
+import { projectIdentity } from "./config.js";
 
 /** 会话条目类型：日常空间按会话选择的项目（`pi.appendEntry(SESSION_PROJECT_ENTRY, { project })`）。 */
 export const SESSION_PROJECT_ENTRY = "drone-session-project-v1";

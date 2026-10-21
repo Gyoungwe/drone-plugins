@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSemanticModel } from "../src/semantic-model";
+import { createSemanticModel } from "../src/core/semantic-model.js";
 
 const node = (path: string, title = path, kind = "note", identity?: string) => ({
 	path,

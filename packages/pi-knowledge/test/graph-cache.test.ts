@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createRevisionCache } from "../src/graph-cache";
+import { createRevisionCache } from "../src/core/graph-cache.js";
 
 describe("revision-scoped graph cache", () => {
 	it("reuses snapshots within a revision and drops them after an index change", () => {

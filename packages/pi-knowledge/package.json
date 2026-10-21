@@ -1,6 +1,6 @@
 {
 	"name": "@gyoungwe/pi-knowledge",
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"description": "Knowledge and Vault tools for native Pi hosts",
 	"repository": {
 		"type": "git",
@@ -16,6 +16,18 @@
 	"license": "MIT",
 	"type": "module",
 	"main": "./dist/index.mjs",
+	"exports": {
+		".": {
+			"types": "./dist/types/host.d.ts",
+			"import": "./dist/index.mjs",
+			"default": "./dist/index.mjs"
+		},
+		"./host": {
+			"types": "./dist/host.d.ts",
+			"import": "./dist/host.mjs",
+			"default": "./dist/host.mjs"
+		}
+	},
 	"files": [
 		"dist",
 		"lib",
@@ -37,12 +49,18 @@
 		"build": "node scripts/build.mjs",
 		"build:check": "node scripts/build.mjs --check",
 		"smoke": "node scripts/smoke.mjs",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@gyoungwe/plugin-api": "^1.1.0"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
 	},
 	"devDependencies": {
-		"typescript": "^5.9.0"
+		"esbuild": "0.25.12",
+		"typescript": "^5.9.0",
+		"vitest": "^3.2.0"
 	}
 }

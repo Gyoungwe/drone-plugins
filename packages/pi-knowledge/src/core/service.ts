@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { mentionedWikiTitle } from "./topic-probe";
-import { expandWithGraph, GRAPH_RETRIEVAL_DEFAULTS } from "./graph-retrieval";
+import { mentionedWikiTitle } from "./topic-probe.js";
+import { expandWithGraph, GRAPH_RETRIEVAL_DEFAULTS } from "./graph-retrieval.js";
 import { createHash, randomUUID } from "node:crypto";
 import { join, relative, resolve, sep } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -9,15 +9,15 @@ import {
 	emitKnowledgeWorkerLifecycle,
 	emitProcessEvent,
 	knowledgeWorkerMetadata,
-} from "./runtime-host";
-import { runRuntimeExclusive, runtimeSlot } from "./runtime-host";
-import { hasPaperCitation, requiresPaperEvidence } from "./runtime-host";
-import { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } from "./config";
-import { canRead, validateNote } from "./files";
-import { readReviewMode } from "./review-policy";
-import { embedTexts, validateSemanticConfig } from "./semantic-provider";
-import { readSemanticSettings, saveSemanticSettings } from "./semantic-settings";
-import { invalidateKnowledgeUi } from "./ui-state";
+} from "./runtime-host.js";
+import { runRuntimeExclusive, runtimeSlot } from "./runtime-host.js";
+import { hasPaperCitation, requiresPaperEvidence } from "./runtime-host.js";
+import { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding, type KnowledgeBinding } from "./config.js";
+import { canRead, validateNote } from "./files.js";
+import { readReviewMode } from "./review-policy.js";
+import { embedTexts, validateSemanticConfig } from "./semantic-provider.js";
+import { readSemanticSettings, saveSemanticSettings } from "./semantic-settings.js";
+import { invalidateKnowledgeUi } from "./ui-state.js";
 
 const pool = runtimeSlot("knowledge", "workerPool", () => {
 	const services = new Map();
@@ -1091,7 +1091,7 @@ export class KnowledgeService {
 		return this.close();
 	}
 }
-export async function getKnowledgeService(binding = null) {
+export async function getKnowledgeService(binding: KnowledgeBinding | null = null) {
 	binding ||= await readKnowledgeBinding();
 	const directory = knowledgeDirectory();
 	if (!binding || !directory) throw new Error("No application knowledge Vault is bound");

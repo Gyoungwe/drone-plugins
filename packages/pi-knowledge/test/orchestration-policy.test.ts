@@ -3,7 +3,7 @@ import {
 	createSpecialistBudget,
 	decideSpecialistRun,
 	specialistRequestSignature,
-} from "../src/orchestration-policy";
+} from "../src/core/orchestration-policy.js";
 
 describe("orchestration policy", () => {
 	it("keeps request signatures deterministic", () => {

@@ -6,7 +6,7 @@ import {
 	ingestKnowledgeSnapshot,
 	KnowledgeReuseIndex,
 	resolveKnowledgeContext,
-} from "../src/reuse";
+} from "../src/core/reuse.js";
 
 const HASH_A = "a".repeat(64);
 const HASH_B = "b".repeat(64);

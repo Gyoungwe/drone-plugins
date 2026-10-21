@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CANDIDATE_MIN_CHARS, classifyIngest, INGEST_RULES, type IngestInput } from "../src/ingest-policy";
+import { CANDIDATE_MIN_CHARS, classifyIngest, INGEST_RULES, type IngestInput } from "../src/core/ingest-policy.js";
 
 const filler = "This protocol describes each step in detail with reagent amounts and timings. ".repeat(5);
 const METHOD_REPORT = `# Library prep\n\n## Methods\n\n${filler}\n\nBased on doi:10.1038/s41586-020-2649-2.\n`;

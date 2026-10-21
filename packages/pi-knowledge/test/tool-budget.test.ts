@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createToolBudget } from "../src/tool-budget";
+import { createToolBudget } from "../src/core/tool-budget.js";
 
 describe("knowledge tool budget", () => {
 	it("bounds reads, searches and repeated calls while allowing two recoveries", () => {

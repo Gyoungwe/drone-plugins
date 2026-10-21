@@ -4,7 +4,9 @@
   "private": true,
   "description": "Drone capability and Desktop UI plugins",
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "npm run --workspace @gyoungwe/pi-knowledge build && npm run --workspace @gyoungwe/pi-analysis build && npm run --workspace @gyoungwe/pi-evidence build && npm run --workspace @gyoungwe/pi-connectors build && npm run --workspace @gyoungwe/desktop-ui-pack build && npm run --workspace @gyoungwe/research-suite build",
     "check:manifests": "node scripts/check-manifests.mjs",
@@ -32,7 +34,8 @@
     "@gyoungwe/pi-core": "0.1.3",
     "@earendil-works/pi-coding-agent": "1.1.0",
     "@types/node": "^22.19.19",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@gyoungwe/plugin-api": "file:vendor/gyoungwe-plugin-api-1.1.0.tgz"
   },
   "overrides": {
     "@earendil-works/chord": "1.1.0",

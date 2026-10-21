@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createTaskFeedback, guardResearchToolResult } from "../src/task-feedback";
+import { createTaskFeedback, guardResearchToolResult } from "../src/core/task-feedback.js";
 
 const roots: string[] = [];
 afterEach(async () => {

@@ -1,23 +1,26 @@
 #!/usr/bin/env node
 
-// The external repository owns the publishable artifact and its freshness
-// checks. The bundle itself is produced by the Drone host, where the private
-// domain sources live, then committed here through the subtree migration.
-
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { join, relative, resolve } from "node:path";
+import { build } from "esbuild";
 
 const packageRoot = resolve(import.meta.dirname, "..");
+const workspaceRoot = resolve(packageRoot, "../..");
 const checkOnly = process.argv.includes("--check");
-// `research-workflow` is owned by @gyoungwe/pi-research. Keeping it out of
-// this package prevents duplicate skill discovery when the suite is loaded.
-const expectedSkills = ["research-vault", "research-show-me"];
 const packageJson = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 const manifestPath = join(packageRoot, "plugin.manifest.json");
 const buildManifestPath = join(packageRoot, "build-manifest.json");
-const outputPaths = ["dist/index.mjs", "lib/knowledge/runtime/worker.mjs"];
+const artifactOutputs = [
+	"dist/index.mjs",
+	"dist/host.mjs",
+	"dist/host.d.ts",
+	"lib/knowledge/runtime/worker.mjs",
+];
+const outputs = [...artifactOutputs, "lib/knowledge/runtime/.knowledge-worker-manifest.json"];
+const expectedSkills = ["research-vault", "research-show-me"];
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const fail = (message) => {
@@ -33,39 +36,77 @@ const ensureFile = async (relativePath) => {
 	}
 	return path;
 };
+const collectFiles = async (directory) => {
+	const result = [];
+	for (const entry of await readdir(directory, { withFileTypes: true })) {
+		const path = join(directory, entry.name);
+		if (entry.isDirectory()) result.push(...(await collectFiles(path)));
+		else result.push(path);
+	}
+	return result;
+};
 
 if (packageJson.name !== "@gyoungwe/pi-knowledge") fail(`unexpected package name: ${packageJson.name}`);
+if (packageJson.version !== "0.2.0") fail("pi-knowledge version must be 0.2.0 for P2");
 if (packageJson.main !== "./dist/index.mjs") fail("main must point at the bundled extension");
 if (packageJson.peerDependencies?.["@earendil-works/pi-coding-agent"] !== ">=1.1.0 <2.0.0")
 	fail("Pi peer dependency must remain >=1.1.0 <2.0.0");
 
-const outputBytes = new Map();
-for (const relativePath of outputPaths) outputBytes.set(relativePath, await readFile(await ensureFile(relativePath)));
+if (!checkOnly) {
+	await rm(join(packageRoot, "dist"), { recursive: true, force: true });
+	await rm(join(packageRoot, "lib"), { recursive: true, force: true });
+	await mkdir(join(packageRoot, "dist"), { recursive: true });
+	await mkdir(join(packageRoot, "lib/knowledge/runtime"), { recursive: true });
+	await build({
+		entryPoints: [join(packageRoot, "src/extension/knowledge-extension.ts")],
+		bundle: true,
+		format: "esm",
+		platform: "node",
+		target: "node20",
+		outfile: join(packageRoot, "dist/index.mjs"),
+		sourcemap: false,
+		external: ["node:*"],
+	});
+	await build({
+		entryPoints: [join(packageRoot, "src/extension/knowledge-worker.ts")],
+		bundle: true,
+		format: "esm",
+		platform: "node",
+		target: "node20",
+		outfile: join(packageRoot, "lib/knowledge/runtime/worker.mjs"),
+		sourcemap: false,
+		external: ["node:*"],
+	});
+	await build({
+		entryPoints: [join(packageRoot, "src/host.ts")],
+		bundle: true,
+		format: "esm",
+		platform: "node",
+		target: "node20",
+		outfile: join(packageRoot, "dist/host.mjs"),
+		sourcemap: false,
+		external: ["node:*"],
+	});
+	const tsc = join(workspaceRoot, "node_modules/.bin/tsc");
+	execFileSync(tsc, ["-p", join(packageRoot, "tsconfig.build.json")], { cwd: packageRoot, stdio: "inherit" });
+	await cp(join(packageRoot, "dist/types/host.d.ts"), join(packageRoot, "dist/host.d.ts"));
+}
 
-// The host bundle must be executable from an installed package. A fallback to a
-// checkout's .pi runtime would make a published package depend on private state.
-for (const [relativePath, bytes] of outputBytes) {
-	const text = bytes.toString("utf8");
-	if (/from\s+["'](?:electron|@drone\/(?:backend|desktop))["']/.test(text))
-		fail(`${relativePath} contains a forbidden host import`);
-	if (/import\s*\(\s*["'](?:electron|@drone\/(?:backend|desktop))["']/.test(text))
-		fail(`${relativePath} contains a forbidden dynamic host import`);
-	if (/(?:from|import\s*\(|require\s*\()\s*["'](?:\.\/\.\/)+/.test(text))
-		fail(`${relativePath} contains a package-boundary relative import`);
-	if (text.includes(".pi/lib/knowledge/runtime/worker.mjs"))
-		fail(`${relativePath} falls back to a host .pi worker`);
+for (const relativePath of artifactOutputs) await ensureFile(relativePath);
+for (const relativePath of ["dist/index.mjs", "dist/host.mjs", "lib/knowledge/runtime/worker.mjs"]) {
+	const text = (await readFile(await ensureFile(relativePath))).toString("utf8");
+	if (/from\s+["'](?:electron|@drone\/(?:backend|desktop))["']/.test(text)) fail(`${relativePath} contains a forbidden host import`);
+	if (/import\s*\(\s*["'](?:electron|@drone\/(?:backend|desktop))["']/.test(text)) fail(`${relativePath} contains a forbidden dynamic host import`);
+	if (/(?:from|import\s*\(|require\s*\()["'](?:\.\/\.\/)+/.test(text)) fail(`${relativePath} contains a package-boundary relative import`);
 }
 
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 if (manifest.schemaVersion !== 1) fail("plugin.manifest schemaVersion must be 1");
 if (manifest.id !== "drone-pi-knowledge") fail("plugin.manifest id is incorrect");
 if (manifest.version !== packageJson.version) fail("plugin.manifest version must match package.json");
-if (manifest.drone?.pluginApi !== 1) fail("plugin.manifest drone.pluginApi must be 1");
-if (manifest.drone?.resultContract !== "drone-result/v3") fail("plugin.manifest resultContract must be drone-result/v3");
 if (manifest.entrypoints?.extension !== "./dist/index.mjs") fail("extension entrypoint is incorrect");
 if (manifest.entrypoints?.worker !== "./lib/knowledge/runtime/worker.mjs") fail("worker entrypoint is incorrect");
-if (manifest.entrypoints?.skills !== "./skills") fail("skills entrypoint is incorrect");
-if (!Array.isArray(manifest.hosts) || !manifest.hosts.includes("native-pi")) fail("native-pi host is missing");
+if (manifest.entrypoints?.host !== "./dist/host.mjs") fail("host entrypoint is incorrect");
 
 const skills = [];
 for (const name of expectedSkills) {
@@ -73,28 +114,55 @@ for (const name of expectedSkills) {
 	await ensureFile(relativePath);
 	skills.push(relativePath);
 }
-const skillRoot = join(packageRoot, "skills");
-for (const entry of await readdir(skillRoot, { withFileTypes: true })) {
-	if (entry.isDirectory() && !expectedSkills.includes(entry.name)) fail(`unexpected skill directory: ${entry.name}`);
+
+const sourceFiles = (await collectFiles(join(packageRoot, "src")))
+	.filter((path) => /\.(?:ts|mjs)$/.test(path))
+	.sort();
+const sourceHashes = {};
+for (const path of sourceFiles) sourceHashes[relative(packageRoot, path).replaceAll("\\", "/")] = sha256(await readFile(path));
+const sourceDigest = createHash("sha256");
+for (const path of sourceFiles) {
+	sourceDigest.update(relative(packageRoot, path).replaceAll("\\", "/"));
+	sourceDigest.update("\0");
+	sourceDigest.update(await readFile(path));
+	sourceDigest.update("\0");
 }
-
-const source = await readFile(join(packageRoot, "src/index.ts"), "utf8");
-if (/@drone\//.test(source) || /from\s+["']\.\./.test(source)) fail("source marker reaches into private Drone packages");
-
-const current = existsSync(buildManifestPath) ? JSON.parse(await readFile(buildManifestPath, "utf8")) : null;
+const knowledgeSourceSha256 = sourceDigest.digest("hex");
+const workerPath = await ensureFile("lib/knowledge/runtime/worker.mjs");
+const workerManifest = {
+	version: 1,
+	generator: "packages/pi-knowledge/scripts/build.mjs",
+	output: "worker.mjs",
+	source: "src/extension/knowledge-worker.ts",
+	inputsSha256: knowledgeSourceSha256,
+	knowledgeSourceSha256,
+	outputSha256: sha256(await readFile(workerPath)),
+};
+const workerManifestPath = join(packageRoot, "lib/knowledge/runtime/.knowledge-worker-manifest.json");
+const currentWorkerManifest = existsSync(workerManifestPath)
+	? JSON.parse(await readFile(workerManifestPath, "utf8"))
+	: null;
+if (checkOnly) {
+	if (JSON.stringify(currentWorkerManifest) !== JSON.stringify(workerManifest))
+		fail(".knowledge-worker-manifest.json is stale; run npm run build");
+} else {
+	await writeFile(workerManifestPath, `${JSON.stringify(workerManifest, null, "\t")}\n`);
+}
+const outputHashes = {};
+for (const relativePath of outputs) outputHashes[relativePath] = sha256(await readFile(await ensureFile(relativePath)));
 const next = {
 	version: 1,
 	generator: "packages/pi-knowledge/scripts/build.mjs",
-	artifactSource: "drone-host-bundle",
-	outputs: Object.fromEntries([...outputBytes].map(([path, bytes]) => [path, sha256(bytes)])),
+	artifactSource: "source",
+	sourceHashes,
+	outputs: outputHashes,
 	skills,
 };
-const currentComparable = current && JSON.stringify(current);
-const nextComparable = JSON.stringify(next, null, "\t") + "\n";
+const current = existsSync(buildManifestPath) ? JSON.parse(await readFile(buildManifestPath, "utf8")) : null;
 if (checkOnly) {
-	if (currentComparable !== JSON.stringify(next)) fail("build-manifest.json is stale; run npm run build");
-	console.log("pi-knowledge package artifacts are up to date");
+	if (JSON.stringify(current) !== JSON.stringify(next)) fail("build-manifest.json is stale; run npm run build");
+	console.log("pi-knowledge source artifacts are up to date");
 } else {
-	await writeFile(buildManifestPath, nextComparable);
-	console.log("verified pi-knowledge package artifacts and refreshed build-manifest.json");
+	await writeFile(buildManifestPath, `${JSON.stringify(next, null, "\t")}\n`);
+	console.log("built pi-knowledge source artifacts and refreshed build-manifest.json");
 }

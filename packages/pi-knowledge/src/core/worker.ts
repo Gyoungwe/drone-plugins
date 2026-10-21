@@ -13,17 +13,17 @@ import {
 	readNoteFile,
 	snippet,
 	validateNote,
-} from "./files";
-import { backlinkContext } from "./graph-retrieval";
+} from "./files.js";
+import { backlinkContext } from "./graph-retrieval.js";
 import {
 	buildKnowledgeSearchExpression,
 	splitKnowledgeChunks,
 	tokenizeKnowledgeText,
-} from "./search-policy";
-import { parseFrontmatter } from "./ingest-frontmatter";
-import { noteDisplayTitle } from "./note-title";
-import { createSemanticModel } from "./semantic-model";
-import { createRevisionCache } from "./graph-cache";
+} from "./search-policy.js";
+import { parseFrontmatter } from "./ingest-frontmatter.js";
+import { noteDisplayTitle } from "./note-title.js";
+import { createSemanticModel } from "./semantic-model.js";
+import { createRevisionCache } from "./graph-cache.js";
 
 await mkdir(dirname(workerData.database), { recursive: true, mode: 0o700 });
 const db = new DatabaseSync(workerData.database, { timeout: 1500 });

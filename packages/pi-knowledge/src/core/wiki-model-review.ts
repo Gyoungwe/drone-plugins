@@ -2,12 +2,12 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { runtimeSlot } from "./runtime-host";
-import { knowledgeDirectory, withKnowledgeBinding } from "./config";
-import { canRead, readNoteFile, validateNote } from "./files";
-import { specialistSettings } from "./specialist-host";
-import { consumeKnowledgeReviewPreview } from "./runtime-host";
-import { decideWikiProposal, previewWikiProposal } from "./wiki-review";
+import { runtimeSlot } from "./runtime-host.js";
+import { knowledgeDirectory, withKnowledgeBinding } from "./config.js";
+import { canRead, readNoteFile, validateNote } from "./files.js";
+import { specialistSettings } from "./specialist-host.js";
+import { consumeKnowledgeReviewPreview } from "./runtime-host.js";
+import { decideWikiProposal, previewWikiProposal } from "./wiki-review.js";
 
 // A review is single-flight per host runtime. Keeping this guard in a runtime
 // slot prevents one desktop host from blocking an unrelated host in-process.

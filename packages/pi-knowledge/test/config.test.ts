@@ -8,7 +8,7 @@ import {
 	readKnowledgeBinding,
 	saveKnowledgeBinding,
 	withKnowledgeBinding,
-} from "../src/config";
+} from "../src/core/config.js";
 
 let root: string;
 let vault: string;

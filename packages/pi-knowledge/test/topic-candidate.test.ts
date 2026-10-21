@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoTopicCandidate } from "../src/topic-candidate";
+import { autoTopicCandidate } from "../src/core/topic-candidate.js";
 
 describe("topic candidate", () => {
 	it("requires current read evidence and bounded summary size", () => {

@@ -11,7 +11,7 @@ import {
 	replaceVaultFile,
 	updateVaultNavigation,
 	VaultFileConflictError,
-} from "../src/layout";
+} from "../src/core/layout.js";
 
 let vault: string;
 
@@ -39,7 +39,7 @@ describe("knowledge Vault layout", () => {
 		await initializeProjectContext(vault, "alpha-2");
 		const context = await readFile(join(vault, "Projects/alpha-2/Context.md"), "utf8");
 		expect(context).toContain('project: "alpha-2"');
-		await expect(initializeProjectContext(vault, "../outside")).rejects.toThrow("Invalid project identifier");
+		await expect(initializeProjectContext(vault, "../outside.js")).rejects.toThrow("Invalid project identifier");
 	});
 
 	it("updates only managed navigation content and keeps human text", async () => {
@@ -65,7 +65,7 @@ describe("knowledge Vault layout", () => {
 	});
 
 	it("keeps all initialization destinations inside the Vault", async () => {
-		await expect(containedVaultFile(vault, "../outside.md")).rejects.toThrow("Path must stay inside Vault");
+		await expect(containedVaultFile(vault, "../outside.md.js")).rejects.toThrow("Path must stay inside Vault");
 		const outside = await realpath(await mkdtemp(join(tmpdir(), "drone-knowledge-outside-")));
 		await symlink(outside, join(vault, "escape"));
 		await expect(containedVaultFile(vault, "escape/Index.md")).rejects.toThrow("Path must stay inside Vault");

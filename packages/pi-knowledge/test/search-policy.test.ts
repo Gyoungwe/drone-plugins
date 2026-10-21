@@ -3,7 +3,7 @@ import {
 	buildKnowledgeSearchExpression,
 	splitKnowledgeChunks,
 	tokenizeKnowledgeText,
-} from "../src/search-policy";
+} from "../src/core/search-policy.js";
 
 describe("knowledge search policy", () => {
 	it("normalizes Latin text and emits Chinese unigram/bigram terms", () => {

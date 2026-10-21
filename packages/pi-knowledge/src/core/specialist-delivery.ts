@@ -2,9 +2,9 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { loadWorkspaceConfig } from "./runtime-host";
-import { publishExplainer } from "./runtime-host";
-import { withKnowledgeBinding } from "./config";
+import { loadWorkspaceConfig } from "./runtime-host.js";
+import { publishExplainer } from "./runtime-host.js";
+import { withKnowledgeBinding } from "./config.js";
 
 const contained = (root, path) => {
 	const rel = relative(root, path);

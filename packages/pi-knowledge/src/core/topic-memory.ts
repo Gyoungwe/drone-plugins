@@ -2,10 +2,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { runRuntimeExclusive } from "./runtime-host";
-import { compareClaimSets } from "./claim-conflicts";
-import { knowledgeDirectory } from "./config";
-import { canRead, readNoteFile, validateNote } from "./files";
+import { runRuntimeExclusive } from "./runtime-host.js";
+import { compareClaimSets } from "./claim-conflicts.js";
+import { knowledgeDirectory } from "./config.js";
+import { canRead, readNoteFile, validateNote } from "./files.js";
 
 export const TOPIC_MEMORY_VERSION = 1;
 export const TOPIC_MEMORY_LIMITS = Object.freeze({

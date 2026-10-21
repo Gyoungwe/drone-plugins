@@ -2,10 +2,10 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { emitProcessEvent } from "./runtime-host";
-import { runtimeSlot } from "./runtime-host";
-import { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } from "./config";
-import { invalidateKnowledgeUi } from "./ui-state";
+import { emitProcessEvent } from "./runtime-host.js";
+import { runtimeSlot } from "./runtime-host.js";
+import { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } from "./config.js";
+import { invalidateKnowledgeUi } from "./ui-state.js";
 
 const state = runtimeSlot("knowledge", "specialists", () => ({
 	hosts: new Map(),

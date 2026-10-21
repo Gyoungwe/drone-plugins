@@ -1,4 +1,4 @@
-import { resolveWorkspaceProject, type SessionContextLike, sessionEntriesOf } from "./project-identity";
+import { resolveWorkspaceProject, type SessionContextLike, sessionEntriesOf } from "./project-identity.js";
 
 /** Tool result envelope shared by knowledge extension adapters. */
 export interface KnowledgeToolResult<T = unknown> {

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { advisoryCodes, readReviewMode, saveReviewMode } from "../src/review-policy";
+import { advisoryCodes, readReviewMode, saveReviewMode } from "../src/core/review-policy.js";
 
 let root: string;
 

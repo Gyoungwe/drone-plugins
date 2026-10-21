@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareClaims, type KnowledgeClaim } from "../src/index";
+import { compareClaims, type KnowledgeClaim } from "../src/core/index.js";
 
 const claim = (overrides: Partial<KnowledgeClaim> = {}): KnowledgeClaim => ({
 	claim: "Wg activates wing-margin growth",

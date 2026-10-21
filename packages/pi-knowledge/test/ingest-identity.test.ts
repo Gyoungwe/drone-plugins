@@ -17,7 +17,7 @@ import {
 	normalizeZoteroKey,
 	sameIdentity,
 	stripFrontmatter,
-} from "../src/ingest-identity";
+} from "../src/core/ingest-identity.js";
 
 describe("normalizeDoi", () => {
 	it.each([

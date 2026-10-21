@@ -1,4 +1,4 @@
-import { parseFrontmatter } from "./ingest-frontmatter";
+import { parseFrontmatter } from "./ingest-frontmatter.js";
 
 const clean = (value: unknown) =>
 	typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 200) : "";

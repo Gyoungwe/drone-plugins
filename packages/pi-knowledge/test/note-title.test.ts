@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { looksLikeFileName, noteDisplayTitle } from "../src/note-title";
+import { looksLikeFileName, noteDisplayTitle } from "../src/core/note-title.js";
 
 describe("noteDisplayTitle", () => {
 	it("prefers the ingestion topic over a file-name heading", () => {

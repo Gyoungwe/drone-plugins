@@ -9,7 +9,7 @@ import {
 	explainerTopicId,
 	result,
 	sessionIdentity,
-} from "../src/extension-helpers";
+} from "../src/core/extension-helpers.js";
 
 const roots: string[] = [];
 afterEach(async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EvolutionIndex, type EvolutionIndexStore } from "../src/evolution";
+import { EvolutionIndex, type EvolutionIndexStore } from "../src/core/evolution.js";
 
 const ref = (kind: string, id: string) => ({ kind, id });
 

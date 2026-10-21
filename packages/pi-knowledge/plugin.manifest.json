@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "drone-pi-knowledge",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "pi": {
     "apiVersion": 1,
     "minHostVersion": "1.1.0",
@@ -14,6 +14,7 @@
   "entrypoints": {
     "extension": "./dist/index.mjs",
     "worker": "./lib/knowledge/runtime/worker.mjs",
+    "host": "./dist/host.mjs",
     "skills": "./skills"
   },
   "capabilities": ["knowledge", "search", "evidence-context"],

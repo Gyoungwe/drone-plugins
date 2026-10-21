@@ -3,7 +3,7 @@
  * 临时内容（ephemeral）。九条规则按顺序执行，第一条命中即生效；每条都只依赖可机器判定的信号。
  * 纯函数：不读写文件，调用方提供路径、来源与（可选）正文。规则说明见 docs/knowledge-ingest-standard.md。
  */
-import { extractIdentifiers } from "./ingest-identity";
+import { extractIdentifiers } from "./ingest-identity.js";
 import {
 	classForType,
 	type IngestClass,
@@ -13,7 +13,7 @@ import {
 	type KnowledgeType,
 	type NoteType,
 	parseFrontmatter,
-} from "./ingest-frontmatter";
+} from "./ingest-frontmatter.js";
 
 /** 运行结果的用途（与 inquiry `ArtifactPurpose` 对齐，另加日志、来源、摘要、卡片和展示层）。 */
 export type IngestPurpose =

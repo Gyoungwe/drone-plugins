@@ -2,11 +2,11 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { knowledgeDirectory } from "./config";
-import { emitProcessEvent } from "./runtime-host";
-import { runtimeSlot } from "./runtime-host";
-import { flowCardBuilder, toolMeta } from "./runtime-host";
-import { failureCard, flowCard } from "./flow-cards";
+import { knowledgeDirectory } from "./config.js";
+import { emitProcessEvent } from "./runtime-host.js";
+import { runtimeSlot } from "./runtime-host.js";
+import { flowCardBuilder, toolMeta } from "./runtime-host.js";
+import { failureCard, flowCard } from "./flow-cards.js";
 
 const state = runtimeSlot("knowledge", "ui", () => ({
 	listeners: new Set(),

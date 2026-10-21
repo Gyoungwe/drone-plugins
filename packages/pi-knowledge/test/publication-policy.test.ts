@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advisoryLine, knowledgeFailure, publicationNotice } from "../src/publication-policy";
+import { advisoryLine, knowledgeFailure, publicationNotice } from "../src/core/publication-policy.js";
 
 describe("knowledge publication policy", () => {
 	it("classifies bounded failure codes and paths without exposing arbitrary error text", () => {

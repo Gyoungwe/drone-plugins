@@ -6,7 +6,7 @@ import {
 	createSemanticSettingsApi,
 	createSemanticSettingsState,
 	validateSemanticConfig,
-} from "../src/semantic-settings";
+} from "../src/core/semantic-settings.js";
 
 let root: string;
 let vaultId: string;

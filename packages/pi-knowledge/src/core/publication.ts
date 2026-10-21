@@ -1,19 +1,19 @@
 // @ts-nocheck
 import { createHash, randomUUID } from "node:crypto";
-import { runtimeSlot } from "./runtime-host";
-import { diagnosticText } from "./runtime-host";
+import { runtimeSlot } from "./runtime-host.js";
+import { diagnosticText } from "./runtime-host.js";
 import {
 	advisoryLine,
 	advisoryNotice,
 	knowledgeFailure,
 	publicationNotices as notices,
-} from "./publication-policy";
-import { evaluateMetacognitivePublication } from "./metacognitive-policy";
-import { advisoryCodes, readReviewMode } from "./review-policy";
+} from "./publication-policy.js";
+import { evaluateMetacognitivePublication } from "./metacognitive-policy.js";
+import { advisoryCodes, readReviewMode } from "./review-policy.js";
 
 export { advisoryLine, advisoryNotice, knowledgeFailure };
 
-import { publicationKnowledgeFlow, updateKnowledgeFlow } from "./ui-state";
+import { publicationKnowledgeFlow, updateKnowledgeFlow } from "./ui-state.js";
 
 const state = runtimeSlot(
 	"knowledge",
