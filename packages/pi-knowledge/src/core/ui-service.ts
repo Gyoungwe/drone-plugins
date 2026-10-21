@@ -271,6 +271,8 @@ export function consumeKnowledgeReviewPreview(cwd, token) {
 	runtimeState.previews.delete(token);
 	return entry;
 }
+/** Host adapter seam for the UI preview registry; distinct from the runtime host callback. */
+export const consumeKnowledgeReviewPreviewEntry = consumeKnowledgeReviewPreview;
 /** @param {Record<string, any>} options */
 export async function knowledgeDecideReview({ cwd, token, decision }) {
 	if (!["apply", "reject"].includes(decision)) throw new Error("Invalid Wiki decision");

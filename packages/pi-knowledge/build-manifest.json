@@ -48,7 +48,7 @@
 		"src/core/topic-candidate.ts": "f43f25ccb6d757fa97bedacb99e976c225bf665f89c62be2b7694ee540089ba0",
 		"src/core/topic-memory.ts": "94f3ec85a7e56e338671a0db636aeed79546b78c12c33df0c7f2587fdc17c76f",
 		"src/core/topic-probe.ts": "b6b80e8aba33c8319eff5862524d0e54bc0ed70516cc3ef4706999a3f66c3e61",
-		"src/core/ui-service.ts": "d05c9b06050e561950339f3796de62ad7270b1565c617e006c86d2707375a2f9",
+		"src/core/ui-service.ts": "603991ba9cb4375bddec74aa8b339db09576628f9ca86745f7323b7a047ab334",
 		"src/core/ui-state.ts": "69165cded45b5fbc77ac4a40f3471af967f4555a50fcfacd688a052acff6cc1a",
 		"src/core/wiki-model-review.ts": "d7c6d17e218c64ba8040190b8a84595e3411b99195923c46b654b4f9bbb6e719",
 		"src/core/wiki-policy.ts": "ffd5f16638d2f31b49ecbb944683a13b503dac91fd499fb901124dad8cec2ff8",
@@ -65,10 +65,10 @@
 	},
 	"outputs": {
 		"dist/index.mjs": "bd792d777c471dc52e0c6b9aa6ef25b2f30962903817074be2bbd3c498a1909d",
-		"dist/host.mjs": "16a5f360996ef93de57a5de05228fa80cc0184b29ec2d25c4a01c9fbaf3e2094",
+		"dist/host.mjs": "19685b3976ad8bafafb6148f29105ef9ce2a9b5cb40ce3c828c8f5e53166e798",
 		"dist/host.d.ts": "3f1ec35ed11d69244b0410af7c8d2e3fb96a82ec7786abe525f840ea9064ec0a",
 		"lib/knowledge/runtime/worker.mjs": "eae35e78905022d937a890c55a0c61e2f8e373e08b49e9c4654eb5cb725e5216",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "194db2df58e397c08dc15a3f0d0519ea085a886f82d89aebc1818e124d3820bb"
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "edc2cb50224f9976b2f2f23edaae45da1da70992525d0162f00668f51c268d5f"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",
