@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const manifest = JSON.parse(await readFile(join(root, "plugin.manifest.json"), "utf8"));
 
 const { ConnectorRegistry, createConnectorReceipt, planConnectorOperation, registerPiConnectors } =
 	await import("../dist/index.mjs");
@@ -12,7 +18,7 @@ test("registerPiConnectors exposes read-only declaration tools", async () => {
 		},
 	};
 	const registration = registerPiConnectors(pi);
-	assert.deepEqual(registration.tools, ["connector_list", "connector_get"]);
+	assert.deepEqual(registration.tools, manifest.tools);
 	assert.deepEqual(
 		tools.map((tool) => tool.name),
 		["connector_list", "connector_get"],

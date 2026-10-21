@@ -14,6 +14,7 @@
 		"ui": "./ui/plugin.json"
   },
   "capabilities": ["ui"],
+  "tools": [],
   "hosts": ["drone-desktop"],
   "permissions": {
     "filesystem": [],

@@ -91,7 +91,6 @@ const expectedExtensions = bundled.map((name) => `./node_modules/${name}/dist/in
 if (JSON.stringify(manifest.entrypoints?.extensions) !== JSON.stringify(expectedExtensions))
 	fail("manifest extensions do not match bundled package dependencies");
 const expectedSkills = [
-	"./node_modules/@gyoungwe/pi-core/skills",
 	"./node_modules/@gyoungwe/pi-knowledge/skills",
 	"./node_modules/@gyoungwe/pi-research/skills",
 ];

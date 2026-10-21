@@ -5,17 +5,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const extension = await import(pathToFileURL(join(root, "dist/index.mjs")).href);
+const manifest = JSON.parse(await readFile(join(root, "plugin.manifest.json"), "utf8"));
 const tools = new Map();
 const registration = extension.default({
 	registerTool(tool) {
 		tools.set(tool.name, tool);
 	},
 });
-assert.deepEqual(registration.tools, [
-	"evidence_validate_manifest",
-	"evidence_validate_capsule",
-	"evidence_verify_replay",
-]);
+assert.deepEqual(registration.tools, manifest.tools);
 assert.deepEqual([...tools.keys()], registration.tools);
 for (const tool of tools.values()) assert.equal(tool.drone.readOnly, true);
 

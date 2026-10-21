@@ -15,6 +15,7 @@
 		"extension": "./dist/index.mjs"
 	},
 	"capabilities": ["connectors", "read-only", "provenance-receipts"],
+	"tools": ["connector_list", "connector_get"],
 	"hosts": ["native-pi", "drone-desktop"],
 	"permissions": {
 		"filesystem": [],

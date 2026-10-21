@@ -67,8 +67,7 @@ try {
 		},
 	};
 	register(pi);
-	assert(tools.has("knowledge_status"), "knowledge_status was not registered");
-	assert(tools.has("knowledge_search"), "knowledge_search was not registered");
+	assert.deepEqual([...tools.keys()], packageManifest.tools);
 	for (const name of ["task_status", "task_plan", "task_wait", "task_reconcile", "task_evidence_restore"])
 		assert(!tools.has(name), `${name} must be owned by pi-core, not pi-knowledge`);
 	for (const name of ["task-status", "task-action"])

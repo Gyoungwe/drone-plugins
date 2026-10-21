@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const extension = await import(pathToFileURL(join(root, "dist/index.mjs")).href);
+const manifest = JSON.parse(await readFile(join(root, "plugin.manifest.json"), "utf8"));
 
 const tools = new Map();
 const registered = extension.default({
@@ -12,7 +13,7 @@ const registered = extension.default({
 		tools.set(tool.name, tool);
 	},
 });
-assert.deepEqual(registered.tools, ["analysis_list_adapters", "analysis_assess_readiness"]);
+assert.deepEqual(registered.tools, manifest.tools);
 assert.deepEqual([...tools.keys()], registered.tools);
 
 const listed = await tools.get("analysis_list_adapters").execute("list", {});

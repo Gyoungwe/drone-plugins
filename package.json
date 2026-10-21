@@ -25,7 +25,7 @@
     "smoke:pi-cli": "node scripts/pi-cli-regression.mjs",
     "typecheck": "tsc --noEmit",
     "pack:check": "npm pack --workspaces --dry-run",
-    "check": "npm run build && npm run check:manifests && npm run typecheck && npm run check:pi-knowledge && npm run check:research-suite && npm run check:pi-analysis && npm run check:pi-evidence && npm run check:pi-connectors && npm run check:desktop-ui-pack && npm run smoke:install && npm run smoke:desktop-ui-pack && npm run pack:check"
+    "check": "npm run build && npm run check:manifests && node --test scripts/check-manifests.test.mjs && npm run typecheck && npm run check:pi-knowledge && npm run check:research-suite && npm run --workspace @gyoungwe/research-suite test && npm run check:pi-analysis && npm run check:pi-evidence && npm run check:pi-connectors && npm run check:desktop-ui-pack && npm run smoke:install && npm run smoke:desktop-ui-pack && npm run pack:check"
   },
   "engines": {
     "node": ">=20"
