@@ -57,15 +57,18 @@
 		"src/extension/internal-knowledge-extension.ts": "e27ead16924897a0ab1b20eb795027be790d4e2b4690a55cbd56570752165fee",
 		"src/extension/knowledge-extension.ts": "5e76e1b7c1ad914355f13892ced890f455ce547f9c5e4cc04329232420f0fc73",
 		"src/extension/knowledge-worker.ts": "bf3bf802e766d34bd01d7d9e2af73dbcd98f2f9afd27f127b4bbf3de9f5015de",
-		"src/host.ts": "7c5b71a9d9f7755d469a5ee84591b6aeffd7728279c894c3ef402144b5ecff6d",
-		"src/index.ts": "50ec275274ddea56789763921ab75500e1ab58ad26ceca7f91b449fcc2cc7432"
+		"src/host.ts": "febff787211660a029b80aa27b0b4022c90909e76e8b421979ccbce22fc4f38d",
+		"src/index.ts": "50ec275274ddea56789763921ab75500e1ab58ad26ceca7f91b449fcc2cc7432",
+		"src/maintenance/plan.ts": "1dafde66d0ce06e79cb5b40299af4d5498980ed72a1805bb6299ceb849b10ac2",
+		"src/maintenance/prompts.ts": "38bfecf6ad69a030bf0be7157d0a283f3a9307e845dbe0b52f24a252189dfa38",
+		"src/maintenance/run.ts": "a9ba9bd38949b68002f2967f3c7cc2a7502b94471fd1995f452caba6ee85233b"
 	},
 	"outputs": {
 		"dist/index.mjs": "bd792d777c471dc52e0c6b9aa6ef25b2f30962903817074be2bbd3c498a1909d",
-		"dist/host.mjs": "e53ca6a57ba9b509aa1e3c13af1eedaf3b3af0447e3552ca7369d305227c22ff",
-		"dist/host.d.ts": "ee679bc313661bd78d870f43050ff6a1523e43267d0598ac18c4d788af3ad000",
+		"dist/host.mjs": "16a5f360996ef93de57a5de05228fa80cc0184b29ec2d25c4a01c9fbaf3e2094",
+		"dist/host.d.ts": "3f1ec35ed11d69244b0410af7c8d2e3fb96a82ec7786abe525f840ea9064ec0a",
 		"lib/knowledge/runtime/worker.mjs": "74cd7b500c66ccdc12f5e4cb75db05516b1cd7152b6b7539ed0eb9883e4e4ce4",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "ca6f6f823efee92a9c219bc398487115add0be7dc3bd6aa95f76d9d4f81a28a8"
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "8de7a14e67d7c8160df56f0cf53d4f9b4524fbe59edef6a9630c360451d37613"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",
