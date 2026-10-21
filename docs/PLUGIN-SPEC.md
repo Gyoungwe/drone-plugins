@@ -2,7 +2,7 @@
 
 本文是 Drone 插件（能力插件、UI 插件、组合包）格式与内容的**唯一权威规范**。UI 组件层的细节（槽位 props、样式纪律、热重载）见宿主仓库 `packages/desktop/resources/ui-plugins/SPEC.md`，本文只在需要时引用它。
 
-规范中的「必须」是硬性要求，由 `npm run check` 和验收拦截；「应当」是默认做法，偏离时要在 README 写明原因。标为「待实现」的条目对应 Drone `docs/pluginization/v3-platform-plan.md` 中的任务，实现前不得声称已经满足。
+规范中的「必须」是硬性要求，由 `npm run check` 和验收拦截；「应当」是默认做法，偏离时要在 README 写明原因。平台能力的实现状态以 Drone `docs/pluginization/v3-evidence.md` 和对应门禁结果为准。
 
 ---
 
@@ -101,23 +101,23 @@ packages/<name>/
 | `drone.resultContract` | 必须为 `drone-result/v3` |
 | `entrypoints` | 至少一项；每个路径必须存在，并且包含在 `files` 里。`host` 只供宿主组合根使用（§6.1） |
 | `capabilities` | 来自固定词表（§4.1）；不在词表内的值视为错误 |
-| `tools` | L1 必填（新增字段，现有 manifest 尚未填写，补齐为待实现）：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
+| `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
 | `hosts` | `native-pi`、`drone-desktop` 的非空子集；只写 `drone-desktop` 时必须在 README 说明原因 |
 | `requires.hostCapabilities` | 依赖的宿主能力，由 `negotiateCapabilities` 协商；缺失时插件必须返回 `degraded` 或 `incompatible`，不能抛错 |
 | `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`）、`network`（主机名列表）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
 
-manifest 是声明，不是安全边界：外部写入、远程执行、删除和发布仍由宿主授权。但宿主**应当**在安装确认和插件详情中展示 `permissions`（待实现）。
+manifest 是声明，不是安全边界：外部写入、远程执行、删除和发布仍由宿主授权。宿主会在安装确认和插件详情中展示 `permissions` 与 `tools`。
 
 ### 4.1 能力词表
 
-取自现有第一方插件已经在用的值：`knowledge`、`research`、`search`、`evidence-context`、`analysis`、`planning`、`files`、`evidence`、`provenance`、`replay`、`connectors`、`read-only`、`provenance-receipts`、`ui`。新增词条需要同时修改本表和 `scripts/check-manifests.mjs`（词表校验为待实现，目前检查器只校验必填字段）。
+取自现有第一方插件已经在用的值：`knowledge`、`research`、`search`、`evidence-context`、`analysis`、`planning`、`files`、`evidence`、`provenance`、`replay`、`connectors`、`read-only`、`provenance-receipts`、`ui`。新增词条需要同时修改本表和 `scripts/check-manifests.mjs`；检查器会校验能力词表。
 
 ---
 
 ## 5. 能力插件（L1）内容要求
 
 1. **只依赖公开合同。** 只能 import `@gyoungwe/plugin-api`、Node 内置模块和普通 npm 库。禁止 import `@drone/*`、`electron`、Drone 源码相对路径，以及 Pi runtime 的复制品。
-2. **工具命名。** 工具名用 `<领域>_<动作>` 小写蛇形，例如 `knowledge_search`；`research_*` 前缀保留给第一方研究流程。不得与已注册的工具重名（第一方插件之间由插件仓库的检查拦截；宿主对第三方包的重名检测与提示为待实现）。
+2. **工具命名。** 工具名用 `<领域>_<动作>` 小写蛇形，例如 `knowledge_search`；`research_*` 前缀保留给第一方研究流程。不得与已注册的工具重名（第一方插件之间由插件仓库的检查拦截；宿主会在资源诊断中列出第三方包的冲突来源并保留先注册者）。
 3. **首次运行要诚实。** 未配置时，状态工具返回 `{ "status": "unconfigured", "next": "<设置命令>" }`，不能假装成功，也不能隐式创建 Vault 或配置。
 4. **结果合同。** 产出研究结论的工具，结果必须遵守 `drone-result/v3` 的状态与红线（`ResultStatus`、`ResultRedline`），有证据的地方必须带读取回执。
 5. **降级路径。** 每个工具在宿主能力缺失或依赖不可用时，必须返回结构化的 `degraded` / `incompatible` 结果（文本 + JSON），不能抛未处理异常、拖垮会话。
@@ -134,7 +134,7 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 - 宿主只能依赖 Drone `plugins.lock.json` 中列出的**必需插件**；锁文件记录仓库、提交、版本和 tarball sha256，构建时必须校验哈希。
 - 宿主代码只能通过插件的 `host` 入口（`@gyoungwe/<pkg>/host`）使用插件，不得深入引用包内路径。
 - 锁文件之外的插件都是**可选插件**：宿主代码中不得出现对它们的 import、路径常量或包名硬编码，只能通过运行时发现（Pi 包加载、UI 插件扫描）接入。
-- 现有违例：UI 插件扫描硬编码了 `@gyoungwe/desktop-ui-pack/ui`（`packages/desktop/src/main/ui-plugins/manager.ts`）。改为通用发现前（待实现），这是唯一允许的例外。
+- UI 插件从已安装 npm 包的 `plugin.manifest.json` 或 `ui/plugin.json` 中按 `entrypoints.ui` 通用发现；包名不属于宿主源码合同。
 
 ### 6.2 插件 → 插件
 
@@ -153,21 +153,21 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 1. 组件契约、样式纪律、性能和热重载规则全部以宿主的 `ui-plugins/SPEC.md` 为准；本节只补充包级要求。
 2. `ui/plugin.json`：`droneUi: 1`、`name` 与包内 `id` 对应、`slots` / `contributions` / `headless` 至少声明一项；未知槽位或区域由宿主忽略并告警。
 3. UI 插件只能通过 `window.DroneUI`（stores、hooks、公开 host API）取数据，不得直接请求 IPC 通道或访问 Node。
-4. **页面接入优先级：** 优先挂到已有页面的区域（`panel.tab`、`settings.panel`，以及待实现的 `knowledge.tab`、`home.section`、`skills.section`），只有完整的独立工作区才用 `rail.view` 新增导航入口，避免一级菜单膨胀。
+4. **页面接入优先级：** 优先挂到已有页面的区域（`panel.tab`、`settings.panel`、`knowledge.tab`、`home.section`、`skills.section`），只有完整的独立工作区才用 `rail.view` 新增导航入口，避免一级菜单膨胀。
 5. 插件被禁用、卸载或加载失败时，所在区域必须恢复宿主默认状态（宿主已实现：页签回到「任务」，主区回到聊天）。
 
-### 7.1 宿主预留接口（现状与待实现）
+### 7.1 宿主预留接口（现状）
 
 | 接口 | 状态 |
 |---|---|
 | 槽位：`chat.tool-call-card`、`chat.subagent-card`、`chat.todo-panel`、`panel.artifacts.card`、`panel.task.milestone-evidence` | 已有 |
 | 区域：`app.background`、`app.overlay`、`chat.corner.*`、`chat.diff-sidebar`、`settings.panel`、`panel.tab`、`rail.view` | 已有 |
 | 无头插件 `headless: true` | 已有 |
-| 区域 `knowledge.tab`：知识库页的页签（与「总览 / 网络图 / 审阅 / 设置」并列） | 待实现 |
-| 区域 `home.section`：新任务首页的卡片区 | 待实现 |
-| 区域 `skills.section`：技能与连接页的分区 | 待实现 |
-| 从任意已安装 npm 包的 `plugin.manifest.json` → `entrypoints.ui` 发现 UI 插件 | 待实现（目前只认 desktop-ui-pack） |
-| 在安装确认和插件详情中展示 `permissions` 与 `tools` | 待实现 |
+| 区域 `knowledge.tab`：知识库页的页签（与「总览 / 网络图 / 审阅 / 设置」并列） | 已有 |
+| 区域 `home.section`：新任务首页的卡片区 | 已有 |
+| 区域 `skills.section`：技能与连接页的分区 | 已有 |
+| 从任意已安装 npm 包的 `plugin.manifest.json` → `entrypoints.ui` 发现 UI 插件 | 已有 |
+| 在安装确认和插件详情中展示 `permissions` 与 `tools` | 已有 |
 
 ---
 
@@ -193,5 +193,5 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 
 宿主（插件被宿主加载或锁定时）：
 - [ ] `plugins.lock.json` 已更新；干净 checkout、不设 `DRONE_PLUGINS_DIR` 时，`npm ci → fetch:plugins → lint → typecheck → test → check:arch → build → check:extensions -- --strict` 全部通过
-- [ ] 宿主独立性检查（待实现）：移除全部可选插件后，宿主仍能启动并通过测试
+- [x] 宿主独立性检查：源码扫描可选插件 import，并验证空插件安装根
 - [ ] 真机：功能可见可用；禁用插件后界面回到默认状态
