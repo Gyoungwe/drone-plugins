@@ -2,7 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join, relative, resolve } from "node:path";
 import { build } from "esbuild";
@@ -89,7 +89,6 @@ if (!checkOnly) {
 	});
 	const tsc = join(workspaceRoot, "node_modules/.bin/tsc");
 	execFileSync(tsc, ["-p", join(packageRoot, "tsconfig.build.json")], { cwd: packageRoot, stdio: "inherit" });
-	await cp(join(packageRoot, "dist/types/host.d.ts"), join(packageRoot, "dist/host.d.ts"));
 }
 
 for (const relativePath of artifactOutputs) await ensureFile(relativePath);

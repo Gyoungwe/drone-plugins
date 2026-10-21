@@ -213,6 +213,7 @@ export {
 	updateTopic,
 } from "./topic-memory.js";
 export { runNavigationMaintenance, updateNavigation } from "./maintenance.js";
+export { looksLikeFileName, noteDisplayTitle } from "./note-title.js";
 export * from "./daily-discovery.js";
 export * from "./daily-discovery-prompt.js";
 export * from "./memory-note.js";

@@ -18,7 +18,7 @@
 	"main": "./dist/index.mjs",
 	"exports": {
 		".": {
-			"types": "./dist/types/host.d.ts",
+			"types": "./dist/host.d.ts",
 			"import": "./dist/index.mjs",
 			"default": "./dist/index.mjs"
 		},
