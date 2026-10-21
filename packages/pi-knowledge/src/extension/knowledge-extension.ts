@@ -7,13 +7,7 @@ import {
 	readKnowledgeBinding,
 	result,
 } from "../core/index.js";
-
-const STATUS_TOOL = "knowledge_status";
-const SEARCH_TOOL = "knowledge_search";
-
-function statusLine(revision: number, coverage: unknown): string {
-	return `knowledge_status revision=${Number.isSafeInteger(revision) ? revision : 0} coverage=${String(coverage || "unknown")}`;
-}
+import { registerKnowledgeInterface, registerWikiReviewAcceptance } from "./internal-knowledge-extension.js";
 
 function configureWorker(): void {
 	configureKnowledgeWorker((_requestedUrl, options) => {
@@ -31,37 +25,25 @@ async function localService(ctx: any, query = "") {
 	return { binding, cwd, project, service, query };
 }
 
-export default function registerPiKnowledge(pi: any): void {
-	configureWorker();
+function registerNativeStatusTools(pi: any): void {
 	pi.registerTool({
-		name: STATUS_TOOL,
+		name: "knowledge_status",
 		label: "Knowledge status",
 		drone: { readOnly: true, capabilities: ["knowledge"] },
 		description: "Report whether the application knowledge Vault is configured.",
 		parameters: { type: "object", properties: {} },
 		async execute(_id: string, _params: unknown, _signal: AbortSignal, _update: unknown, ctx: any) {
-			if (!knowledgeDirectory())
-				return result({ status: "unconfigured", next: "/drone-init", revision: 0, stableLine: statusLine(0, "unconfigured") });
-			const binding = await readKnowledgeBinding();
-			if (!binding)
-				return result({ status: "unconfigured", next: "/drone-init", revision: 0, stableLine: statusLine(0, "unconfigured") });
+			const binding = knowledgeDirectory() ? await readKnowledgeBinding() : null;
+			if (!binding) return result({ status: "unconfigured", next: "/drone-init", revision: 0 });
 			const local = await localService(ctx);
-			if (!local) return result({ status: "unconfigured", next: "/drone-init", revision: binding.revision, stableLine: statusLine(binding.revision, "unconfigured") });
+			if (!local) return result({ status: "unconfigured", next: "/drone-init", revision: binding.revision });
 			const index = await local.service.request("status");
-			const revision = Number(index?.revision ?? binding.revision ?? 0);
-			return result({
-				status: "configured",
-				vault: binding.vault,
-				project: local.project,
-				revision,
-				stableLine: statusLine(revision, index?.coverage),
-				index,
-			});
+			return result({ status: "configured", vault: binding.vault, project: local.project, revision: Number(index?.revision ?? binding.revision ?? 0), index });
 		},
 	});
 
 	pi.registerTool({
-		name: SEARCH_TOOL,
+		name: "knowledge_search",
 		label: "Knowledge · local search",
 		drone: { readOnly: true, recoverySafe: true, capabilities: ["knowledge"] },
 		description: "Search the bound local knowledge Vault.",
@@ -74,16 +56,10 @@ export default function registerPiKnowledge(pi: any): void {
 			const query = String(params?.query || "").trim().slice(0, 2_000);
 			if (!query) throw new Error("query is required");
 			const local = await localService(ctx, query);
-			if (!local)
-				return result({ query, hits: [], local: { status: "unconfigured", hitCount: 0 }, remoteFallback: { status: "blocked" } });
+			if (!local) return result({ query, hits: [], local: { status: "unconfigured", hitCount: 0 }, remoteFallback: { status: "blocked" } });
 			const limit = Math.max(1, Math.min(12, Number(params?.limit) || 6));
 			const found = await local.service.request("search", { query, project: local.project, limit });
-			return result({
-				query,
-				hits: (found?.hits || []).slice(0, limit),
-				local: { status: "searched", hitCount: found?.hits?.length || 0, revision: found?.revision ?? null, coverage: found?.coverage ?? null },
-				remoteFallback: { status: (found?.hits?.length || 0) < limit ? "prompt" : "not-needed" },
-			});
+			return result({ query, hits: (found?.hits || []).slice(0, limit), local: { status: "searched", hitCount: found?.hits?.length || 0, revision: found?.revision ?? null, coverage: found?.coverage ?? null }, remoteFallback: { status: (found?.hits?.length || 0) < limit ? "prompt" : "not-needed" } });
 		},
 	});
 
@@ -94,4 +70,13 @@ export default function registerPiKnowledge(pi: any): void {
 			else ctx?.ui?.notify?.("Run /obsidian-setup to initialize the knowledge Vault", "info");
 		},
 	});
+}
+
+export { registerKnowledgeInterface, registerWikiReviewAcceptance };
+export { createSpecialistBudget, decideSpecialistRun } from "../core/orchestration-policy.js";
+
+export default function registerPiKnowledge(pi: any): void {
+	configureWorker();
+	registerNativeStatusTools(pi);
+	registerKnowledgeInterface(pi);
 }

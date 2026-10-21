@@ -54,17 +54,18 @@
 		"src/core/wiki-policy.ts": "ffd5f16638d2f31b49ecbb944683a13b503dac91fd499fb901124dad8cec2ff8",
 		"src/core/wiki-review.ts": "634b6ad5efc3b15b569d1e429ca23aae5171200f7599cee0ca14d5e97fac6a4f",
 		"src/core/worker.ts": "cfbabc061baa64be73e2f90e79479f4776f4392f1dde017e415e0b4fcf5f62ba",
-		"src/extension/knowledge-extension.ts": "92e09fa80bb389122cd503d0956988566825c8247f6cd3cdb8416e74841d0d1e",
+		"src/extension/internal-knowledge-extension.ts": "e27ead16924897a0ab1b20eb795027be790d4e2b4690a55cbd56570752165fee",
+		"src/extension/knowledge-extension.ts": "5e76e1b7c1ad914355f13892ced890f455ce547f9c5e4cc04329232420f0fc73",
 		"src/extension/knowledge-worker.ts": "bf3bf802e766d34bd01d7d9e2af73dbcd98f2f9afd27f127b4bbf3de9f5015de",
 		"src/host.ts": "7c5b71a9d9f7755d469a5ee84591b6aeffd7728279c894c3ef402144b5ecff6d",
 		"src/index.ts": "50ec275274ddea56789763921ab75500e1ab58ad26ceca7f91b449fcc2cc7432"
 	},
 	"outputs": {
-		"dist/index.mjs": "d51203edd8340d4df129afda2a168cf12575dd7f56b730e02d64cb6757e82fa5",
+		"dist/index.mjs": "f4012e79fa250f5b8820f9a5e706bc3589514f6d1cae65a574bc37cd34d6e281",
 		"dist/host.mjs": "9acd0da9385c1672edba920b5881f3d7c81f6f017e95a810fe282f274ec83c9b",
 		"dist/host.d.ts": "ee679bc313661bd78d870f43050ff6a1523e43267d0598ac18c4d788af3ad000",
 		"lib/knowledge/runtime/worker.mjs": "74cd7b500c66ccdc12f5e4cb75db05516b1cd7152b6b7539ed0eb9883e4e4ce4",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "98741d591ba7df733b1800fbdea5b15c0d751b483cb60e6fb028ffe7407070b0"
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "dcfef3d6f70094a132402adaabba17b144148d9ad3237efe90bf454b39918b90"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",
