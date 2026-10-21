@@ -17,7 +17,7 @@
 		"src/core/graph-cache.ts": "69877e42ea611ca0c2a244dd83017ce91de1d511735253bff815e5238e7b78d6",
 		"src/core/graph-retrieval.ts": "ac74005cf7fed222cb0548669608cd65ed3eb320bdef2e8537084d76c0ee8f2c",
 		"src/core/host.ts": "08cefa64947a98f96c91563f70beedaf941a811b57abf02418013f5afa75fd73",
-		"src/core/index.ts": "2887982320dc2b35a551f4f8cbff95e8423f929148b150607bd7e1edd1276b02",
+		"src/core/index.ts": "abf3a03b82165fb65e902d2e66f591d1a503415a858e467491feac4197c39545",
 		"src/core/ingest-frontmatter.ts": "371fc6970211fd72a0efab65ff07abd1f470066c01e6c3b48c3dd771ee5ba68a",
 		"src/core/ingest-identity.ts": "7c631e59cb9efc1ee3df05732ee936e934388488979bdf83625b9c5e6432d75d",
 		"src/core/ingest-policy.ts": "c4d9fbae139d14bf1f93e050507a733e903e3b35f0e79b0e54b6b11816616386",
@@ -62,10 +62,10 @@
 	},
 	"outputs": {
 		"dist/index.mjs": "bd792d777c471dc52e0c6b9aa6ef25b2f30962903817074be2bbd3c498a1909d",
-		"dist/host.mjs": "61a27be51378adcaffcb35a950d1b0ca6b6e3e879f7d6536849b548f0b024374",
+		"dist/host.mjs": "e53ca6a57ba9b509aa1e3c13af1eedaf3b3af0447e3552ca7369d305227c22ff",
 		"dist/host.d.ts": "ee679bc313661bd78d870f43050ff6a1523e43267d0598ac18c4d788af3ad000",
 		"lib/knowledge/runtime/worker.mjs": "74cd7b500c66ccdc12f5e4cb75db05516b1cd7152b6b7539ed0eb9883e4e4ce4",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "0bf195fb89f88af58a17c3986097afb663c4343b55c0418eefad4b1dd814d29b"
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "ca6f6f823efee92a9c219bc398487115add0be7dc3bd6aa95f76d9d4f81a28a8"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",

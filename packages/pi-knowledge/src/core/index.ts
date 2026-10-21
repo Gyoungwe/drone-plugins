@@ -225,9 +225,18 @@ export {
 	configureKnowledgeHost,
 	configureKnowledgeSetup,
 	createKnowledgeWorker,
+	consumeKnowledgeReviewPreview,
+	deliveryContract,
 	emitKnowledgeWorkerLifecycle,
 	knowledgeWorkerMetadata,
 	KNOWLEDGE_WORKER_LIFECYCLE_EVENT,
+	loadWorkspaceConfig,
+	publishExplainer,
+	LAYOUT,
+	inspectObsidianSetup,
+	inspectSetupDirectory,
+	resolveSetupVault,
+	researchSetupOptions,
 } from "./runtime-host.js";
 export type {
 	KnowledgeWorkerLifecycleEvent,
