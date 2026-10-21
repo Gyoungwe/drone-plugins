@@ -1482,7 +1482,7 @@ var init_ui_state = __esm({
 });
 
 // src/core/wiki-review.ts
-import { createHash as createHash11, randomUUID as randomUUID10 } from "node:crypto";
+import { createHash as createHash12, randomUUID as randomUUID10 } from "node:crypto";
 import { link as link2, lstat as lstat6, mkdir as mkdir7, readdir as readdir3, readFile as readFile6, rename as rename7, unlink as unlink4, writeFile as writeFile7 } from "node:fs/promises";
 import { basename as basename3, dirname as dirname5, join as join11 } from "node:path";
 async function exclusive(key, operation) {
@@ -2033,7 +2033,7 @@ var init_wiki_review = __esm({
     AUTOMATIC_AUTHORITY = Symbol("host-automatic-wiki");
     START2 = "<!-- pi-agent:managed:start -->";
     END2 = "<!-- pi-agent:managed:end -->";
-    digest3 = (text2) => createHash11("sha256").update(text2).digest("hex");
+    digest3 = (text2) => createHash12("sha256").update(text2).digest("hex");
     MAX_PENDING = 100;
     MAX_AGE = 24 * 60 * 60 * 1e3;
     RENAME_RETRY_CODES = /* @__PURE__ */ new Set(["EPERM", "EACCES", "EBUSY"]);
@@ -3671,6 +3671,28 @@ async function runNavigationMaintenance(service, project, limit = 3) {
   };
 }
 
+// src/core/ingest-identity.ts
+import { createHash as createHash9 } from "node:crypto";
+
+// src/core/ingest-frontmatter.ts
+var KNOWLEDGE_TYPES = [
+  "paper",
+  "method",
+  "software",
+  "dataset",
+  "concept",
+  "entity",
+  "idea",
+  "claim",
+  "evidence",
+  "decision",
+  "question",
+  "wiki"
+];
+var RUN_RESULT_TYPES = ["run", "artifact", "explainer"];
+var NOTE_TYPES = [...KNOWLEDGE_TYPES, ...RUN_RESULT_TYPES];
+var MAX_FRONTMATTER_CHARS = 64 * 1024;
+
 // src/core/daily-discovery.ts
 import { readdir as readdir2, readFile as readFile5, stat as stat2 } from "node:fs/promises";
 import { join as join8, relative as relative6, sep as sep6 } from "node:path";
@@ -3781,7 +3803,7 @@ init_runtime_host();
 init_config();
 init_files();
 init_review_policy();
-import { createHash as createHash9, randomUUID as randomUUID8 } from "node:crypto";
+import { createHash as createHash10, randomUUID as randomUUID8 } from "node:crypto";
 import { join as join10, relative as relative7, resolve as resolve7, sep as sep7 } from "node:path";
 init_ui_state();
 var pool = runtimeSlot("knowledge", "workerPool", () => {
@@ -3834,7 +3856,7 @@ function providerConfig(settings) {
   };
 }
 function fingerprintFor(settings) {
-  return createHash9("sha256").update(`${settings.provider}\0${settings.baseUrl}\0${settings.model}\0${settings.chunkChars || 1200}`).digest("hex");
+  return createHash10("sha256").update(`${settings.provider}\0${settings.baseUrl}\0${settings.model}\0${settings.chunkChars || 1200}`).digest("hex");
 }
 function awaitSemanticDeadline(operation, controller) {
   let onAbort;
@@ -4019,7 +4041,7 @@ var KnowledgeService = class {
       this.tickets.set(ticket, {
         cwd: resolve7(cwd),
         project,
-        queryHash: createHash9("sha256").update(query).digest("hex"),
+        queryHash: createHash10("sha256").update(query).digest("hex"),
         query,
         navigation,
         linkedWiki: [...linkedWiki],
@@ -4092,7 +4114,7 @@ var KnowledgeService = class {
         hash: page.hash,
         startLine: page.startLine,
         endLine: page.endLine,
-        excerptHash: createHash9("sha256").update(page.text).digest("hex")
+        excerptHash: createHash10("sha256").update(page.text).digest("hex")
       };
       state5.reads.delete(path);
       state5.reads.set(path, receipt);
@@ -4841,7 +4863,7 @@ init_ui_state();
 // src/core/publication.ts
 init_runtime_host();
 init_runtime_host();
-import { createHash as createHash10, randomUUID as randomUUID9 } from "node:crypto";
+import { createHash as createHash11, randomUUID as randomUUID9 } from "node:crypto";
 init_review_policy();
 init_ui_state();
 var state2 = runtimeSlot(
@@ -4855,7 +4877,7 @@ var state2 = runtimeSlot(
   })
 );
 var FIELD = "knowledgePublication";
-var hash2 = (content) => createHash10("sha256").update(JSON.stringify(content ?? [])).digest("hex");
+var hash2 = (content) => createHash11("sha256").update(JSON.stringify(content ?? [])).digest("hex");
 function sanitizeError(text2) {
   return diagnosticText(text2, 4096).trim();
 }
@@ -6020,7 +6042,7 @@ init_runtime_host();
 init_runtime_host();
 init_runtime_host();
 init_config();
-import { createHash as createHash12, randomUUID as randomUUID15 } from "node:crypto";
+import { createHash as createHash13, randomUUID as randomUUID15 } from "node:crypto";
 import { lstat as lstat9, mkdir as mkdir11, readFile as readFile10, realpath as realpath8, stat as stat3, writeFile as writeFile11 } from "node:fs/promises";
 import { dirname as dirname7, isAbsolute as isAbsolute8, join as join15, relative as relative9, resolve as resolve10 } from "node:path";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
@@ -6043,7 +6065,7 @@ var runtimeState = runtimeSlot("knowledge", "uiService", () => ({
 // src/core/experience-store.ts
 init_config();
 init_runtime_host();
-import { createHash as createHash13, randomUUID as randomUUID16 } from "node:crypto";
+import { createHash as createHash14, randomUUID as randomUUID16 } from "node:crypto";
 import { lstat as lstat10, mkdir as mkdir12, readFile as readFile11, rename as rename10, unlink as unlink7, writeFile as writeFile12 } from "node:fs/promises";
 import { isAbsolute as isAbsolute9, join as join16, relative as relative10, resolve as resolve11, sep as sep9 } from "node:path";
 var EXPERIENCE_LIMITS = Object.freeze({
