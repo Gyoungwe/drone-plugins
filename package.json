@@ -35,7 +35,7 @@
     "@earendil-works/pi-coding-agent": "1.1.0",
     "@types/node": "^22.19.19",
     "typescript": "5.9.3",
-    "@gyoungwe/plugin-api": "file:vendor/gyoungwe-plugin-api-1.1.0.tgz"
+    "@gyoungwe/plugin-api": "^1.1.0"
   },
   "overrides": {
     "@earendil-works/chord": "1.1.0",
