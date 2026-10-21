@@ -1,5 +1,7 @@
 # Drone Plugins 协作规则
 
+插件清单和宿主集成规范见 [`docs/PLUGIN-SPEC.md`](docs/PLUGIN-SPEC.md)；新增或修改插件必须先按该规范运行 `npm run check`。
+
 - 插件只能依赖已发布的 `@gyoungwe/plugin-api`、公开结果/证据合同和声明过的 Pi `peerDependencies`。
 - 禁止 import Drone 源码相对路径、Electron、backend 私有模块、renderer 私有模块或 Pi runtime 的重复副本。
 - 每个可发布插件必须有 `plugin.manifest.json`，声明 `pluginApi`、`resultContract`、宿主、能力、权限和 entrypoints。
