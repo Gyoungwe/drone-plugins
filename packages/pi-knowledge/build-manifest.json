@@ -62,7 +62,7 @@
 	},
 	"outputs": {
 		"dist/index.mjs": "f4012e79fa250f5b8820f9a5e706bc3589514f6d1cae65a574bc37cd34d6e281",
-		"dist/host.mjs": "9acd0da9385c1672edba920b5881f3d7c81f6f017e95a810fe282f274ec83c9b",
+		"dist/host.mjs": "adc713dd4c178eae6195678ad9900ac739529c40712d8d9cbc0776e618f44706",
 		"dist/host.d.ts": "ee679bc313661bd78d870f43050ff6a1523e43267d0598ac18c4d788af3ad000",
 		"lib/knowledge/runtime/worker.mjs": "74cd7b500c66ccdc12f5e4cb75db05516b1cd7152b6b7539ed0eb9883e4e4ce4",
 		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "dcfef3d6f70094a132402adaabba17b144148d9ad3237efe90bf454b39918b90"
