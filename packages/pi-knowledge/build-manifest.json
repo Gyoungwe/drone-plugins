@@ -61,14 +61,14 @@
 		"src/index.ts": "50ec275274ddea56789763921ab75500e1ab58ad26ceca7f91b449fcc2cc7432",
 		"src/maintenance/plan.ts": "1dafde66d0ce06e79cb5b40299af4d5498980ed72a1805bb6299ceb849b10ac2",
 		"src/maintenance/prompts.ts": "38bfecf6ad69a030bf0be7157d0a283f3a9307e845dbe0b52f24a252189dfa38",
-		"src/maintenance/run.ts": "a9ba9bd38949b68002f2967f3c7cc2a7502b94471fd1995f452caba6ee85233b"
+		"src/maintenance/run.ts": "b1c786523f9a95bde3bbc085f599cc2cfa844e65605bc179282329edc04fa3e7"
 	},
 	"outputs": {
 		"dist/index.mjs": "bd792d777c471dc52e0c6b9aa6ef25b2f30962903817074be2bbd3c498a1909d",
-		"dist/host.mjs": "19685b3976ad8bafafb6148f29105ef9ce2a9b5cb40ce3c828c8f5e53166e798",
+		"dist/host.mjs": "e5a43eb1f1932662228f0145233aca5a6b324c3acb89a48f19ee29903d35bfef",
 		"dist/host.d.ts": "3f1ec35ed11d69244b0410af7c8d2e3fb96a82ec7786abe525f840ea9064ec0a",
 		"lib/knowledge/runtime/worker.mjs": "eae35e78905022d937a890c55a0c61e2f8e373e08b49e9c4654eb5cb725e5216",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "edc2cb50224f9976b2f2f23edaae45da1da70992525d0162f00668f51c268d5f"
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "47c57b279a78673e25416aeae0046c663451e85a6736a018fb8f4cd671a2c1ec"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",

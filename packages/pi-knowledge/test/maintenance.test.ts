@@ -37,4 +37,34 @@ describe("maintenance execution", () => {
 		const result = await runMaintenance([{ id: "a", kind: "orphan", path: "a.md" }], { ...ports(), complete: async () => "nope" });
 		expect(result.items[0]?.status).toBe("skipped");
 	});
+	it("stops at the daily model budget and validates Wiki links before writing", async () => {
+		const calls: string[] = [];
+		const result = await runMaintenance(
+			[
+				{ id: "a", kind: "orphan", path: "a.md" },
+				{ id: "b", kind: "orphan", path: "b.md" },
+			],
+			{
+				...ports(),
+				budget: { modelCalls: 1 },
+				validateWikiLinks: async () => {
+					calls.push("validate");
+				},
+				proposeWiki: async () => {
+					calls.push("propose");
+				},
+			},
+		);
+		expect(result.modelCalls).toBe(1);
+		expect(result.items.map((item) => item.reason)).toEqual([undefined, "daily-budget-exhausted"]);
+		expect(calls).toEqual(["validate", "propose"]);
+		await expect(
+			runMaintenance([{ id: "a", kind: "orphan", path: "a.md" }], {
+				...ports(),
+				validateWikiLinks: async () => {
+					throw new Error("unknown-wiki-target");
+				},
+			}),
+		).resolves.toMatchObject({ items: [{ status: "skipped", reason: "unknown-wiki-target" }] });
+	});
 });
