@@ -1,6 +1,6 @@
 {
   "name": "@gyoungwe/desktop-ui-pack",
-  "version": "0.1.0",
+  "version": "0.1.1",
 	"description": "Optional Drone Desktop UI contributions loaded by the installed package boundary",
 	"repository": {
 		"type": "git",
@@ -19,7 +19,7 @@
 		"smoke": "node scripts/smoke.mjs"
   },
   "peerDependencies": {
-    "@gyoungwe/plugin-api": ">=1.0.0 <2.0.0"
+    "@gyoungwe/plugin-api": ">=1.1.0 <2.0.0"
   },
   "peerDependenciesMeta": {
     "@gyoungwe/plugin-api": {

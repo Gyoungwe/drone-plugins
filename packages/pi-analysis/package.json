@@ -1,6 +1,6 @@
 {
 	"name": "@gyoungwe/pi-analysis",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Portable scientific analysis adapters and readiness gates for native Pi",
 	"keywords": ["pi-package", "analysis", "bioinformatics"],
 	"license": "MIT",
@@ -38,7 +38,7 @@
 		"check": "npm run typecheck && npm run build:check && npm test && npm run smoke"
 	},
 	"dependencies": {
-		"@gyoungwe/plugin-api": "^1.0.0"
+		"@gyoungwe/plugin-api": "^1.1.0"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"

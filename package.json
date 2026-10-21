@@ -31,7 +31,8 @@
     "node": ">=20"
   },
   "devDependencies": {
-    "@gyoungwe/pi-core": "0.1.3",
+    "@gyoungwe/pi-core": "0.1.6",
+    "@gyoungwe/pi-research": "0.1.1",
     "@earendil-works/pi-coding-agent": "1.1.0",
     "@types/node": "^22.19.19",
     "typescript": "5.9.3",

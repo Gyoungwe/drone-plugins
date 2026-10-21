@@ -18,7 +18,7 @@ const piVersions = (process.env.PI_CLI_VERSIONS ?? "1.1.0,latest")
 	.map((value) => value.trim())
 	.filter(Boolean);
 const timeoutMs = Number.parseInt(process.env.PI_CLI_TIMEOUT_MS ?? "120000", 10);
-const positiveSource = process.env.RESEARCH_SUITE_PACKAGE ?? "@gyoungwe/research-suite@0.1.5";
+const positiveSource = process.env.RESEARCH_SUITE_PACKAGE ?? "@gyoungwe/research-suite@0.1.6";
 const legacySource = process.env.RESEARCH_SUITE_LEGACY_PACKAGE ?? "@gyoungwe/research-suite@0.1.1";
 const evidencePath = process.env.PI_CLI_EVIDENCE;
 

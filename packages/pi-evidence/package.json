@@ -1,6 +1,6 @@
 {
   "name": "@gyoungwe/pi-evidence",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Portable evidence manifests, provenance, checkpoints and replay proofs for native Pi",
   "keywords": ["pi-package", "evidence", "provenance", "reproducibility"],
   "license": "MIT",
@@ -13,6 +13,6 @@
   "exports": {".": {"types": "./src/index.ts", "import": "./dist/index.mjs", "default": "./dist/index.mjs"}},
   "scripts": {"build": "node scripts/build.mjs", "build:check": "node scripts/build.mjs --check", "typecheck": "tsc --noEmit", "test": "npm run build && node --test test/registration.test.mjs test/contracts.test.mjs", "smoke": "node scripts/smoke.mjs", "check": "npm run typecheck && npm run build:check && npm test && npm run smoke"},
   "peerDependencies": {"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"},
-  "dependencies": {"@gyoungwe/plugin-api": "^1.0.0"},
+  "dependencies": {"@gyoungwe/plugin-api": "^1.1.0"},
   "devDependencies": {"typescript": "^5.9.0", "esbuild": "^0.25.12"}
 }
