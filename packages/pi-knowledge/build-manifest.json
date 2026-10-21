@@ -67,8 +67,8 @@
 		"dist/index.mjs": "bd792d777c471dc52e0c6b9aa6ef25b2f30962903817074be2bbd3c498a1909d",
 		"dist/host.mjs": "16a5f360996ef93de57a5de05228fa80cc0184b29ec2d25c4a01c9fbaf3e2094",
 		"dist/host.d.ts": "3f1ec35ed11d69244b0410af7c8d2e3fb96a82ec7786abe525f840ea9064ec0a",
-		"lib/knowledge/runtime/worker.mjs": "74cd7b500c66ccdc12f5e4cb75db05516b1cd7152b6b7539ed0eb9883e4e4ce4",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "8de7a14e67d7c8160df56f0cf53d4f9b4524fbe59edef6a9630c360451d37613"
+		"lib/knowledge/runtime/worker.mjs": "eae35e78905022d937a890c55a0c61e2f8e373e08b49e9c4654eb5cb725e5216",
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "194db2df58e397c08dc15a3f0d0519ea085a886f82d89aebc1818e124d3820bb"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",

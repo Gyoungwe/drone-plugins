@@ -75,6 +75,7 @@ if (!checkOnly) {
 		target: "node20",
 		outfile: join(packageRoot, "lib/knowledge/runtime/worker.mjs"),
 		sourcemap: false,
+		banner: { js: "// @ts-nocheck" },
 		external: ["node:*"],
 	});
 	await build({
