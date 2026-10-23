@@ -108,6 +108,12 @@ packages/<name>/
 
 manifest 是声明，不是安全边界：外部写入、远程执行、删除和发布仍由宿主授权。宿主会在安装确认和插件详情中展示 `permissions` 与 `tools`。
 
+宿主加载能力插件时，应把 manifest 的 `permissions` 传给
+`createPermissionedHostPort`（来自 `@gyoungwe/plugin-api`）。该适配器在调用
+宿主授权端口前拒绝未声明的文件、网络、子进程和外部写入操作，并产生不含凭据和正文的
+`PluginPermissionAuditEvent`。插件直接调用 Node 文件、网络或子进程 API 不会因此获得进程级
+隔离；需要真正沙箱时必须由宿主提供独立进程能力并单独验收。
+
 ### 4.1 能力词表
 
 取自现有第一方插件已经在用的值：`knowledge`、`research`、`search`、`evidence-context`、`analysis`、`planning`、`files`、`evidence`、`provenance`、`replay`、`connectors`、`read-only`、`provenance-receipts`、`ui`。新增词条需要同时修改本表和 `scripts/check-manifests.mjs`；检查器会校验能力词表。
