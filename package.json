@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "1.1.0",
-    "@gyoungwe/pi-core": "0.1.7",
+    "@gyoungwe/pi-core": "0.1.8",
     "@gyoungwe/pi-research": "0.1.1",
     "@gyoungwe/plugin-api": "^1.1.0",
     "@types/node": "^22.19.19",

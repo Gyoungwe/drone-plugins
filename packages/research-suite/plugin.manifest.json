@@ -1,11 +1,14 @@
 {
 	"schemaVersion": 1,
 	"id": "drone-research-suite",
-	"version": "0.1.7",
+	"version": "0.1.8",
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",
-		"testedHosts": ["1.1.0", "latest"]
+		"testedHosts": [
+			"1.1.0",
+			"latest"
+		]
 	},
 	"drone": {
 		"pluginApi": 1,
@@ -14,7 +17,7 @@
 	"entrypoints": {
 		"extensions": [
 			"./node_modules/@gyoungwe/pi-core/dist/index.mjs",
-		"./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
+			"./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
 			"./node_modules/@gyoungwe/pi-research/dist/index.mjs"
 		],
 		"skills": [
@@ -22,7 +25,12 @@
 			"./node_modules/@gyoungwe/pi-research/skills"
 		]
 	},
-	"capabilities": ["knowledge", "research", "search", "evidence-context"],
+	"capabilities": [
+		"knowledge",
+		"research",
+		"search",
+		"evidence-context"
+	],
 	"tools": [
 		"task_status",
 		"task_plan",
@@ -60,9 +68,15 @@
 		"research_status",
 		"research_loop"
 	],
-	"hosts": ["native-pi", "drone-desktop"],
+	"hosts": [
+		"native-pi",
+		"drone-desktop"
+	],
 	"permissions": {
-		"filesystem": ["workspace", "configured-vault"],
+		"filesystem": [
+			"workspace",
+			"configured-vault"
+		],
 		"network": [],
 		"subprocess": [],
 		"externalWrites": true

@@ -1,6 +1,6 @@
 {
 	"name": "@gyoungwe/research-suite",
-	"version": "0.1.7",
+	"version": "0.1.8",
 	"description": "Bundled Drone native Pi research suite",
 	"keywords": [
 		"pi-package",
@@ -45,7 +45,7 @@
 		]
 	},
 	"dependencies": {
-		"@gyoungwe/pi-core": "0.1.7",
+		"@gyoungwe/pi-core": "0.1.8",
 		"@gyoungwe/pi-knowledge": "0.2.0",
 		"@gyoungwe/pi-research": "0.1.1"
 	},
