@@ -31,12 +31,12 @@
     "node": ">=20"
   },
   "devDependencies": {
-    "@gyoungwe/pi-core": "0.1.6",
-    "@gyoungwe/pi-research": "0.1.1",
     "@earendil-works/pi-coding-agent": "1.1.0",
+    "@gyoungwe/pi-core": "0.1.7",
+    "@gyoungwe/pi-research": "0.1.1",
+    "@gyoungwe/plugin-api": "^1.1.0",
     "@types/node": "^22.19.19",
-    "typescript": "5.9.3",
-    "@gyoungwe/plugin-api": "^1.1.0"
+    "typescript": "5.9.3"
   },
   "overrides": {
     "@earendil-works/chord": "1.1.0",
