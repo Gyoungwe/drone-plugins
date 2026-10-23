@@ -59,7 +59,11 @@ function validatePermissions(packageName, permissions, failures) {
 	if (value.externalWrites !== undefined && typeof value.externalWrites !== "boolean") failure(failures, packageName, "permissions.externalWrites must be boolean");
 	if (value.readWrite !== undefined) {
 		if (!value.readWrite || typeof value.readWrite !== "object" || Array.isArray(value.readWrite)) failure(failures, packageName, "permissions.readWrite must be an object");
-		else for (const key of ["read", "write", "delete"]) if (typeof value.readWrite[key] !== "boolean") failure(failures, packageName, `permissions.readWrite.${key} must be boolean`);
+		else {
+			for (const key of ["read", "write", "delete"]) if (typeof value.readWrite[key] !== "boolean") failure(failures, packageName, `permissions.readWrite.${key} must be boolean`);
+			if (value.externalWrites === true && value.readWrite.write === false) failure(failures, packageName, "permissions.externalWrites=true conflicts with permissions.readWrite.write=false");
+			if (value.externalWrites === false && value.readWrite.write === true) failure(failures, packageName, "permissions.externalWrites=false conflicts with permissions.readWrite.write=true");
+		}
 	}
 }
 

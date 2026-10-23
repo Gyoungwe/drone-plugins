@@ -64,3 +64,31 @@ test("allows a UI-only package to omit tools", () => {
 	const pkg = { ...packageJson, version: "1.2.3", files: ["ui", "plugin.manifest.json"] };
 	assert.equal(errors(manifest, pkg, uiRoot), "");
 });
+
+test("rejects contradictory external write declarations", () => {
+	const manifest = {
+		...valid,
+		permissions: {
+			filesystem: [],
+			network: [],
+			subprocess: [],
+			externalWrites: true,
+			readWrite: { read: true, write: false, delete: false },
+		},
+	};
+	assert.match(errors(manifest), /externalWrites=true conflicts/);
+});
+
+test("rejects a readWrite write permission when external writes are disabled", () => {
+	const manifest = {
+		...valid,
+		permissions: {
+			filesystem: [],
+			network: [],
+			subprocess: [],
+			externalWrites: false,
+			readWrite: { read: true, write: true, delete: false },
+		},
+	};
+	assert.match(errors(manifest), /externalWrites=false conflicts/);
+});
