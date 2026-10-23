@@ -6,7 +6,7 @@ The package exposes `analysis_list_adapters` and `analysis_assess_readiness`. Th
 
 The first adapters cover bulk RNA-seq/DESeq2 and de novo assembly. A blocked readiness result is a real gate; it is never promoted to execution success by this package.
 
-The published extension is a self-contained `dist/index.mjs` bundle. It uses the host-neutral `@gyoungwe/plugin-api` seam at type level and carries the analysis contract implementation in the extension bundle; the Pi coding-agent API remains a peer dependency supplied by the host.
+The published extension is a self-contained `dist/index.mjs` bundle. The package also ships `dist/host.mjs`, a versioned `AnalysisHostPort` registry/loader for Desktop composition roots. It uses the host-neutral `@gyoungwe/plugin-api` seam at type level and carries the analysis contract implementation in both bundles; the Pi coding-agent API remains a peer dependency supplied by the host.
 
 ```sh
 npm install @gyoungwe/pi-analysis @earendil-works/pi-coding-agent

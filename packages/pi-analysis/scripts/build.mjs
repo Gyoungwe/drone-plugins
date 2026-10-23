@@ -16,6 +16,7 @@ const workspaceRoot = resolve(packageRoot, "../..");
 const sourceRoot = join(packageRoot, "src");
 const distRoot = join(packageRoot, "dist");
 const outputPath = join(distRoot, "index.mjs");
+const hostOutputPath = join(distRoot, "host.mjs");
 const manifestPath = join(packageRoot, "plugin.manifest.json");
 const packageJsonPath = join(packageRoot, "package.json");
 const buildManifestPath = join(packageRoot, "build-manifest.json");
@@ -38,21 +39,29 @@ function validateMetadata() {
 	if (manifest.drone?.pluginApi !== 1) throw new Error("manifest plugin API must be 1");
 	if (manifest.drone?.resultContract !== "drone-result/v3") throw new Error("manifest result contract is incorrect");
 	if (manifest.entrypoints?.extension !== "./dist/index.mjs") throw new Error("extension entrypoint is incorrect");
+	if (manifest.entrypoints?.host !== "./dist/host.mjs") throw new Error("host entrypoint is incorrect");
 	if (!manifest.hosts?.includes("native-pi")) throw new Error("native-pi host is missing");
 }
 
 function validateSource() {
-	for (const file of ["assembly.ts", "bulk-rnaseq.ts", "index.ts", "registry.ts"]) {
+	for (const file of ["assembly.ts", "bulk-rnaseq.ts", "host.ts", "index.ts", "registry.ts"]) {
 		if (!existsSync(join(sourceRoot, file))) throw new Error(`source file is missing: ${file}`);
 	}
 }
 
 function validateDeclarations() {
-	for (const file of ["index.d.ts", "assembly.d.ts", "bulk-rnaseq.d.ts", "registry.d.ts", "analysis-contract.d.ts"])
+	for (const file of [
+		"index.d.ts",
+		"host.d.ts",
+		"assembly.d.ts",
+		"bulk-rnaseq.d.ts",
+		"registry.d.ts",
+		"analysis-contract.d.ts",
+	])
 		if (!existsSync(join(distRoot, file))) throw new Error(`declaration output is missing: dist/${file}`);
 }
 
-function validateBundle(output) {
+function validateBundle(output, kind) {
 	const forbidden = [
 		/(?:from|import\s*\(|require\s*\()\s*["']electron["']/u,
 		/(?:from|import\s*\(|require\s*\()\s*["']@drone\//u,
@@ -62,8 +71,14 @@ function validateBundle(output) {
 	for (const pattern of forbidden) {
 		if (pattern.test(output)) throw new Error(`bundle contains forbidden import: ${pattern}`);
 	}
-	for (const marker of ["analysis_list_adapters", "analysis_assess_readiness", "bulk-rnaseq", "assembly"])
-		if (!output.includes(JSON.stringify(marker))) throw new Error(`bundle is missing ${marker}`);
+	const markers =
+		kind === "extension"
+			? ["analysis_list_adapters", "analysis_assess_readiness"]
+			: ["contractVersion", "bulk-rnaseq", "assembly"];
+	for (const marker of markers) {
+		if (!output.includes(kind === "extension" ? JSON.stringify(marker) : marker))
+			throw new Error(`${kind} bundle is missing ${marker}`);
+	}
 }
 
 validateMetadata();
@@ -72,17 +87,30 @@ validateSource();
 if (!checkOnly) {
 	await rm(distRoot, { recursive: true, force: true });
 	await mkdir(distRoot, { recursive: true });
-	const buildResult = await build({
-		entryPoints: [join(sourceRoot, "index.ts")],
-		outfile: outputPath,
-		bundle: true,
-		format: "esm",
-		platform: "node",
-		packages: "bundle",
-		metafile: true,
-		sourcemap: false,
-		logLevel: "silent",
-	});
+	const [extensionBuild, hostBuild] = await Promise.all([
+		build({
+			entryPoints: [join(sourceRoot, "index.ts")],
+			outfile: outputPath,
+			bundle: true,
+			format: "esm",
+			platform: "node",
+			packages: "bundle",
+			metafile: true,
+			sourcemap: false,
+			logLevel: "silent",
+		}),
+		build({
+			entryPoints: [join(sourceRoot, "host.ts")],
+			outfile: hostOutputPath,
+			bundle: true,
+			format: "esm",
+			platform: "node",
+			packages: "bundle",
+			metafile: true,
+			sourcemap: false,
+			logLevel: "silent",
+		}),
+	]);
 	await execFileAsync("tsc", ["-p", join(packageRoot, "tsconfig.build.json")], {
 		cwd: workspaceRoot,
 		maxBuffer: 8 * 1024 * 1024,
@@ -92,8 +120,18 @@ if (!checkOnly) {
 		output = `// @ts-nocheck\n${output}`;
 		await writeFile(outputPath, output, "utf8");
 	}
+	let hostOutput = await readFile(hostOutputPath, "utf8");
+	if (!hostOutput.startsWith("// @ts-nocheck")) {
+		hostOutput = `// @ts-nocheck\n${hostOutput}`;
+		await writeFile(hostOutputPath, hostOutput, "utf8");
+	}
 	const inputHash = createHash("sha256");
-	for (const input of Object.keys(buildResult.metafile?.inputs || {}).sort()) {
+	for (const input of [
+		...new Set([
+			...Object.keys(extensionBuild.metafile?.inputs || {}),
+			...Object.keys(hostBuild.metafile?.inputs || {}),
+		]),
+	].sort()) {
 		const normalized = input.replaceAll("\\", "/");
 		inputHash.update(normalized);
 		inputHash.update("\0");
@@ -110,7 +148,9 @@ if (!checkOnly) {
 				inputsSha256: inputHash.digest("hex"),
 				outputs: {
 					"dist/index.mjs": sha256(await readFile(outputPath)),
+					"dist/host.mjs": sha256(await readFile(hostOutputPath)),
 					"dist/index.d.ts": sha256(await readFile(join(distRoot, "index.d.ts"))),
+					"dist/host.d.ts": sha256(await readFile(join(distRoot, "host.d.ts"))),
 				},
 			},
 			null,
@@ -120,6 +160,8 @@ if (!checkOnly) {
 }
 
 const output = await readFile(outputPath, "utf8");
+const hostOutput = await readFile(hostOutputPath, "utf8");
 validateDeclarations();
-validateBundle(output);
+validateBundle(output, "extension");
+validateBundle(hostOutput, "host");
 console.log(`pi-analysis package artifacts ${checkOnly ? "are present" : "built"}`);

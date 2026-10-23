@@ -1,6 +1,6 @@
 {
 	"name": "@gyoungwe/pi-analysis",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Portable scientific analysis adapters and readiness gates for native Pi",
 	"keywords": ["pi-package", "analysis", "bioinformatics"],
 	"license": "MIT",
@@ -27,6 +27,11 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.mjs",
 			"default": "./dist/index.mjs"
+		},
+		"./host": {
+			"types": "./dist/host.d.ts",
+			"import": "./dist/host.mjs",
+			"default": "./dist/host.mjs"
 		}
 	},
 	"scripts": {

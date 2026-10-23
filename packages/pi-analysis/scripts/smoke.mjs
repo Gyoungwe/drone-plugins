@@ -9,6 +9,7 @@ import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 
 const execFileAsync = promisify(execFile);
 const packageRoot = resolve(import.meta.dirname, "..");
@@ -41,6 +42,14 @@ try {
 	await readFile(join(installRoot, "node_modules/@gyoungwe/plugin-api/package.json"), "utf8");
 	await readFile(join(installRoot, "node_modules/@gyoungwe/pi-analysis/dist/index.d.ts"), "utf8");
 	const extensionPath = join(installRoot, "node_modules/@gyoungwe/pi-analysis", packageJson.pi.extensions[0]);
+	const hostPath = join(installRoot, "node_modules/@gyoungwe/pi-analysis", "dist/host.mjs");
+	const host = await import(pathToFileURL(hostPath).href);
+	assert.equal(host.analysisHostLoader.contractVersion, 1);
+	assert.equal(host.analysisHostLoader.load().contractVersion, 1);
+	assert.deepEqual(
+		host.analysisHostLoader.load().registry.list().map((adapter) => adapter.identity.id),
+		["assembly", "bulk-rnaseq"],
+	);
 	const { DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
 	const loader = new DefaultResourceLoader({
 		cwd: installRoot,

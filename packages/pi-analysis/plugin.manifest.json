@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "drone-pi-analysis",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",
@@ -12,7 +12,8 @@
 		"resultContract": "drone-result/v3"
 	},
 	"entrypoints": {
-		"extension": "./dist/index.mjs"
+		"extension": "./dist/index.mjs",
+		"host": "./dist/host.mjs"
 	},
 	"capabilities": ["analysis", "planning", "files"],
 	"tools": ["analysis_list_adapters", "analysis_assess_readiness"],

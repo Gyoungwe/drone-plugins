@@ -5,7 +5,15 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const extension = await import(pathToFileURL(join(root, "dist/index.mjs")).href);
+const host = await import(pathToFileURL(join(root, "dist/host.mjs")).href);
 const manifest = JSON.parse(await readFile(join(root, "plugin.manifest.json"), "utf8"));
+
+assert.equal(host.analysisHostLoader.contractVersion, 1);
+assert.equal(host.analysisHostLoader.load().contractVersion, 1);
+assert.deepEqual(
+	host.analysisHostLoader.load().registry.list().map((adapter) => adapter.identity.id),
+	["assembly", "bulk-rnaseq"],
+);
 
 const tools = new Map();
 const registered = extension.default({
