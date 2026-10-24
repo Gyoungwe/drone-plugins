@@ -9,6 +9,49 @@ import {
 	requiredOutputs,
 } from "./registry.js";
 
+/** BUSCO short-summary percentages have one decimal place; counts remain exact. */
+export function validateBuscoEvidence(value: unknown): boolean {
+	const row = qcRecord(value);
+	if (!row) return false;
+	const tool = qcRecord(row.tool);
+	const lineage = qcRecord(row.lineage);
+	const counts = qcRecord(row.counts);
+	if (!tool || !lineage || !counts) return false;
+	if (tool.id !== "BUSCO" || typeof tool.version !== "string" || !tool.version.trim()) return false;
+	if (typeof lineage.id !== "string" || !lineage.id.trim() || typeof lineage.version !== "string" || !lineage.version.trim()) return false;
+	const keys = ["complete", "single", "duplicated", "fragmented", "missing"] as const;
+	const total = counts.total;
+	if (typeof total !== "number" || !Number.isSafeInteger(total) || total <= 0) return false;
+	for (const key of keys) {
+		const count = counts[key];
+		const percentage = row[key];
+		if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || count > total) return false;
+		if (typeof percentage !== "number" || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) return false;
+		if (Math.abs(percentage - 100 * count / total) > 0.0500000001) return false;
+	}
+	return counts.complete === Number(counts.single) + Number(counts.duplicated)
+		&& Number(counts.complete) + Number(counts.fragmented) + Number(counts.missing) === total
+		&& Number(counts.duplicated) <= Number(counts.complete);
+}
+
+function qcRecord(value: unknown): Record<string, unknown> | undefined {
+	return value !== null && typeof value === "object" && !Array.isArray(value)
+		? value as Record<string, unknown>
+		: undefined;
+}
+
+function readQcObject(artifact: AnalysisArtifactEvidence | undefined): Record<string, unknown> | undefined {
+	if (!artifact?.text) return undefined;
+	let value: unknown;
+	try {
+		value = JSON.parse(artifact.text);
+	} catch (error) {
+		if (error instanceof SyntaxError) return undefined;
+		throw error;
+	}
+	return qcRecord(value);
+}
+
 /** Minimal de novo assembly contract; no treatment groups or contrasts. */
 export class AssemblyAdapter implements AnalysisAdapter {
 	readonly identity = { id: "assembly", version: "1.0.0" };
@@ -97,9 +140,9 @@ export class AssemblyAdapter implements AnalysisAdapter {
 		let positiveLength = false;
 		let validBusco = false;
 		let validContamination = false;
-		try {
-			const value: unknown = JSON.parse(metrics?.text ?? "");
-			const row = recordEvidence(value);
+		const metricsRow = readQcObject(metrics);
+		if (metricsRow) {
+			const row = metricsRow;
 			positiveLength =
 				typeof row.totalLength === "number" &&
 				Number.isFinite(row.totalLength) &&
@@ -109,25 +152,14 @@ export class AssemblyAdapter implements AnalysisAdapter {
 				row.contigs > 0;
 			positiveLength =
 				positiveLength && typeof row.n50 === "number" && Number.isFinite(row.n50) && row.n50 > 0;
-		} catch {
-			/* Missing or malformed QC is rejected. */
 		}
-		try {
-			const row = recordEvidence(JSON.parse(busco?.text ?? ""));
-			const values = ["complete", "fragmented", "duplicated", "missing"].map((key) => row[key]);
-			validBusco =
-				values.every(
-					(value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100,
-				) && Math.abs((values as number[]).reduce((sum, value) => sum + value, 0) - 100) < 0.01;
-		} catch {
-			/* Missing or malformed BUSCO evidence is rejected. */
-		}
-		try {
-			const row = recordEvidence(JSON.parse(contamination?.text ?? ""));
+		const buscoRow = readQcObject(busco);
+		if (buscoRow) validBusco = validateBuscoEvidence(buscoRow);
+		const contaminationRow = readQcObject(contamination);
+		if (contaminationRow) {
+			const row = contaminationRow;
 			const rate = row.contaminationRate;
 			validContamination = typeof rate === "number" && Number.isFinite(rate) && rate >= 0 && rate <= 0.1;
-		} catch {
-			/* Missing or malformed contamination evidence is rejected. */
 		}
 		return [
 			{
@@ -144,7 +176,7 @@ export class AssemblyAdapter implements AnalysisAdapter {
 				id: "assembly-busco",
 				passed: validBusco,
 				detail:
-					"BUSCO evidence requires complete, fragmented, duplicated and missing percentages summing to 100.",
+					"BUSCO requires observed tool/lineage versions and exact counts: C=S+D, C+F+M=total; one-decimal percentages must match those counts.",
 			},
 			{
 				id: "assembly-contamination",

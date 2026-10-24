@@ -102,12 +102,33 @@ const review = new extension.AssemblyAdapter().reviewResults(
 		},
 		{
 			path: "assembly/busco.json",
-			text: JSON.stringify({ complete: 90, fragmented: 5, duplicated: 2, missing: 3 }),
+			text: JSON.stringify({
+				tool: { id: "BUSCO", version: "6.1.0" }, lineage: { id: "eukaryota_odb12", version: "2025-07-01" },
+				complete: 90, single: 88, duplicated: 2, fragmented: 5, missing: 5,
+				counts: { complete: 90, single: 88, duplicated: 2, fragmented: 5, missing: 5, total: 100 },
+			}),
 		},
 		{ path: "assembly/contamination.json", text: JSON.stringify({ contaminationRate: 0.01 }) },
 	],
 );
 assert.ok(review.every((check) => check.passed));
+
+const busco = {
+	tool: { id: "BUSCO", version: "6.1.0" }, lineage: { id: "eukaryota_odb12", version: "2025-07-01" },
+	complete: 95, single: 94, duplicated: 1, fragmented: 2, missing: 3,
+	counts: { complete: 95, single: 94, duplicated: 1, fragmented: 2, missing: 3, total: 100 },
+};
+assert.equal(extension.validateBuscoEvidence(busco), true);
+assert.equal(extension.validateBuscoEvidence({ ...busco, missing: 2 }), false);
+assert.equal(extension.validateBuscoEvidence({ ...busco, duplicated: 96 }), false);
+assert.equal(extension.validateBuscoEvidence({ ...busco, tool: undefined }), false);
+assert.equal(extension.validateBuscoEvidence({ ...busco, lineage: undefined }), false);
+assert.equal(extension.validateBuscoEvidence({ ...busco, counts: { ...busco.counts, complete: 94 } }), false);
+const rounded = {
+	...busco, complete: 98.6, single: 97.2, duplicated: 1.4, fragmented: 0.7, missing: 0.7,
+	counts: { complete: 142, single: 140, duplicated: 2, fragmented: 1, missing: 1, total: 144 },
+};
+assert.equal(extension.validateBuscoEvidence(rounded), true);
 
 const bundle = await readFile(join(root, "dist/index.mjs"), "utf8");
 assert(!bundle.includes("@drone/backend"));
