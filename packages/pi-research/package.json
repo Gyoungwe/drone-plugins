@@ -50,9 +50,10 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:check": "node scripts/build.mjs --check",
-    "check": "npm run typecheck && npm run build:check && npm test && npm run smoke",
+    "check": "npm run typecheck && npm run build:check && npm test && npm run smoke && npm run test:sdk",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:sdk": "node scripts/check-sdk-sessions.mjs",
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
