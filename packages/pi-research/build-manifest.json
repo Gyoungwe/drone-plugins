@@ -1,10 +1,10 @@
 {
   "version": 1,
   "generator": "packages/pi-research/scripts/build.mjs",
-  "inputsSha256": "c1a7622b64c8439cff33f88d758b918de683f1cb542dd835d609a1c0f37b5ff4",
+  "inputsSha256": "0fe81bcf8036c634d69a0f247059849e96f20ffd61f1e03814ee8973575802f7",
   "outputs": {
-    "dist/host.mjs": "233c85b47ee0307b9e104395ec3c2302a017179566176d55022c1b037ea36ab3",
-    "dist/index.mjs": "b585e4753b456656aa9401585faf1bf18a2a2f2322de83ab82a76c7ef4593396",
+    "dist/host.mjs": "6edb5ef6a4003816267d46cd62fafe45cc30b36e5782f8dcb7d5ceebfefea4c3",
+    "dist/index.mjs": "d25fd0e64f1bbbdfc45bc4f6bcc3d39ba0344a131b9e0d079e99d589ddabeaaf",
     "dist/types/core/claim-bindings.d.ts": "876229bb74474e71943fd1843cef98b38325daf5dc163cc28f2caabc5348e533",
     "dist/types/core/external-effect-key.d.ts": "dbd00836bea9e1c8541fecebdcc5e6687351eb3d0cf3a9757ee9c489dad86d7f",
     "dist/types/core/institutional-access.d.ts": "12677b6e0873f89c2eb7b4c6001cf2a7feec63024f8f0004144f85ed780018ba",
@@ -30,8 +30,9 @@
     "dist/types/core/zotero-write.d.ts": "c6c0e5e940571d6f0a4b7f176aa8d2fc10bf6c7542c383250f98ea592a629446",
     "dist/types/evidence-gate.d.ts": "4f01bdeb41824004cf332e009f79dffea3f0f377e0e49895ac01db913ea01eea",
     "dist/types/evidence-loop.d.ts": "f8a7724620e7202c0b028729cbeff7e2afb5d9efe606c2bac8f163ee939d28f7",
-    "dist/types/host.d.ts": "a7a11e0594a74e48244bcebfd2c278ad204db8ddd2f9befbceb90d3dd20d5762",
+    "dist/types/extension.d.ts": "8cf65db1419e0fb67b6f76a9dcbfd594d93eac429d932efd93755621a26bc9ce",
+    "dist/types/host.d.ts": "8bf51759d4662483c1c27f20f47206bfb1f8d7a8c1e0ace15fe23eea55d5a20e",
     "dist/types/index.d.ts": "5b1704f0b2f221f0bd8b9f3797af4b420dbd7809bb2653a888fbd650a6438103",
-    "dist/types/research-loop.d.ts": "42a65e33a1176404416d1109347589b95683b6d73b54fb6cd3e9a2af967e2f5d"
+    "dist/types/research-loop.d.ts": "80d7650cc81596afb405262de3bf859765d00fb7754d481487257df65cf3c46a"
   }
 }

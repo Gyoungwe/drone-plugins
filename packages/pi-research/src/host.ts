@@ -235,3 +235,5 @@ export * as zoteroSetupRuntime from "./core/zotero-setup-runtime.js";
 export * as zoteroSetup from "./core/zotero-setup.js";
 export * as zoteroWriteRuntime from "./core/zotero-write-runtime.js";
 export * as zoteroWrite from "./core/zotero-write.js";
+
+export { registerResearchExtension, type ResearchExtensionPorts } from "./extension.js";

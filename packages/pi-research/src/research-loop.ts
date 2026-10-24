@@ -1,145 +1,51 @@
-import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
+import { verifyLiteratureReceipt } from "./core/literature-receipt.js";
+import { sourceStatus } from "./core/source-archive.js";
+import { registerResearchExtension, type ResearchExtensionPorts } from "./extension.js";
 
-const STAGES = [
-	"created",
-	"local_query_recorded",
-	"external_search_recorded",
-	"sources_inspected",
-	"sources_archived",
-	"claims_bound",
-	"answerable",
-] as const;
-
-type Stage = (typeof STAGES)[number];
-type Event = { type: Stage; at: string; [key: string]: unknown };
-type Run = {
-	run_dir: string;
-	stage: Stage;
-	events: Event[];
-	query?: string;
-	result_slug?: string;
-};
-
-function sessionKey(ctx: any): string {
-	return String(ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || ctx?.cwd || "default");
+/** Native Pi owns project-local configuration; Desktop injects binding-aware ports. */
+async function workspace(cwd: string) {
+ let config: { resultsRoot?: string; obsidianVault?: string | null; knowledgeBindingRevision?: number } = {};
+ try {
+  config = JSON.parse(await readFile(join(cwd, ".pi/research-workspace.json"), "utf8"));
+ } catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+ }
+ if (!config || typeof config !== "object" || Array.isArray(config)) throw new Error("Invalid research workspace configuration");
+ if (config.resultsRoot !== undefined && typeof config.resultsRoot !== "string") throw new Error("resultsRoot must be a path");
+ if (config.obsidianVault != null && typeof config.obsidianVault !== "string") throw new Error("obsidianVault must be a path");
+ if (config.knowledgeBindingRevision !== undefined && !Number.isInteger(config.knowledgeBindingRevision)) throw new Error("knowledgeBindingRevision must be an integer");
+ return {
+  resultsRoot: resolve(cwd, config.resultsRoot ?? "results"),
+  obsidianVault: config.obsidianVault ? resolve(cwd, config.obsidianVault) : null,
+  knowledgeBindingRevision: config.knowledgeBindingRevision ?? 0,
+ };
 }
 
-function result(details: unknown) {
-	return { content: [{ type: "text", text: JSON.stringify(details, null, 2) }], details };
-}
-
-function advance(run: Run, stage: Stage, details: Record<string, unknown> = {}): void {
-	const current = STAGES.indexOf(run.stage);
-	const next = STAGES.indexOf(stage);
-	if (next < current) throw new Error(`research run cannot move backwards: ${run.stage} -> ${stage}`);
-	run.stage = stage;
-	run.events.push({ type: stage, at: new Date().toISOString(), ...details });
-}
-
-function snapshot(run: Run) {
-	return {
-		run_dir: run.run_dir,
-		stage: run.stage,
-		answerable: run.stage === "answerable",
-		query: run.query,
-		result_slug: run.result_slug,
-		events: [...run.events],
-	};
-}
-
-/**
- * Host-neutral run-level evidence lifecycle. Source retrieval, archive writes,
- * and Zotero operations remain host ports; this package only owns the receipt
- * state machine and session ledger.
- */
 export function registerResearchLoop(pi: any): void {
-	if (process.env.PI_SUBAGENT_CHILD === "1") return;
-	const sessions = new Map<string, Map<string, Run>>();
-	const counters = new Map<string, number>();
-	const runsFor = (ctx: any) => {
-		const key = sessionKey(ctx);
-		let runs = sessions.get(key);
-		if (!runs) {
-			runs = new Map();
-			sessions.set(key, runs);
-		}
-		return runs;
-	};
-	const nextRunDir = (ctx: any) => {
-		const key = sessionKey(ctx);
-		const next = (counters.get(key) || 0) + 1;
-		counters.set(key, next);
-		return `.pi/research-runs/${new Date().toISOString().replace(/[:.]/gu, "-")}-${next}-${randomUUID().slice(0, 8)}`;
-	};
-
-	pi.registerTool({
-		name: "research_loop",
-		label: "Research evidence loop",
-		description:
-			"Create or inspect a host-neutral research evidence receipt. Host adapters provide source retrieval and persistence; this lifecycle records the monotonic stages and current-session run ledger.",
-		drone: { libraryMode: true, recoverySafe: true, capabilities: ["research"] },
-		parameters: {
-			type: "object",
-			properties: {
-				action: {
-					type: "string",
-					enum: [
-						"start",
-						"record_local",
-						"record_external",
-						"inspect_sources",
-						"verify_archive",
-						"bind_claims",
-						"finalize",
-						"complete",
-						"status",
-					],
-				},
-				run_dir: { type: "string" },
-				query: { type: "string" },
-				result_slug: { type: "string" },
-				outcome: { type: "string" },
-			},
-			required: ["action"],
-		},
-		async execute(_id: string, params: any, _signal: AbortSignal, _update: unknown, ctx: any) {
-			const action = String(params?.action || "");
-			const runs = runsFor(ctx);
-			if (action === "status" && !params?.run_dir) {
-				const current = [...runs.values()].at(-1);
-				return result(current ? snapshot(current) : { run_dir: null, stage: "not-started", answerable: false });
-			}
-			if (action === "start") {
-				const run: Run = {
-					run_dir: String(params?.run_dir || nextRunDir(ctx)),
-					stage: "created",
-					events: [],
-					query: String(params?.query || "").trim() || undefined,
-					result_slug: String(params?.result_slug || "").trim() || undefined,
-				};
-				if (!run.query) throw new Error("query is required when starting a research run");
-				runs.set(run.run_dir, run);
-				return result(snapshot(run));
-			}
-			const runDir = String(params?.run_dir || "");
-			const run = runs.get(runDir);
-			if (!run) throw new Error("run_dir must come from research_loop(action=start) in this session");
-			if (action === "status") return result(snapshot(run));
-			const transitions: Record<string, Stage> = {
-				record_local: "local_query_recorded",
-				record_external: "external_search_recorded",
-				inspect_sources: "sources_inspected",
-				verify_archive: "sources_archived",
-				bind_claims: "claims_bound",
-				finalize: "answerable",
-				complete: "answerable",
-			};
-			const stage = transitions[action];
-			if (!stage) throw new Error(`unsupported research_loop action: ${action}`);
-			if ((action === "finalize" || action === "complete") && run.stage !== "claims_bound" && run.stage !== "answerable")
-				throw new Error("research run cannot finalize before claims are bound");
-			advance(run, stage, params?.outcome ? { outcome: String(params.outcome) } : {});
-			return result(snapshot(run));
-		},
-	});
+ let tail: Promise<void> = Promise.resolve();
+ const run = async <T>(operation: () => T | Promise<T>): Promise<T> => {
+  const previous = tail;
+  let unlock!: () => void;
+  tail = new Promise<void>((resolve) => { unlock = resolve; });
+  await previous;
+  try { return await operation(); } finally { unlock(); }
+ };
+ const resolveProject = async (cwd: string) => basename(resolve(cwd)).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "research-project";
+ const ports: ResearchExtensionPorts = {
+  workspace,
+  resolveProject,
+  resolveSessionProject: async (ctx) => ({ project: await resolveProject(ctx.cwd) }),
+  describeProject: (resolution) => resolution,
+  registerTool: (host, tool) => host.registerTool(tool),
+  run,
+  verifyLiteratureReceipt: (input) => verifyLiteratureReceipt(input as any),
+  sourceStatus: (input) => sourceStatus(input, {
+   workspace,
+   exclusive: (_key, work) => work(), // Tool execution is already serialized by run.
+   publishSourceNote: async () => { throw new Error("Native research status cannot publish a source note"); },
+  }),
+ };
+ registerResearchExtension(pi, ports);
 }

@@ -20,28 +20,28 @@ function createEvidenceGate({ scope = "factual-answer" } = {}) {
   const record = (type, details = {}) => {
     events.push({ type, at: (/* @__PURE__ */ new Date()).toISOString(), ...details });
   };
-  const snapshot2 = () => ({
+  const snapshot = () => ({
     scope,
     stage,
     status: "ok",
     answerable: stage === "answerable",
     events: [...events]
   });
-  const advance2 = (next, details = {}) => {
+  const advance = (next, details = {}) => {
     if (!EVIDENCE_STAGES.includes(next)) throw new Error(`Unknown evidence stage: ${next}`);
     const current = EVIDENCE_STAGES.indexOf(stage);
     const target = EVIDENCE_STAGES.indexOf(next);
     if (target < current) throw new Error(`Evidence stage cannot move backwards: ${stage} -> ${next}`);
     stage = next;
     record(next, details);
-    return snapshot2();
+    return snapshot();
   };
   const fail = (status, details = {}) => {
     if (!TERMINAL_FAILURES.has(status)) throw new Error(`Unknown evidence failure: ${status}`);
     record(status, details);
-    return { ...snapshot2(), status, answerable: false };
+    return { ...snapshot(), status, answerable: false };
   };
-  return Object.freeze({ advance: advance2, fail, snapshot: snapshot2 });
+  return Object.freeze({ advance, fail, snapshot });
 }
 
 // ../../node_modules/pdfjs-dist/legacy/build/pdf.mjs
@@ -374,9 +374,9 @@ var __webpack_modules__ = {
     module.exports = function(Constructor, list, $length) {
       var index = 0;
       var length = arguments.length > 2 ? $length : lengthOfArrayLike(list);
-      var result3 = new Constructor(length);
-      while (length > index) result3[index] = list[index++];
-      return result3;
+      var result2 = new Constructor(length);
+      while (length > index) result2[index] = list[index++];
+      return result2;
     };
   },
   /***/
@@ -444,10 +444,10 @@ var __webpack_modules__ = {
     var base64Alphabet = commonAlphabet + "+/";
     var base64UrlAlphabet = commonAlphabet + "-_";
     var inverse = function(characters) {
-      var result3 = {};
+      var result2 = {};
       var index = 0;
-      for (; index < 64; index++) result3[characters.charAt(index)] = index;
-      return result3;
+      for (; index < 64; index++) result2[characters.charAt(index)] = index;
+      return result2;
     };
     module.exports = {
       i2c: base64Alphabet,
@@ -495,8 +495,8 @@ var __webpack_modules__ = {
       }
     };
     module.exports = TO_STRING_TAG_SUPPORT ? classofRaw : function(it) {
-      var O, tag, result3;
-      return it === void 0 ? "Undefined" : it === null ? "Null" : typeof (tag = tryGet(O = $Object(it), TO_STRING_TAG)) == "string" ? tag : CORRECT_ARGUMENTS ? classofRaw(O) : (result3 = classofRaw(O)) === "Object" && isCallable(O.callee) ? "Arguments" : result3;
+      var O, tag, result2;
+      return it === void 0 ? "Undefined" : it === null ? "Null" : typeof (tag = tryGet(O = $Object(it), TO_STRING_TAG)) == "string" ? tag : CORRECT_ARGUMENTS ? classofRaw(O) : (result2 = classofRaw(O)) === "Object" && isCallable(O.callee) ? "Arguments" : result2;
     };
   },
   /***/
@@ -1247,10 +1247,10 @@ var __webpack_modules__ = {
     module.exports = function(record, fn, ITERATOR_INSTEAD_OF_RECORD) {
       var iterator = ITERATOR_INSTEAD_OF_RECORD ? record : record.iterator;
       var next = record.next;
-      var step, result3;
+      var step, result2;
       while (!(step = call(next, iterator)).done) {
-        result3 = fn(step.value);
-        if (result3 !== void 0) return result3;
+        result2 = fn(step.value);
+        if (result2 !== void 0) return result2;
       }
     };
   },
@@ -1267,9 +1267,9 @@ var __webpack_modules__ = {
     var getIteratorMethod = __webpack_require__3(3085);
     var iteratorClose = __webpack_require__3(9539);
     var $TypeError = TypeError;
-    var Result = function(stopped, result3) {
+    var Result = function(stopped, result2) {
       this.stopped = stopped;
-      this.result = result3;
+      this.result = result2;
     };
     var ResultPrototype = Result.prototype;
     module.exports = function(iterable, unboundFunction, options) {
@@ -1279,7 +1279,7 @@ var __webpack_modules__ = {
       var IS_ITERATOR = !!(options && options.IS_ITERATOR);
       var INTERRUPTED = !!(options && options.INTERRUPTED);
       var fn = bind(unboundFunction, that);
-      var iterator, iterFn, index, length, result3, next, step;
+      var iterator, iterFn, index, length, result2, next, step;
       var stop = function(condition) {
         var $iterator = iterator;
         iterator = void 0;
@@ -1302,8 +1302,8 @@ var __webpack_modules__ = {
         if (!iterFn) throw new $TypeError(tryToString(iterable) + " is not iterable");
         if (isArrayIteratorMethod(iterFn)) {
           for (index = 0, length = lengthOfArrayLike(iterable); length > index; index++) {
-            result3 = callFn(iterable[index]);
-            if (result3 && isPrototypeOf(ResultPrototype, result3)) return result3;
+            result2 = callFn(iterable[index]);
+            if (result2 && isPrototypeOf(ResultPrototype, result2)) return result2;
           }
           return new Result(false);
         }
@@ -1313,12 +1313,12 @@ var __webpack_modules__ = {
       while (!(step = call(next, iterator)).done) {
         var value = step.value;
         try {
-          result3 = callFn(value);
+          result2 = callFn(value);
         } catch (error) {
           if (iterator) iteratorClose(iterator, "throw", error);
           else throw error;
         }
-        if (typeof result3 == "object" && result3 && isPrototypeOf(ResultPrototype, result3)) return result3;
+        if (typeof result2 == "object" && result2 && isPrototypeOf(ResultPrototype, result2)) return result2;
       }
       return new Result(false);
     };
@@ -1399,9 +1399,9 @@ var __webpack_modules__ = {
           if (IS_ITERATOR) return state.nextHandler();
           if (state.done) return createIterResultObject(void 0, true);
           try {
-            var result3 = state.nextHandler();
+            var result2 = state.nextHandler();
             if (state.done) cleanupState(state);
-            return state.returnHandlerResult ? result3 : createIterResultObject(result3, state.done);
+            return state.returnHandlerResult ? result2 : createIterResultObject(result2, state.done);
           } catch (error) {
             state.done = true;
             cleanupState(state);
@@ -1555,7 +1555,7 @@ var __webpack_modules__ = {
     var defineProperty = Object.defineProperty;
     var stringSlice = uncurryThis("".slice);
     var replace = uncurryThis("".replace);
-    var join2 = uncurryThis([].join);
+    var join6 = uncurryThis([].join);
     var CONFIGURABLE_LENGTH = DESCRIPTORS && !fails(function() {
       return defineProperty(function() {
       }, "length", { value: 8 }).length !== 8;
@@ -1582,7 +1582,7 @@ var __webpack_modules__ = {
       }
       var state = enforceInternalState(value);
       if (!hasOwn(state, "source")) {
-        state.source = join2(TEMPLATE, typeof name == "string" ? name : "");
+        state.source = join6(TEMPLATE, typeof name == "string" ? name : "");
       }
       return value;
     };
@@ -1627,13 +1627,13 @@ var __webpack_modules__ = {
     var aCallable = __webpack_require__3(9306);
     var $TypeError = TypeError;
     var PromiseCapability = function(C) {
-      var resolve2, reject;
+      var resolve9, reject;
       this.promise = new C(function($$resolve, $$reject) {
-        if (resolve2 !== void 0 || reject !== void 0) throw new $TypeError("Bad Promise constructor");
-        resolve2 = $$resolve;
+        if (resolve9 !== void 0 || reject !== void 0) throw new $TypeError("Bad Promise constructor");
+        resolve9 = $$resolve;
         reject = $$reject;
       });
-      this.resolve = aCallable(resolve2);
+      this.resolve = aCallable(resolve9);
       this.reject = aCallable(reject);
     };
     module.exports.f = function(C) {
@@ -1707,14 +1707,14 @@ var __webpack_modules__ = {
     };
     hiddenKeys[IE_PROTO] = true;
     module.exports = Object.create || function create(O, Properties) {
-      var result3;
+      var result2;
       if (O !== null) {
         EmptyConstructor[PROTOTYPE] = anObject(O);
-        result3 = new EmptyConstructor();
+        result2 = new EmptyConstructor();
         EmptyConstructor[PROTOTYPE] = null;
-        result3[IE_PROTO] = O;
-      } else result3 = NullProtoObject();
-      return Properties === void 0 ? result3 : definePropertiesModule.f(result3, Properties);
+        result2[IE_PROTO] = O;
+      } else result2 = NullProtoObject();
+      return Properties === void 0 ? result2 : definePropertiesModule.f(result2, Properties);
     };
   },
   /***/
@@ -1848,13 +1848,13 @@ var __webpack_modules__ = {
     module.exports = function(object, names) {
       var O = toIndexedObject(object);
       var i = 0;
-      var result3 = [];
+      var result2 = [];
       var key;
-      for (key in O) !hasOwn(hiddenKeys, key) && hasOwn(O, key) && push(result3, key);
+      for (key in O) !hasOwn(hiddenKeys, key) && hasOwn(O, key) && push(result2, key);
       while (names.length > i) if (hasOwn(O, key = names[i++])) {
-        ~indexOf(result3, key) || push(result3, key);
+        ~indexOf(result2, key) || push(result2, key);
       }
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -2001,8 +2001,8 @@ var __webpack_modules__ = {
       anObject(C);
       if (isObject(x) && x.constructor === C) return x;
       var promiseCapability = newPromiseCapability.f(C);
-      var resolve2 = promiseCapability.resolve;
-      resolve2(x);
+      var resolve9 = promiseCapability.resolve;
+      resolve9(x);
       return promiseCapability.promise;
     };
   },
@@ -2022,11 +2022,11 @@ var __webpack_modules__ = {
     var Set2 = SetHelpers.Set;
     var add = SetHelpers.add;
     module.exports = function(set) {
-      var result3 = new Set2();
+      var result2 = new Set2();
       iterate(set, function(it) {
-        add(result3, it);
+        add(result2, it);
       });
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -2043,14 +2043,14 @@ var __webpack_modules__ = {
     module.exports = function difference(other) {
       var O = aSet(this);
       var otherRec = getSetRecord(other);
-      var result3 = clone(O);
-      if (size(result3) <= otherRec.size) iterateSet(result3, function(e) {
-        if (otherRec.includes(e)) remove(result3, e);
+      var result2 = clone(O);
+      if (size(result2) <= otherRec.size) iterateSet(result2, function(e) {
+        if (otherRec.includes(e)) remove(result2, e);
       });
       else iterateSimple(otherRec.getIterator(), function(e) {
-        if (has(result3, e)) remove(result3, e);
+        if (has(result2, e)) remove(result2, e);
       });
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -2080,17 +2080,17 @@ var __webpack_modules__ = {
     module.exports = function intersection(other) {
       var O = aSet(this);
       var otherRec = getSetRecord(other);
-      var result3 = new Set2();
+      var result2 = new Set2();
       if (size(O) > otherRec.size) {
         iterateSimple(otherRec.getIterator(), function(e) {
-          if (has(O, e)) add(result3, e);
+          if (has(O, e)) add(result2, e);
         });
       } else {
         iterateSet(O, function(e) {
-          if (otherRec.includes(e)) add(result3, e);
+          if (otherRec.includes(e)) add(result2, e);
         });
       }
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -2234,8 +2234,8 @@ var __webpack_modules__ = {
             });
           }
         };
-        var result3 = baseSet[METHOD_NAME](setLike);
-        return result3.size === 1 && result3.values().next().value === 4;
+        var result2 = baseSet[METHOD_NAME](setLike);
+        return result2.size === 1 && result2.values().next().value === 4;
       } catch (error) {
         return false;
       }
@@ -2262,12 +2262,12 @@ var __webpack_modules__ = {
     module.exports = function symmetricDifference(other) {
       var O = aSet(this);
       var keysIter = getSetRecord(other).getIterator();
-      var result3 = clone(O);
+      var result2 = clone(O);
       iterateSimple(keysIter, function(e) {
-        if (has(O, e)) remove(result3, e);
-        else add(result3, e);
+        if (has(O, e)) remove(result2, e);
+        else add(result2, e);
       });
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -2280,11 +2280,11 @@ var __webpack_modules__ = {
     module.exports = function union(other) {
       var O = aSet(this);
       var keysIter = getSetRecord(other).getIterator();
-      var result3 = clone(O);
+      var result2 = clone(O);
       iterateSimple(keysIter, function(it) {
-        add(result3, it);
+        add(result2, it);
       });
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -2394,9 +2394,9 @@ var __webpack_modules__ = {
     var toIntegerOrInfinity = __webpack_require__3(1291);
     var $RangeError = RangeError;
     module.exports = function(it) {
-      var result3 = toIntegerOrInfinity(it);
-      if (result3 < 0) throw new $RangeError("The argument can't be less than 0");
-      return result3;
+      var result2 = toIntegerOrInfinity(it);
+      if (result2 < 0) throw new $RangeError("The argument can't be less than 0");
+      return result2;
     };
   },
   /***/
@@ -2412,11 +2412,11 @@ var __webpack_modules__ = {
     module.exports = function(input, pref) {
       if (!isObject(input) || isSymbol(input)) return input;
       var exoticToPrim = getMethod(input, TO_PRIMITIVE);
-      var result3;
+      var result2;
       if (exoticToPrim) {
         if (pref === void 0) pref = "default";
-        result3 = call(exoticToPrim, input, pref);
-        if (!isObject(result3) || isSymbol(result3)) return result3;
+        result2 = call(exoticToPrim, input, pref);
+        if (!isObject(result2) || isSymbol(result2)) return result2;
         throw new $TypeError("Can't convert object to primitive value");
       }
       if (pref === void 0) pref = "number";
@@ -2625,11 +2625,11 @@ var __webpack_modules__ = {
       var segments = stringMatch(string, /[\S\s]{2}/g);
       var written = 0;
       for (; written < maxLength; written++) {
-        var result3 = +("0x" + segments[written] + "0");
-        if (result3 !== result3) {
+        var result2 = +("0x" + segments[written] + "0");
+        if (result2 !== result2) {
           throw new SyntaxError2("String should only contain hex characters");
         }
-        bytes[written] = result3 >> 4;
+        bytes[written] = result2 >> 4;
       }
       return { bytes, read: written << 1 };
     };
@@ -2645,15 +2645,15 @@ var __webpack_modules__ = {
       var url = new URL("b?a=1&b=2&c=3", "https://a");
       var params = url.searchParams;
       var params2 = new URLSearchParams("a=1&a=2&b=3");
-      var result3 = "";
+      var result2 = "";
       url.pathname = "c%20d";
       params.forEach(function(value, key) {
         params["delete"]("b");
-        result3 += key + value;
+        result2 += key + value;
       });
       params2["delete"]("a", 2);
       params2["delete"]("b", void 0);
-      return IS_PURE && (!url.toJSON || !params2.has("a", 1) || params2.has("a", 2) || !params2.has("a", void 0) || params2.has("b")) || !params.size && (IS_PURE || !DESCRIPTORS) || !params.sort || url.href !== "https://a/c%20d?a=1&c=3" || params.get("c") !== "3" || String(new URLSearchParams("?a=1")) !== "a=1" || !params[ITERATOR] || new URL("https://a@b").username !== "a" || new URLSearchParams(new URLSearchParams("a=b")).get("a") !== "b" || new URL("https://\u0442\u0435\u0441\u0442").host !== "xn--e1aybc" || new URL("https://a#\u0431").hash !== "#%D0%B1" || result3 !== "a1c3" || new URL("https://x", void 0).host !== "x";
+      return IS_PURE && (!url.toJSON || !params2.has("a", 1) || params2.has("a", 2) || !params2.has("a", void 0) || params2.has("b")) || !params.size && (IS_PURE || !DESCRIPTORS) || !params.sort || url.href !== "https://a/c%20d?a=1&c=3" || params.get("c") !== "3" || String(new URLSearchParams("?a=1")) !== "a=1" || !params[ITERATOR] || new URL("https://a@b").username !== "a" || new URLSearchParams(new URLSearchParams("a=b")).get("a") !== "b" || new URL("https://\u0442\u0435\u0441\u0442").host !== "xn--e1aybc" || new URL("https://a#\u0431").hash !== "#%D0%B1" || result2 !== "a1c3" || new URL("https://x", void 0).host !== "x";
     });
   },
   /***/
@@ -2857,16 +2857,16 @@ var __webpack_modules__ = {
     var IteratorProxy = createIteratorProxy(function() {
       var iterator = this.iterator;
       var next = this.next;
-      var result3, done;
+      var result2, done;
       while (this.remaining) {
         this.remaining--;
-        result3 = anObject(call(next, iterator));
-        done = this.done = !!result3.done;
+        result2 = anObject(call(next, iterator));
+        done = this.done = !!result2.done;
         if (done) return;
       }
-      result3 = anObject(call(next, iterator));
-      done = this.done = !!result3.done;
-      if (!done) return result3.value;
+      result2 = anObject(call(next, iterator));
+      done = this.done = !!result2.done;
+      if (!done) return result2.value;
     });
     $({ target: "Iterator", proto: true, real: true, forced: FORCED }, {
       drop: function drop(limit) {
@@ -2936,12 +2936,12 @@ var __webpack_modules__ = {
       var iterator = this.iterator;
       var predicate = this.predicate;
       var next = this.next;
-      var result3, done, value;
+      var result2, done, value;
       while (true) {
-        result3 = anObject(call(next, iterator));
-        done = this.done = !!result3.done;
+        result2 = anObject(call(next, iterator));
+        done = this.done = !!result2.done;
         if (done) return;
-        value = result3.value;
+        value = result2.value;
         if (callWithSafeIterationClosing(iterator, predicate, [value, this.counter++], true)) return value;
       }
     });
@@ -3016,19 +3016,19 @@ var __webpack_modules__ = {
     var IteratorProxy = createIteratorProxy(function() {
       var iterator = this.iterator;
       var mapper = this.mapper;
-      var result3, inner;
+      var result2, inner;
       while (true) {
         if (inner = this.inner) try {
-          result3 = anObject(call(inner.next, inner.iterator));
-          if (!result3.done) return result3.value;
+          result2 = anObject(call(inner.next, inner.iterator));
+          if (!result2.done) return result2.value;
           this.inner = null;
         } catch (error) {
           iteratorClose(iterator, "throw", error);
         }
-        result3 = anObject(call(this.next, iterator));
-        if (this.done = !!result3.done) return;
+        result2 = anObject(call(this.next, iterator));
+        if (this.done = !!result2.done) return;
         try {
-          this.inner = getIteratorFlattenable(mapper(result3.value, this.counter++), false);
+          this.inner = getIteratorFlattenable(mapper(result2.value, this.counter++), false);
         } catch (error) {
           iteratorClose(iterator, "throw", error);
         }
@@ -3097,9 +3097,9 @@ var __webpack_modules__ = {
     var FORCED = IS_PURE || MAP_WITHOUT_THROWING_ON_INVALID_ITERATOR || mapWithoutClosingOnEarlyError;
     var IteratorProxy = createIteratorProxy(function() {
       var iterator = this.iterator;
-      var result3 = anObject(call(this.next, iterator));
-      var done = this.done = !!result3.done;
-      if (!done) return callWithSafeIterationClosing(iterator, this.mapper, [result3.value, this.counter++], true);
+      var result2 = anObject(call(this.next, iterator));
+      var done = this.done = !!result2.done;
+      if (!done) return callWithSafeIterationClosing(iterator, this.mapper, [result2.value, this.counter++], true);
     });
     $({ target: "Iterator", proto: true, real: true, forced: FORCED }, {
       map: function map(mapper) {
@@ -3178,9 +3178,9 @@ var __webpack_modules__ = {
         this.done = true;
         return iteratorClose(iterator, "normal", void 0);
       }
-      var result3 = anObject(call(this.next, iterator));
-      var done = this.done = !!result3.done;
-      if (!done) return result3.value;
+      var result2 = anObject(call(this.next, iterator));
+      var done = this.done = !!result2.done;
+      if (!done) return result2.value;
     });
     $({ target: "Iterator", proto: true, real: true, forced: FORCED }, {
       take: function take(limit) {
@@ -3210,12 +3210,12 @@ var __webpack_modules__ = {
     var getIteratorDirect = __webpack_require__3(1767);
     $({ target: "Iterator", proto: true, real: true }, {
       toArray: function toArray() {
-        var result3 = [];
+        var result2 = [];
         var index = 0;
         iterate(getIteratorDirect(anObject(this)), function(element) {
-          createProperty(result3, index++, element);
+          createProperty(result2, index++, element);
         }, { IS_RECORD: true });
-        return result3;
+        return result2;
       }
     });
   },
@@ -3350,15 +3350,15 @@ var __webpack_modules__ = {
             closed = true;
             break;
           }
-          var result3 = this.fork(i).string();
-          var key = result3.value;
-          i = result3.end;
+          var result2 = this.fork(i).string();
+          var key = result2.value;
+          i = result2.end;
           i = this.until([":"], i) + 1;
           i = this.skip(IS_WHITESPACE, i);
-          result3 = this.fork(i).parse();
-          createProperty(nodes, key, result3);
-          createProperty(object, key, result3.value);
-          i = this.until([",", "}"], result3.end);
+          result2 = this.fork(i).parse();
+          createProperty(nodes, key, result2);
+          createProperty(object, key, result2.value);
+          i = this.until([",", "}"], result2.end);
           var chr = at(source, i);
           if (chr === ",") {
             expectKeypair = true;
@@ -3386,10 +3386,10 @@ var __webpack_modules__ = {
             closed = true;
             break;
           }
-          var result3 = this.fork(i).parse();
-          push(nodes, result3);
-          push(array, result3.value);
-          i = this.until([",", "]"], result3.end);
+          var result2 = this.fork(i).parse();
+          push(nodes, result2);
+          push(array, result2.value);
+          i = this.until([",", "]"], result2.end);
           if (at(source, i) === ",") {
             expectElement = true;
             i++;
@@ -3460,8 +3460,8 @@ var __webpack_modules__ = {
       return 1 / nativeParse("-0 	") !== -Infinity;
     });
     $({ target: "JSON", stat: true, forced: NO_SOURCE_SUPPORT }, {
-      parse: function parse(text, reviver) {
-        return PROPER_BASE_PARSE && !isCallable(reviver) ? nativeParse(text) : $parse(text, reviver);
+      parse: function parse(text2, reviver) {
+        return PROPER_BASE_PARSE && !isCallable(reviver) ? nativeParse(text2) : $parse(text2, reviver);
       }
     });
   },
@@ -3599,7 +3599,7 @@ var __webpack_modules__ = {
       return ordered;
     };
     if ($stringify) $({ target: "JSON", stat: true, arity: 3, forced: WRONG_SYMBOLS_CONVERSION || ILL_FORMED_UNICODE || !NATIVE_RAW_JSON }, {
-      stringify: function stringify(text, replacer, space) {
+      stringify: function stringify(text2, replacer, space) {
         var replacerFunction = isCallable(replacer) ? replacer : void 0;
         var propertyList = replacerFunction ? void 0 : getPropertyList(replacer);
         var keyPrefix = propertyList && getKeyPrefix(propertyList);
@@ -3609,7 +3609,7 @@ var __webpack_modules__ = {
         var currentOrdered;
         var marked = false;
         var root = true;
-        var json = stringifyWithProperSymbolsConversion(text, function(key, value) {
+        var json = stringifyWithProperSymbolsConversion(text2, function(key, value) {
           key = $String(key);
           if (propertyList) {
             if (key === END_MARK) {
@@ -3639,20 +3639,20 @@ var __webpack_modules__ = {
         if (typeof json != "string") return json;
         if (ILL_FORMED_UNICODE) json = replace(json, surrogates, fixIllFormedJSON);
         if (!marked) return json;
-        var result3 = "";
+        var result2 = "";
         var length = json.length;
         for (var i = 0; i < length; i++) {
           var chr = charAt(json, i);
           if (chr === '"') {
             var end = parseJSONString(json, ++i).end - 1;
             var string = slice(json, i, end);
-            if (slice(string, 0, RAW_MARK_LENGTH) === RAW_MARK) result3 += rawStrings[slice(string, RAW_MARK_LENGTH)];
-            else if (slice(string, 0, KEY_MARK_LENGTH) === KEY_MARK) result3 += '"' + slice(string, KEY_MARK_LENGTH) + '"';
-            else result3 += '"' + string + '"';
+            if (slice(string, 0, RAW_MARK_LENGTH) === RAW_MARK) result2 += rawStrings[slice(string, RAW_MARK_LENGTH)];
+            else if (slice(string, 0, KEY_MARK_LENGTH) === KEY_MARK) result2 += '"' + slice(string, KEY_MARK_LENGTH) + '"';
+            else result2 += '"' + string + '"';
             i = end;
-          } else result3 += chr;
+          } else result2 += chr;
         }
-        return result3;
+        return result2;
       }
     });
   },
@@ -3846,13 +3846,13 @@ var __webpack_modules__ = {
     $({ target: "Promise", stat: true, forced: FORCED }, {
       "try": function(callbackfn) {
         var args = arguments.length > 1 ? slice(arguments, 1) : [];
-        var result3 = perform(function() {
+        var result2 = perform(function() {
           return apply(aCallable(callbackfn), void 0, args);
         });
-        if (!result3.error) return promiseResolve(this, result3.value);
+        if (!result2.error) return promiseResolve(this, result2.value);
         var promiseCapability = newPromiseCapabilityModule.f(this);
         var reject = promiseCapability.reject;
-        reject(result3.value);
+        reject(result2.value);
         return promiseCapability.promise;
       }
     });
@@ -3863,8 +3863,8 @@ var __webpack_modules__ = {
     var difference = __webpack_require__3(3440);
     var fails = __webpack_require__3(9039);
     var setMethodAcceptSetLike = __webpack_require__3(4916);
-    var SET_LIKE_INCORRECT_BEHAVIOR = !setMethodAcceptSetLike("difference", function(result3) {
-      return result3.size === 0;
+    var SET_LIKE_INCORRECT_BEHAVIOR = !setMethodAcceptSetLike("difference", function(result2) {
+      return result2.size === 0;
     });
     var FORCED = SET_LIKE_INCORRECT_BEHAVIOR || fails(function() {
       var setLike = {
@@ -3896,8 +3896,8 @@ var __webpack_modules__ = {
     var fails = __webpack_require__3(9039);
     var intersection = __webpack_require__3(8750);
     var setMethodAcceptSetLike = __webpack_require__3(4916);
-    var INCORRECT = !setMethodAcceptSetLike("intersection", function(result3) {
-      return result3.size === 2 && result3.has(1) && result3.has(2);
+    var INCORRECT = !setMethodAcceptSetLike("intersection", function(result2) {
+      return result2.size === 2 && result2.has(1) && result2.has(2);
     }) || fails(function() {
       return String(Array.from((/* @__PURE__ */ new Set([1, 2, 3])).intersection(/* @__PURE__ */ new Set([3, 2])))) !== "3,2";
     });
@@ -3910,8 +3910,8 @@ var __webpack_modules__ = {
     var $ = __webpack_require__3(6518);
     var isDisjointFrom = __webpack_require__3(4449);
     var setMethodAcceptSetLike = __webpack_require__3(4916);
-    var INCORRECT = !setMethodAcceptSetLike("isDisjointFrom", function(result3) {
-      return !result3;
+    var INCORRECT = !setMethodAcceptSetLike("isDisjointFrom", function(result2) {
+      return !result2;
     });
     $({ target: "Set", proto: true, real: true, forced: INCORRECT }, {
       isDisjointFrom
@@ -3922,8 +3922,8 @@ var __webpack_modules__ = {
     var $ = __webpack_require__3(6518);
     var isSubsetOf = __webpack_require__3(3838);
     var setMethodAcceptSetLike = __webpack_require__3(4916);
-    var INCORRECT = !setMethodAcceptSetLike("isSubsetOf", function(result3) {
-      return result3;
+    var INCORRECT = !setMethodAcceptSetLike("isSubsetOf", function(result2) {
+      return result2;
     });
     $({ target: "Set", proto: true, real: true, forced: INCORRECT }, {
       isSubsetOf
@@ -3934,8 +3934,8 @@ var __webpack_modules__ = {
     var $ = __webpack_require__3(6518);
     var isSupersetOf = __webpack_require__3(8527);
     var setMethodAcceptSetLike = __webpack_require__3(4916);
-    var INCORRECT = !setMethodAcceptSetLike("isSupersetOf", function(result3) {
-      return !result3;
+    var INCORRECT = !setMethodAcceptSetLike("isSupersetOf", function(result2) {
+      return !result2;
     });
     $({ target: "Set", proto: true, real: true, forced: INCORRECT }, {
       isSupersetOf
@@ -4024,8 +4024,8 @@ var __webpack_modules__ = {
     })();
     if (Uint8Array2) $({ target: "Uint8Array", stat: true, forced: INCORRECT_BEHAVIOR_OR_DOESNT_EXISTS }, {
       fromBase64: function fromBase64(string) {
-        var result3 = $fromBase64(string, arguments.length > 1 ? arguments[1] : void 0, null, 9007199254740991);
-        return arrayFromConstructorAndList(Uint8Array2, result3.bytes);
+        var result2 = $fromBase64(string, arguments.length > 1 ? arguments[1] : void 0, null, 9007199254740991);
+        return arrayFromConstructorAndList(Uint8Array2, result2.bytes);
       }
     });
   },
@@ -4057,8 +4057,8 @@ var __webpack_modules__ = {
     if (Uint8Array2) $({ target: "Uint8Array", proto: true, forced: INCORRECT_BEHAVIOR_OR_DOESNT_EXISTS }, {
       setFromBase64: function setFromBase64(string) {
         anUint8Array(this);
-        var result3 = $fromBase64(string, arguments.length > 1 ? arguments[1] : void 0, this, this.length);
-        return { read: result3.read, written: result3.written };
+        var result2 = $fromBase64(string, arguments.length > 1 ? arguments[1] : void 0, this, this.length);
+        return { read: result2.read, written: result2.written };
       }
     });
   },
@@ -4105,7 +4105,7 @@ var __webpack_modules__ = {
     var charAt = uncurryThis("".charAt);
     var Uint8Array2 = globalThis2.Uint8Array;
     var $Array = globalThis2.Array;
-    var join2 = uncurryThis([].join);
+    var join6 = uncurryThis([].join);
     var INCORRECT_BEHAVIOR_OR_DOESNT_EXISTS = !Uint8Array2 || !Uint8Array2.prototype.toBase64 || !(function() {
       try {
         var target = new Uint8Array2();
@@ -4123,7 +4123,7 @@ var __webpack_modules__ = {
         notDetached(this.buffer);
         var i = 0;
         var length = array.length;
-        var result3 = $Array(omitPadding ? $floor(length / 3) * 4 + (length % 3 ? length % 3 + 1 : 0) : $ceil(length / 3) * 4);
+        var result2 = $Array(omitPadding ? $floor(length / 3) * 4 + (length % 3 ? length % 3 + 1 : 0) : $ceil(length / 3) * 4);
         var written = 0;
         var triplet;
         var at = function(shift) {
@@ -4131,27 +4131,27 @@ var __webpack_modules__ = {
         };
         for (; i + 2 < length; i += 3) {
           triplet = (array[i] << 16) + (array[i + 1] << 8) + array[i + 2];
-          result3[written++] = at(3);
-          result3[written++] = at(2);
-          result3[written++] = at(1);
-          result3[written++] = at(0);
+          result2[written++] = at(3);
+          result2[written++] = at(2);
+          result2[written++] = at(1);
+          result2[written++] = at(0);
         }
         if (i + 2 === length) {
           triplet = (array[i] << 16) + (array[i + 1] << 8);
-          result3[written++] = at(3);
-          result3[written++] = at(2);
-          result3[written++] = at(1);
-          if (!omitPadding) result3[written++] = "=";
+          result2[written++] = at(3);
+          result2[written++] = at(2);
+          result2[written++] = at(1);
+          if (!omitPadding) result2[written++] = "=";
         } else if (i + 1 === length) {
           triplet = array[i] << 16;
-          result3[written++] = at(3);
-          result3[written++] = at(2);
+          result2[written++] = at(3);
+          result2[written++] = at(2);
           if (!omitPadding) {
-            result3[written++] = "=";
-            result3[written++] = "=";
+            result2[written++] = "=";
+            result2[written++] = "=";
           }
         }
-        return join2(result3, "");
+        return join6(result2, "");
       }
     });
   },
@@ -4163,7 +4163,7 @@ var __webpack_modules__ = {
     var anUint8Array = __webpack_require__3(4154);
     var notDetached = __webpack_require__3(5169);
     var numberToString2 = uncurryThis(1.1.toString);
-    var join2 = uncurryThis([].join);
+    var join6 = uncurryThis([].join);
     var $Array = Array;
     var Uint8Array2 = globalThis2.Uint8Array;
     var INCORRECT_BEHAVIOR_OR_DOESNT_EXISTS = !Uint8Array2 || !Uint8Array2.prototype.toHex || !(function() {
@@ -4178,12 +4178,12 @@ var __webpack_modules__ = {
       toHex: function toHex() {
         anUint8Array(this);
         notDetached(this.buffer);
-        var result3 = $Array(this.length);
+        var result2 = $Array(this.length);
         for (var i = 0, length = this.length; i < length; i++) {
           var hex = numberToString2(this[i], 16);
-          result3[i] = hex.length === 1 ? "0" + hex : hex;
+          result2[i] = hex.length === 1 ? "0" + hex : hex;
         }
-        return join2(result3, "");
+        return join6(result2, "");
       }
     });
   },
@@ -5513,7 +5513,7 @@ async function fetchData(url, type = "text") {
     }
     return response.text();
   }
-  return new Promise((resolve2, reject) => {
+  return new Promise((resolve9, reject) => {
     const request = new XMLHttpRequest();
     request.open("GET", url, true);
     request.responseType = type === "bytes" ? "arraybuffer" : type;
@@ -5524,14 +5524,14 @@ async function fetchData(url, type = "text") {
       if (request.status === 200 || request.status === 0) {
         switch (type) {
           case "bytes":
-            resolve2(new Uint8Array(request.response));
+            resolve9(new Uint8Array(request.response));
             return;
           case "blob":
           case "json":
-            resolve2(request.response);
+            resolve9(request.response);
             return;
         }
-        resolve2(request.responseText);
+        resolve9(request.responseText);
         return;
       }
       reject(new Error(request.statusText));
@@ -6467,11 +6467,11 @@ var ImageManager = class _ImageManager {
         const mustRemoveAspectRatioPromise = _ImageManager._isSVGFittingCanvas;
         const fileReader = new FileReader();
         const imageElement = new Image();
-        const imagePromise = new Promise((resolve2, reject) => {
+        const imagePromise = new Promise((resolve9, reject) => {
           imageElement.onload = () => {
             data.bitmap = imageElement;
             data.isSvg = true;
-            resolve2();
+            resolve9();
           };
           fileReader.onload = async () => {
             const url = data.svgUrl = fileReader.result;
@@ -7157,13 +7157,13 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
       return;
     }
     const {
-      resolve: resolve2,
+      resolve: resolve9,
       promise
     } = Promise.withResolvers();
     const onEditorsRendered = (evt) => {
       if (evt.pageNumber === pageNumber) {
         this._eventBus.off("editorsrendered", onEditorsRendered);
-        resolve2();
+        resolve9();
       }
     };
     this._eventBus.on("editorsrendered", onEditorsRendered, internalOpt);
@@ -7292,7 +7292,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
       focusNode,
       focusOffset
     } = selection;
-    const text = selection.toString();
+    const text2 = selection.toString();
     const anchorElement = this.#getAnchorElementForSelection(selection);
     const textLayer = anchorElement.closest(".textLayer");
     const boxes = this.getSelectionBoxes(textLayer);
@@ -7313,7 +7313,7 @@ var AnnotationEditorUIManager = class _AnnotationEditorUIManager {
         anchorOffset,
         focusNode,
         focusOffset,
-        text
+        text: text2
       });
       if (isNoneMode) {
         this.showAllEditors("highlight", true, true);
@@ -9019,32 +9019,32 @@ var Comment = class {
       deleted: this.isDeleted()
     };
   }
-  set data(text) {
-    if (text !== this.#text) {
+  set data(text2) {
+    if (text2 !== this.#text) {
       this.#richText = null;
     }
-    if (text === null) {
+    if (text2 === null) {
       this.#text = "";
       this.#deleted = true;
       return;
     }
-    this.#text = text;
+    this.#text = text2;
     this.#date = /* @__PURE__ */ new Date();
     this.#deleted = false;
   }
   restoreData({
-    text,
+    text: text2,
     richText,
     date
   }) {
-    this.#text = text;
+    this.#text = text2;
     this.#richText = richText;
     this.#date = date;
     this.#deleted = false;
   }
-  setInitialText(text, richText = null) {
-    this.#initialText = text;
-    this.data = text;
+  setInitialText(text2, richText = null) {
+    this.#initialText = text2;
+    this.data = text2;
     this.#date = null;
     this.#richText = richText;
   }
@@ -10106,8 +10106,8 @@ var AnnotationEditor = class _AnnotationEditor {
   get guessedAltText() {
     return this.#altText?.guessedText;
   }
-  async setGuessedAltText(text) {
-    await this.#altText?.setGuessedText(text);
+  async setGuessedAltText(text2) {
+    await this.#altText?.setGuessedText(text2);
   }
   serializeAltText(isForCopying) {
     return this.#altText?.serialize(isForCopying);
@@ -10154,13 +10154,13 @@ var AnnotationEditor = class _AnnotationEditor {
     const {
       data: {
         richText,
-        text,
+        text: text2,
         date,
         deleted
       }
     } = this.#comment;
     return {
-      text,
+      text: text2,
       richText,
       date,
       deleted,
@@ -12269,8 +12269,8 @@ var FontLoader = class {
       if (this.isSyncFontLoadingSupported) {
         return;
       }
-      await new Promise((resolve2) => {
-        const request = this._queueLoadingCallback(resolve2);
+      await new Promise((resolve9) => {
+        const request = this._queueLoadingCallback(resolve9);
         this._prepareFontLoadEvent(font, request);
       });
     }
@@ -13049,13 +13049,13 @@ var MessageHandler = class {
     }
     if (data.callbackId) {
       const sourceName = this.sourceName, targetName = data.sourceName, comObj = this.comObj;
-      Promise.try(action, data.data).then(function(result3) {
+      Promise.try(action, data.data).then(function(result2) {
         comObj.postMessage({
           sourceName,
           targetName,
           callback: CallbackKind.DATA,
           callbackId: data.callbackId,
-          data: result3
+          data: result2
         });
       }, function(reason) {
         comObj.postMessage({
@@ -17207,9 +17207,9 @@ var CanvasGraphics = class _CanvasGraphics {
     let imgToPaint;
     let inlineImgCanvas = null;
     if (imgData.bitmap) {
-      const result3 = this.applyTransferMapsToBitmap(imgData);
-      imgToPaint = result3.img;
-      inlineImgCanvas = result3.canvasEntry;
+      const result2 = this.applyTransferMapsToBitmap(imgData);
+      imgToPaint = result2.img;
+      inlineImgCanvas = result2.canvasEntry;
     } else {
       const tmpCanvas = this.canvasFactory.create(width, height);
       putBinaryImageData(tmpCanvas.context, imgData);
@@ -17642,19 +17642,19 @@ function getFilenameFromContentDispositionHeader(contentDisposition) {
     if (!value.startsWith("=?") || /[\x00-\x19\x80-\xff]/.test(value)) {
       return value;
     }
-    return value.replaceAll(/=\?([\w-]*)\?([QB])\?((?:[^?]|\?(?!=))*)\?=/gi, function(matches, charset, encoding, text) {
+    return value.replaceAll(/=\?([\w-]*)\?([QB])\?((?:[^?]|\?(?!=))*)\?=/gi, function(matches, charset, encoding, text2) {
       if (encoding === "q" || encoding === "Q") {
-        text = text.replaceAll("_", " ");
-        text = text.replaceAll(/=([0-9a-f]{2})/gi, function(match, hex) {
+        text2 = text2.replaceAll("_", " ");
+        text2 = text2.replaceAll(/=([0-9a-f]{2})/gi, function(match, hex) {
           return String.fromCharCode(parseInt(hex, 16));
         });
-        return textdecode(charset, text);
+        return textdecode(charset, text2);
       }
       try {
-        text = atob(text);
+        text2 = atob(text2);
       } catch {
       }
-      return textdecode(charset, text);
+      return textdecode(charset, text2);
     });
   }
   return "";
@@ -18400,12 +18400,12 @@ var PDFNodeStreamReader = class extends BasePDFStreamReader {
     } = stream._source;
     this._isStreamingSupported = !disableStream;
     const fs = process.getBuiltinModule("fs/promises");
-    fs.lstat(url).then((stat2) => {
+    fs.lstat(url).then((stat4) => {
       const readableStream = getReadableStream(url);
       this._reader = readableStream.getReader();
       const {
         size
-      } = stat2;
+      } = stat4;
       this._contentLength = size;
       this._isRangeSupported = !disableRange && size > 2 * rangeChunkSize;
       if (!this._isStreamingSupported && this._isRangeSupported) {
@@ -21891,13 +21891,13 @@ var AnnotationElement = class _AnnotationElement {
     } = this;
     return this.annotationStorage.getRawValue(`${AnnotationEditorPrefix}${data.id}`)?.popup?.contents || data.contentsObj?.str || "";
   }
-  set commentText(text) {
+  set commentText(text2) {
     const {
       data
     } = this;
     const popup = {
-      deleted: !text,
-      contents: text || ""
+      deleted: !text2,
+      contents: text2 || ""
     };
     if (!this.annotationStorage.updateEditor(data.id, {
       popup
@@ -21911,7 +21911,7 @@ var AnnotationElement = class _AnnotationElement {
         modificationDate: /* @__PURE__ */ new Date()
       });
     }
-    if (!text) {
+    if (!text2) {
       this.removePopup();
     }
   }
@@ -22463,9 +22463,9 @@ var EditorAnnotationElement = class extends AnnotationElement {
   get commentText() {
     return this.editor.comment.text;
   }
-  set commentText(text) {
-    this.editor.comment = text;
-    if (!text) {
+  set commentText(text2) {
+    this.editor.comment = text2;
+    if (!text2) {
       this.removePopup();
     }
   }
@@ -23923,11 +23923,11 @@ var PopupElement = class {
     this.#commentText ||= this.#firstElement.commentText;
     return this.#commentText;
   }
-  set comment(text) {
-    if (text === this.comment) {
+  set comment(text2) {
+    if (text2 === this.comment) {
       return;
     }
-    this.#firstElement.commentText = this.#commentText = text;
+    this.#firstElement.commentText = this.#commentText = text2;
   }
   focus() {
     this.#firstElement.container?.focus();
@@ -24044,10 +24044,10 @@ var PopupElement = class {
   get #fontColor() {
     return this.#html?.attributes?.style?.color || null;
   }
-  #makePopupContent(text) {
+  #makePopupContent(text2) {
     const popupLines = [];
     const popupContent = {
-      str: text,
+      str: text2,
       html: {
         name: "div",
         attributes: {
@@ -24065,7 +24065,7 @@ var PopupElement = class {
         fontSize: this.#fontSize ? `calc(${this.#fontSize}px * var(--total-scale-factor))` : ""
       }
     };
-    for (const line of text.split("\n")) {
+    for (const line of text2.split("\n")) {
       popupLines.push({
         name: "span",
         value: line,
@@ -25574,9 +25574,9 @@ var FreeTextEditor = class _FreeTextEditor extends AnnotationEditor {
     if (savedText === newText) {
       return;
     }
-    const setText = (text) => {
-      this.#content = text;
-      if (!text) {
+    const setText = (text2) => {
+      this.#content = text2;
+      if (!text2) {
         this.remove();
         return;
       }
@@ -29424,7 +29424,7 @@ var SignatureExtractor = class {
     const uint8Buf = this.#toUint8(grayImage);
     return [uint8Buf, newWidth, newHeight];
   }
-  static extractContoursFromText(text, {
+  static extractContoursFromText(text2, {
     fontFamily,
     fontStyle,
     fontWeight
@@ -29443,7 +29443,7 @@ var SignatureExtractor = class {
       fontBoundingBoxAscent,
       fontBoundingBoxDescent,
       width
-    } = ctx.measureText(text);
+    } = ctx.measureText(text2);
     const SCALE = 1.5;
     const canvasWidth = Math.ceil(Math.max(Math.abs(actualBoundingBoxLeft) + Math.abs(actualBoundingBoxRight) || 0, width) * SCALE);
     const canvasHeight = Math.ceil(Math.max(Math.abs(actualBoundingBoxAscent) + Math.abs(actualBoundingBoxDescent) || fontSize, Math.abs(fontBoundingBoxAscent) + Math.abs(fontBoundingBoxDescent) || fontSize) * SCALE);
@@ -29457,7 +29457,7 @@ var SignatureExtractor = class {
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     ctx.fillStyle = "black";
-    ctx.fillText(text, canvasWidth * (SCALE - 1) / 2, canvasHeight * (3 - SCALE) / 2);
+    ctx.fillText(text2, canvasWidth * (SCALE - 1) / 2, canvasHeight * (3 - SCALE) / 2);
     const uint8Buf = this.#toUint8(ctx.getImageData(0, 0, canvasWidth, canvasHeight).data);
     const histogram = this.#getHistogram(uint8Buf);
     const threshold = this.#guessThreshold(histogram);
@@ -29959,7 +29959,7 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
     } = this.parent.viewport;
     return SignatureExtractor.process(bitmap, pageWidth, pageHeight, rotation, _SignatureEditor._INNER_MARGIN);
   }
-  getFromText(text, fontInfo) {
+  getFromText(text2, fontInfo) {
     const {
       rawDims: {
         pageWidth,
@@ -29967,7 +29967,7 @@ var SignatureEditor = class _SignatureEditor extends DrawingEditor {
       },
       rotation
     } = this.parent.viewport;
-    return SignatureExtractor.extractContoursFromText(text, fontInfo, pageWidth, pageHeight, rotation, _SignatureEditor._INNER_MARGIN);
+    return SignatureExtractor.extractContoursFromText(text2, fontInfo, pageWidth, pageHeight, rotation, _SignatureEditor._INNER_MARGIN);
   }
   getDrawnSignature(curves) {
     const {
@@ -30223,7 +30223,7 @@ var StampEditor = class extends AnnotationEditor {
     input.type = "file";
     input.accept = SupportedImageMimeTypes.join(",");
     const signal = this._uiManager._signal;
-    this.#bitmapPromise = new Promise((resolve2) => {
+    this.#bitmapPromise = new Promise((resolve9) => {
       input.addEventListener("change", async () => {
         if (!input.files || input.files.length === 0) {
           this.remove();
@@ -30238,13 +30238,13 @@ var StampEditor = class extends AnnotationEditor {
           });
           this.#getBitmapFetched(data);
         }
-        resolve2();
+        resolve9();
       }, {
         signal
       });
       input.addEventListener("cancel", () => {
         this.remove();
-        resolve2();
+        resolve9();
       }, {
         signal
       });
@@ -32543,9 +32543,9 @@ var __webpack_modules__2 = {
     module.exports = function(Constructor, list, $length) {
       var index = 0;
       var length = arguments.length > 2 ? $length : lengthOfArrayLike(list);
-      var result3 = new Constructor(length);
-      while (length > index) result3[index] = list[index++];
-      return result3;
+      var result2 = new Constructor(length);
+      while (length > index) result2[index] = list[index++];
+      return result2;
     };
   },
   /***/
@@ -32613,10 +32613,10 @@ var __webpack_modules__2 = {
     var base64Alphabet = commonAlphabet + "+/";
     var base64UrlAlphabet = commonAlphabet + "-_";
     var inverse = function(characters) {
-      var result3 = {};
+      var result2 = {};
       var index = 0;
-      for (; index < 64; index++) result3[characters.charAt(index)] = index;
-      return result3;
+      for (; index < 64; index++) result2[characters.charAt(index)] = index;
+      return result2;
     };
     module.exports = {
       i2c: base64Alphabet,
@@ -32664,8 +32664,8 @@ var __webpack_modules__2 = {
       }
     };
     module.exports = TO_STRING_TAG_SUPPORT ? classofRaw : function(it) {
-      var O, tag, result3;
-      return it === void 0 ? "Undefined" : it === null ? "Null" : typeof (tag = tryGet(O = $Object(it), TO_STRING_TAG)) == "string" ? tag : CORRECT_ARGUMENTS ? classofRaw(O) : (result3 = classofRaw(O)) === "Object" && isCallable(O.callee) ? "Arguments" : result3;
+      var O, tag, result2;
+      return it === void 0 ? "Undefined" : it === null ? "Null" : typeof (tag = tryGet(O = $Object(it), TO_STRING_TAG)) == "string" ? tag : CORRECT_ARGUMENTS ? classofRaw(O) : (result2 = classofRaw(O)) === "Object" && isCallable(O.callee) ? "Arguments" : result2;
     };
   },
   /***/
@@ -33354,10 +33354,10 @@ var __webpack_modules__2 = {
     module.exports = function(record, fn, ITERATOR_INSTEAD_OF_RECORD) {
       var iterator = ITERATOR_INSTEAD_OF_RECORD ? record : record.iterator;
       var next = record.next;
-      var step, result3;
+      var step, result2;
       while (!(step = call(next, iterator)).done) {
-        result3 = fn(step.value);
-        if (result3 !== void 0) return result3;
+        result2 = fn(step.value);
+        if (result2 !== void 0) return result2;
       }
     };
   },
@@ -33374,9 +33374,9 @@ var __webpack_modules__2 = {
     var getIteratorMethod = __webpack_require__3(3085);
     var iteratorClose = __webpack_require__3(9539);
     var $TypeError = TypeError;
-    var Result = function(stopped, result3) {
+    var Result = function(stopped, result2) {
       this.stopped = stopped;
-      this.result = result3;
+      this.result = result2;
     };
     var ResultPrototype = Result.prototype;
     module.exports = function(iterable, unboundFunction, options) {
@@ -33386,7 +33386,7 @@ var __webpack_modules__2 = {
       var IS_ITERATOR = !!(options && options.IS_ITERATOR);
       var INTERRUPTED = !!(options && options.INTERRUPTED);
       var fn = bind(unboundFunction, that);
-      var iterator, iterFn, index, length, result3, next, step;
+      var iterator, iterFn, index, length, result2, next, step;
       var stop = function(condition) {
         var $iterator = iterator;
         iterator = void 0;
@@ -33409,8 +33409,8 @@ var __webpack_modules__2 = {
         if (!iterFn) throw new $TypeError(tryToString(iterable) + " is not iterable");
         if (isArrayIteratorMethod(iterFn)) {
           for (index = 0, length = lengthOfArrayLike(iterable); length > index; index++) {
-            result3 = callFn(iterable[index]);
-            if (result3 && isPrototypeOf(ResultPrototype, result3)) return result3;
+            result2 = callFn(iterable[index]);
+            if (result2 && isPrototypeOf(ResultPrototype, result2)) return result2;
           }
           return new Result(false);
         }
@@ -33420,12 +33420,12 @@ var __webpack_modules__2 = {
       while (!(step = call(next, iterator)).done) {
         var value = step.value;
         try {
-          result3 = callFn(value);
+          result2 = callFn(value);
         } catch (error) {
           if (iterator) iteratorClose(iterator, "throw", error);
           else throw error;
         }
-        if (typeof result3 == "object" && result3 && isPrototypeOf(ResultPrototype, result3)) return result3;
+        if (typeof result2 == "object" && result2 && isPrototypeOf(ResultPrototype, result2)) return result2;
       }
       return new Result(false);
     };
@@ -33506,9 +33506,9 @@ var __webpack_modules__2 = {
           if (IS_ITERATOR) return state.nextHandler();
           if (state.done) return createIterResultObject(void 0, true);
           try {
-            var result3 = state.nextHandler();
+            var result2 = state.nextHandler();
             if (state.done) cleanupState(state);
-            return state.returnHandlerResult ? result3 : createIterResultObject(result3, state.done);
+            return state.returnHandlerResult ? result2 : createIterResultObject(result2, state.done);
           } catch (error) {
             state.done = true;
             cleanupState(state);
@@ -33662,7 +33662,7 @@ var __webpack_modules__2 = {
     var defineProperty = Object.defineProperty;
     var stringSlice = uncurryThis("".slice);
     var replace = uncurryThis("".replace);
-    var join2 = uncurryThis([].join);
+    var join6 = uncurryThis([].join);
     var CONFIGURABLE_LENGTH = DESCRIPTORS && !fails(function() {
       return defineProperty(function() {
       }, "length", { value: 8 }).length !== 8;
@@ -33689,7 +33689,7 @@ var __webpack_modules__2 = {
       }
       var state = enforceInternalState(value);
       if (!hasOwn(state, "source")) {
-        state.source = join2(TEMPLATE, typeof name == "string" ? name : "");
+        state.source = join6(TEMPLATE, typeof name == "string" ? name : "");
       }
       return value;
     };
@@ -33734,13 +33734,13 @@ var __webpack_modules__2 = {
     var aCallable = __webpack_require__3(9306);
     var $TypeError = TypeError;
     var PromiseCapability = function(C) {
-      var resolve2, reject;
+      var resolve9, reject;
       this.promise = new C(function($$resolve, $$reject) {
-        if (resolve2 !== void 0 || reject !== void 0) throw new $TypeError("Bad Promise constructor");
-        resolve2 = $$resolve;
+        if (resolve9 !== void 0 || reject !== void 0) throw new $TypeError("Bad Promise constructor");
+        resolve9 = $$resolve;
         reject = $$reject;
       });
-      this.resolve = aCallable(resolve2);
+      this.resolve = aCallable(resolve9);
       this.reject = aCallable(reject);
     };
     module.exports.f = function(C) {
@@ -33799,14 +33799,14 @@ var __webpack_modules__2 = {
     };
     hiddenKeys[IE_PROTO] = true;
     module.exports = Object.create || function create(O, Properties) {
-      var result3;
+      var result2;
       if (O !== null) {
         EmptyConstructor[PROTOTYPE] = anObject(O);
-        result3 = new EmptyConstructor();
+        result2 = new EmptyConstructor();
         EmptyConstructor[PROTOTYPE] = null;
-        result3[IE_PROTO] = O;
-      } else result3 = NullProtoObject();
-      return Properties === void 0 ? result3 : definePropertiesModule.f(result3, Properties);
+        result2[IE_PROTO] = O;
+      } else result2 = NullProtoObject();
+      return Properties === void 0 ? result2 : definePropertiesModule.f(result2, Properties);
     };
   },
   /***/
@@ -33940,13 +33940,13 @@ var __webpack_modules__2 = {
     module.exports = function(object, names) {
       var O = toIndexedObject(object);
       var i = 0;
-      var result3 = [];
+      var result2 = [];
       var key;
-      for (key in O) !hasOwn(hiddenKeys, key) && hasOwn(O, key) && push(result3, key);
+      for (key in O) !hasOwn(hiddenKeys, key) && hasOwn(O, key) && push(result2, key);
       while (names.length > i) if (hasOwn(O, key = names[i++])) {
-        ~indexOf(result3, key) || push(result3, key);
+        ~indexOf(result2, key) || push(result2, key);
       }
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -34093,8 +34093,8 @@ var __webpack_modules__2 = {
       anObject(C);
       if (isObject(x) && x.constructor === C) return x;
       var promiseCapability = newPromiseCapability.f(C);
-      var resolve2 = promiseCapability.resolve;
-      resolve2(x);
+      var resolve9 = promiseCapability.resolve;
+      resolve9(x);
       return promiseCapability.promise;
     };
   },
@@ -34114,11 +34114,11 @@ var __webpack_modules__2 = {
     var Set2 = SetHelpers.Set;
     var add = SetHelpers.add;
     module.exports = function(set) {
-      var result3 = new Set2();
+      var result2 = new Set2();
       iterate(set, function(it) {
-        add(result3, it);
+        add(result2, it);
       });
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -34135,14 +34135,14 @@ var __webpack_modules__2 = {
     module.exports = function difference(other) {
       var O = aSet(this);
       var otherRec = getSetRecord(other);
-      var result3 = clone(O);
-      if (size(result3) <= otherRec.size) iterateSet(result3, function(e) {
-        if (otherRec.includes(e)) remove(result3, e);
+      var result2 = clone(O);
+      if (size(result2) <= otherRec.size) iterateSet(result2, function(e) {
+        if (otherRec.includes(e)) remove(result2, e);
       });
       else iterateSimple(otherRec.getIterator(), function(e) {
-        if (has(result3, e)) remove(result3, e);
+        if (has(result2, e)) remove(result2, e);
       });
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -34172,17 +34172,17 @@ var __webpack_modules__2 = {
     module.exports = function intersection(other) {
       var O = aSet(this);
       var otherRec = getSetRecord(other);
-      var result3 = new Set2();
+      var result2 = new Set2();
       if (size(O) > otherRec.size) {
         iterateSimple(otherRec.getIterator(), function(e) {
-          if (has(O, e)) add(result3, e);
+          if (has(O, e)) add(result2, e);
         });
       } else {
         iterateSet(O, function(e) {
-          if (otherRec.includes(e)) add(result3, e);
+          if (otherRec.includes(e)) add(result2, e);
         });
       }
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -34326,8 +34326,8 @@ var __webpack_modules__2 = {
             });
           }
         };
-        var result3 = baseSet[METHOD_NAME](setLike);
-        return result3.size === 1 && result3.values().next().value === 4;
+        var result2 = baseSet[METHOD_NAME](setLike);
+        return result2.size === 1 && result2.values().next().value === 4;
       } catch (error) {
         return false;
       }
@@ -34354,12 +34354,12 @@ var __webpack_modules__2 = {
     module.exports = function symmetricDifference(other) {
       var O = aSet(this);
       var keysIter = getSetRecord(other).getIterator();
-      var result3 = clone(O);
+      var result2 = clone(O);
       iterateSimple(keysIter, function(e) {
-        if (has(O, e)) remove(result3, e);
-        else add(result3, e);
+        if (has(O, e)) remove(result2, e);
+        else add(result2, e);
       });
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -34372,11 +34372,11 @@ var __webpack_modules__2 = {
     module.exports = function union(other) {
       var O = aSet(this);
       var keysIter = getSetRecord(other).getIterator();
-      var result3 = clone(O);
+      var result2 = clone(O);
       iterateSimple(keysIter, function(it) {
-        add(result3, it);
+        add(result2, it);
       });
-      return result3;
+      return result2;
     };
   },
   /***/
@@ -34494,11 +34494,11 @@ var __webpack_modules__2 = {
     module.exports = function(input, pref) {
       if (!isObject(input) || isSymbol(input)) return input;
       var exoticToPrim = getMethod(input, TO_PRIMITIVE);
-      var result3;
+      var result2;
       if (exoticToPrim) {
         if (pref === void 0) pref = "default";
-        result3 = call(exoticToPrim, input, pref);
-        if (!isObject(result3) || isSymbol(result3)) return result3;
+        result2 = call(exoticToPrim, input, pref);
+        if (!isObject(result2) || isSymbol(result2)) return result2;
         throw new $TypeError("Can't convert object to primitive value");
       }
       if (pref === void 0) pref = "number";
@@ -34707,11 +34707,11 @@ var __webpack_modules__2 = {
       var segments = stringMatch(string, /[\S\s]{2}/g);
       var written = 0;
       for (; written < maxLength; written++) {
-        var result3 = +("0x" + segments[written] + "0");
-        if (result3 !== result3) {
+        var result2 = +("0x" + segments[written] + "0");
+        if (result2 !== result2) {
           throw new SyntaxError2("String should only contain hex characters");
         }
-        bytes[written] = result3 >> 4;
+        bytes[written] = result2 >> 4;
       }
       return { bytes, read: written << 1 };
     };
@@ -34727,15 +34727,15 @@ var __webpack_modules__2 = {
       var url = new URL("b?a=1&b=2&c=3", "https://a");
       var params = url.searchParams;
       var params2 = new URLSearchParams("a=1&a=2&b=3");
-      var result3 = "";
+      var result2 = "";
       url.pathname = "c%20d";
       params.forEach(function(value, key) {
         params["delete"]("b");
-        result3 += key + value;
+        result2 += key + value;
       });
       params2["delete"]("a", 2);
       params2["delete"]("b", void 0);
-      return IS_PURE && (!url.toJSON || !params2.has("a", 1) || params2.has("a", 2) || !params2.has("a", void 0) || params2.has("b")) || !params.size && (IS_PURE || !DESCRIPTORS) || !params.sort || url.href !== "https://a/c%20d?a=1&c=3" || params.get("c") !== "3" || String(new URLSearchParams("?a=1")) !== "a=1" || !params[ITERATOR] || new URL("https://a@b").username !== "a" || new URLSearchParams(new URLSearchParams("a=b")).get("a") !== "b" || new URL("https://\u0442\u0435\u0441\u0442").host !== "xn--e1aybc" || new URL("https://a#\u0431").hash !== "#%D0%B1" || result3 !== "a1c3" || new URL("https://x", void 0).host !== "x";
+      return IS_PURE && (!url.toJSON || !params2.has("a", 1) || params2.has("a", 2) || !params2.has("a", void 0) || params2.has("b")) || !params.size && (IS_PURE || !DESCRIPTORS) || !params.sort || url.href !== "https://a/c%20d?a=1&c=3" || params.get("c") !== "3" || String(new URLSearchParams("?a=1")) !== "a=1" || !params[ITERATOR] || new URL("https://a@b").username !== "a" || new URLSearchParams(new URLSearchParams("a=b")).get("a") !== "b" || new URL("https://\u0442\u0435\u0441\u0442").host !== "xn--e1aybc" || new URL("https://a#\u0431").hash !== "#%D0%B1" || result2 !== "a1c3" || new URL("https://x", void 0).host !== "x";
     });
   },
   /***/
@@ -34957,12 +34957,12 @@ var __webpack_modules__2 = {
       var iterator = this.iterator;
       var predicate = this.predicate;
       var next = this.next;
-      var result3, done, value;
+      var result2, done, value;
       while (true) {
-        result3 = anObject(call(next, iterator));
-        done = this.done = !!result3.done;
+        result2 = anObject(call(next, iterator));
+        done = this.done = !!result2.done;
         if (done) return;
-        value = result3.value;
+        value = result2.value;
         if (callWithSafeIterationClosing(iterator, predicate, [value, this.counter++], true)) return value;
       }
     });
@@ -35037,19 +35037,19 @@ var __webpack_modules__2 = {
     var IteratorProxy = createIteratorProxy(function() {
       var iterator = this.iterator;
       var mapper = this.mapper;
-      var result3, inner;
+      var result2, inner;
       while (true) {
         if (inner = this.inner) try {
-          result3 = anObject(call(inner.next, inner.iterator));
-          if (!result3.done) return result3.value;
+          result2 = anObject(call(inner.next, inner.iterator));
+          if (!result2.done) return result2.value;
           this.inner = null;
         } catch (error) {
           iteratorClose(iterator, "throw", error);
         }
-        result3 = anObject(call(this.next, iterator));
-        if (this.done = !!result3.done) return;
+        result2 = anObject(call(this.next, iterator));
+        if (this.done = !!result2.done) return;
         try {
-          this.inner = getIteratorFlattenable(mapper(result3.value, this.counter++), false);
+          this.inner = getIteratorFlattenable(mapper(result2.value, this.counter++), false);
         } catch (error) {
           iteratorClose(iterator, "throw", error);
         }
@@ -35118,9 +35118,9 @@ var __webpack_modules__2 = {
     var FORCED = IS_PURE || MAP_WITHOUT_THROWING_ON_INVALID_ITERATOR || mapWithoutClosingOnEarlyError;
     var IteratorProxy = createIteratorProxy(function() {
       var iterator = this.iterator;
-      var result3 = anObject(call(this.next, iterator));
-      var done = this.done = !!result3.done;
-      if (!done) return callWithSafeIterationClosing(iterator, this.mapper, [result3.value, this.counter++], true);
+      var result2 = anObject(call(this.next, iterator));
+      var done = this.done = !!result2.done;
+      if (!done) return callWithSafeIterationClosing(iterator, this.mapper, [result2.value, this.counter++], true);
     });
     $({ target: "Iterator", proto: true, real: true, forced: FORCED }, {
       map: function map(mapper) {
@@ -35174,12 +35174,12 @@ var __webpack_modules__2 = {
     var getIteratorDirect = __webpack_require__3(1767);
     $({ target: "Iterator", proto: true, real: true }, {
       toArray: function toArray() {
-        var result3 = [];
+        var result2 = [];
         var index = 0;
         iterate(getIteratorDirect(anObject(this)), function(element) {
-          createProperty(result3, index++, element);
+          createProperty(result2, index++, element);
         }, { IS_RECORD: true });
-        return result3;
+        return result2;
       }
     });
   },
@@ -35317,7 +35317,7 @@ var __webpack_modules__2 = {
       return ordered;
     };
     if ($stringify) $({ target: "JSON", stat: true, arity: 3, forced: WRONG_SYMBOLS_CONVERSION || ILL_FORMED_UNICODE || !NATIVE_RAW_JSON }, {
-      stringify: function stringify(text, replacer, space) {
+      stringify: function stringify(text2, replacer, space) {
         var replacerFunction = isCallable(replacer) ? replacer : void 0;
         var propertyList = replacerFunction ? void 0 : getPropertyList(replacer);
         var keyPrefix = propertyList && getKeyPrefix(propertyList);
@@ -35327,7 +35327,7 @@ var __webpack_modules__2 = {
         var currentOrdered;
         var marked = false;
         var root = true;
-        var json = stringifyWithProperSymbolsConversion(text, function(key, value) {
+        var json = stringifyWithProperSymbolsConversion(text2, function(key, value) {
           key = $String(key);
           if (propertyList) {
             if (key === END_MARK) {
@@ -35357,20 +35357,20 @@ var __webpack_modules__2 = {
         if (typeof json != "string") return json;
         if (ILL_FORMED_UNICODE) json = replace(json, surrogates, fixIllFormedJSON);
         if (!marked) return json;
-        var result3 = "";
+        var result2 = "";
         var length = json.length;
         for (var i = 0; i < length; i++) {
           var chr = charAt(json, i);
           if (chr === '"') {
             var end = parseJSONString(json, ++i).end - 1;
             var string = slice(json, i, end);
-            if (slice(string, 0, RAW_MARK_LENGTH) === RAW_MARK) result3 += rawStrings[slice(string, RAW_MARK_LENGTH)];
-            else if (slice(string, 0, KEY_MARK_LENGTH) === KEY_MARK) result3 += '"' + slice(string, KEY_MARK_LENGTH) + '"';
-            else result3 += '"' + string + '"';
+            if (slice(string, 0, RAW_MARK_LENGTH) === RAW_MARK) result2 += rawStrings[slice(string, RAW_MARK_LENGTH)];
+            else if (slice(string, 0, KEY_MARK_LENGTH) === KEY_MARK) result2 += '"' + slice(string, KEY_MARK_LENGTH) + '"';
+            else result2 += '"' + string + '"';
             i = end;
-          } else result3 += chr;
+          } else result2 += chr;
         }
-        return result3;
+        return result2;
       }
     });
   },
@@ -35564,13 +35564,13 @@ var __webpack_modules__2 = {
     $({ target: "Promise", stat: true, forced: FORCED }, {
       "try": function(callbackfn) {
         var args = arguments.length > 1 ? slice(arguments, 1) : [];
-        var result3 = perform(function() {
+        var result2 = perform(function() {
           return apply(aCallable(callbackfn), void 0, args);
         });
-        if (!result3.error) return promiseResolve(this, result3.value);
+        if (!result2.error) return promiseResolve(this, result2.value);
         var promiseCapability = newPromiseCapabilityModule.f(this);
         var reject = promiseCapability.reject;
-        reject(result3.value);
+        reject(result2.value);
         return promiseCapability.promise;
       }
     });
@@ -35581,8 +35581,8 @@ var __webpack_modules__2 = {
     var difference = __webpack_require__3(3440);
     var fails = __webpack_require__3(9039);
     var setMethodAcceptSetLike = __webpack_require__3(4916);
-    var SET_LIKE_INCORRECT_BEHAVIOR = !setMethodAcceptSetLike("difference", function(result3) {
-      return result3.size === 0;
+    var SET_LIKE_INCORRECT_BEHAVIOR = !setMethodAcceptSetLike("difference", function(result2) {
+      return result2.size === 0;
     });
     var FORCED = SET_LIKE_INCORRECT_BEHAVIOR || fails(function() {
       var setLike = {
@@ -35614,8 +35614,8 @@ var __webpack_modules__2 = {
     var fails = __webpack_require__3(9039);
     var intersection = __webpack_require__3(8750);
     var setMethodAcceptSetLike = __webpack_require__3(4916);
-    var INCORRECT = !setMethodAcceptSetLike("intersection", function(result3) {
-      return result3.size === 2 && result3.has(1) && result3.has(2);
+    var INCORRECT = !setMethodAcceptSetLike("intersection", function(result2) {
+      return result2.size === 2 && result2.has(1) && result2.has(2);
     }) || fails(function() {
       return String(Array.from((/* @__PURE__ */ new Set([1, 2, 3])).intersection(/* @__PURE__ */ new Set([3, 2])))) !== "3,2";
     });
@@ -35628,8 +35628,8 @@ var __webpack_modules__2 = {
     var $ = __webpack_require__3(6518);
     var isDisjointFrom = __webpack_require__3(4449);
     var setMethodAcceptSetLike = __webpack_require__3(4916);
-    var INCORRECT = !setMethodAcceptSetLike("isDisjointFrom", function(result3) {
-      return !result3;
+    var INCORRECT = !setMethodAcceptSetLike("isDisjointFrom", function(result2) {
+      return !result2;
     });
     $({ target: "Set", proto: true, real: true, forced: INCORRECT }, {
       isDisjointFrom
@@ -35640,8 +35640,8 @@ var __webpack_modules__2 = {
     var $ = __webpack_require__3(6518);
     var isSubsetOf = __webpack_require__3(3838);
     var setMethodAcceptSetLike = __webpack_require__3(4916);
-    var INCORRECT = !setMethodAcceptSetLike("isSubsetOf", function(result3) {
-      return result3;
+    var INCORRECT = !setMethodAcceptSetLike("isSubsetOf", function(result2) {
+      return result2;
     });
     $({ target: "Set", proto: true, real: true, forced: INCORRECT }, {
       isSubsetOf
@@ -35652,8 +35652,8 @@ var __webpack_modules__2 = {
     var $ = __webpack_require__3(6518);
     var isSupersetOf = __webpack_require__3(8527);
     var setMethodAcceptSetLike = __webpack_require__3(4916);
-    var INCORRECT = !setMethodAcceptSetLike("isSupersetOf", function(result3) {
-      return !result3;
+    var INCORRECT = !setMethodAcceptSetLike("isSupersetOf", function(result2) {
+      return !result2;
     });
     $({ target: "Set", proto: true, real: true, forced: INCORRECT }, {
       isSupersetOf
@@ -35742,8 +35742,8 @@ var __webpack_modules__2 = {
     })();
     if (Uint8Array2) $({ target: "Uint8Array", stat: true, forced: INCORRECT_BEHAVIOR_OR_DOESNT_EXISTS }, {
       fromBase64: function fromBase64(string) {
-        var result3 = $fromBase64(string, arguments.length > 1 ? arguments[1] : void 0, null, 9007199254740991);
-        return arrayFromConstructorAndList(Uint8Array2, result3.bytes);
+        var result2 = $fromBase64(string, arguments.length > 1 ? arguments[1] : void 0, null, 9007199254740991);
+        return arrayFromConstructorAndList(Uint8Array2, result2.bytes);
       }
     });
   },
@@ -35775,8 +35775,8 @@ var __webpack_modules__2 = {
     if (Uint8Array2) $({ target: "Uint8Array", proto: true, forced: INCORRECT_BEHAVIOR_OR_DOESNT_EXISTS }, {
       setFromBase64: function setFromBase64(string) {
         anUint8Array(this);
-        var result3 = $fromBase64(string, arguments.length > 1 ? arguments[1] : void 0, this, this.length);
-        return { read: result3.read, written: result3.written };
+        var result2 = $fromBase64(string, arguments.length > 1 ? arguments[1] : void 0, this, this.length);
+        return { read: result2.read, written: result2.written };
       }
     });
   },
@@ -35823,7 +35823,7 @@ var __webpack_modules__2 = {
     var charAt = uncurryThis("".charAt);
     var Uint8Array2 = globalThis2.Uint8Array;
     var $Array = globalThis2.Array;
-    var join2 = uncurryThis([].join);
+    var join6 = uncurryThis([].join);
     var INCORRECT_BEHAVIOR_OR_DOESNT_EXISTS = !Uint8Array2 || !Uint8Array2.prototype.toBase64 || !(function() {
       try {
         var target = new Uint8Array2();
@@ -35841,7 +35841,7 @@ var __webpack_modules__2 = {
         notDetached(this.buffer);
         var i = 0;
         var length = array.length;
-        var result3 = $Array(omitPadding ? $floor(length / 3) * 4 + (length % 3 ? length % 3 + 1 : 0) : $ceil(length / 3) * 4);
+        var result2 = $Array(omitPadding ? $floor(length / 3) * 4 + (length % 3 ? length % 3 + 1 : 0) : $ceil(length / 3) * 4);
         var written = 0;
         var triplet;
         var at = function(shift) {
@@ -35849,27 +35849,27 @@ var __webpack_modules__2 = {
         };
         for (; i + 2 < length; i += 3) {
           triplet = (array[i] << 16) + (array[i + 1] << 8) + array[i + 2];
-          result3[written++] = at(3);
-          result3[written++] = at(2);
-          result3[written++] = at(1);
-          result3[written++] = at(0);
+          result2[written++] = at(3);
+          result2[written++] = at(2);
+          result2[written++] = at(1);
+          result2[written++] = at(0);
         }
         if (i + 2 === length) {
           triplet = (array[i] << 16) + (array[i + 1] << 8);
-          result3[written++] = at(3);
-          result3[written++] = at(2);
-          result3[written++] = at(1);
-          if (!omitPadding) result3[written++] = "=";
+          result2[written++] = at(3);
+          result2[written++] = at(2);
+          result2[written++] = at(1);
+          if (!omitPadding) result2[written++] = "=";
         } else if (i + 1 === length) {
           triplet = array[i] << 16;
-          result3[written++] = at(3);
-          result3[written++] = at(2);
+          result2[written++] = at(3);
+          result2[written++] = at(2);
           if (!omitPadding) {
-            result3[written++] = "=";
-            result3[written++] = "=";
+            result2[written++] = "=";
+            result2[written++] = "=";
           }
         }
-        return join2(result3, "");
+        return join6(result2, "");
       }
     });
   },
@@ -35881,7 +35881,7 @@ var __webpack_modules__2 = {
     var anUint8Array = __webpack_require__3(4154);
     var notDetached = __webpack_require__3(5169);
     var numberToString2 = uncurryThis(1.1.toString);
-    var join2 = uncurryThis([].join);
+    var join6 = uncurryThis([].join);
     var $Array = Array;
     var Uint8Array2 = globalThis2.Uint8Array;
     var INCORRECT_BEHAVIOR_OR_DOESNT_EXISTS = !Uint8Array2 || !Uint8Array2.prototype.toHex || !(function() {
@@ -35896,12 +35896,12 @@ var __webpack_modules__2 = {
       toHex: function toHex() {
         anUint8Array(this);
         notDetached(this.buffer);
-        var result3 = $Array(this.length);
+        var result2 = $Array(this.length);
         for (var i = 0, length = this.length; i < length; i++) {
           var hex = numberToString2(this[i], 16);
-          result3[i] = hex.length === 1 ? "0" + hex : hex;
+          result2[i] = hex.length === 1 ? "0" + hex : hex;
         }
-        return join2(result3, "");
+        return join6(result2, "");
       }
     });
   },
@@ -37386,7 +37386,7 @@ function getInheritableProperty({
 function getParentToUpdate(dict, ref, xref) {
   const visited = new RefSet();
   const firstDict = dict;
-  const result3 = {
+  const result2 = {
     dict: null,
     ref: null
   };
@@ -37397,15 +37397,15 @@ function getParentToUpdate(dict, ref, xref) {
     }
     ref = dict.getRaw("Parent");
     if (!(ref instanceof Ref)) {
-      return result3;
+      return result2;
     }
     dict = xref.fetch(ref);
   }
   if (dict instanceof Dict && dict !== firstDict) {
-    result3.dict = dict;
-    result3.ref = ref;
+    result2.dict = dict;
+    result2.ref = ref;
   }
-  return result3;
+  return result2;
 }
 function deepCompare(a, b) {
   if (a === b) {
@@ -38407,23 +38407,23 @@ var CalRGBCS = class _CalRGBCS extends ColorSpace {
       this.GR = this.GG = this.GB = 1;
     }
   }
-  #matrixProduct(a, b, result3) {
-    result3[0] = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    result3[1] = a[3] * b[0] + a[4] * b[1] + a[5] * b[2];
-    result3[2] = a[6] * b[0] + a[7] * b[1] + a[8] * b[2];
+  #matrixProduct(a, b, result2) {
+    result2[0] = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    result2[1] = a[3] * b[0] + a[4] * b[1] + a[5] * b[2];
+    result2[2] = a[6] * b[0] + a[7] * b[1] + a[8] * b[2];
   }
-  #toFlat(sourceWhitePoint, LMS, result3) {
-    result3[0] = LMS[0] * 1 / sourceWhitePoint[0];
-    result3[1] = LMS[1] * 1 / sourceWhitePoint[1];
-    result3[2] = LMS[2] * 1 / sourceWhitePoint[2];
+  #toFlat(sourceWhitePoint, LMS, result2) {
+    result2[0] = LMS[0] * 1 / sourceWhitePoint[0];
+    result2[1] = LMS[1] * 1 / sourceWhitePoint[1];
+    result2[2] = LMS[2] * 1 / sourceWhitePoint[2];
   }
-  #toD65(sourceWhitePoint, LMS, result3) {
+  #toD65(sourceWhitePoint, LMS, result2) {
     const D65X = 0.95047;
     const D65Y = 1;
     const D65Z = 1.08883;
-    result3[0] = LMS[0] * D65X / sourceWhitePoint[0];
-    result3[1] = LMS[1] * D65Y / sourceWhitePoint[1];
-    result3[2] = LMS[2] * D65Z / sourceWhitePoint[2];
+    result2[0] = LMS[0] * D65X / sourceWhitePoint[0];
+    result2[1] = LMS[1] * D65Y / sourceWhitePoint[1];
+    result2[2] = LMS[2] * D65Z / sourceWhitePoint[2];
   }
   #sRGBTransferFunction(color) {
     if (color <= 31308e-7) {
@@ -38443,11 +38443,11 @@ var CalRGBCS = class _CalRGBCS extends ColorSpace {
     }
     return L * _CalRGBCS.#DECODE_L_CONSTANT;
   }
-  #compensateBlackPoint(sourceBlackPoint, XYZ_Flat, result3) {
+  #compensateBlackPoint(sourceBlackPoint, XYZ_Flat, result2) {
     if (sourceBlackPoint[0] === 0 && sourceBlackPoint[1] === 0 && sourceBlackPoint[2] === 0) {
-      result3[0] = XYZ_Flat[0];
-      result3[1] = XYZ_Flat[1];
-      result3[2] = XYZ_Flat[2];
+      result2[0] = XYZ_Flat[0];
+      result2[1] = XYZ_Flat[1];
+      result2[2] = XYZ_Flat[2];
       return;
     }
     const zeroDecodeL = this.#decodeL(0);
@@ -38463,29 +38463,29 @@ var CalRGBCS = class _CalRGBCS extends ColorSpace {
     const Y_Offset = 1 - Y_Scale;
     const Z_Scale = (1 - Z_DST) / (1 - Z_SRC);
     const Z_Offset = 1 - Z_Scale;
-    result3[0] = XYZ_Flat[0] * X_Scale + X_Offset;
-    result3[1] = XYZ_Flat[1] * Y_Scale + Y_Offset;
-    result3[2] = XYZ_Flat[2] * Z_Scale + Z_Offset;
+    result2[0] = XYZ_Flat[0] * X_Scale + X_Offset;
+    result2[1] = XYZ_Flat[1] * Y_Scale + Y_Offset;
+    result2[2] = XYZ_Flat[2] * Z_Scale + Z_Offset;
   }
-  #normalizeWhitePointToFlat(sourceWhitePoint, XYZ_In, result3) {
+  #normalizeWhitePointToFlat(sourceWhitePoint, XYZ_In, result2) {
     if (sourceWhitePoint[0] === 1 && sourceWhitePoint[2] === 1) {
-      result3[0] = XYZ_In[0];
-      result3[1] = XYZ_In[1];
-      result3[2] = XYZ_In[2];
+      result2[0] = XYZ_In[0];
+      result2[1] = XYZ_In[1];
+      result2[2] = XYZ_In[2];
       return;
     }
-    const LMS = result3;
+    const LMS = result2;
     this.#matrixProduct(_CalRGBCS.#BRADFORD_SCALE_MATRIX, XYZ_In, LMS);
     const LMS_Flat = _CalRGBCS.#tempNormalizeMatrix;
     this.#toFlat(sourceWhitePoint, LMS, LMS_Flat);
-    this.#matrixProduct(_CalRGBCS.#BRADFORD_SCALE_INVERSE_MATRIX, LMS_Flat, result3);
+    this.#matrixProduct(_CalRGBCS.#BRADFORD_SCALE_INVERSE_MATRIX, LMS_Flat, result2);
   }
-  #normalizeWhitePointToD65(sourceWhitePoint, XYZ_In, result3) {
-    const LMS = result3;
+  #normalizeWhitePointToD65(sourceWhitePoint, XYZ_In, result2) {
+    const LMS = result2;
     this.#matrixProduct(_CalRGBCS.#BRADFORD_SCALE_MATRIX, XYZ_In, LMS);
     const LMS_D65 = _CalRGBCS.#tempNormalizeMatrix;
     this.#toD65(sourceWhitePoint, LMS, LMS_D65);
-    this.#matrixProduct(_CalRGBCS.#BRADFORD_SCALE_INVERSE_MATRIX, LMS_D65, result3);
+    this.#matrixProduct(_CalRGBCS.#BRADFORD_SCALE_INVERSE_MATRIX, LMS_D65, result2);
   }
   #toRgb(src, srcOffset, dest, destOffset, scale) {
     const A2 = MathClamp2(src[srcOffset] * scale, 0, 1);
@@ -39411,9 +39411,9 @@ var ImageResizer = class _ImageResizer {
       height
     } = imgData;
     if (width * height * 4 > MAX_INT_32) {
-      const result4 = this.#rescaleImageData();
-      if (result4) {
-        return result4;
+      const result3 = this.#rescaleImageData();
+      if (result3) {
+        return result3;
       }
     }
     const data = this._encodeBMP();
@@ -39451,8 +39451,8 @@ var ImageResizer = class _ImageResizer {
     steps.splice(-1, 1, factor / (1 << N));
     let newWidth = width;
     let newHeight = height;
-    const result3 = await imagePromise;
-    let bitmap = result3.image || result3;
+    const result2 = await imagePromise;
+    let bitmap = result2.image || result2;
     for (const step of steps) {
       const prevWidth = newWidth;
       const prevHeight = newHeight;
@@ -43208,18 +43208,18 @@ var makeBrotliDecode = () => {
   const CMD_LOOKUP = new Int16Array(2816);
   unpackCommandLookupTable(CMD_LOOKUP);
   function log2floor(i) {
-    let result3 = -1;
+    let result2 = -1;
     let step = 16;
     let v = i;
     while (step > 0) {
       let next = v >> step;
       if (next !== 0) {
-        result3 += step;
+        result2 += step;
         v = next;
       }
       step = step >> 1;
     }
-    return result3 + v;
+    return result2 + v;
   }
   function calculateDistanceAlphabetSize(npostfix, ndirect, maxndistbits) {
     return 16 + ndirect + 2 * (maxndistbits << npostfix);
@@ -43318,16 +43318,16 @@ var makeBrotliDecode = () => {
     s.blockTrees = new Int32Array(3091);
     s.blockTrees[0] = 7;
     s.distRbIdx = 3;
-    let result3 = calculateDistanceAlphabetLimit(s, 2147483644, 3, 120);
-    if (result3 < 0) {
-      return result3;
+    let result2 = calculateDistanceAlphabetLimit(s, 2147483644, 3, 120);
+    if (result2 < 0) {
+      return result2;
     }
-    const maxDistanceAlphabetLimit = result3;
+    const maxDistanceAlphabetLimit = result2;
     s.distExtraBits = new Int8Array(maxDistanceAlphabetLimit);
     s.distOffset = new Int32Array(maxDistanceAlphabetLimit);
-    result3 = initBitReader(s);
-    if (result3 < 0) {
-      return result3;
+    result2 = initBitReader(s);
+    if (result2 < 0) {
+      return result2;
     }
     s.runningState = 1;
     return 0;
@@ -43469,9 +43469,9 @@ var makeBrotliDecode = () => {
     buildHuffmanTable2(table, tableIdx, 5, codeLengthCodeLengths, 18);
     while (symbol < numSymbols && space > 0) {
       if (s.halfOffset > 2030) {
-        const result3 = readMoreInput(s);
-        if (result3 < 0) {
-          return result3;
+        const result2 = readMoreInput(s);
+        if (result2 < 0) {
+          return result2;
         }
       }
       if (s.bitOffset >= 16) {
@@ -43552,9 +43552,9 @@ var makeBrotliDecode = () => {
       }
       symbols[i] = symbol;
     }
-    const result3 = checkDupes(s, symbols, numSymbols);
-    if (result3 < 0) {
-      return result3;
+    const result2 = checkDupes(s, symbols, numSymbols);
+    if (result2 < 0) {
+      return result2;
     }
     let histogramId = numSymbols;
     if (numSymbols === 4) {
@@ -43616,17 +43616,17 @@ var makeBrotliDecode = () => {
     if (space !== 0 && numCodes !== 1) {
       return makeError(s, -4);
     }
-    const result3 = readHuffmanCodeLengths(codeLengthCodeLengths, alphabetSizeLimit, codeLengths, s);
-    if (result3 < 0) {
-      return result3;
+    const result2 = readHuffmanCodeLengths(codeLengthCodeLengths, alphabetSizeLimit, codeLengths, s);
+    if (result2 < 0) {
+      return result2;
     }
     return buildHuffmanTable2(tableGroup, tableIdx, 8, codeLengths, alphabetSizeLimit);
   }
   function readHuffmanCode(alphabetSizeMax, alphabetSizeLimit, tableGroup, tableIdx, s) {
     if (s.halfOffset > 2030) {
-      const result3 = readMoreInput(s);
-      if (result3 < 0) {
-        return result3;
+      const result2 = readMoreInput(s);
+      if (result2 < 0) {
+        return result2;
       }
     }
     if (s.bitOffset >= 16) {
@@ -43640,11 +43640,11 @@ var makeBrotliDecode = () => {
     return readComplexHuffmanCode(alphabetSizeLimit, simpleCodeOrSkip, tableGroup, tableIdx, s);
   }
   function decodeContextMap(contextMapSize, contextMap, s) {
-    let result3;
+    let result2;
     if (s.halfOffset > 2030) {
-      result3 = readMoreInput(s);
-      if (result3 < 0) {
-        return result3;
+      result2 = readMoreInput(s);
+      if (result2 < 0) {
+        return result2;
       }
     }
     const numTrees = decodeVarLenUnsignedByte(s) + 1;
@@ -43665,16 +43665,16 @@ var makeBrotliDecode = () => {
     const tableSize = MAX_HUFFMAN_TABLE_SIZE[alphabetSize + 31 >> 5];
     const table = new Int32Array(tableSize + 1);
     const tableIdx = table.length - 1;
-    result3 = readHuffmanCode(alphabetSize, alphabetSize, table, tableIdx, s);
-    if (result3 < 0) {
-      return result3;
+    result2 = readHuffmanCode(alphabetSize, alphabetSize, table, tableIdx, s);
+    if (result2 < 0) {
+      return result2;
     }
     let i = 0;
     while (i < contextMapSize) {
       if (s.halfOffset > 2030) {
-        result3 = readMoreInput(s);
-        if (result3 < 0) {
-          return result3;
+        result2 = readMoreInput(s);
+        if (result2 < 0) {
+          return result2;
         }
       }
       if (s.bitOffset >= 16) {
@@ -43721,7 +43721,7 @@ var makeBrotliDecode = () => {
       s.bitOffset -= 16;
     }
     let blockType = readSymbol(s.blockTrees, 2 * treeType, s);
-    const result3 = readBlockLength(s.blockTrees, 2 * treeType + 1, s);
+    const result2 = readBlockLength(s.blockTrees, 2 * treeType + 1, s);
     if (blockType === 1) {
       blockType = ringBuffers[offset + 1] + 1;
     } else if (blockType === 0) {
@@ -43734,7 +43734,7 @@ var makeBrotliDecode = () => {
     }
     ringBuffers[offset] = ringBuffers[offset + 1];
     ringBuffers[offset + 1] = blockType;
-    return result3;
+    return result2;
   }
   function decodeLiteralBlockSwitch(s) {
     s.literalBlockLength = decodeBlockTypeAndLength(s, 0, s.numLiteralBlockTypes);
@@ -43785,24 +43785,24 @@ var makeBrotliDecode = () => {
     s.literalTreeGroup = new Int32Array(0);
     s.commandTreeGroup = new Int32Array(0);
     s.distanceTreeGroup = new Int32Array(0);
-    let result3;
+    let result2;
     if (s.halfOffset > 2030) {
-      result3 = readMoreInput(s);
-      if (result3 < 0) {
-        return result3;
+      result2 = readMoreInput(s);
+      if (result2 < 0) {
+        return result2;
       }
     }
-    result3 = decodeMetaBlockLength(s);
-    if (result3 < 0) {
-      return result3;
+    result2 = decodeMetaBlockLength(s);
+    if (result2 < 0) {
+      return result2;
     }
     if (s.metaBlockLength === 0 && s.isMetadata === 0) {
       return 0;
     }
     if (s.isUncompressed !== 0 || s.isMetadata !== 0) {
-      result3 = jumpToByteBoundary(s);
-      if (result3 < 0) {
-        return result3;
+      result2 = jumpToByteBoundary(s);
+      if (result2 < 0) {
+        return result2;
       }
       if (s.isMetadata === 0) {
         s.runningState = 6;
@@ -43832,18 +43832,18 @@ var makeBrotliDecode = () => {
       return 1 << 28;
     }
     const blockTypeAlphabetSize = numBlockTypes + 2;
-    let result3 = readHuffmanCode(blockTypeAlphabetSize, blockTypeAlphabetSize, s.blockTrees, 2 * treeType, s);
-    if (result3 < 0) {
-      return result3;
+    let result2 = readHuffmanCode(blockTypeAlphabetSize, blockTypeAlphabetSize, s.blockTrees, 2 * treeType, s);
+    if (result2 < 0) {
+      return result2;
     }
-    offset += result3;
+    offset += result2;
     s.blockTrees[2 * treeType + 1] = offset;
     const blockLengthAlphabetSize = 26;
-    result3 = readHuffmanCode(blockLengthAlphabetSize, blockLengthAlphabetSize, s.blockTrees, 2 * treeType + 1, s);
-    if (result3 < 0) {
-      return result3;
+    result2 = readHuffmanCode(blockLengthAlphabetSize, blockLengthAlphabetSize, s.blockTrees, 2 * treeType + 1, s);
+    if (result2 < 0) {
+      return result2;
     }
-    offset += result3;
+    offset += result2;
     s.blockTrees[2 * treeType + 2] = offset;
     return readBlockLength(s.blockTrees, 2 * treeType + 1, s);
   }
@@ -43874,27 +43874,27 @@ var makeBrotliDecode = () => {
   }
   function readMetablockHuffmanCodesAndContextMaps(s) {
     s.numLiteralBlockTypes = decodeVarLenUnsignedByte(s) + 1;
-    let result3 = readMetablockPartition(s, 0, s.numLiteralBlockTypes);
-    if (result3 < 0) {
-      return result3;
+    let result2 = readMetablockPartition(s, 0, s.numLiteralBlockTypes);
+    if (result2 < 0) {
+      return result2;
     }
-    s.literalBlockLength = result3;
+    s.literalBlockLength = result2;
     s.numCommandBlockTypes = decodeVarLenUnsignedByte(s) + 1;
-    result3 = readMetablockPartition(s, 1, s.numCommandBlockTypes);
-    if (result3 < 0) {
-      return result3;
+    result2 = readMetablockPartition(s, 1, s.numCommandBlockTypes);
+    if (result2 < 0) {
+      return result2;
     }
-    s.commandBlockLength = result3;
+    s.commandBlockLength = result2;
     s.numDistanceBlockTypes = decodeVarLenUnsignedByte(s) + 1;
-    result3 = readMetablockPartition(s, 2, s.numDistanceBlockTypes);
-    if (result3 < 0) {
-      return result3;
+    result2 = readMetablockPartition(s, 2, s.numDistanceBlockTypes);
+    if (result2 < 0) {
+      return result2;
     }
-    s.distanceBlockLength = result3;
+    s.distanceBlockLength = result2;
     if (s.halfOffset > 2030) {
-      result3 = readMoreInput(s);
-      if (result3 < 0) {
-        return result3;
+      result2 = readMoreInput(s);
+      if (result2 < 0) {
+        return result2;
       }
     }
     if (s.bitOffset >= 16) {
@@ -43916,19 +43916,19 @@ var makeBrotliDecode = () => {
         i++;
       }
       if (s.halfOffset > 2030) {
-        result3 = readMoreInput(s);
-        if (result3 < 0) {
-          return result3;
+        result2 = readMoreInput(s);
+        if (result2 < 0) {
+          return result2;
         }
       }
     }
     const contextMapLength = s.numLiteralBlockTypes << 6;
     s.contextMap = new Int8Array(contextMapLength);
-    result3 = decodeContextMap(contextMapLength, s.contextMap, s);
-    if (result3 < 0) {
-      return result3;
+    result2 = decodeContextMap(contextMapLength, s.contextMap, s);
+    if (result2 < 0) {
+      return result2;
     }
-    const numLiteralTrees = result3;
+    const numLiteralTrees = result2;
     s.trivialLiteralContext = 1;
     for (let j = 0; j < contextMapLength; ++j) {
       if (s.contextMap[j] !== j >> 6) {
@@ -43937,35 +43937,35 @@ var makeBrotliDecode = () => {
       }
     }
     s.distContextMap = new Int8Array(s.numDistanceBlockTypes << 2);
-    result3 = decodeContextMap(s.numDistanceBlockTypes << 2, s.distContextMap, s);
-    if (result3 < 0) {
-      return result3;
+    result2 = decodeContextMap(s.numDistanceBlockTypes << 2, s.distContextMap, s);
+    if (result2 < 0) {
+      return result2;
     }
-    const numDistTrees = result3;
+    const numDistTrees = result2;
     s.literalTreeGroup = new Int32Array(huffmanTreeGroupAllocSize(256, numLiteralTrees));
-    result3 = decodeHuffmanTreeGroup(256, 256, numLiteralTrees, s, s.literalTreeGroup);
-    if (result3 < 0) {
-      return result3;
+    result2 = decodeHuffmanTreeGroup(256, 256, numLiteralTrees, s, s.literalTreeGroup);
+    if (result2 < 0) {
+      return result2;
     }
     s.commandTreeGroup = new Int32Array(huffmanTreeGroupAllocSize(704, s.numCommandBlockTypes));
-    result3 = decodeHuffmanTreeGroup(704, 704, s.numCommandBlockTypes, s, s.commandTreeGroup);
-    if (result3 < 0) {
-      return result3;
+    result2 = decodeHuffmanTreeGroup(704, 704, s.numCommandBlockTypes, s, s.commandTreeGroup);
+    if (result2 < 0) {
+      return result2;
     }
     let distanceAlphabetSizeMax = calculateDistanceAlphabetSize(s.distancePostfixBits, s.numDirectDistanceCodes, 24);
     let distanceAlphabetSizeLimit = distanceAlphabetSizeMax;
     if (s.isLargeWindow === 1) {
       distanceAlphabetSizeMax = calculateDistanceAlphabetSize(s.distancePostfixBits, s.numDirectDistanceCodes, 62);
-      result3 = calculateDistanceAlphabetLimit(s, 2147483644, s.distancePostfixBits, s.numDirectDistanceCodes);
-      if (result3 < 0) {
-        return result3;
+      result2 = calculateDistanceAlphabetLimit(s, 2147483644, s.distancePostfixBits, s.numDirectDistanceCodes);
+      if (result2 < 0) {
+        return result2;
       }
-      distanceAlphabetSizeLimit = result3;
+      distanceAlphabetSizeLimit = result2;
     }
     s.distanceTreeGroup = new Int32Array(huffmanTreeGroupAllocSize(distanceAlphabetSizeLimit, numDistTrees));
-    result3 = decodeHuffmanTreeGroup(distanceAlphabetSizeMax, distanceAlphabetSizeLimit, numDistTrees, s, s.distanceTreeGroup);
-    if (result3 < 0) {
-      return result3;
+    result2 = decodeHuffmanTreeGroup(distanceAlphabetSizeMax, distanceAlphabetSizeLimit, numDistTrees, s, s.distanceTreeGroup);
+    if (result2 < 0) {
+      return result2;
     }
     calculateDistanceLut(s, distanceAlphabetSizeLimit);
     s.contextMapSlice = 0;
@@ -43984,19 +43984,19 @@ var makeBrotliDecode = () => {
   }
   function copyUncompressedData(s) {
     const ringBuffer = s.ringBuffer;
-    let result3;
+    let result2;
     if (s.metaBlockLength <= 0) {
-      result3 = reload(s);
-      if (result3 < 0) {
-        return result3;
+      result2 = reload(s);
+      if (result2 < 0) {
+        return result2;
       }
       s.runningState = 2;
       return 0;
     }
     const chunkLength = Math.min(s.ringBufferSize - s.pos, s.metaBlockLength);
-    result3 = copyRawBytes(s, ringBuffer, s.pos, chunkLength);
-    if (result3 < 0) {
-      return result3;
+    result2 = copyRawBytes(s, ringBuffer, s.pos, chunkLength);
+    if (result2 < 0) {
+      return result2;
     }
     s.metaBlockLength -= chunkLength;
     s.pos += chunkLength;
@@ -44005,9 +44005,9 @@ var makeBrotliDecode = () => {
       s.runningState = 12;
       return 0;
     }
-    result3 = reload(s);
-    if (result3 < 0) {
-      return result3;
+    result2 = reload(s);
+    if (result2 < 0) {
+      return result2;
     }
     s.runningState = 2;
     return 0;
@@ -44032,20 +44032,20 @@ var makeBrotliDecode = () => {
     let next = n;
     for (let i = 0; i < n; ++i) {
       group[i] = next;
-      const result3 = readHuffmanCode(alphabetSizeMax, alphabetSizeLimit, group, i, s);
-      if (result3 < 0) {
-        return result3;
+      const result2 = readHuffmanCode(alphabetSizeMax, alphabetSizeLimit, group, i, s);
+      if (result2 < 0) {
+        return result2;
       }
-      next += result3;
+      next += result2;
     }
     return 0;
   }
   function calculateFence(s) {
-    let result3 = s.ringBufferSize;
+    let result2 = s.ringBufferSize;
     if (s.isEager !== 0) {
-      result3 = Math.min(result3, s.ringBufferBytesWritten + s.outputLength - s.outputUsed);
+      result2 = Math.min(result2, s.ringBufferBytesWritten + s.outputLength - s.outputUsed);
     }
-    return result3;
+    return result2;
   }
   function doUseDictionary(s, fence) {
     if (s.distance > 2147483644) {
@@ -44053,9 +44053,9 @@ var makeBrotliDecode = () => {
     }
     const address = s.distance - s.maxDistance - 1 - s.cdTotalSize;
     if (address < 0) {
-      const result3 = initializeCompoundDictionaryCopy(s, -address - 1, s.copyLength);
-      if (result3 < 0) {
-        return result3;
+      const result2 = initializeCompoundDictionaryCopy(s, -address - 1, s.copyLength);
+      if (result2 < 0) {
+        return result2;
       }
       s.runningState = 14;
     } else {
@@ -44156,7 +44156,7 @@ var makeBrotliDecode = () => {
     return pos - origPos;
   }
   function decompress(s) {
-    let result3;
+    let result2;
     if (s.runningState === 0) {
       return makeError(s, -25);
     }
@@ -44184,18 +44184,18 @@ var makeBrotliDecode = () => {
           if (s.metaBlockLength < 0) {
             return makeError(s, -10);
           }
-          result3 = readNextMetablockHeader(s);
-          if (result3 < 0) {
-            return result3;
+          result2 = readNextMetablockHeader(s);
+          if (result2 < 0) {
+            return result2;
           }
           fence = calculateFence(s);
           ringBufferMask = s.ringBufferSize - 1;
           ringBuffer = s.ringBuffer;
           continue;
         case 3:
-          result3 = readMetablockHuffmanCodesAndContextMaps(s);
-          if (result3 < 0) {
-            return result3;
+          result2 = readMetablockHuffmanCodesAndContextMaps(s);
+          if (result2 < 0) {
+            return result2;
           }
           s.runningState = 4;
           continue;
@@ -44205,9 +44205,9 @@ var makeBrotliDecode = () => {
             continue;
           }
           if (s.halfOffset > 2030) {
-            result3 = readMoreInput(s);
-            if (result3 < 0) {
-              return result3;
+            result2 = readMoreInput(s);
+            if (result2 < 0) {
+              return result2;
             }
           }
           if (s.commandBlockLength === 0) {
@@ -44242,9 +44242,9 @@ var makeBrotliDecode = () => {
           if (s.trivialLiteralContext !== 0) {
             while (s.j < s.insertLength) {
               if (s.halfOffset > 2030) {
-                result3 = readMoreInput(s);
-                if (result3 < 0) {
-                  return result3;
+                result2 = readMoreInput(s);
+                if (result2 < 0) {
+                  return result2;
                 }
               }
               if (s.literalBlockLength === 0) {
@@ -44269,9 +44269,9 @@ var makeBrotliDecode = () => {
             let prevByte2 = ringBuffer[s.pos - 2 & ringBufferMask] & 255;
             while (s.j < s.insertLength) {
               if (s.halfOffset > 2030) {
-                result3 = readMoreInput(s);
-                if (result3 < 0) {
-                  return result3;
+                result2 = readMoreInput(s);
+                if (result2 < 0) {
+                  return result2;
                 }
               }
               if (s.literalBlockLength === 0) {
@@ -44309,9 +44309,9 @@ var makeBrotliDecode = () => {
             s.distance = s.rings[s.distRbIdx];
           } else {
             if (s.halfOffset > 2030) {
-              result3 = readMoreInput(s);
-              if (result3 < 0) {
-                return result3;
+              result2 = readMoreInput(s);
+              if (result2 < 0) {
+                return result2;
               }
             }
             if (s.distanceBlockLength === 0) {
@@ -44403,9 +44403,9 @@ var makeBrotliDecode = () => {
           }
           continue;
         case 9:
-          result3 = doUseDictionary(s, fence);
-          if (result3 < 0) {
-            return result3;
+          result2 = doUseDictionary(s, fence);
+          if (result2 < 0) {
+            return result2;
           }
           continue;
         case 14:
@@ -44420,9 +44420,9 @@ var makeBrotliDecode = () => {
         case 5:
           while (s.metaBlockLength > 0) {
             if (s.halfOffset > 2030) {
-              result3 = readMoreInput(s);
-              if (result3 < 0) {
-                return result3;
+              result2 = readMoreInput(s);
+              if (result2 < 0) {
+                return result2;
               }
             }
             if (s.bitOffset >= 16) {
@@ -44435,9 +44435,9 @@ var makeBrotliDecode = () => {
           s.runningState = 2;
           continue;
         case 6:
-          result3 = copyUncompressedData(s);
-          if (result3 < 0) {
-            return result3;
+          result2 = copyUncompressedData(s);
+          if (result2 < 0) {
+            return result2;
           }
           continue;
         case 12:
@@ -44445,9 +44445,9 @@ var makeBrotliDecode = () => {
           s.runningState = 13;
           continue;
         case 13:
-          result3 = writeRingBuffer(s);
-          if (result3 !== 0) {
-            return result3;
+          result2 = writeRingBuffer(s);
+          if (result2 !== 0) {
+            return result2;
           }
           if (s.pos >= s.maxBackwardDistance) {
             s.maxDistance = s.maxBackwardDistance;
@@ -44471,13 +44471,13 @@ var makeBrotliDecode = () => {
     if (s.metaBlockLength < 0) {
       return makeError(s, -10);
     }
-    result3 = jumpToByteBoundary(s);
-    if (result3 !== 0) {
-      return result3;
+    result2 = jumpToByteBoundary(s);
+    if (result2 !== 0) {
+      return result2;
     }
-    result3 = checkHealth(s, 1);
-    if (result3 !== 0) {
-      return result3;
+    result2 = checkHealth(s, 1);
+    if (result2 !== 0) {
+      return result2;
     }
     return 1;
   }
@@ -44782,9 +44782,9 @@ var makeBrotliDecode = () => {
   }
   function prepare(s) {
     if (s.halfOffset > 2030) {
-      const result3 = readMoreInput(s);
-      if (result3 !== 0) {
-        return result3;
+      const result2 = readMoreInput(s);
+      if (result2 !== 0) {
+        return result2;
       }
     }
     let health = checkHealth(s, 0);
@@ -45061,19 +45061,19 @@ var makeBrotliDecode = () => {
   }
   function toUsAsciiBytes(src) {
     const n = src.length;
-    const result3 = new Int8Array(n);
+    const result2 = new Int8Array(n);
     for (let i = 0; i < n; ++i) {
-      result3[i] = src.charCodeAt(i);
+      result2[i] = src.charCodeAt(i);
     }
-    return result3;
+    return result2;
   }
   function toUtf8Runes(src) {
     const n = src.length;
-    const result3 = new Int32Array(n);
+    const result2 = new Int32Array(n);
     for (let i = 0; i < n; ++i) {
-      result3[i] = src.charCodeAt(i);
+      result2[i] = src.charCodeAt(i);
     }
-    return result3;
+    return result2;
   }
   function makeError(s, code) {
     if (code >= 0) {
@@ -45108,20 +45108,20 @@ var makeBrotliDecode = () => {
     }
     close(s);
     closeInput(s);
-    let result3 = new Int8Array(totalOutput);
+    let result2 = new Int8Array(totalOutput);
     let offset = 0;
     for (let i = 0; i < chunks.length; ++i) {
       let chunk = chunks[i];
       let end = Math.min(totalOutput, offset + 16384);
       let len = end - offset;
       if (len < 16384) {
-        result3.set(chunk.subarray(0, len), offset);
+        result2.set(chunk.subarray(0, len), offset);
       } else {
-        result3.set(chunk, offset);
+        result2.set(chunk, offset);
       }
       offset += len;
     }
-    return result3;
+    return result2;
   }
   return decode;
 };
@@ -45265,9 +45265,9 @@ async function JBig2(moduleArg = {}) {
       return wasmExports;
     }
     var info3 = getWasmImports();
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve9, reject) => {
       Module["instantiateWasm"](info3, (inst, mod) => {
-        resolve2(receiveInstance(inst, mod));
+        resolve9(receiveInstance(inst, mod));
       });
     });
   }
@@ -45462,8 +45462,8 @@ async function JBig2(moduleArg = {}) {
   if (runtimeInitialized) {
     moduleRtn = Module;
   } else {
-    moduleRtn = new Promise((resolve2, reject) => {
-      readyPromiseResolve = resolve2;
+    moduleRtn = new Promise((resolve9, reject) => {
+      readyPromiseResolve = resolve9;
       readyPromiseReject = reject;
     });
   }
@@ -45544,15 +45544,15 @@ var WasmImage = class _WasmImage {
     if (!this.#modulePromise) {
       const {
         promise,
-        resolve: resolve2
+        resolve: resolve9
       } = Promise.withResolvers();
       const promises = [promise];
       if (!_WasmImage.#useWasm) {
-        this.#getJsModule(resolve2);
+        this.#getJsModule(resolve9);
       } else {
         promises.push(ImageDecoder2({
           warn: warn2,
-          instantiateWasm: this.#instantiateWasm.bind(this, resolve2)
+          instantiateWasm: this.#instantiateWasm.bind(this, resolve9)
         }));
       }
       this.#modulePromise = Promise.race(promises);
@@ -46071,9 +46071,9 @@ async function OpenJPEG(moduleArg = {}) {
       return wasmExports;
     }
     var info3 = getWasmImports();
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve9, reject) => {
       Module["instantiateWasm"](info3, (inst, mod) => {
-        resolve2(receiveInstance(inst, mod));
+        resolve9(receiveInstance(inst, mod));
       });
     });
   }
@@ -46519,8 +46519,8 @@ async function OpenJPEG(moduleArg = {}) {
   if (runtimeInitialized) {
     moduleRtn = Module;
   } else {
-    moduleRtn = new Promise((resolve2, reject) => {
-      readyPromiseResolve = resolve2;
+    moduleRtn = new Promise((resolve9, reject) => {
+      readyPromiseResolve = resolve9;
       readyPromiseReject = reject;
     });
   }
@@ -61713,8 +61713,8 @@ function isCidKeyedType1File(file) {
   if (sample.length < 2 || sample[0] !== 37 || sample[1] !== 33) {
     return false;
   }
-  const text = bytesToString2(sample);
-  return text.includes("Resource-CIDFont") || /\/CIDFontType\s+0\b/.test(text);
+  const text2 = bytesToString2(sample);
+  return text2.includes("Resource-CIDFont") || /\/CIDFontType\s+0\b/.test(text2);
 }
 var Type1Font = class {
   #rawFileLength;
@@ -63853,13 +63853,13 @@ var Font = class {
           newLength += content[j].length;
         }
         newLength = newLength + 3 & ~3;
-        const result3 = new Uint8Array(newLength);
+        const result2 = new Uint8Array(newLength);
         let pos = 0;
         for (j = 0, jj = content.length; j < jj; j++) {
-          result3.set(content[j], pos);
+          result2.set(content[j], pos);
           pos += content[j].length;
         }
-        table.data = result3;
+        table.data = result2;
         table.length = newLength;
       }
     }
@@ -65482,13 +65482,13 @@ var PSStackToTree = class _PSStackToTree {
             break;
           }
           const cond = stack.pop();
-          const snapshot2 = stack.slice();
-          const thenStack = snapshot2.slice();
+          const snapshot = stack.slice();
+          const thenStack = snapshot.slice();
           this._evalBlock(instr.then, thenStack);
           if (this._failed) {
             break;
           }
-          const elseStack = snapshot2.slice();
+          const elseStack = snapshot.slice();
           this._evalBlock(instr.otherwise, elseStack);
           if (this._failed) {
             break;
@@ -67270,22 +67270,22 @@ var PsWasmCompiler = class _PsWasmCompiler {
     const memorySection = _PsWasmCompiler.#memorySection;
     const exportSection = _PsWasmCompiler.#exportSection;
     const totalLen = magicVersion.length + typeSectionBytes.length + importSection.length + functionSection.length + memorySection.length + exportSection.length + codeSectionBytes.length;
-    const result3 = new Uint8Array(totalLen);
+    const result2 = new Uint8Array(totalLen);
     let off = 0;
-    result3.set(magicVersion, off);
+    result2.set(magicVersion, off);
     off += magicVersion.length;
-    result3.set(typeSectionBytes, off);
+    result2.set(typeSectionBytes, off);
     off += typeSectionBytes.length;
-    result3.set(importSection, off);
+    result2.set(importSection, off);
     off += importSection.length;
-    result3.set(functionSection, off);
+    result2.set(functionSection, off);
     off += functionSection.length;
-    result3.set(memorySection, off);
+    result2.set(memorySection, off);
     off += memorySection.length;
-    result3.set(exportSection, off);
+    result2.set(exportSection, off);
     off += exportSection.length;
-    result3.set(codeSectionBytes, off);
-    return result3;
+    result2.set(codeSectionBytes, off);
+    return result2;
   }
 };
 function compilePostScriptToWasm(source, domain, range) {
@@ -67955,12 +67955,12 @@ function parseMarkedContentProps(xref, contentProperties, resources) {
   } else if (optionalContentType === "OCMD") {
     const expression = optionalContent.get("VE");
     if (Array.isArray(expression)) {
-      const result3 = [];
-      _parseVisibilityExpression(xref, expression, 0, result3);
-      if (result3.length > 0) {
+      const result2 = [];
+      _parseVisibilityExpression(xref, expression, 0, result2);
+      if (result2.length > 0) {
         return {
           type: "OCMD",
-          expression: result3
+          expression: result2
         };
       }
     }
@@ -68487,7 +68487,7 @@ function generateFont({
   style,
   ultimate
 }, src, localFontPath, useFallback = true, usePath = true, append = "") {
-  const result3 = {
+  const result2 = {
     style: null,
     ultimate: null
   };
@@ -68500,25 +68500,25 @@ function generateFont({
   if (alias) {
     const substitution = substitutionMap.get(alias);
     const aliasAppend = append || getStyleToAppend(style);
-    Object.assign(result3, generateFont(substitution, src, localFontPath, useFallback && !fallback, usePath && !path, aliasAppend));
+    Object.assign(result2, generateFont(substitution, src, localFontPath, useFallback && !fallback, usePath && !path, aliasAppend));
   }
   if (style) {
-    result3.style = style;
+    result2.style = style;
   }
   if (ultimate) {
-    result3.ultimate = ultimate;
+    result2.ultimate = ultimate;
   }
   if (useFallback && fallback) {
     const fallbackInfo = substitutionMap.get(fallback);
     const {
       ultimate: fallbackUltimate
     } = generateFont(fallbackInfo, src, localFontPath, useFallback, usePath && !path, append);
-    result3.ultimate ||= fallbackUltimate;
+    result2.ultimate ||= fallbackUltimate;
   }
   if (usePath && path && localFontPath) {
     src.push(`url(${localFontPath}${path})`);
   }
-  return result3;
+  return result2;
 }
 function getFontSubstitution(systemFontCache, idFactory, localFontPath, baseFontName, standardFontName, type) {
   if (baseFontName.startsWith("InvalidPDFjsFont_")) {
@@ -70343,7 +70343,7 @@ var PartialEvaluator = class _PartialEvaluator {
     }
     const {
       promise,
-      resolve: resolve2
+      resolve: resolve9
     } = Promise.withResolvers();
     let preEvaluatedFont;
     try {
@@ -70400,10 +70400,10 @@ var PartialEvaluator = class _PartialEvaluator {
           throw new Error(`Type3 font load error: ${reason}`);
         }
       }
-      resolve2(translated);
+      resolve9(translated);
     }).catch((reason) => {
       warn2(`loadFont - translateFont failed: "${reason}".`);
-      resolve2(new TranslatedFont({
+      resolve9(new TranslatedFont({
         loadedName: font.loadedName,
         font: new ErrorFont(reason?.message),
         dict: font
@@ -70638,11 +70638,11 @@ var PartialEvaluator = class _PartialEvaluator {
         operatorList.addOp(OPS2.endMarkedContent, []);
       }
     }
-    return new Promise(function promiseBody(resolve2, reject) {
+    return new Promise(function promiseBody(resolve9, reject) {
       const next = function(promise) {
         Promise.all([promise, operatorList.ready]).then(function() {
           try {
-            promiseBody(resolve2, reject);
+            promiseBody(resolve9, reject);
           } catch (ex) {
             reject(ex);
           }
@@ -71140,7 +71140,7 @@ var PartialEvaluator = class _PartialEvaluator {
       }
       closePendingMarkedContentOPS();
       closePendingRestoreOPS();
-      resolve2();
+      resolve9();
     }).catch((reason) => {
       if (reason instanceof AbortException2) {
         return;
@@ -71339,11 +71339,11 @@ var PartialEvaluator = class _PartialEvaluator {
       textContentItem.textAdvanceScale = scaleFactor;
     }
     function runBidiTransform(textChunk) {
-      let text = textChunk.str.join("");
+      let text2 = textChunk.str.join("");
       if (!disableNormalization) {
-        text = normalizeUnicode2(text);
+        text2 = normalizeUnicode2(text2);
       }
-      const bidiResult = bidi(text, -1, textChunk.vertical);
+      const bidiResult = bidi(text2, -1, textChunk.vertical);
       return {
         str: bidiResult.str,
         dir: bidiResult.dir,
@@ -71677,12 +71677,12 @@ var PartialEvaluator = class _PartialEvaluator {
       textContent.styles = /* @__PURE__ */ Object.create(null);
     }
     const timeSlotManager = new TimeSlotManager();
-    return new Promise(function promiseBody(resolve2, reject) {
+    return new Promise(function promiseBody(resolve9, reject) {
       const next = function(promise) {
         enqueueChunk(true);
         Promise.all([promise, sink.ready]).then(function() {
           try {
-            promiseBody(resolve2, reject);
+            promiseBody(resolve9, reject);
           } catch (ex) {
             reject(ex);
           }
@@ -71981,7 +71981,7 @@ var PartialEvaluator = class _PartialEvaluator {
       flushTextContentItem();
       closePendingMarkedContentItems();
       enqueueChunk();
-      resolve2();
+      resolve9();
     }).catch((reason) => {
       if (reason instanceof AbortException2) {
         return;
@@ -72302,16 +72302,16 @@ var PartialEvaluator = class _PartialEvaluator {
     return null;
   }
   readCidToGidMap(glyphsData, toUnicode) {
-    const result3 = [];
+    const result2 = [];
     for (let j = 0, jj = glyphsData.length; j < jj; j++) {
       const glyphID = glyphsData[j++] << 8 | glyphsData[j];
       const code = j >> 1;
       if (glyphID === 0 && !toUnicode.has(code)) {
         continue;
       }
-      result3[code] = glyphID;
+      result2[code] = glyphID;
     }
-    return result3;
+    return result2;
   }
   extractWidths(dict, descriptor, properties) {
     const xref = this.xref;
@@ -72920,7 +72920,7 @@ var TranslatedFont = class {
     assert2(font.isType3Font, "Must be a Type3 font.");
     const {
       promise,
-      resolve: resolve2
+      resolve: resolve9
     } = Promise.withResolvers();
     this.#type3Loaded = promise;
     const type3Evaluator = evaluator.clone({
@@ -72970,7 +72970,7 @@ var TranslatedFont = class {
       font.isCharBBox = true;
       font.bbox = this._bbox;
     }
-    resolve2();
+    resolve9();
     return this.#type3Loaded;
   }
   #removeType3ColorOperators(operatorList, fontBBoxSize = NaN) {
@@ -73637,7 +73637,7 @@ var DefaultAppearanceEvaluator = class extends EvaluatorPreprocessor {
       fn: 0,
       args: []
     };
-    const result3 = {
+    const result2 = {
       fontSize: 0,
       fontName: "",
       fontColor: new Uint8ClampedArray(3)
@@ -73659,27 +73659,27 @@ var DefaultAppearanceEvaluator = class extends EvaluatorPreprocessor {
           case OPS2.setFont:
             const [fontName, fontSize] = args;
             if (fontName instanceof Name) {
-              result3.fontName = fontName.name;
+              result2.fontName = fontName.name;
             }
             if (typeof fontSize === "number" && fontSize > 0) {
-              result3.fontSize = fontSize;
+              result2.fontSize = fontSize;
             }
             break;
           case OPS2.setFillRGBColor:
-            ColorSpaceUtils.rgb.getRgbItem(args, 0, result3.fontColor, 0);
+            ColorSpaceUtils.rgb.getRgbItem(args, 0, result2.fontColor, 0);
             break;
           case OPS2.setFillGray:
-            ColorSpaceUtils.gray.getRgbItem(args, 0, result3.fontColor, 0);
+            ColorSpaceUtils.gray.getRgbItem(args, 0, result2.fontColor, 0);
             break;
           case OPS2.setFillCMYKColor:
-            ColorSpaceUtils.cmyk.getRgbItem(args, 0, result3.fontColor, 0);
+            ColorSpaceUtils.cmyk.getRgbItem(args, 0, result2.fontColor, 0);
             break;
         }
       }
     } catch (reason) {
       warn2(`parseDefaultAppearance - ignoring errors: "${reason}".`);
     }
-    return result3;
+    return result2;
   }
 };
 function parseDefaultAppearance(str) {
@@ -73698,7 +73698,7 @@ var AppearanceStreamEvaluator = class extends EvaluatorPreprocessor {
       fn: 0,
       args: []
     };
-    let result3 = {
+    let result2 = {
       scaleFactor: 1,
       fontSize: 0,
       fontName: "",
@@ -73720,31 +73720,31 @@ var AppearanceStreamEvaluator = class extends EvaluatorPreprocessor {
         switch (fn | 0) {
           case OPS2.save:
             stack.push({
-              scaleFactor: result3.scaleFactor,
-              fontSize: result3.fontSize,
-              fontName: result3.fontName,
-              fontColor: result3.fontColor.slice(),
-              fillColorSpace: result3.fillColorSpace
+              scaleFactor: result2.scaleFactor,
+              fontSize: result2.fontSize,
+              fontName: result2.fontName,
+              fontColor: result2.fontColor.slice(),
+              fillColorSpace: result2.fillColorSpace
             });
             break;
           case OPS2.restore:
-            result3 = stack.pop() || result3;
+            result2 = stack.pop() || result2;
             break;
           case OPS2.setTextMatrix:
             const tm = Util2.transform(this.stateManager.state.ctm, args);
-            result3.scaleFactor *= Math.hypot(tm[0], tm[1]);
+            result2.scaleFactor *= Math.hypot(tm[0], tm[1]);
             break;
           case OPS2.setFont:
             const [fontName, fontSize] = args;
             if (fontName instanceof Name) {
-              result3.fontName = fontName.name;
+              result2.fontName = fontName.name;
             }
             if (typeof fontSize === "number" && fontSize > 0) {
-              result3.fontSize = fontSize;
+              result2.fontSize = fontSize;
             }
             break;
           case OPS2.setFillColorSpace:
-            result3.fillColorSpace = ColorSpaceUtils.parse({
+            result2.fillColorSpace = ColorSpaceUtils.parse({
               cs: args[0],
               xref: this.xref,
               resources: this.resources,
@@ -73754,23 +73754,23 @@ var AppearanceStreamEvaluator = class extends EvaluatorPreprocessor {
             });
             break;
           case OPS2.setFillColor:
-            const cs = result3.fillColorSpace;
-            cs.getRgbItem(args, 0, result3.fontColor, 0);
+            const cs = result2.fillColorSpace;
+            cs.getRgbItem(args, 0, result2.fontColor, 0);
             break;
           case OPS2.setFillRGBColor:
-            ColorSpaceUtils.rgb.getRgbItem(args, 0, result3.fontColor, 0);
+            ColorSpaceUtils.rgb.getRgbItem(args, 0, result2.fontColor, 0);
             break;
           case OPS2.setFillGray:
-            ColorSpaceUtils.gray.getRgbItem(args, 0, result3.fontColor, 0);
+            ColorSpaceUtils.gray.getRgbItem(args, 0, result2.fontColor, 0);
             break;
           case OPS2.setFillCMYKColor:
-            ColorSpaceUtils.cmyk.getRgbItem(args, 0, result3.fontColor, 0);
+            ColorSpaceUtils.cmyk.getRgbItem(args, 0, result2.fontColor, 0);
             break;
           case OPS2.showText:
           case OPS2.showSpacedText:
           case OPS2.nextLineShowText:
           case OPS2.nextLineSetSpacingShowText:
-            result3.fontSize *= result3.scaleFactor;
+            result2.fontSize *= result2.scaleFactor;
             breakLoop = true;
             break;
         }
@@ -73779,9 +73779,9 @@ var AppearanceStreamEvaluator = class extends EvaluatorPreprocessor {
       warn2(`parseAppearanceStream - ignoring errors: "${reason}".`);
     }
     this.stream.reset();
-    delete result3.scaleFactor;
-    delete result3.fillColorSpace;
-    return result3;
+    delete result2.scaleFactor;
+    delete result2.fillColorSpace;
+    return result2;
   }
   get _localColorSpaceCache() {
     return shadow2(this, "_localColorSpaceCache", new LocalColorSpaceCache());
@@ -73898,9 +73898,9 @@ var FakeUnicodeFont = class _FakeUnicodeFont {
     this.ctxMeasure.font = `1000px ${this.fontFamily}`;
     return this.ctxMeasure;
   }
-  createFontResources(text) {
+  createFontResources(text2) {
     const ctx = this._createContext();
-    for (const line of text.split(/\r\n?|\n/)) {
+    for (const line of text2.split(/\r\n?|\n/)) {
       for (const char of line.split("")) {
         const code = char.charCodeAt(0);
         if (this.widths.has(code)) {
@@ -73936,11 +73936,11 @@ var FakeUnicodeFont = class _FakeUnicodeFont {
       matrix: rotation !== 0 ? getRotationMatrix(rotation, h, lineHeight) : void 0
     };
   }
-  createAppearance(text, rect, rotation, fontSize, bgColor, strokeAlpha) {
+  createAppearance(text2, rect, rotation, fontSize, bgColor, strokeAlpha) {
     const ctx = this._createContext();
     const lines = [];
     let maxWidth = -Infinity;
-    for (const line of text.split(/\r\n?|\n/)) {
+    for (const line of text2.split(/\r\n?|\n/)) {
       lines.push(line);
       const lineWidth = ctx.measureText(line).width;
       maxWidth = Math.max(maxWidth, lineWidth);
@@ -74416,8 +74416,8 @@ var XMLParserBase = class _XMLParserBase {
         while (j < s.length && s[j] !== "<") {
           j++;
         }
-        const text = s.substring(i, j);
-        this.onText(this._resolveEntities(text));
+        const text2 = s.substring(i, j);
+        this.onText(this._resolveEntities(text2));
       }
       i = j;
     }
@@ -74427,13 +74427,13 @@ var XMLParserBase = class _XMLParserBase {
   }
   onPi(name, value) {
   }
-  onComment(text) {
+  onComment(text2) {
   }
-  onCdata(text) {
+  onCdata(text2) {
   }
   onDoctype(doctypeContent) {
   }
-  onText(text) {
+  onText(text2) {
   }
   onBeginElement(name, attributes, isEmpty) {
   }
@@ -74580,15 +74580,15 @@ var SimpleXMLParser = class extends XMLParserBase {
       documentElement
     };
   }
-  onText(text) {
-    if (isWhitespaceString(text)) {
+  onText(text2) {
+    if (isWhitespaceString(text2)) {
       return;
     }
-    const node = new SimpleDOMNode("#text", text);
+    const node = new SimpleDOMNode("#text", text2);
     this._currentFragment.push(node);
   }
-  onCdata(text) {
-    const node = new SimpleDOMNode("#text", text);
+  onCdata(text2) {
+    const node = new SimpleDOMNode("#text", text2);
     this._currentFragment.push(node);
   }
   onBeginElement(name, attributes, isEmpty) {
@@ -79184,8 +79184,8 @@ var ContentObject = class extends XFAObject {
     super(nsId, name);
     this[$content] = "";
   }
-  [$onText](text) {
-    this[$content] += text;
+  [$onText](text2) {
+    this[$content] += text2;
   }
   [$finalize]() {
   }
@@ -79383,12 +79383,12 @@ function setMinMaxDimensions(node, style) {
     }
   }
 }
-function layoutText(text, xfaFont, margin, lineHeight, fontFinder, width) {
+function layoutText(text2, xfaFont, margin, lineHeight, fontFinder, width) {
   const measure = new TextMeasure(xfaFont, margin, lineHeight, fontFinder);
-  if (typeof text === "string") {
-    measure.addString(text);
+  if (typeof text2 === "string") {
+    measure.addString(text2);
   } else {
-    text[$pushGlyphs](measure);
+    text2[$pushGlyphs](measure);
   }
   return measure.compute(width);
 }
@@ -79433,9 +79433,9 @@ function layoutNode(node, availableSpace) {
       height = res.height;
       isBroken = res.isBroken;
     } else {
-      const text = node.value[$text]();
-      if (text) {
-        const res = layoutText(text, font, margin, lineHeight, fontFinder, maxWidth);
+      const text2 = node.value[$text]();
+      if (text2) {
+        const res = layoutText(text2, font, margin, lineHeight, fontFinder, maxWidth);
         width = res.width;
         height = res.height;
         isBroken = res.isBroken;
@@ -80389,13 +80389,13 @@ var Area = class extends XFAObject {
       height: 0,
       availableSpace
     };
-    const result3 = this[$childrenToHTML]({
+    const result2 = this[$childrenToHTML]({
       filter: /* @__PURE__ */ new Set(["area", "draw", "field", "exclGroup", "subform", "subformSet"]),
       include: true
     });
-    if (!result3.success) {
-      if (result3.isBreak()) {
-        return result3;
+    if (!result2.success) {
+      if (result2.isBreak()) {
+        return result2;
       }
       delete this[$extra];
       return HTMLResult.FAILURE;
@@ -81754,16 +81754,16 @@ var ExclGroup = class extends XFAObject {
       if (isLrTb && this[$extra].attempt === MAX_ATTEMPTS_FOR_LRTB_LAYOUT - 1) {
         this[$extra].numberInLine = 0;
       }
-      const result3 = this[$childrenToHTML]({
+      const result2 = this[$childrenToHTML]({
         filter,
         include: true
       });
-      if (result3.success) {
+      if (result2.success) {
         break;
       }
-      if (result3.isBreak()) {
+      if (result2.isBreak()) {
         this[$popPara]();
-        return result3;
+        return result2;
       }
       if (isLrTb && this[$extra].attempt === 0 && this[$extra].numberInLine === 0 && !this[$getTemplateRoot]()[$extra].noLayoutFailure) {
         this[$extra].attempt = maxRun;
@@ -83739,16 +83739,16 @@ var Subform = class extends XFAObject {
       if (isLrTb && this[$extra].attempt === MAX_ATTEMPTS_FOR_LRTB_LAYOUT - 1) {
         this[$extra].numberInLine = 0;
       }
-      const result4 = this[$childrenToHTML]({
+      const result3 = this[$childrenToHTML]({
         filter,
         include: true
       });
-      if (result4.success) {
+      if (result3.success) {
         break;
       }
-      if (result4.isBreak()) {
+      if (result3.isBreak()) {
         this[$popPara]();
-        return result4;
+        return result3;
       }
       if (isLrTb && this[$extra].attempt === 0 && this[$extra].numberInLine === 0 && !root[$extra].noLayoutFailure) {
         this[$extra].attempt = maxRun;
@@ -83800,16 +83800,16 @@ var Subform = class extends XFAObject {
       children
     };
     applyAssist(this, attributes);
-    const result3 = HTMLResult.success(createWrapper(this, html), bbox);
+    const result2 = HTMLResult.success(createWrapper(this, html), bbox);
     if (this.breakAfter.children.length >= 1) {
       const breakAfter = this.breakAfter.children[0];
       if (handleBreak(breakAfter)) {
-        this[$extra].afterBreakAfter = result3;
+        this[$extra].afterBreakAfter = result2;
         return HTMLResult.breakNode(breakAfter);
       }
     }
     delete this[$extra];
-    return result3;
+    return result2;
   }
 };
 var SubformSet = class extends XFAObject {
@@ -87800,19 +87800,19 @@ var XFAParser = class _XFAParser extends XMLParserBase {
     this._current[$finalize]();
     return this._current.element;
   }
-  onText(text) {
-    text = text.replace(this._nbsps, (match) => match.slice(1) + " ");
+  onText(text2) {
+    text2 = text2.replace(this._nbsps, (match) => match.slice(1) + " ");
     if (this._richText || this._current[$acceptWhitespace]()) {
-      this._current[$onText](text, this._richText);
+      this._current[$onText](text2, this._richText);
       return;
     }
-    if (this._whiteRegex.test(text)) {
+    if (this._whiteRegex.test(text2)) {
       return;
     }
-    this._current[$onText](text.trim());
+    this._current[$onText](text2.trim());
   }
-  onCdata(text) {
-    this._current[$onText](text);
+  onCdata(text2) {
+    this._current[$onText](text2);
   }
   _mkAttributes(attributes, tagName) {
     let namespace = null;
@@ -87915,12 +87915,12 @@ var XFAFactory = class _XFAFactory {
   }
   _createPagesHelper() {
     const iterator = this.form[$toPages]();
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve9, reject) => {
       const nextIteration = () => {
         try {
           const value = iterator.next();
           if (value.done) {
-            resolve2(value.value);
+            resolve9(value.value);
           } else {
             setTimeout(nextIteration, 0);
           }
@@ -88000,13 +88000,13 @@ var XFAFactory = class _XFAFactory {
         newRoot[$appendChild](root);
         root = newRoot;
       }
-      const result3 = root[$toHTML]();
-      if (!result3.success) {
+      const result2 = root[$toHTML]();
+      if (!result2.success) {
         return null;
       }
       const {
         html
-      } = result3;
+      } = result2;
       const {
         attributes
       } = html;
@@ -88799,7 +88799,7 @@ var Annotation = class {
       return;
     }
     const resources = await this.loadResources(RESOURCES_KEYS_TEXT_CONTENT, this.appearance);
-    const text = [];
+    const text2 = [];
     const buffer = [];
     let firstPositionX = Infinity;
     let firstPositionY = Infinity;
@@ -88816,7 +88816,7 @@ var Annotation = class {
           firstPositionY = Math.min(firstPositionY, item.transform[5]);
           buffer.push(item.str);
           if (item.hasEOL) {
-            text.push(buffer.join("").trimEnd());
+            text2.push(buffer.join("").trimEnd());
             buffer.length = 0;
           }
         }
@@ -88836,14 +88836,14 @@ var Annotation = class {
       firstPosition = [firstPositionX, firstPositionY];
     }
     if (buffer.length) {
-      text.push(buffer.join("").trimEnd());
+      text2.push(buffer.join("").trimEnd());
     }
-    if (text.length > 1 || text[0]) {
+    if (text2.length > 1 || text2[0]) {
       const appearanceDict = this.appearance.dict;
       const bbox = lookupRect(appearanceDict.getArray("BBox"), null);
       const matrix = lookupMatrix(appearanceDict.getArray("Matrix"), null);
       this.data.textPosition = this._transformPoint(firstPosition, bbox, matrix);
-      this.data.textContent = text;
+      this.data.textContent = text2;
     }
   }
   _transformPoint(coords, bbox, matrix) {
@@ -89629,10 +89629,10 @@ var WidgetAnnotation = class _WidgetAnnotation extends Annotation {
     await evaluator.handleSetFont(resources, [fontName && Name.get(fontName), fontSize], null, operatorList, task, initialState, null);
     return initialState.font;
   }
-  _getTextWidth(text, font) {
-    return Math.sumPrecise(font.charsToGlyphs(text).map((g) => g.width)) / 1e3;
+  _getTextWidth(text2, font) {
+    return Math.sumPrecise(font.charsToGlyphs(text2).map((g) => g.width)) / 1e3;
   }
-  _computeFontSize(height, width, text, font, lineCount) {
+  _computeFontSize(height, width, text2, font, lineCount) {
     let {
       fontSize
     } = this.data.defaultAppearanceData;
@@ -89641,12 +89641,12 @@ var WidgetAnnotation = class _WidgetAnnotation extends Annotation {
     if (!fontSize) {
       const roundWithTwoDigits = (x) => Math.floor(x * 100) / 100;
       if (lineCount === -1) {
-        const textWidth = this._getTextWidth(text, font);
+        const textWidth = this._getTextWidth(text2, font);
         fontSize = roundWithTwoDigits(Math.min(height / /* inlined export .LINE_FACTOR */
         1.35, width / textWidth));
         numberOfLines = 1;
       } else {
-        const lines = text.split(/\r\n?|\n/);
+        const lines = text2.split(/\r\n?|\n/);
         const cachedLines = [];
         for (const line of lines) {
           const encoded = font.encodeString(line).join("");
@@ -89693,13 +89693,13 @@ var WidgetAnnotation = class _WidgetAnnotation extends Annotation {
     }
     return [this._defaultAppearance, fontSize, height / numberOfLines];
   }
-  _renderText(text, font, fontSize, totalWidth, alignment, prevInfo, hPadding, vPadding) {
+  _renderText(text2, font, fontSize, totalWidth, alignment, prevInfo, hPadding, vPadding) {
     let shift;
     if (alignment === 1) {
-      const width = this._getTextWidth(text, font) * fontSize;
+      const width = this._getTextWidth(text2, font) * fontSize;
       shift = (totalWidth - width) / 2;
     } else if (alignment === 2) {
-      const width = this._getTextWidth(text, font) * fontSize;
+      const width = this._getTextWidth(text2, font) * fontSize;
       shift = totalWidth - width - hPadding;
     } else {
       shift = hPadding;
@@ -89707,7 +89707,7 @@ var WidgetAnnotation = class _WidgetAnnotation extends Annotation {
     const shiftStr = numberToString(shift - prevInfo.shift);
     prevInfo.shift = shift;
     vPadding = numberToString(vPadding);
-    return `${shiftStr} ${vPadding} Td (${escapeString(text)}) Tj`;
+    return `${shiftStr} ${vPadding} Td (${escapeString(text2)}) Tj`;
   }
   _getSaveFieldResources(xref) {
     const {
@@ -89837,11 +89837,11 @@ var TextWidgetAnnotation = class extends WidgetAnnotation {
   get hasTextContent() {
     return !!this.appearance && !this._needAppearances;
   }
-  _getCombAppearance(defaultAppearance, font, text, fontSize, width, vShift, alignment, isRTL, annotationStorage) {
+  _getCombAppearance(defaultAppearance, font, text2, fontSize, width, vShift, alignment, isRTL, annotationStorage) {
     const combWidth = width / this.data.maxLen;
     const colors = this.getBorderAndBackgroundAppearances(annotationStorage);
-    const cells = font.getCharPositions(text).map(([start, end]) => {
-      const glyph = text.substring(start, end);
+    const cells = font.getCharPositions(text2).map(([start, end]) => {
+      const glyph = text2.substring(start, end);
       return {
         glyph,
         width: this._getTextWidth(glyph, font) * fontSize
@@ -89940,11 +89940,11 @@ var TextWidgetAnnotation = class extends WidgetAnnotation {
   }
   async extractTextContent(evaluator, task, viewBox) {
     await super.extractTextContent(evaluator, task, viewBox);
-    const text = this.data.textContent;
-    if (!text) {
+    const text2 = this.data.textContent;
+    if (!text2) {
       return;
     }
-    const allText = text.join("\n");
+    const allText = text2.join("\n");
     if (allText === this.data.fieldValue) {
       return;
     }
@@ -92270,63 +92270,63 @@ var calculate_sha_other_PARAMS = {
     return shadow2(this, "k", [new Word64(1116352408, 3609767458), new Word64(1899447441, 602891725), new Word64(3049323471, 3964484399), new Word64(3921009573, 2173295548), new Word64(961987163, 4081628472), new Word64(1508970993, 3053834265), new Word64(2453635748, 2937671579), new Word64(2870763221, 3664609560), new Word64(3624381080, 2734883394), new Word64(310598401, 1164996542), new Word64(607225278, 1323610764), new Word64(1426881987, 3590304994), new Word64(1925078388, 4068182383), new Word64(2162078206, 991336113), new Word64(2614888103, 633803317), new Word64(3248222580, 3479774868), new Word64(3835390401, 2666613458), new Word64(4022224774, 944711139), new Word64(264347078, 2341262773), new Word64(604807628, 2007800933), new Word64(770255983, 1495990901), new Word64(1249150122, 1856431235), new Word64(1555081692, 3175218132), new Word64(1996064986, 2198950837), new Word64(2554220882, 3999719339), new Word64(2821834349, 766784016), new Word64(2952996808, 2566594879), new Word64(3210313671, 3203337956), new Word64(3336571891, 1034457026), new Word64(3584528711, 2466948901), new Word64(113926993, 3758326383), new Word64(338241895, 168717936), new Word64(666307205, 1188179964), new Word64(773529912, 1546045734), new Word64(1294757372, 1522805485), new Word64(1396182291, 2643833823), new Word64(1695183700, 2343527390), new Word64(1986661051, 1014477480), new Word64(2177026350, 1206759142), new Word64(2456956037, 344077627), new Word64(2730485921, 1290863460), new Word64(2820302411, 3158454273), new Word64(3259730800, 3505952657), new Word64(3345764771, 106217008), new Word64(3516065817, 3606008344), new Word64(3600352804, 1432725776), new Word64(4094571909, 1467031594), new Word64(275423344, 851169720), new Word64(430227734, 3100823752), new Word64(506948616, 1363258195), new Word64(659060556, 3750685593), new Word64(883997877, 3785050280), new Word64(958139571, 3318307427), new Word64(1322822218, 3812723403), new Word64(1537002063, 2003034995), new Word64(1747873779, 3602036899), new Word64(1955562222, 1575990012), new Word64(2024104815, 1125592928), new Word64(2227730452, 2716904306), new Word64(2361852424, 442776044), new Word64(2428436474, 593698344), new Word64(2756734187, 3733110249), new Word64(3204031479, 2999351573), new Word64(3329325298, 3815920427), new Word64(3391569614, 3928383900), new Word64(3515267271, 566280711), new Word64(3940187606, 3454069534), new Word64(4118630271, 4000239992), new Word64(116418474, 1914138554), new Word64(174292421, 2731055270), new Word64(289380356, 3203993006), new Word64(460393269, 320620315), new Word64(685471733, 587496836), new Word64(852142971, 1086792851), new Word64(1017036298, 365543100), new Word64(1126000580, 2618297676), new Word64(1288033470, 3409855158), new Word64(1501505948, 4234509866), new Word64(1607167915, 987167468), new Word64(1816402316, 1246189591)]);
   }
 };
-function ch(result3, x, y, z, tmp) {
-  result3.assign(x);
-  result3.and(y);
+function ch(result2, x, y, z, tmp) {
+  result2.assign(x);
+  result2.and(y);
   tmp.assign(x);
   tmp.not();
   tmp.and(z);
-  result3.xor(tmp);
+  result2.xor(tmp);
 }
-function maj(result3, x, y, z, tmp) {
-  result3.assign(x);
-  result3.and(y);
+function maj(result2, x, y, z, tmp) {
+  result2.assign(x);
+  result2.and(y);
   tmp.assign(x);
   tmp.and(z);
-  result3.xor(tmp);
+  result2.xor(tmp);
   tmp.assign(y);
   tmp.and(z);
-  result3.xor(tmp);
+  result2.xor(tmp);
 }
-function sigma(result3, x, tmp) {
-  result3.assign(x);
-  result3.rotateRight(28);
+function sigma(result2, x, tmp) {
+  result2.assign(x);
+  result2.rotateRight(28);
   tmp.assign(x);
   tmp.rotateRight(34);
-  result3.xor(tmp);
+  result2.xor(tmp);
   tmp.assign(x);
   tmp.rotateRight(39);
-  result3.xor(tmp);
+  result2.xor(tmp);
 }
-function sigmaPrime(result3, x, tmp) {
-  result3.assign(x);
-  result3.rotateRight(14);
+function sigmaPrime(result2, x, tmp) {
+  result2.assign(x);
+  result2.rotateRight(14);
   tmp.assign(x);
   tmp.rotateRight(18);
-  result3.xor(tmp);
+  result2.xor(tmp);
   tmp.assign(x);
   tmp.rotateRight(41);
-  result3.xor(tmp);
+  result2.xor(tmp);
 }
-function littleSigma(result3, x, tmp) {
-  result3.assign(x);
-  result3.rotateRight(1);
+function littleSigma(result2, x, tmp) {
+  result2.assign(x);
+  result2.rotateRight(1);
   tmp.assign(x);
   tmp.rotateRight(8);
-  result3.xor(tmp);
+  result2.xor(tmp);
   tmp.assign(x);
   tmp.shiftRight(7);
-  result3.xor(tmp);
+  result2.xor(tmp);
 }
-function littleSigmaPrime(result3, x, tmp) {
-  result3.assign(x);
-  result3.rotateRight(19);
+function littleSigmaPrime(result2, x, tmp) {
+  result2.assign(x);
+  result2.rotateRight(19);
   tmp.assign(x);
   tmp.rotateRight(61);
-  result3.xor(tmp);
+  result2.xor(tmp);
   tmp.assign(x);
   tmp.shiftRight(6);
-  result3.xor(tmp);
+  result2.xor(tmp);
 }
 function calculateSHA512(data, offset, length, mode384 = false) {
   let h0, h1, h2, h3, h4, h5, h6, h7;
@@ -92434,27 +92434,27 @@ function calculateSHA512(data, offset, length, mode384 = false) {
     h6.add(g);
     h7.add(h);
   }
-  let result3;
+  let result2;
   if (!mode384) {
-    result3 = new Uint8Array(64);
-    h0.copyTo(result3, 0);
-    h1.copyTo(result3, 8);
-    h2.copyTo(result3, 16);
-    h3.copyTo(result3, 24);
-    h4.copyTo(result3, 32);
-    h5.copyTo(result3, 40);
-    h6.copyTo(result3, 48);
-    h7.copyTo(result3, 56);
+    result2 = new Uint8Array(64);
+    h0.copyTo(result2, 0);
+    h1.copyTo(result2, 8);
+    h2.copyTo(result2, 16);
+    h3.copyTo(result2, 24);
+    h4.copyTo(result2, 32);
+    h5.copyTo(result2, 40);
+    h6.copyTo(result2, 48);
+    h7.copyTo(result2, 56);
   } else {
-    result3 = new Uint8Array(48);
-    h0.copyTo(result3, 0);
-    h1.copyTo(result3, 8);
-    h2.copyTo(result3, 16);
-    h3.copyTo(result3, 24);
-    h4.copyTo(result3, 32);
-    h5.copyTo(result3, 40);
+    result2 = new Uint8Array(48);
+    h0.copyTo(result2, 0);
+    h1.copyTo(result2, 8);
+    h2.copyTo(result2, 16);
+    h3.copyTo(result2, 24);
+    h4.copyTo(result2, 32);
+    h5.copyTo(result2, 40);
   }
-  return result3;
+  return result2;
 }
 function calculateSHA384(data, offset, length) {
   return calculateSHA512(data, offset, length, true);
@@ -92787,7 +92787,7 @@ var AESBaseCipher = class {
   _decryptBlock2(data, finalize) {
     const sourceLength = data.length;
     let buffer = this.buffer, bufferLength = this.bufferPosition;
-    const result3 = [];
+    const result2 = [];
     let iv = this.iv;
     for (let i = 0; i < sourceLength; ++i) {
       buffer[bufferLength] = data[i];
@@ -92800,19 +92800,19 @@ var AESBaseCipher = class {
         plain[j] ^= iv[j];
       }
       iv = buffer;
-      result3.push(plain);
+      result2.push(plain);
       buffer = new Uint8Array(16);
       bufferLength = 0;
     }
     this.buffer = buffer;
     this.bufferLength = bufferLength;
     this.iv = iv;
-    if (result3.length === 0) {
+    if (result2.length === 0) {
       return new Uint8Array(0);
     }
-    let outputLength = 16 * result3.length;
+    let outputLength = 16 * result2.length;
     if (finalize) {
-      const lastBlock = result3.at(-1);
+      const lastBlock = result2.at(-1);
       let psLen = lastBlock[15];
       if (psLen <= 16) {
         for (let i = 15, ii = 16 - psLen; i >= ii; --i) {
@@ -92822,12 +92822,12 @@ var AESBaseCipher = class {
           }
         }
         outputLength -= psLen;
-        result3[result3.length - 1] = lastBlock.subarray(0, 16 - psLen);
+        result2[result2.length - 1] = lastBlock.subarray(0, 16 - psLen);
       }
     }
     const output = new Uint8Array(outputLength);
-    for (let i = 0, j = 0, ii = result3.length; i < ii; ++i, j += 16) {
-      output.set(result3[i], j);
+    for (let i = 0, j = 0, ii = result2.length; i < ii; ++i, j += 16) {
+      output.set(result2[i], j);
     }
     return output;
   }
@@ -92856,7 +92856,7 @@ var AESBaseCipher = class {
   encrypt(data, iv) {
     const sourceLength = data.length;
     let buffer = this.buffer, bufferLength = this.bufferPosition;
-    const result3 = [];
+    const result2 = [];
     iv ||= new Uint8Array(16);
     for (let i = 0; i < sourceLength; ++i) {
       buffer[bufferLength] = data[i];
@@ -92869,20 +92869,20 @@ var AESBaseCipher = class {
       }
       const cipher = this._encrypt(buffer, this._key);
       iv = cipher;
-      result3.push(cipher);
+      result2.push(cipher);
       buffer = new Uint8Array(16);
       bufferLength = 0;
     }
     this.buffer = buffer;
     this.bufferLength = bufferLength;
     this.iv = iv;
-    if (result3.length === 0) {
+    if (result2.length === 0) {
       return new Uint8Array(0);
     }
-    const outputLength = 16 * result3.length;
+    const outputLength = 16 * result2.length;
     const output = new Uint8Array(outputLength);
-    for (let i = 0, j = 0, ii = result3.length; i < ii; ++i, j += 16) {
-      output.set(result3[i], j);
+    for (let i = 0, j = 0, ii = result2.length; i < ii; ++i, j += 16) {
+      output.set(result2[i], j);
     }
     return output;
   }
@@ -92899,30 +92899,30 @@ var AES128Cipher = class extends AESBaseCipher {
     const b = 176;
     const s = this._s;
     const rcon = this._rcon;
-    const result3 = new Uint8Array(b);
-    result3.set(cipherKey);
+    const result2 = new Uint8Array(b);
+    result2.set(cipherKey);
     for (let j = 16, i = 1; j < b; ++i) {
-      let t1 = result3[j - 3];
-      let t2 = result3[j - 2];
-      let t3 = result3[j - 1];
-      let t4 = result3[j - 4];
+      let t1 = result2[j - 3];
+      let t2 = result2[j - 2];
+      let t3 = result2[j - 1];
+      let t4 = result2[j - 4];
       t1 = s[t1];
       t2 = s[t2];
       t3 = s[t3];
       t4 = s[t4];
       t1 ^= rcon[i];
       for (let n = 0; n < 4; ++n) {
-        result3[j] = t1 ^= result3[j - 16];
+        result2[j] = t1 ^= result2[j - 16];
         j++;
-        result3[j] = t2 ^= result3[j - 16];
+        result2[j] = t2 ^= result2[j - 16];
         j++;
-        result3[j] = t3 ^= result3[j - 16];
+        result2[j] = t3 ^= result2[j - 16];
         j++;
-        result3[j] = t4 ^= result3[j - 16];
+        result2[j] = t4 ^= result2[j - 16];
         j++;
       }
     }
-    return result3;
+    return result2;
   }
 };
 var AES256Cipher = class extends AESBaseCipher {
@@ -92935,8 +92935,8 @@ var AES256Cipher = class extends AESBaseCipher {
   _expandKey(cipherKey) {
     const b = 240;
     const s = this._s;
-    const result3 = new Uint8Array(b);
-    result3.set(cipherKey);
+    const result2 = new Uint8Array(b);
+    result2.set(cipherKey);
     let r = 1;
     let t1, t2, t3, t4;
     for (let j = 32, i = 1; j < b; ++i) {
@@ -92946,10 +92946,10 @@ var AES256Cipher = class extends AESBaseCipher {
         t3 = s[t3];
         t4 = s[t4];
       } else if (j % 32 === 0) {
-        t1 = result3[j - 3];
-        t2 = result3[j - 2];
-        t3 = result3[j - 1];
-        t4 = result3[j - 4];
+        t1 = result2[j - 3];
+        t2 = result2[j - 2];
+        t3 = result2[j - 1];
+        t4 = result2[j - 4];
         t1 = s[t1];
         t2 = s[t2];
         t3 = s[t3];
@@ -92960,17 +92960,17 @@ var AES256Cipher = class extends AESBaseCipher {
         }
       }
       for (let n = 0; n < 4; ++n) {
-        result3[j] = t1 ^= result3[j - 32];
+        result2[j] = t1 ^= result2[j - 32];
         j++;
-        result3[j] = t2 ^= result3[j - 32];
+        result2[j] = t2 ^= result2[j - 32];
         j++;
-        result3[j] = t3 ^= result3[j - 32];
+        result2[j] = t3 ^= result2[j - 32];
         j++;
-        result3[j] = t4 ^= result3[j - 32];
+        result2[j] = t4 ^= result2[j - 32];
         j++;
       }
     }
-    return result3;
+    return result2;
   }
 };
 var PDFBase = class {
@@ -92982,15 +92982,15 @@ var PDFBase = class {
     hashData.set(password, 0);
     hashData.set(ownerValidationSalt, password.length);
     hashData.set(userBytes, password.length + ownerValidationSalt.length);
-    const result3 = this._hash(password, hashData, userBytes);
-    return isArrayEqual(result3, ownerPassword);
+    const result2 = this._hash(password, hashData, userBytes);
+    return isArrayEqual(result2, ownerPassword);
   }
   checkUserPassword(password, userValidationSalt, userPassword) {
     const hashData = new Uint8Array(password.length + 8);
     hashData.set(password, 0);
     hashData.set(userValidationSalt, password.length);
-    const result3 = this._hash(password, hashData, []);
-    return isArrayEqual(result3, userPassword);
+    const result2 = this._hash(password, hashData, []);
+    return isArrayEqual(result2, userPassword);
   }
   getOwnerKey(password, ownerKeySalt, userBytes, ownerEncryption) {
     const hashData = new Uint8Array(password.length + 56);
@@ -95914,13 +95914,13 @@ var MessageHandler2 = class {
     }
     if (data.callbackId) {
       const sourceName = this.sourceName, targetName = data.sourceName, comObj = this.comObj;
-      Promise.try(action, data.data).then(function(result3) {
+      Promise.try(action, data.data).then(function(result2) {
         comObj.postMessage({
           sourceName,
           targetName,
           callback: CallbackKind2.DATA,
           callbackId: data.callbackId,
-          data: result3
+          data: result2
         });
       }, function(reason) {
         comObj.postMessage({
@@ -97149,16 +97149,16 @@ var PDFEditor = class {
     }) => indices.has(index) || ranges.some(([start, end]) => index >= start && index <= end);
     const inc = compile(includePages);
     const exc = compile(excludePages);
-    const result3 = [];
+    const result2 = [];
     for (let i = 0, ii = document2.numPages; i < ii; i++) {
       if (exc && matches(i, exc)) {
         continue;
       }
       if (!inc || matches(i, inc)) {
-        result3.push(i);
+        result2.push(i);
       }
     }
-    return result3;
+    return result2;
   }
   #resolveInsertAfterIndices(pageInfos) {
     const counts = new Array(pageInfos.length);
@@ -97235,12 +97235,12 @@ var PDFEditor = class {
         for (let k = 0; k < count; k++) {
           pageIndices.push(threshold + 1 + k);
         }
-        const result3 = {
+        const result2 = {
           ...updatedPageInfos[i],
           pageIndices
         };
-        delete result3.insertAfter;
-        updatedPageInfos[i] = result3;
+        delete result2.insertAfter;
+        updatedPageInfos[i] = result2;
         offset2 += count;
         maxExistingPos += count;
       }
@@ -97265,12 +97265,12 @@ var PDFEditor = class {
       if (!hasContent(info3) || info3.pageIndices) {
         return info3;
       }
-      const result3 = {
+      const result2 = {
         ...info3,
         pageIndices: pageIndicesArr[i] || []
       };
-      delete result3.insertAfter;
-      return result3;
+      delete result2.insertAfter;
+      return result2;
     });
   }
   async extractPages(pageInfos, annotationStorage, primaryDocument, handler, task) {
@@ -97941,12 +97941,12 @@ var PDFEditor = class {
     return false;
   }
   #filterOutlineItems(items, documentData) {
-    const result3 = [];
+    const result2 = [];
     for (const item of items) {
       const filteredChildren = this.#filterOutlineItems(item.items, documentData);
       const hasValidOwnDest = this.#isValidOutlineDest(item, documentData);
       if (hasValidOwnDest || filteredChildren.length > 0) {
-        result3.push({
+        result2.push({
           ...item,
           dest: hasValidOwnDest ? item.dest : null,
           rawDict: hasValidOwnDest ? item.rawDict : null,
@@ -97955,7 +97955,7 @@ var PDFEditor = class {
         });
       }
     }
-    return result3;
+    return result2;
   }
   #buildOutline(allDocumentData) {
     const outlineItems = [];
@@ -98992,9 +98992,9 @@ var PDFEditor = class {
       return [null, null, null];
     }
     this.currentDocument = documentData;
-    const result3 = [await this.#cloneObject(encryptDict, trailer.xref), encrypt, trailer.get("ID")];
+    const result2 = [await this.#cloneObject(encryptDict, trailer.xref), encrypt, trailer.get("ID")];
     this.currentDocument = null;
-    return result3;
+    return result2;
   }
   async #createChanges() {
     const changes = new RefMap();
@@ -99351,7 +99351,7 @@ var WorkerMessageHandler = class {
       }), fullReader = pdfStream.getFullReader();
       const {
         promise,
-        resolve: resolve2,
+        resolve: resolve9,
         reject
       } = Promise.withResolvers();
       let newPdfManager, cachedChunks = [];
@@ -99368,7 +99368,7 @@ var WorkerMessageHandler = class {
           newPdfManager.sendProgressiveData(chunk);
         }
         cachedChunks = null;
-        resolve2(newPdfManager);
+        resolve9(newPdfManager);
         cancelXHRs = null;
       }).catch((reason) => {
         reject(reason);
@@ -99402,7 +99402,7 @@ var WorkerMessageHandler = class {
           pdfManagerArgs.source = arrayBuffersToBytes(cachedChunks);
           cachedChunks = null;
           newPdfManager = new LocalPdfManager(pdfManagerArgs);
-          resolve2(newPdfManager);
+          resolve9(newPdfManager);
         }
         cancelXHRs = null;
       }
@@ -100002,18 +100002,18 @@ function contained(root, target) {
   const rel = relative(resolve(root), resolve(target));
   return rel === "" || !rel.startsWith(`..${sep}`) && rel !== ".." && !rel.includes(sep + sep);
 }
-function parseFrontmatter(text) {
-  if (!text.startsWith("---\n")) return { fields: {}, body: text };
-  const end = text.indexOf("\n---", 4);
-  if (end < 0) return { fields: {}, body: text };
+function parseFrontmatter(text2) {
+  if (!text2.startsWith("---\n")) return { fields: {}, body: text2 };
+  const end = text2.indexOf("\n---", 4);
+  if (end < 0) return { fields: {}, body: text2 };
   const fields = {};
-  for (const line of text.slice(4, end).split(/\r?\n/)) {
+  for (const line of text2.slice(4, end).split(/\r?\n/)) {
     const match = line.match(/^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*["']?(.+?)["']?\s*$/);
     const key = match?.[1];
     const value = match?.[2];
     if (key && value) fields[key.toLowerCase()] = value.trim();
   }
-  return { fields, body: text.slice(end + 4).replace(/^\s+/, "") };
+  return { fields, body: text2.slice(end + 4).replace(/^\s+/, "") };
 }
 function titleOf(path, fields, body) {
   return fields.title || body.match(/^#\s+(.+)$/m)?.[1]?.trim() || basename(path, extname(path));
@@ -100031,9 +100031,9 @@ async function readPdfText(path) {
     for (let pageNumber = 1; pageNumber <= document2.numPages; pageNumber += 1) {
       const page = await document2.getPage(pageNumber);
       const content = await page.getTextContent();
-      const text = content.items.map((item) => "str" in item ? item.str : "").join(" ").replace(/\s+/gu, " ").trim();
-      pages.push(`[[page:${pageNumber}]]${text ? `
-${text}` : ""}`);
+      const text2 = content.items.map((item) => "str" in item ? item.str : "").join(" ").replace(/\s+/gu, " ").trim();
+      pages.push(`[[page:${pageNumber}]]${text2 ? `
+${text2}` : ""}`);
       page.cleanup();
     }
   } finally {
@@ -100041,10 +100041,10 @@ ${text}` : ""}`);
   }
   return pages.join("\n\n");
 }
-function sourceId(relativePath, fields, text) {
+function sourceId(relativePath, fields, text2) {
   const declared = fields.id || fields.source_id;
   if (declared && /^[A-Za-z0-9._:-]{1,120}$/.test(declared)) return declared;
-  return `source-${createHash("sha256").update(`${relativePath}\0${text}`).digest("hex").slice(0, 16)}`;
+  return `source-${createHash("sha256").update(`${relativePath}\0${text2}`).digest("hex").slice(0, 16)}`;
 }
 async function walk(root, out = []) {
   let entries;
@@ -100068,10 +100068,10 @@ async function readSource(root, path) {
   const isPdf = extname(path).toLowerCase() === ".pdf";
   const maxBytes = isPdf ? MAX_PDF_BYTES : MAX_SOURCE_BYTES;
   if (!info3.isFile() || info3.size > maxBytes) return null;
-  const text = isPdf ? await readPdfText(path) : await readFile(path, "utf8");
-  const { fields, body } = parseFrontmatter(text);
+  const text2 = isPdf ? await readPdfText(path) : await readFile(path, "utf8");
+  const { fields, body } = parseFrontmatter(text2);
   const relativePath = relative(root, path).split(sep).join("/");
-  const id = sourceId(relativePath, fields, text);
+  const id = sourceId(relativePath, fields, text2);
   return {
     id,
     root,
@@ -100080,8 +100080,8 @@ async function readSource(root, path) {
     title: titleOf(path, fields, body),
     uri: fields.uri || fields.url || (fields.doi ? `https://doi.org/${fields.doi}` : isPdf ? relativePath : `source://${id}`),
     doi: fields.doi || null,
-    text,
-    hash: createHash("sha256").update(text).digest("hex")
+    text: text2,
+    hash: createHash("sha256").update(text2).digest("hex")
   };
 }
 async function sourceRoot(ctx, sourceDir) {
@@ -100107,8 +100107,8 @@ function publicSource(source) {
     hash: source.hash
   };
 }
-function pageRange(text) {
-  const pages = [...text.matchAll(/\[\[page:(\d+)\]\]/gu)].map((match) => Number(match[1]));
+function pageRange(text2) {
+  const pages = [...text2.matchAll(/\[\[page:(\d+)\]\]/gu)].map((match) => Number(match[1]));
   if (!pages.length || pages.some((page) => !Number.isInteger(page) || page < 1)) return void 0;
   return { start: Math.min(...pages), end: Math.max(...pages) };
 }
@@ -100348,63 +100348,1283 @@ ${citationLines.join("\n")}
 }
 
 // src/research-loop.ts
-import { randomUUID } from "node:crypto";
-var STAGES = [
+import { readFile as readFile6 } from "node:fs/promises";
+import { basename as basename4, join as join5, resolve as resolve8 } from "node:path";
+
+// src/core/literature-receipt.ts
+import { createHash as createHash2 } from "node:crypto";
+import { readFile as readFile2, realpath, stat as stat2 } from "node:fs/promises";
+import { isAbsolute, relative as relative2, resolve as resolve2, sep as sep2 } from "node:path";
+function normalizeDoi(value) {
+  const doi = String(value || "").trim().replace(/^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)/i, "").toLowerCase();
+  return /^10\.\d{4,9}\/\S+$/.test(doi) ? doi : null;
+}
+function exactDoiItems(items, doi) {
+  const wanted = normalizeDoi(doi);
+  return wanted ? items.filter((item) => normalizeDoi(item.data?.DOI || item.doi || item.DOI) === wanted) : [];
+}
+function errorName(error) {
+  return error instanceof Error ? error.name : "Error";
+}
+async function verifyLiteratureReceipt({
+  doi,
+  zotero_key,
+  note_path,
+  vault,
+  signal,
+  fetcher = (url, init) => fetch(url, init)
+}) {
+  const normalizedDoi = normalizeDoi(doi);
+  const zoteroKey = String(zotero_key || "");
+  if (!normalizedDoi || !/^[A-Z0-9]{8}$/.test(zoteroKey))
+    throw new Error("Valid DOI and Zotero key required");
+  const receipt = {
+    doi: normalizedDoi,
+    zoteroKey,
+    zotero: { status: "unavailable" },
+    obsidian: { status: "unavailable" },
+    scientificallyVerified: false
+  };
+  const get = async (path) => {
+    const response = await fetcher(`http://127.0.0.1:23119/api/users/0/${path}`, {
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(1e4)]) : AbortSignal.timeout(1e4),
+      redirect: "error"
+    });
+    if (!response.ok) throw new Error(`Zotero HTTP ${response.status}`);
+    return response.json();
+  };
+  try {
+    const item = await get(`items/${zoteroKey}`);
+    const data = item?.data || {};
+    receipt.zotero = {
+      status: exactDoiItems([item], normalizedDoi).length ? "verified" : "identity-mismatch",
+      title: data.title,
+      collections: data.collections || []
+    };
+    if (receipt.zotero.status === "verified") {
+      try {
+        const children = await get(`items/${zoteroKey}/children`);
+        receipt.zotero.pdfAttachmentKeys = children.filter((child) => child.data?.contentType === "application/pdf").map((child) => String(child.data?.key || "")).filter(Boolean);
+        receipt.zotero.fulltextStatus = receipt.zotero.pdfAttachmentKeys.length ? "attachment-indexed-not-read" : "metadata-only";
+      } catch {
+        receipt.zotero.fulltextStatus = "unavailable";
+      }
+    }
+  } catch (error) {
+    receipt.zotero.error = errorName(error) === "TimeoutError" ? "timeout" : "local-api-unavailable";
+  }
+  let vaultResolved = false;
+  try {
+    const notePath = String(note_path || "");
+    if (!vault || !/^(?:Library)\/Papers\/.+\.md$/.test(notePath) || notePath.split("/").includes("..") || notePath.includes("\\"))
+      throw new Error("invalid-note-path");
+    const root = await realpath(String(vault));
+    vaultResolved = true;
+    const file = await realpath(resolve2(root, notePath));
+    const rel = relative2(root, file);
+    if (isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep2}`)) throw new Error("outside-vault");
+    if ((await stat2(file)).size > 1024 * 1024) throw new Error("note-too-large");
+    const text2 = await readFile2(file, "utf8");
+    const linked = text2.includes(`zotero:${zoteroKey}`) || new RegExp(`zotero://select/library/items/${zoteroKey}(?=[)\\s<>]|$)`).test(text2) || new RegExp(`^zotero_key: *["']?${zoteroKey}["']? *$`, "m").test(text2);
+    const dois = text2.match(/10\.\d{4,9}\/[^\s<>"'\])]+/gi) || [];
+    receipt.obsidian = {
+      status: linked && dois.some((item) => normalizeDoi(item.replace(/[.,;]+$/, "")) === normalizedDoi) ? "verified" : "identity-mismatch",
+      path: notePath,
+      vault: root,
+      hash: createHash2("sha256").update(text2).digest("hex")
+    };
+  } catch (error) {
+    if (vaultResolved && error instanceof Error && "code" in error && error.code === "ENOENT") {
+      receipt.obsidian.status = "missing";
+      receipt.obsidian.error = "note-missing";
+    } else receipt.obsidian.error = "note-unavailable-or-invalid";
+  }
+  receipt.status = receipt.zotero.status === "verified" && receipt.obsidian.status === "verified" ? "both-verified" : "partial";
+  return receipt;
+}
+
+// src/core/source-archive.ts
+import { createHash as createHash4, randomUUID } from "node:crypto";
+import { access as access2, mkdir as mkdir2, readFile as readFile3, realpath as realpath2, rename as rename2, writeFile as writeFile2 } from "node:fs/promises";
+import { basename as basename3, dirname as dirname2, extname as extname2, isAbsolute as isAbsolute3, join as join2, relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
+
+// src/core/external-effect-key.ts
+import { createHash as createHash3 } from "node:crypto";
+
+// src/core/open-access.ts
+var OA_SOURCES = Object.freeze([
+  "europepmc",
+  "pmc-cloud",
+  "unpaywall",
+  "openalex",
+  "semanticscholar",
+  "crossref"
+]);
+
+// src/core/source-archive-policy.ts
+import { basename as basename2, isAbsolute as isAbsolute2, relative as relative3, resolve as resolve3, sep as sep3 } from "node:path";
+var SOURCE_CATEGORIES = ["papers", "supplementary", "software", "manuals"];
+var DEFAULT_MAX_BYTES = 50 * 1024 * 1024;
+function isWithin(root, child) {
+  const rel = relative3(resolve3(root), resolve3(child));
+  return rel === "" || !isAbsolute2(rel) && !rel.startsWith(`..${sep3}`) && rel !== ".." && !rel.includes(`..${sep3}`);
+}
+function validateRunDir(resultsRoot, candidate) {
+  const runDir = resolve3(candidate);
+  const rel = relative3(resolve3(resultsRoot), runDir);
+  const parts = rel.split(sep3);
+  if (!rel || !isWithin(resultsRoot, runDir) || parts.length !== 2 || !parts[1]?.startsWith("run-"))
+    throw new Error("run_dir must point to a run directory directly inside the configured results root");
+  return runDir;
+}
+
+// src/core/source-archive.ts
+async function readManifest(file, runDir) {
+  try {
+    const parsed = JSON.parse(await readFile3(file, "utf8"));
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.items))
+      throw new Error("invalid manifest");
+    return parsed;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    return { version: 1, run_dir: runDir, updated_at: null, items: [] };
+  }
+}
+async function verifyManifestItems(manifest, runDir) {
+  const downloaded = manifest.items.filter((entry) => entry?.status === "downloaded");
+  if (downloaded.length === 0) return { ok: true, items: [] };
+  let sourcesRoot;
+  try {
+    sourcesRoot = await realpath2(join2(runDir, "sources"));
+  } catch {
+    return {
+      ok: false,
+      items: downloaded.map((item) => ({
+        id: item.id ?? null,
+        path: item.path ?? item.local_path ?? null,
+        ok: false,
+        reason: "sources directory is missing"
+      }))
+    };
+  }
+  const items = [];
+  for (const item of downloaded) {
+    const path = typeof item.path === "string" ? item.path : typeof item.local_path === "string" ? item.local_path : "";
+    if (!path) {
+      items.push({ id: item.id ?? null, path: null, ok: false, reason: "missing manifest path" });
+      continue;
+    }
+    try {
+      const canonical = await realpath2(isAbsolute3(path) ? path : resolve4(runDir, path));
+      if (!isWithin(sourcesRoot, canonical)) throw new Error("path escapes run sources");
+      const bytes = await readFile3(canonical);
+      const sha256 = createHash4("sha256").update(bytes).digest("hex");
+      if (sha256 !== String(item.sha256 || "").toLowerCase()) throw new Error("sha256 mismatch");
+      if (item.size_bytes !== void 0 && Number(item.size_bytes) !== bytes.byteLength)
+        throw new Error("size mismatch");
+      items.push({ id: item.id ?? null, path: canonical, ok: true, sha256, size_bytes: bytes.byteLength });
+    } catch (error) {
+      items.push({ id: item.id ?? null, path, ok: false, reason: String(error?.message || error) });
+    }
+  }
+  return { ok: items.every((item) => item.ok === true), items };
+}
+async function sourceStatus(options = {}, ports) {
+  if (!ports) throw new Error("Source archive host ports are required");
+  const { cwd = process.cwd(), run_dir } = options;
+  const config = await ports.workspace(cwd);
+  const runDir = run_dir ? validateRunDir(config.resultsRoot, resolve4(cwd, run_dir)) : null;
+  if (!runDir) return { results_root: config.resultsRoot, categories: SOURCE_CATEGORIES, run_dir: null };
+  const manifestPath = join2(runDir, "sources", "download-manifest.json");
+  const failuresPath = join2(runDir, "sources", "download-failures.md");
+  const manifest = await readManifest(manifestPath, runDir);
+  let failures = "";
+  try {
+    failures = await readFile3(failuresPath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  const manifestExists = await access2(manifestPath).then(
+    () => true,
+    () => false
+  );
+  const failuresExists = await access2(failuresPath).then(
+    () => true,
+    () => false
+  );
+  return {
+    run_dir: runDir,
+    manifest_path: manifestExists ? manifestPath : null,
+    failures_path: failuresExists ? failuresPath : null,
+    manifest,
+    failure_count: manifest.failures?.length ?? Math.max(0, (failures.match(/^## /gm) || []).length),
+    ...options.verify ? { verification: await verifyManifestItems(manifest, runDir) } : {}
+  };
+}
+
+// src/core/receipt-journal.ts
+import { realpath as realpath3 } from "node:fs/promises";
+
+// src/core/receipt-journal-policy.ts
+import { resolve as resolve5 } from "node:path";
+var CORE_RESEARCH_RECEIPT_TOOLS = [
+  "bash",
+  "powershell",
+  "webfetch",
+  "fetch_content",
+  "web_search",
+  "research_read_knowledge",
+  "research_search_knowledge",
+  "research_verify_literature",
+  "research_reconcile_literature",
+  "research_archive_source",
+  "read"
+];
+function shouldRecordResearchReceipt(event, isJournalTool = () => false) {
+  const toolName = typeof event.toolName === "string" ? event.toolName : "";
+  if (event.isError && toolName !== "bash" && toolName !== "powershell") return false;
+  return CORE_RESEARCH_RECEIPT_TOOLS.includes(toolName) || isJournalTool(toolName);
+}
+var ReceiptJournalBuffer = class {
+  capacity;
+  entries = [];
+  seen = /* @__PURE__ */ new Set();
+  evictedCount = 0;
+  constructor({ capacity = 256 } = {}) {
+    if (!Number.isInteger(capacity) || capacity < 1)
+      throw new Error("Receipt journal capacity must be a positive integer");
+    this.capacity = capacity;
+  }
+  /** Adds a receipt and returns false for a duplicate tool call id. */
+  add(receipt) {
+    const toolCallId = typeof receipt.toolCallId === "string" ? receipt.toolCallId : null;
+    if (toolCallId && this.seen.has(toolCallId)) return false;
+    if (toolCallId) this.seen.add(toolCallId);
+    if (this.entries.length >= this.capacity) {
+      this.entries.shift();
+      this.evictedCount += 1;
+    }
+    this.entries.push(receipt);
+    return true;
+  }
+  values() {
+    return this.entries.slice();
+  }
+  get evicted() {
+    return this.evictedCount;
+  }
+  snapshot() {
+    return {
+      scope: "current-session-current-turn",
+      buffered: this.entries.length,
+      evicted: this.evictedCount
+    };
+  }
+  clear() {
+    this.entries.length = 0;
+    this.seen.clear();
+    this.evictedCount = 0;
+  }
+};
+function receiptBelongsToRun(receipt, cwd, runDir) {
+  const ownedRun = receipt.args?.run_dir || receipt.details?.run_dir;
+  return !ownedRun || resolve5(cwd, String(ownedRun)) === resolve5(cwd, runDir);
+}
+
+// src/core/receipt-journal.ts
+function createResearchReceiptJournal(cwd, { sessionId = null, ports }) {
+  const owners = ports.owners || /* @__PURE__ */ new Map();
+  const owner = Symbol("research-turn");
+  const buffer = new ReceiptJournalBuffer();
+  const runs = /* @__PURE__ */ new Set();
+  let active = true;
+  let currentRun;
+  let tail = Promise.resolve();
+  const belongs = (receipt, runDir) => receiptBelongsToRun(receipt, cwd, runDir);
+  const serial = (work) => {
+    const next = tail.catch(() => {
+    }).then(() => active ? work() : null);
+    tail = next;
+    return next;
+  };
+  const attach = async (runDir) => {
+    if (!runDir) return;
+    const status = await ports.status(cwd, runDir);
+    const path = status.run_dir;
+    if (owners.has(path) && owners.get(path) !== owner)
+      throw new Error("Research run is owned by another active session/turn; create a separate run");
+    if (!runs.has(path)) {
+      owners.set(path, owner);
+      await ports.flush(cwd, path);
+      ports.reset(cwd, path);
+      runs.add(path);
+      for (const receipt of buffer.values()) {
+        if (!belongs(receipt, path)) continue;
+        await ports.observeExecution({ ...receipt, sessionId, cwd, runDir: path });
+        await ports.observeResearch({ ...receipt, sessionId, cwd, runDir: path });
+      }
+    }
+    currentRun = path;
+  };
+  return {
+    currentRun: () => currentRun,
+    record(event) {
+      if (!active || !shouldRecordResearchReceipt(event, ports.isJournalTool)) return Promise.resolve(null);
+      const snapshot = event.toolName === "research_read_knowledge" ? ports.workspace(cwd).then(async (config) => ({
+        vault: config.obsidianVault ? await realpath3(config.obsidianVault) : null,
+        revision: config.knowledgeBindingRevision || 0
+      })).catch(() => ({ vault: null, revision: -1 })) : Promise.resolve(void 0);
+      const receipt = {
+        ...structuredClone(event),
+        sessionId,
+        observedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      return serial(async () => {
+        if (buffer.add(receipt) === false) return null;
+        receipt.readBinding = await snapshot;
+        if (currentRun && belongs(receipt, currentRun)) {
+          await ports.observeExecution({ ...receipt, cwd, runDir: currentRun });
+          return ports.observeResearch({ ...receipt, cwd, runDir: currentRun });
+        }
+        return null;
+      });
+    },
+    execute(runDir, work) {
+      return serial(async () => {
+        if (runDir) await attach(runDir);
+        const result2 = await work();
+        if (typeof result2.run_dir === "string") await attach(result2.run_dir);
+        const refreshed = typeof result2.run_dir === "string" ? await ports.status(cwd, result2.run_dir) : result2;
+        return {
+          ...result2,
+          ...refreshed,
+          receipt_journal: { ...buffer.snapshot() }
+        };
+      });
+    },
+    async close() {
+      active = false;
+      await tail.catch(() => {
+      });
+      for (const runDir of runs) {
+        await ports.flush(cwd, runDir);
+        if (owners.get(runDir) === owner) {
+          ports.reset(cwd, runDir);
+          owners.delete(runDir);
+        }
+      }
+      runs.clear();
+      buffer.clear();
+    }
+  };
+}
+
+// src/core/research-loop.ts
+import { createHash as createHash5, randomUUID as randomUUID2 } from "node:crypto";
+import { access as access3, mkdir as mkdir3, readFile as readFile4, realpath as realpath4, rename as rename3, writeFile as writeFile3 } from "node:fs/promises";
+import { dirname as dirname3, isAbsolute as isAbsolute4, join as join3, relative as relative5, resolve as resolve6, sep as sep5 } from "node:path";
+
+// src/core/claim-bindings.ts
+var RELATIONSHIPS = ["direct", "indirect", "hypothesis", "unsupported"];
+function text(value, label, max = 4e3) {
+  if (typeof value !== "string" || !value.trim() || value.length > max) throw new Error(`Invalid ${label}`);
+  return value.trim();
+}
+function validateClaimBindings(bindings, sources, reads) {
+  if (!Array.isArray(bindings) || bindings.length < 1 || bindings.length > 64)
+    throw new Error("Provide 1-64 structured claim_bindings");
+  const seen = /* @__PURE__ */ new Set();
+  return bindings.map((raw, index) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid claim binding");
+    const binding = raw;
+    const claim = text(binding.claim, "claim");
+    const limitations = text(binding.limitations, "limitations");
+    if (seen.has(claim)) throw new Error("Duplicate claim binding");
+    seen.add(claim);
+    const relationship = binding.relationship;
+    if (!RELATIONSHIPS.includes(relationship))
+      throw new Error("Invalid support relationship");
+    if (!Array.isArray(binding.sources) || binding.sources.length > 12)
+      throw new Error("Invalid claim sources");
+    if (["direct", "indirect"].includes(String(relationship)) && binding.sources.length === 0)
+      throw new Error("Supported claims require observed source excerpts");
+    const refs = binding.sources.map((rawRef) => {
+      if (!rawRef || typeof rawRef !== "object" || Array.isArray(rawRef))
+        throw new Error("Invalid claim source");
+      const ref = rawRef;
+      const path = typeof ref.path === "string" ? ref.path : "";
+      const source = sources.find((candidate) => candidate.path === path);
+      const read = reads.get(path);
+      if (!source || !read || read.hash !== source.hash)
+        throw new Error("Claim source was not read and identity-verified in this scope");
+      const first = ref.start_line;
+      const last = ref.end_line;
+      if (!Number.isInteger(first) || !Number.isInteger(last) || first < read.startLine || last < first || last > read.endLine)
+        throw new Error("Claim source range is outside the observed read");
+      const quote = text(ref.quote, "source quote", 6e3);
+      const excerpt = read.text.split(/\r?\n/).slice(first - read.startLine, last - read.startLine + 1).join("\n");
+      if (!excerpt.includes(quote)) throw new Error("Claim quote does not match the observed note range");
+      return {
+        path: source.path,
+        doi: source.doi,
+        zotero_key: source.zotero_key,
+        hash: source.hash,
+        start_line: first,
+        end_line: last,
+        quote,
+        ...ref.original_location ? { original_location: text(ref.original_location, "historical original location", 600) } : {},
+        reading_basis: "current-scope-literature-note",
+        originalFulltextReadThisTurn: false
+      };
+    });
+    return {
+      id: `claim-${index + 1}`,
+      claim,
+      relationship,
+      limitations,
+      ...binding.organism ? { organism: text(binding.organism, "organism", 600) } : {},
+      ...binding.method ? { method: text(binding.method, "method", 1e3) } : {},
+      sources: refs,
+      supportAssessment: "model-asserted-unreviewed",
+      provenanceChecked: true,
+      scientificallyVerified: false
+    };
+  });
+}
+function claimBindingRefs(bindings) {
+  return bindings.map(
+    (binding) => `${binding.claim} [${binding.relationship}] -> ${binding.sources.map((source) => `${source.path}:${source.start_line}-${source.end_line}`).join(", ") || "no supporting source"}; limitation: ${binding.limitations}`
+  );
+}
+var CLAIM_BINDING_SCHEMA = {
+  type: "array",
+  minItems: 1,
+  maxItems: 64,
+  items: {
+    type: "object",
+    properties: {
+      claim: { type: "string" },
+      relationship: { type: "string", enum: [...RELATIONSHIPS] },
+      organism: { type: "string" },
+      method: { type: "string" },
+      limitations: { type: "string" },
+      sources: {
+        type: "array",
+        maxItems: 12,
+        items: {
+          type: "object",
+          properties: {
+            path: { type: "string" },
+            start_line: { type: "integer", minimum: 1 },
+            end_line: { type: "integer", minimum: 1 },
+            quote: { type: "string" },
+            original_location: { type: "string" }
+          },
+          required: ["path", "start_line", "end_line", "quote"]
+        }
+      }
+    },
+    required: ["claim", "relationship", "limitations", "sources"]
+  }
+};
+
+// src/core/research-loop.ts
+var RESEARCH_STAGES = Object.freeze([
   "created",
   "local_query_recorded",
   "external_search_recorded",
   "sources_inspected",
   "sources_archived",
+  "sources_reused",
   "claims_bound",
   "answerable"
-];
-function sessionKey2(ctx) {
-  return String(ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || ctx?.cwd || "default");
-}
-function result2(details) {
-  return { content: [{ type: "text", text: JSON.stringify(details, null, 2) }], details };
-}
-function advance(run, stage, details = {}) {
-  const current = STAGES.indexOf(run.stage);
-  const next = STAGES.indexOf(stage);
-  if (next < current) throw new Error(`research run cannot move backwards: ${run.stage} -> ${stage}`);
-  run.stage = stage;
-  run.events.push({ type: stage, at: (/* @__PURE__ */ new Date()).toISOString(), ...details });
-}
-function snapshot(run) {
-  return {
-    run_dir: run.run_dir,
-    stage: run.stage,
-    answerable: run.stage === "answerable",
-    query: run.query,
-    result_slug: run.result_slug,
-    events: [...run.events]
-  };
-}
-function registerResearchLoop(pi) {
-  if (process.env.PI_SUBAGENT_CHILD === "1") return;
-  const sessions = /* @__PURE__ */ new Map();
-  const counters = /* @__PURE__ */ new Map();
-  const runsFor = (ctx) => {
-    const key = sessionKey2(ctx);
-    let runs = sessions.get(key);
-    if (!runs) {
-      runs = /* @__PURE__ */ new Map();
-      sessions.set(key, runs);
+]);
+var RESEARCH_DOCUMENT_KIND = "drone.research.run";
+function createResearchLoop(ports) {
+  const loadWorkspaceConfig = ports.workspace;
+  const verifyLiteratureReceipt2 = ports.verifyLiteratureReceipt;
+  const sourceStatus2 = ports.sourceStatus;
+  const runtimeState = {
+    receiptLedger: /* @__PURE__ */ new Map(),
+    receiptQueues: /* @__PURE__ */ new Map(),
+    dispose() {
+      this.receiptLedger.clear();
+      this.receiptQueues.clear();
     }
-    return runs;
   };
-  const nextRunDir = (ctx) => {
+  const runKey = (cwd, runDir) => resolve6(cwd, runDir);
+  function ledger(cwd, runDir) {
+    const key = runKey(cwd, runDir);
+    if (!runtimeState.receiptLedger.has(key)) {
+      if (runtimeState.receiptLedger.size >= 128)
+        runtimeState.receiptLedger.delete(runtimeState.receiptLedger.keys().next().value);
+      runtimeState.receiptLedger.set(key, { reads: /* @__PURE__ */ new Map(), verified: /* @__PURE__ */ new Map() });
+    }
+    return runtimeState.receiptLedger.get(key);
+  }
+  async function flushResearchReceipts({ cwd = process.cwd(), runDir } = {}) {
+    await runtimeState.receiptQueues.get(runKey(cwd, runDir));
+  }
+  function resetResearchReceipts({ cwd = process.cwd(), runDir } = {}) {
+    if (runDir) runtimeState.receiptLedger.delete(runKey(cwd, runDir));
+  }
+  async function reusableSources(cwd, runDir) {
+    const config = await loadWorkspaceConfig(cwd);
+    if (!config.obsidianVault) return [];
+    const root = await realpath4(config.obsidianVault);
+    const state = ledger(cwd, runDir), result2 = [];
+    for (const [path, proof] of state.verified) {
+      const read = state.reads.get(path);
+      if (!read || read.hash !== proof.obsidian?.hash || read.vault !== root || read.revision !== (config.knowledgeBindingRevision || 0) || proof.obsidian?.vault !== root)
+        continue;
+      const current = await verifyLiteratureReceipt2({
+        doi: proof.doi,
+        zotero_key: proof.zoteroKey,
+        note_path: path,
+        vault: root
+      });
+      if (current.status !== "both-verified" || current.obsidian.hash !== read.hash) continue;
+      result2.push({
+        path,
+        hash: read.hash,
+        doi: current.doi,
+        zotero_key: current.zoteroKey,
+        startLine: read.startLine,
+        endLine: read.endLine,
+        basis: "current-turn-literature-note-read-and-identity-check",
+        fulltext_status: current.zotero.fulltextStatus,
+        originalFulltextReadThisTurn: false,
+        evidence_profile: {
+          identity: "both-verified",
+          acquisition: current.zotero.fulltextStatus,
+          reading: {
+            kind: "literature-note",
+            scope: "current-turn",
+            startLine: read.startLine,
+            endLine: read.endLine
+          },
+          claimSupport: "not-assessed"
+        }
+      });
+    }
+    return result2;
+  }
+  async function validateReuse(cwd, runDir, gate) {
+    if (!gate.reuse_count) return;
+    const fresh = await reusableSources(cwd, runDir);
+    if (gate.reused_sources.length !== gate.reuse_count || gate.reused_sources.some(
+      (old) => !fresh.some(
+        (now) => now.path === old.path && now.hash === old.hash && now.doi === old.doi && now.zotero_key === old.zotero_key
+      )
+    ))
+      throw new Error(
+        "Reused source changed or current-turn receipt is missing; re-read and verify the existing note, do not re-import it"
+      );
+  }
+  async function validateStoredClaimBindings(cwd, runDir, gate) {
+    if (!Array.isArray(gate.claim_bindings) || gate.claim_bindings.length === 0)
+      throw new Error("Structured claim_bindings are required before answerable");
+    return validateClaimBindings(
+      gate.claim_bindings,
+      [...await reusableSources(cwd, runDir), ...await archivedSourceRecords(cwd, runDir)],
+      ledger(cwd, runDir).reads
+    );
+  }
+  function safeSlug(value, label) {
+    const text2 = String(value ?? "").trim();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(text2)) throw new Error(`${label} must be lowercase kebab-case`);
+    return text2;
+  }
+  function topicIdFromResultSlug(value) {
+    const slug = safeSlug(value || "research-question", "result_slug");
+    const stable = slug.replace(/-20\d{6}(?:\d{6})?$/, "").replace(/-run-\d+$/, "");
+    return stable || slug;
+  }
+  function within2(root, target) {
+    const rel = relative5(resolve6(root), resolve6(target));
+    return rel === "" || !isAbsolute4(rel) && rel !== ".." && !rel.startsWith(`..${sep5}`);
+  }
+  function fileHash(bytes) {
+    return createHash5("sha256").update(bytes).digest("hex");
+  }
+  async function archivedSourceRecords(cwd, runDir) {
+    const archive = await sourceStatus2({ cwd, run_dir: resolve6(cwd, runDir) });
+    const records = [];
+    for (const item of archive.manifest?.items || []) {
+      if (item.status !== "downloaded" || !item.path || !item.sha256) continue;
+      const absolute = resolve6(cwd, item.path);
+      if (!within2(join3(resolve6(cwd, runDir), "sources"), absolute)) continue;
+      try {
+        if (!within2(await realpath4(join3(resolve6(cwd, runDir), "sources")), await realpath4(absolute)))
+          continue;
+        if (fileHash(await readFile4(absolute)) !== item.sha256) continue;
+      } catch {
+        continue;
+      }
+      const aliases = /* @__PURE__ */ new Set([
+        String(item.path),
+        absolute,
+        relative5(cwd, absolute),
+        relative5(resolve6(cwd, runDir), absolute)
+      ]);
+      for (const path of aliases)
+        records.push({
+          path,
+          hash: String(item.sha256),
+          doi: item.metadata?.doi || item.doi,
+          zotero_key: item.metadata?.zotero_key || item.zotero_key
+        });
+    }
+    return records;
+  }
+  async function recordArchivedRead(cwd, runDir, path, args, details, content) {
+    const absolute = resolve6(cwd, path);
+    const sourcesRoot = join3(resolve6(cwd, runDir), "sources");
+    if (!within2(sourcesRoot, absolute)) return false;
+    if (!within2(await realpath4(sourcesRoot), await realpath4(absolute))) return false;
+    if (details.truncation?.firstLineExceedsLimit) return false;
+    const returned = details.truncation?.content ?? content?.find((part) => part.type === "text")?.text;
+    if (typeof returned !== "string" || !returned.trim()) return false;
+    const bytes = await readFile4(absolute);
+    const sourceText = bytes.toString("utf8");
+    if (sourceText.includes("\0") || sourceText.startsWith("%PDF-")) return false;
+    const startLine = Number.isInteger(args.offset) && args.offset > 0 ? args.offset : 1;
+    const selected = sourceText.split("\n").slice(startLine - 1, args.limit ? startLine - 1 + args.limit : void 0);
+    const visible = returned.split("\n");
+    const lines = [];
+    for (let index = 0; index < Math.min(selected.length, visible.length, 2e3); index++) {
+      const shown = visible[index] ?? "";
+      if (selected[index] !== shown || lines.join("\n").length + shown.length > 9e4) break;
+      lines.push(shown);
+    }
+    const text2 = lines.join("\n");
+    if (!text2.trim()) return false;
+    const read = { hash: fileHash(bytes), text: text2, startLine, endLine: startLine + lines.length - 1 };
+    const aliases = /* @__PURE__ */ new Set([
+      String(path),
+      absolute,
+      relative5(cwd, absolute),
+      relative5(resolve6(cwd, runDir), absolute)
+    ]);
+    for (const alias of aliases) ledger(cwd, runDir).reads.set(alias, read);
+    return true;
+  }
+  async function readJson(path) {
+    const value = JSON.parse(await readFile4(path, "utf8"));
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new Error(`Invalid JSON object: ${path}`);
+    if (path.endsWith("metadata.json") && !value.kind) {
+      return { ...value, kind: RESEARCH_DOCUMENT_KIND, version: 1 };
+    }
+    if (path.endsWith("metadata.json") && (value.kind !== RESEARCH_DOCUMENT_KIND || value.version !== 1))
+      throw new Error(`Unsupported research metadata document: ${path}`);
+    return value;
+  }
+  async function atomicJson(path, value) {
+    await mkdir3(dirname3(path), { recursive: true });
+    const temp = `${path}.${randomUUID2()}.tmp`;
+    await writeFile3(temp, `${JSON.stringify(value, null, 2)}
+`, "utf8");
+    await rename3(temp, path);
+  }
+  function gateOf(metadata) {
+    const gate = metadata.evidence_gate && typeof metadata.evidence_gate === "object" ? metadata.evidence_gate : {};
+    return {
+      stage: RESEARCH_STAGES.includes(gate.stage) ? gate.stage : "created",
+      status: gate.status === "failed" ? "failed" : "ok",
+      answerable: gate.answerable === true,
+      events: Array.isArray(gate.events) ? gate.events : [],
+      claim_refs: Array.isArray(gate.claim_refs) ? gate.claim_refs : [],
+      claim_bindings: Array.isArray(gate.claim_bindings) ? gate.claim_bindings : [],
+      warnings: gate.claim_refs?.length && !gate.claim_bindings?.length ? ["legacy-unstructured-claims: support not assessed"] : [],
+      source_refs: Array.isArray(gate.source_refs) ? gate.source_refs : [],
+      archive_count: Number(gate.archive_count) || 0,
+      reuse_count: Number(gate.reuse_count) || 0,
+      reused_sources: Array.isArray(gate.reused_sources) ? gate.reused_sources : [],
+      scientificallyVerified: false
+    };
+  }
+  function researchNodes(gate) {
+    const current = RESEARCH_STAGES.indexOf(gate.stage);
+    return RESEARCH_STAGES.map((id, index) => ({
+      id,
+      state: gate.answerable || index < current ? "completed" : index === current ? "current" : "pending",
+      observed: (gate.events || []).some((event) => event.type === id && !event.skipped)
+    }));
+  }
+  function provenanceFor(gate, status = "pending") {
+    return {
+      status,
+      source_refs: [...gate.source_refs],
+      claim_bindings: structuredClone(gate.claim_bindings),
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  function advance(gate, stage, details = {}) {
+    const current = RESEARCH_STAGES.indexOf(gate.stage);
+    const target = RESEARCH_STAGES.indexOf(stage);
+    if (target < 0) throw new Error(`Unknown research stage: ${stage}`);
+    if (target < current)
+      return {
+        ...gate,
+        events: [...gate.events, { type: stage, at: (/* @__PURE__ */ new Date()).toISOString(), repeated: true, ...details }]
+      };
+    return {
+      ...gate,
+      stage,
+      events: [...gate.events, { type: stage, at: (/* @__PURE__ */ new Date()).toISOString(), ...details }]
+    };
+  }
+  async function resolveRun(cwd, runDir) {
+    const config = await loadWorkspaceConfig(cwd);
+    if (!runDir) throw new Error("run_dir is required for this action");
+    const path = resolve6(cwd, runDir);
+    if (!within2(config.resultsRoot, path))
+      throw new Error("run_dir must stay inside the configured results root");
+    const rel = relative5(config.resultsRoot, path).split(sep5);
+    if (rel.length !== 2 || !rel[1]?.startsWith("run-"))
+      throw new Error("run_dir must be directly inside a result slug");
+    await access3(join3(path, "metadata.json"));
+    return { config, path, metadataPath: join3(path, "metadata.json") };
+  }
+  async function startResearchRun({
+    cwd = process.cwd(),
+    project,
+    resultSlug,
+    query,
+    requiresProvenance = false
+  } = {}) {
+    const config = await loadWorkspaceConfig(cwd);
+    project = safeSlug(project || await ports.resolveProject(cwd), "project");
+    resultSlug = safeSlug(resultSlug || "research-question", "result_slug");
+    if (typeof query !== "string" || !query.trim()) throw new Error("query is required");
+    const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+    const runId = `run-${stamp}-${randomUUID2().slice(0, 8)}`;
+    const runDir = join3(config.resultsRoot, resultSlug, runId);
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const metadata = {
+      kind: RESEARCH_DOCUMENT_KIND,
+      version: 1,
+      run_id: runId,
+      project,
+      result_slug: resultSlug,
+      topic_id: topicIdFromResultSlug(resultSlug),
+      query: query.trim(),
+      status: "running",
+      revision: 0,
+      requires_provenance: requiresProvenance === true,
+      started_at: now,
+      evidence_gate: {
+        stage: "created",
+        status: "ok",
+        answerable: false,
+        events: [{ type: "created", at: now }],
+        claim_refs: [],
+        source_refs: [],
+        archive_count: 0
+      },
+      research_nodes: researchNodes({ stage: "created", answerable: false, events: [{ type: "created" }] }),
+      provenance: provenanceFor({ source_refs: [], claim_bindings: [] })
+    };
+    await mkdir3(runDir, { recursive: true });
+    await atomicJson(join3(runDir, "metadata.json"), metadata);
+    return { run_dir: runDir, metadata };
+  }
+  async function updateResearchLoopUnlocked({
+    cwd = process.cwd(),
+    runDir,
+    action,
+    query,
+    sourceRefs = [],
+    claimRefs = [],
+    claimBindings = [],
+    outcome,
+    notes,
+    expectedRevision
+  } = {}) {
+    const { path, metadataPath } = await resolveRun(cwd, runDir);
+    const metadata = await readJson(metadataPath);
+    const revision = Number.isInteger(metadata.revision) ? metadata.revision : 0;
+    if (expectedRevision != null && Number(expectedRevision) !== revision)
+      throw new Error(`research run changed; expected revision ${expectedRevision}, found ${revision}`);
+    let gate = gateOf(metadata);
+    const detail = {
+      ...query ? { query: String(query).trim() } : {},
+      ...outcome ? { outcome } : {},
+      ...notes ? { notes } : {}
+    };
+    const requireStage = (stage) => {
+      if (RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf(stage))
+        throw new Error(`research loop must reach ${stage} before ${action}`);
+    };
+    if (action === "status") return { run_dir: path, metadata, evidence_gate: gate, revision };
+    if (action === "record_local") {
+      if (!query?.trim()) throw new Error("query is required");
+      gate = advance(gate, "local_query_recorded", detail);
+    } else if (action === "record_external") {
+      requireStage("local_query_recorded");
+      if (!query?.trim() && !notes?.trim())
+        throw new Error("record the external query or why external search was skipped");
+      gate = advance(gate, "external_search_recorded", detail);
+    } else if (action === "inspect_sources") {
+      requireStage("external_search_recorded");
+      if (!Array.isArray(sourceRefs) || sourceRefs.length === 0)
+        throw new Error("source_refs must list inspected original sources");
+      gate = advance(
+        { ...gate, source_refs: [.../* @__PURE__ */ new Set([...gate.source_refs, ...sourceRefs.map(String)])] },
+        "sources_inspected",
+        { ...detail, source_refs: sourceRefs }
+      );
+    } else if (action === "verify_archive") {
+      requireStage("sources_inspected");
+      const archive = await sourceStatus2({ cwd, run_dir: path, verify: true });
+      if (archive.verification && archive.verification.ok !== true) {
+        const failed = archive.verification.items?.filter((item) => item.ok !== true) || [];
+        throw new Error(
+          `Archived source verification failed: ${failed.map((item) => item.reason || item.path).join(", ") || "unknown"}`
+        );
+      }
+      const downloaded = (archive.manifest?.items || []).filter((item) => item.status === "downloaded");
+      const reused = await reusableSources(cwd, runDir);
+      if (!downloaded.length && !reused.length)
+        throw new Error(
+          "No available source: read an existing Library/Papers note this turn and verify its DOI/key with research_verify_literature, or archive an authorized new source. Do not repeat imports to clear this gate."
+        );
+      gate = advance(
+        { ...gate, archive_count: downloaded.length, reuse_count: reused.length, reused_sources: reused },
+        downloaded.length ? "sources_archived" : "sources_reused",
+        {
+          archived: downloaded.map((item) => ({ id: item.id, sha256: item.sha256, path: item.path })),
+          reused_sources: reused,
+          scientificallyVerified: false
+        }
+      );
+    } else if (action === "bind_claims") {
+      if (gate.stage === "sources_inspected") {
+        const available = await updateResearchLoopUnlocked({ cwd, runDir, action: "verify_archive" });
+        gate = available.evidence_gate;
+      }
+      requireStage("sources_archived");
+      await validateReuse(cwd, runDir, gate);
+      if (claimBindings.length) {
+        const checked = validateClaimBindings(
+          claimBindings,
+          [...await reusableSources(cwd, runDir), ...await archivedSourceRecords(cwd, runDir)],
+          ledger(cwd, runDir).reads
+        );
+        gate = { ...gate, claim_bindings: checked, warnings: [] };
+        claimRefs = claimBindingRefs(checked);
+      } else if (gate.claim_bindings.length) {
+        const checked = await validateStoredClaimBindings(cwd, runDir, gate);
+        gate = { ...gate, claim_bindings: checked, claim_refs: claimBindingRefs(checked), warnings: [] };
+        claimRefs = claimBindingRefs(checked);
+      } else if (claimRefs.length) {
+        throw new Error(
+          "Structured claim_bindings are required; legacy claim_refs cannot make a run answerable"
+        );
+      }
+      if (!Array.isArray(gate.claim_bindings) || gate.claim_bindings.length === 0)
+        throw new Error("Structured claim_bindings must contain at least one validated claim");
+      gate = advance({ ...gate, claim_refs: [...new Set(claimRefs.map(String))] }, "claims_bound", {
+        claim_refs: claimRefs
+      });
+    } else if (action === "finalize") {
+      requireStage("claims_bound");
+      await validateReuse(cwd, runDir, gate);
+      const checked = await validateStoredClaimBindings(cwd, runDir, gate);
+      const refs = claimBindingRefs(checked);
+      if (gate.archive_count + gate.reuse_count < 1 || !refs.length)
+        throw new Error("archive verification and structured claim bindings are required before answerable");
+      if (metadata.requires_provenance === true) {
+        const provenance = await readJson(join3(path, "reproducibility-manifest.json"));
+        if (provenance?.version !== 1)
+          throw new Error("This run requires a reproducibility manifest before it can become answerable");
+      }
+      gate = advance(
+        { ...gate, claim_bindings: checked, claim_refs: refs, warnings: [], status: "ok", answerable: true },
+        "answerable",
+        detail
+      );
+    } else if (action === "complete") {
+      return completeResearchGate({ cwd, runDir, claimRefs, claimBindings });
+    } else {
+      throw new Error(`unknown research_loop action: ${action}`);
+    }
+    metadata.evidence_gate = gate;
+    metadata.research_nodes = researchNodes(gate);
+    metadata.provenance = provenanceFor(gate, gate.answerable ? "host-verified" : "pending");
+    if (gate.answerable) {
+      metadata.status = "completed";
+      metadata.finalized_at = metadata.finalized_at || (/* @__PURE__ */ new Date()).toISOString();
+    }
+    metadata.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    metadata.revision = revision + 1;
+    await atomicJson(metadataPath, metadata);
+    return { run_dir: path, evidence_gate: gate, revision: metadata.revision };
+  }
+  async function updateResearchLoop(input = {}) {
+    const cwd = input.cwd || process.cwd();
+    const key = runKey(cwd, input.runDir);
+    const work = () => updateResearchLoopUnlocked(input);
+    if (input.action === "complete" || !ports.exclusive) return work();
+    return ports.exclusive(key, work);
+  }
+  function isWikiPath(path) {
+    return /(?:^|[\\/])Wiki[\\/]/i.test(String(path || ""));
+  }
+  async function ensureStage(cwd, runDir, stage, fill) {
+    const current = await updateResearchLoop({ cwd, runDir, action: "status" });
+    if (RESEARCH_STAGES.indexOf(current.evidence_gate.stage) >= RESEARCH_STAGES.indexOf(stage))
+      return current;
+    return fill();
+  }
+  async function completeResearchGate({
+    cwd = process.cwd(),
+    runDir,
+    claimRefs = [],
+    claimBindings = []
+  } = {}) {
+    let status = await updateResearchLoop({ cwd, runDir, action: "status" });
+    let gate = status.evidence_gate;
+    await validateReuse(cwd, runDir, gate);
+    if (RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf("sources_inspected"))
+      throw new Error("research loop must inspect sources before complete");
+    if (RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf("sources_archived"))
+      status = await updateResearchLoop({ cwd, runDir, action: "verify_archive" });
+    gate = status.evidence_gate;
+    if (!claimBindings.length && !gate.claim_bindings.length)
+      throw new Error(
+        "Provide structured claim_bindings; legacy claim_refs cannot make a research run answerable"
+      );
+    if (claimBindings.length || RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf("claims_bound"))
+      status = await updateResearchLoop({
+        cwd,
+        runDir,
+        action: "bind_claims",
+        claimRefs,
+        claimBindings
+      });
+    gate = status.evidence_gate;
+    status = await updateResearchLoop({ cwd, runDir, action: "finalize" });
+    return status;
+  }
+  function observeResearchReceipt(options = {}) {
+    if (!options.runDir) return Promise.resolve(null);
+    const key = runKey(options.cwd || process.cwd(), options.runDir);
+    const work = (runtimeState.receiptQueues.get(key) || Promise.resolve()).catch(() => {
+    }).then(() => observeReceipt(options));
+    runtimeState.receiptQueues.set(key, work);
+    void work.finally(() => {
+      if (runtimeState.receiptQueues.get(key) === work) runtimeState.receiptQueues.delete(key);
+    }).catch(() => {
+    });
+    return work;
+  }
+  async function observeReceipt({
+    cwd = process.cwd(),
+    runDir,
+    toolName,
+    args = {},
+    details = {},
+    content = [],
+    isError = false,
+    readBinding
+  } = {}) {
+    if (isError || !runDir || !toolName) return null;
+    try {
+      if (toolName === "research_reconcile_literature")
+        return observeReceipt({
+          cwd,
+          runDir,
+          toolName: "research_verify_literature",
+          args,
+          details: details.receipt || {},
+          isError
+        });
+      const query = String(args.query || details.query || "").trim();
+      if (toolName === "research_search_knowledge" && query && details.complete !== false)
+        return await updateResearchLoop({ cwd, runDir, action: "record_local", query });
+      if (["webfetch", "fetch_content", "web_search"].includes(toolName)) {
+        const url = String(args.url || details.url || query).trim();
+        if (!url) return null;
+        await ensureStage(
+          cwd,
+          runDir,
+          "local_query_recorded",
+          () => updateResearchLoop({ cwd, runDir, action: "record_local", query: url })
+        );
+        return await updateResearchLoop({
+          cwd,
+          runDir,
+          action: "record_external",
+          query: url,
+          notes: String(details.title || "")
+        });
+      }
+      if (toolName === "research_read_knowledge") {
+        const path = String(args.path || details.path || "");
+        if (!path || isWikiPath(path) || details.missing === true) return null;
+        await ensureStage(
+          cwd,
+          runDir,
+          "local_query_recorded",
+          () => updateResearchLoop({ cwd, runDir, action: "record_local", query: path })
+        );
+        await ensureStage(
+          cwd,
+          runDir,
+          "external_search_recorded",
+          () => updateResearchLoop({
+            cwd,
+            runDir,
+            action: "record_external",
+            notes: "Host: no extra web search before inspecting current sources."
+          })
+        );
+        if (/^Library\/Papers\/.+\.md$/.test(path) && /^[a-f0-9]{64}$/i.test(details.hash || "") && typeof details.text === "string" && details.text.trim() && Number.isInteger(details.startLine) && details.endLine >= details.startLine) {
+          const config = await loadWorkspaceConfig(cwd);
+          if (config.obsidianVault)
+            ledger(cwd, runDir).reads.set(path, {
+              hash: details.hash,
+              text: details.text,
+              vault: readBinding ? readBinding.vault : await realpath4(config.obsidianVault),
+              revision: readBinding ? readBinding.revision : config.knowledgeBindingRevision || 0,
+              startLine: details.startLine,
+              endLine: details.endLine
+            });
+        }
+        const inspected = await updateResearchLoop({
+          cwd,
+          runDir,
+          action: "inspect_sources",
+          sourceRefs: [path]
+        });
+        if ((await reusableSources(cwd, runDir)).length)
+          return await updateResearchLoop({ cwd, runDir, action: "verify_archive" });
+        return inspected;
+      }
+      if (toolName === "read") {
+        const path = String(args.path || details.path || "");
+        if (!path || details.missing === true) return null;
+        const archived = await recordArchivedRead(cwd, runDir, path, args, details, content);
+        if (!archived) return null;
+        await ensureStage(
+          cwd,
+          runDir,
+          "local_query_recorded",
+          () => updateResearchLoop({ cwd, runDir, action: "record_local", query: path })
+        );
+        await ensureStage(
+          cwd,
+          runDir,
+          "external_search_recorded",
+          () => updateResearchLoop({
+            cwd,
+            runDir,
+            action: "record_external",
+            notes: "Host recorded a read of the archived run source."
+          })
+        );
+        return updateResearchLoop({ cwd, runDir, action: "inspect_sources", sourceRefs: [path] });
+      }
+      if (toolName === "research_verify_literature" && details.status === "both-verified" && details.obsidian?.status === "verified" && details.zotero?.status === "verified") {
+        const path = details.obsidian.path;
+        if (!/^Library\/Papers\/.+\.md$/.test(path || "")) return null;
+        ledger(cwd, runDir).verified.set(path, structuredClone(details));
+        if ((await reusableSources(cwd, runDir)).length)
+          return await updateResearchLoop({ cwd, runDir, action: "verify_archive" });
+        return null;
+      }
+      if (toolName === "research_archive_source" && details.status === "downloaded") {
+        const ref = String(details.path || details.url || args.url || "");
+        if (!ref) return null;
+        await ensureStage(
+          cwd,
+          runDir,
+          "local_query_recorded",
+          () => updateResearchLoop({ cwd, runDir, action: "record_local", query: ref })
+        );
+        await ensureStage(
+          cwd,
+          runDir,
+          "external_search_recorded",
+          () => updateResearchLoop({
+            cwd,
+            runDir,
+            action: "record_external",
+            query: String(args.url || details.url || ref),
+            notes: "Host recorded the archived source URL as the external lookup."
+          })
+        );
+        await updateResearchLoop({ cwd, runDir, action: "inspect_sources", sourceRefs: [ref] });
+        const archived = await updateResearchLoop({ cwd, runDir, action: "verify_archive" });
+        return archived;
+      }
+      if (toolName === "research_deposit_knowledge" && details.type === "claim" && details.note) return null;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+  return {
+    startResearchRun,
+    updateResearchLoop,
+    completeResearchGate,
+    observeResearchReceipt,
+    flushResearchReceipts,
+    resetResearchReceipts,
+    topicIdFromResultSlug,
+    dispose: () => runtimeState.dispose()
+  };
+}
+
+// src/core/run-provenance.ts
+import { createHash as createHash6, randomUUID as randomUUID3 } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { lstat, readFile as readFile5, realpath as realpath5, rename as rename4, stat as stat3, writeFile as writeFile4 } from "node:fs/promises";
+import { isAbsolute as isAbsolute5, join as join4, relative as relative6, resolve as resolve7, sep as sep6 } from "node:path";
+var queues = /* @__PURE__ */ new Map();
+var digest = (value) => createHash6("sha256").update(value).digest("hex");
+var defaultWorkspaceConfig = async (cwd) => ({
+  resultsRoot: resolve7(cwd, "results")
+});
+function within(root, path) {
+  const rel = relative6(root, path);
+  return rel !== ".." && !rel.startsWith(`..${sep6}`) && !isAbsolute5(rel);
+}
+async function runPath(cwd, runDir, loadConfig) {
+  const config = await loadConfig(cwd);
+  const root = await realpath5(config.resultsRoot);
+  const run = await realpath5(resolve7(cwd, runDir || ""));
+  const parts = relative6(root, run).split(sep6);
+  if (!within(root, run) || parts.length !== 2 || !parts[1]?.startsWith("run-")) {
+    throw new Error("Expected existing run inside results root");
+  }
+  await readFile5(join4(run, "metadata.json"), "utf8");
+  return run;
+}
+async function readObservations(path) {
+  try {
+    const info3 = await lstat(path);
+    if (!info3.isFile() || info3.isSymbolicLink() || info3.size > 2 * 1024 * 1024) {
+      throw new Error("Invalid observation file");
+    }
+    const data = JSON.parse(await readFile5(path, "utf8"));
+    if (data.version !== 1 || !Array.isArray(data.records) || data.records.length > 256 || data.records.some(
+      (record) => !record || typeof record.toolCallId !== "string"
+    )) {
+      throw new Error("Invalid observation records");
+    }
+    return data.records;
+  } catch (error) {
+    if (isNodeError(error, "ENOENT")) return [];
+    throw error;
+  }
+}
+async function atomic(path, value) {
+  const temp = `${path}.${randomUUID3()}.tmp`;
+  await writeFile4(temp, JSON.stringify(value, null, 2));
+  await rename4(temp, path);
+}
+function isNodeError(error, code) {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
+}
+async function observeExecutionReceipt({
+  cwd,
+  runDir,
+  toolCallId,
+  toolName,
+  sessionId = null,
+  args = {},
+  details = {},
+  isError = false,
+  observedAt,
+  loadWorkspaceConfig = defaultWorkspaceConfig
+}) {
+  if (!["bash", "powershell"].includes(toolName) || !toolCallId) return null;
+  const run = await runPath(cwd, runDir, loadWorkspaceConfig);
+  const file = join4(run, "execution-observations.json");
+  const work = (queues.get(file) || Promise.resolve()).catch(() => {
+  }).then(async () => {
+    let records = [];
+    try {
+      records = await readObservations(file);
+    } catch (error) {
+      if (!isNodeError(error, "ENOENT")) throw error;
+    }
+    if (records.some((record) => record.toolCallId === toolCallId)) return;
+    const code = details.exitCode ?? details.exit_code;
+    records.push({
+      toolCallId,
+      toolName,
+      sessionId,
+      observedAt: observedAt || (/* @__PURE__ */ new Date()).toISOString(),
+      cwd,
+      commandSha256: digest(String(args.command || args.cmd || "")),
+      commandLocation: "original-session-tool-call",
+      resultDetailsSha256: digest(JSON.stringify(details)),
+      outcome: isError ? "failed-or-blocked" : "tool-returned",
+      exitCode: Number.isInteger(code) ? Number(code) : null,
+      executionConfirmed: !isError && Number.isInteger(code),
+      qcVerified: false
+    });
+    await atomic(file, { version: 1, records: records.slice(-256), scientificallyVerified: false });
+  });
+  queues.set(file, work);
+  void work.finally(() => {
+    if (queues.get(file) === work) queues.delete(file);
+  }).catch(() => {
+  });
+  return work.then(() => void 0);
+}
+
+// src/extension.ts
+var CLAIM_BINDING_SCHEMA2 = {
+  type: "array",
+  maxItems: 24,
+  items: { type: "object", additionalProperties: true }
+};
+var USER_QUESTION_FOCUS = "Answer the user's current question. Use evidence for factual research claims, not unrelated citations for ordinary chat. For a simple factual question that can be answered from existing local knowledge, take the light path: retrieve, answer, and auto-deposit a bounded note when appropriate; do not create a task_plan or ask for write authorization just to answer. For substantive tasks, do bounded read-only preparation and consolidate scope, assumptions, needed permissions and deliverables into one task_plan for one user authorization. After authorization, carry out routine steps and recoverable checks within that scope without repeatedly asking whether to continue. Respect prior decisions, especially declined installs. New risks or scope, missing credentials and genuinely unavailable user data still require a specific request; never infer consent. At completion, explain what changed, link actual outputs or show key figures, separate execution from validation, and give one next step only if needed. Keep internal counters and tool logs out of the main answer.";
+function sessionKey2(ctx) {
+  return ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || ctx?.cwd || "";
+}
+function registerResearchExtension(pi, ports) {
+  if (process.env.PI_SUBAGENT_CHILD === "1") return;
+  const state = { journals: /* @__PURE__ */ new Map(), pending: /* @__PURE__ */ new Map(), awaitingUserStart: /* @__PURE__ */ new Set() };
+  const owners = /* @__PURE__ */ new Map();
+  const loop = createResearchLoop(ports);
+  const run = ports.run;
+  const journalPorts = {
+    workspace: ports.workspace,
+    status: async (cwd, runDir) => loop.updateResearchLoop({ cwd, runDir, action: "status" }),
+    flush: async (cwd, runDir) => loop.flushResearchReceipts({ cwd, runDir }),
+    reset: (cwd, runDir) => loop.resetResearchReceipts({ cwd, runDir }),
+    observeExecution: (event) => observeExecutionReceipt(event),
+    observeResearch: (event) => loop.observeResearchReceipt(event),
+    owners
+  };
+  const journalFor = (ctx) => {
     const key = sessionKey2(ctx);
-    const next = (counters.get(key) || 0) + 1;
-    counters.set(key, next);
-    return `.pi/research-runs/${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/gu, "-")}-${next}-${randomUUID().slice(0, 8)}`;
+    let journal = state.journals.get(key);
+    if (!journal) {
+      journal = createResearchReceiptJournal(ctx.cwd, {
+        sessionId: key,
+        ports: journalPorts
+      });
+      state.journals.set(key, journal);
+    }
+    return journal;
   };
-  pi.registerTool({
+  ports.registerTool(pi, {
     name: "research_loop",
     label: "Research evidence loop",
-    description: "Create or inspect a host-neutral research evidence receipt. Host adapters provide source retrieval and persistence; this lifecycle records the monotonic stages and current-session run ledger.",
-    drone: { libraryMode: true, recoverySafe: true, capabilities: ["research"] },
+    drone: {
+      libraryMode: true,
+      recoverySafe: true,
+      capabilities: ["research"],
+      activity: { text: "\u6B63\u5728\u68C0\u67E5\u7814\u7A76\u8BC1\u636E\u94FE\u2026", phase: "verification" }
+    },
+    description: "Create or inspect a scientific evidence gate. Prefer start and status; the host advances search, inspection, archive, claims and finalize from successful tools. Structured claim_bindings with observed source excerpts are required before complete/finalize; claim_refs alone do not establish support.",
     parameters: {
       type: "object",
       properties: {
@@ -100423,52 +101643,205 @@ function registerResearchLoop(pi) {
           ]
         },
         run_dir: { type: "string" },
-        query: { type: "string" },
+        project: {
+          type: "string",
+          description: "Optional. The host resolves the project from the workspace (or the daily-space session choice); a different value is ignored."
+        },
         result_slug: { type: "string" },
-        outcome: { type: "string" }
+        query: { type: "string" },
+        requires_provenance: { type: "boolean" },
+        source_refs: { type: "array", items: { type: "string" } },
+        claim_refs: { type: "array", items: { type: "string" } },
+        claim_bindings: CLAIM_BINDING_SCHEMA2,
+        outcome: { type: "string" },
+        notes: { type: "string" }
       },
       required: ["action"]
     },
     async execute(_id, params, _signal, _update, ctx) {
-      const action = String(params?.action || "");
-      const runs = runsFor(ctx);
-      if (action === "status" && !params?.run_dir) {
-        const current = [...runs.values()].at(-1);
-        return result2(current ? snapshot(current) : { run_dir: null, stage: "not-started", answerable: false });
-      }
-      if (action === "start") {
-        const run2 = {
-          run_dir: String(params?.run_dir || nextRunDir(ctx)),
-          stage: "created",
-          events: [],
-          query: String(params?.query || "").trim() || void 0,
-          result_slug: String(params?.result_slug || "").trim() || void 0
+      return run(async () => {
+        const journal = journalFor(ctx);
+        const runDir = params.run_dir || journal.currentRun();
+        if (params.action === "status" && !runDir) {
+          const value = {
+            run_dir: null,
+            evidence_gate: { stage: "not-started", answerable: false },
+            next_action: "start",
+            guidance: "Call research_loop(action=start,query=the research question)."
+          };
+          return { content: [{ type: "text", text: JSON.stringify(value) }], details: value };
+        }
+        const projectResolution = params.action === "start" ? await ports.resolveSessionProject(ctx, params.project) : null;
+        const result2 = await journal.execute(
+          runDir,
+          async () => params.action === "start" ? loop.startResearchRun({
+            cwd: ctx.cwd,
+            project: projectResolution?.project,
+            resultSlug: params.result_slug,
+            query: params.query,
+            requiresProvenance: params.requires_provenance === true
+          }) : loop.updateResearchLoop({
+            cwd: ctx.cwd,
+            runDir,
+            action: params.action,
+            query: params.query,
+            sourceRefs: params.source_refs || [],
+            claimRefs: params.claim_refs || [],
+            claimBindings: params.claim_bindings || [],
+            outcome: params.outcome,
+            notes: params.notes
+          })
+        );
+        const gate = result2?.evidence_gate;
+        const visible = params.action === "status" ? result2 : {
+          run_dir: result2?.run_dir,
+          topic_id: result2?.metadata?.topic_id,
+          evidence_gate: gate && {
+            stage: gate.stage,
+            answerable: gate.answerable,
+            archive_count: gate.archive_count,
+            reuse_count: gate.reuse_count,
+            source_refs: gate.source_refs,
+            claim_count: gate.claim_refs.length,
+            structured_claim_count: gate.claim_bindings.length,
+            warnings: gate.warnings,
+            scientificallyVerified: false
+          },
+          receipt_journal: result2?.receipt_journal,
+          ...projectResolution ? { project: ports.describeProject(projectResolution) } : {}
         };
-        if (!run2.query) throw new Error("query is required when starting a research run");
-        runs.set(run2.run_dir, run2);
-        return result2(snapshot(run2));
-      }
-      const runDir = String(params?.run_dir || "");
-      const run = runs.get(runDir);
-      if (!run) throw new Error("run_dir must come from research_loop(action=start) in this session");
-      if (action === "status") return result2(snapshot(run));
-      const transitions = {
-        record_local: "local_query_recorded",
-        record_external: "external_search_recorded",
-        inspect_sources: "sources_inspected",
-        verify_archive: "sources_archived",
-        bind_claims: "claims_bound",
-        finalize: "answerable",
-        complete: "answerable"
-      };
-      const stage = transitions[action];
-      if (!stage) throw new Error(`unsupported research_loop action: ${action}`);
-      if ((action === "finalize" || action === "complete") && run.stage !== "claims_bound" && run.stage !== "answerable")
-        throw new Error("research run cannot finalize before claims are bound");
-      advance(run, stage, params?.outcome ? { outcome: String(params.outcome) } : {});
-      return result2(snapshot(run));
+        return { content: [{ type: "text", text: JSON.stringify(visible, null, 2) }], details: result2 };
+      });
     }
   });
+  const on = pi.on?.bind(pi);
+  on?.(
+    "tool_execution_start",
+    (event, ctx) => run(() => {
+      if (state.pending.size > 256) state.pending.delete(state.pending.keys().next().value);
+      state.pending.set(`${sessionKey2(ctx)}:${event.toolCallId}`, {
+        args: event.args || {},
+        journal: journalFor(ctx),
+        key: sessionKey2(ctx)
+      });
+    })
+  );
+  on?.(
+    "tool_execution_end",
+    (event, ctx) => run(async () => {
+      const started = state.pending.get(`${sessionKey2(ctx)}:${event.toolCallId}`);
+      state.pending.delete(`${sessionKey2(ctx)}:${event.toolCallId}`);
+      if (!started || started.key !== sessionKey2(ctx) || started.journal !== state.journals.get(started.key) || event.toolName === "research_loop")
+        return;
+      await started.journal.record({
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        args: started.args,
+        details: event.result?.details || {},
+        ...event.toolName === "read" ? { content: event.result?.content || [] } : {},
+        isError: !!event.isError
+      });
+    })
+  );
+  on?.(
+    "before_agent_start",
+    (event, ctx) => run(async () => {
+      const key = sessionKey2(ctx);
+      state.awaitingUserStart.add(key);
+      const previous = state.journals.get(key);
+      state.journals.set(
+        key,
+        createResearchReceiptJournal(ctx.cwd, {
+          sessionId: key,
+          ports: journalPorts
+        })
+      );
+      state.pending.forEach((item, id) => {
+        if (item.key === key) state.pending.delete(id);
+      });
+      await previous?.close();
+      return {
+        systemPrompt: `${event.systemPrompt}
+
+For substantive research, use research_loop(action=start) when a tracked run is needed. The host checks provenance, not scientific truth. ${USER_QUESTION_FOCUS}`
+      };
+    })
+  );
+  on?.("message_start", (event, ctx) => {
+    if (event.message?.role !== "user") return;
+    return run(async () => {
+      const key = sessionKey2(ctx);
+      if (state.awaitingUserStart.delete(key)) return;
+      await state.journals.get(key)?.close();
+      state.journals.delete(key);
+    });
+  });
+  on?.(
+    "session_shutdown",
+    (_event, ctx) => run(async () => {
+      const key = sessionKey2(ctx);
+      await state.journals.get(key)?.close();
+      state.journals.delete(key);
+      state.pending.forEach((item, id) => {
+        if (item.key === key) state.pending.delete(id);
+      });
+      if (state.journals.size === 0) loop.dispose();
+    })
+  );
+}
+
+// src/research-loop.ts
+async function workspace(cwd) {
+  let config = {};
+  try {
+    config = JSON.parse(await readFile6(join5(cwd, ".pi/research-workspace.json"), "utf8"));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  if (!config || typeof config !== "object" || Array.isArray(config)) throw new Error("Invalid research workspace configuration");
+  if (config.resultsRoot !== void 0 && typeof config.resultsRoot !== "string") throw new Error("resultsRoot must be a path");
+  if (config.obsidianVault != null && typeof config.obsidianVault !== "string") throw new Error("obsidianVault must be a path");
+  if (config.knowledgeBindingRevision !== void 0 && !Number.isInteger(config.knowledgeBindingRevision)) throw new Error("knowledgeBindingRevision must be an integer");
+  return {
+    resultsRoot: resolve8(cwd, config.resultsRoot ?? "results"),
+    obsidianVault: config.obsidianVault ? resolve8(cwd, config.obsidianVault) : null,
+    knowledgeBindingRevision: config.knowledgeBindingRevision ?? 0
+  };
+}
+function registerResearchLoop(pi) {
+  let tail = Promise.resolve();
+  const run = async (operation) => {
+    const previous = tail;
+    let unlock;
+    tail = new Promise((resolve9) => {
+      unlock = resolve9;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      unlock();
+    }
+  };
+  const resolveProject = async (cwd) => basename4(resolve8(cwd)).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "research-project";
+  const ports = {
+    workspace,
+    resolveProject,
+    resolveSessionProject: async (ctx) => ({ project: await resolveProject(ctx.cwd) }),
+    describeProject: (resolution) => resolution,
+    registerTool: (host, tool) => host.registerTool(tool),
+    run,
+    verifyLiteratureReceipt: (input) => verifyLiteratureReceipt(input),
+    sourceStatus: (input) => sourceStatus(input, {
+      workspace,
+      exclusive: (_key, work) => work(),
+      // Tool execution is already serialized by run.
+      publishSourceNote: async () => {
+        throw new Error("Native research status cannot publish a source note");
+      }
+    })
+  };
+  registerResearchExtension(pi, ports);
 }
 
 // src/index.ts

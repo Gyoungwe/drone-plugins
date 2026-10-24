@@ -15,6 +15,6 @@ const ctx = {cwd: workspace, sessionId: "smoke"};
 const search = await tools.get("research_search_sources").execute("smoke", {query: "source", source_dir: "."}, new AbortController().signal, () => undefined, ctx);
 assert.equal(search.details.count, 1);
 const run = await tools.get("research_loop").execute("smoke", {action: "start", query: "source"}, new AbortController().signal, () => undefined, ctx);
-assert.equal(run.details.stage, "created");
+assert.equal(run.details.evidence_gate.stage, "created");
 await rm(workspace, {recursive: true, force: true});
-console.log(JSON.stringify({registered: [...tools.keys()], searchCount: search.details.count, lifecycleStage: run.details.stage}));
+console.log(JSON.stringify({registered: [...tools.keys()], searchCount: search.details.count, lifecycleStage: run.details.evidence_gate.stage}));
