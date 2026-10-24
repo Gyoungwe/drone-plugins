@@ -47,7 +47,6 @@ const collectFiles = async (directory) => {
 };
 
 if (packageJson.name !== "@gyoungwe/pi-knowledge") fail(`unexpected package name: ${packageJson.name}`);
-if (packageJson.version !== "0.2.0") fail("pi-knowledge version must be 0.2.0 for P2");
 if (packageJson.main !== "./dist/index.mjs") fail("main must point at the bundled extension");
 if (packageJson.peerDependencies?.["@earendil-works/pi-coding-agent"] !== ">=1.1.0 <2.0.0")
 	fail("Pi peer dependency must remain >=1.1.0 <2.0.0");

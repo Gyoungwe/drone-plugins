@@ -14,3 +14,18 @@ describe("recentByCategory", () => {
 		expect(groups.software).toEqual([]);
 	});
 });
+
+it.each([
+	["Library/Methods/mapping-tools.md", "method", "method"],
+	["Library/Software/paper-mapping.md", "method", "method"],
+	["Library/Methods/paper-analysis.md", "software", "software"],
+	["Library/Ideas/tool-protocol.md", "idea", "idea"],
+	["Library/Papers/tool-protocol.md", "paper", "paper"],
+	["Library/Methods/mapping-tools.md", "", "method"],
+	["Library/Software/paper-protocol.md", "", "software"],
+	["Inbox/mapping-tools.md", "", "software"],
+	["Library/Concepts/mapping-tools.md", "concept", "other"],
+])("classifies %s with type %s as %s", (path, type, category) => {
+	const groups = recentByCategory([{ path, title: "Mapping tools", kind: "note", signature: "1:x", body: type ? `---\ntype: ${type}\n---\n` : "# Mapping tools" }]);
+	for (const [key, notes] of Object.entries(groups)) expect(notes.map((note) => note.path)).toEqual(key === category ? [path] : []);
+});

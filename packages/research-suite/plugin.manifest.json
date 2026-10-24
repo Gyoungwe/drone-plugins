@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "drone-research-suite",
-	"version": "0.1.9",
+	"version": "0.1.10",
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",

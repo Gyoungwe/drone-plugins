@@ -9,9 +9,9 @@ Show Me skills, so the suite exposes one copy of each skill. `pi-core` also
 provides the stable `/drone-doctor` and `/drone-example` onboarding commands;
 the latter is read-only unless the user explicitly supplies `--run <question>`.
 
-## 0.1.9 source release
+## 0.1.10 source release
 
-This candidate pins `pi-core@0.1.8`, `pi-knowledge@0.2.0`, and
+This candidate pins `pi-core@0.1.8`, `pi-knowledge@0.2.1`, and
 `pi-research@0.2.0`. The research package contains the complete evidence journal,
 source archive, claim checks, provenance and Zotero domain implementation. Its
 `/host` export and declarations are included in the aggregate tarball; the suite
@@ -22,4 +22,4 @@ writes and installations still require the host authorization flow.
 Run `npm run build`, `npm run build:check`, and `npm test` in this package after
 building its workspace dependencies. The checks verify exact versions, resource
 paths, tool registration and rejection of unsupported research claims. This
-source update is not evidence that version 0.1.9 has been published to npm.
+source update is not evidence that version 0.1.10 has been published to npm.

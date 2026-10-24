@@ -1,4 +1,6 @@
-export type KnowledgeCategory = "paper" | "software" | "method" | "idea";
+import { type KnowledgeCategory, noteCategory } from "./note-category.js";
+
+export type { KnowledgeCategory } from "./note-category.js";
 
 export interface RecentCategoryRow {
 	path: string;
@@ -6,16 +8,6 @@ export interface RecentCategoryRow {
 	kind: string;
 	signature: string;
 	body: string;
-}
-
-function noteCategory(row: Pick<RecentCategoryRow, "path" | "body">): KnowledgeCategory | "other" {
-	const type = String(parseFrontmatter(row.body).data?.type || "").toLowerCase();
-	const value = `${type}/${row.path.toLowerCase()}`;
-	if (/paper|literature|文献|论文/.test(value)) return "paper";
-	if (/software|tool|软件/.test(value)) return "software";
-	if (/method|protocol|方法/.test(value)) return "method";
-	if (/idea|hypothes|想法|假设/.test(value)) return "idea";
-	return "other";
 }
 
 export function recentByCategory(
@@ -45,5 +37,4 @@ export function recentByCategory(
 			.slice(0, max);
 	return groups;
 }
-import { parseFrontmatter } from "./ingest-frontmatter.js";
 

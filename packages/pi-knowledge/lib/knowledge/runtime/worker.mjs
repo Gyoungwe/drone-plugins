@@ -779,16 +779,27 @@ function createRevisionCache() {
   };
 }
 
-// src/core/recent-by-category.ts
-function noteCategory(row) {
-  const type = String(parseFrontmatter(row.body).data?.type || "").toLowerCase();
-  const value = `${type}/${row.path.toLowerCase()}`;
+// src/core/note-category.ts
+function keywordCategory(value) {
   if (/paper|literature|文献|论文/.test(value)) return "paper";
   if (/software|tool|软件/.test(value)) return "software";
   if (/method|protocol|方法/.test(value)) return "method";
   if (/idea|hypothes|想法|假设/.test(value)) return "idea";
   return "other";
 }
+function noteCategory(row) {
+  const type = String(parseFrontmatter(row.body).data?.type || "").trim().toLowerCase();
+  if (type) return keywordCategory(type);
+  const segments = row.path.toLowerCase().split("/");
+  const filename = segments.pop();
+  for (const directory of segments.reverse()) {
+    if (/^(papers?|literature|文献|论文|software|tools?|软件|methods?|protocols?|方法|ideas?|hypotheses|想法|假设)$/.test(directory))
+      return keywordCategory(directory);
+  }
+  return keywordCategory(filename);
+}
+
+// src/core/recent-by-category.ts
 function recentByCategory(rows, limit = 10) {
   const groups = {
     paper: [],
@@ -1193,19 +1204,10 @@ function status() {
     }
   };
 }
-function noteCategory2(row) {
-  const type = String(parseFrontmatter(row.body)?.data?.type || "").toLowerCase();
-  const value = `${type}/${String(row.path).toLowerCase()}`;
-  if (/paper|literature|文献|论文/.test(value)) return "paper";
-  if (/software|tool|软件/.test(value)) return "software";
-  if (/method|protocol|方法/.test(value)) return "method";
-  if (/idea|hypothes|想法|假设/.test(value)) return "idea";
-  return "other";
-}
 function categoryCounts() {
   const counts = { paper: 0, software: 0, method: 0, idea: 0, other: 0 };
   for (const row of db.prepare("SELECT path,body,kind FROM notes WHERE kind IN ('note','wiki')").all())
-    counts[noteCategory2(row)]++;
+    counts[noteCategory(row)]++;
   return counts;
 }
 function semanticStatus(fingerprint = null, project = null) {

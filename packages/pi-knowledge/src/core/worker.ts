@@ -24,6 +24,7 @@ import { parseFrontmatter } from "./ingest-frontmatter.js";
 import { noteDisplayTitle } from "./note-title.js";
 import { createSemanticModel } from "./semantic-model.js";
 import { createRevisionCache } from "./graph-cache.js";
+import { noteCategory } from "./note-category.js";
 import { recentByCategory as groupRecentByCategory } from "./recent-by-category.js";
 
 await mkdir(dirname(workerData.database), { recursive: true, mode: 0o700 });
@@ -437,15 +438,6 @@ function status() {
 			paths: Number(db.prepare("SELECT count(DISTINCT path) count FROM semantic_chunks").get().count),
 		},
 	};
-}
-function noteCategory(row) {
-	const type = String(parseFrontmatter(row.body)?.data?.type || "").toLowerCase();
-	const value = `${type}/${String(row.path).toLowerCase()}`;
-	if (/paper|literature|文献|论文/.test(value)) return "paper";
-	if (/software|tool|软件/.test(value)) return "software";
-	if (/method|protocol|方法/.test(value)) return "method";
-	if (/idea|hypothes|想法|假设/.test(value)) return "idea";
-	return "other";
 }
 function categoryCounts() {
 	const counts = { paper: 0, software: 0, method: 0, idea: 0, other: 0 };

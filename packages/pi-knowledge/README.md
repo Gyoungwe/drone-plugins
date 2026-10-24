@@ -25,3 +25,7 @@ contract, checks the first-run `unconfigured` response, and verifies that the
 dry-run tarball contains only publishable package files. Pi 1.1.0 can record a
 local `.tgz` as an extension path instead of unpacking it; install the unpacked
 package directory when using that host version.
+
+## 0.2.1 source candidate
+
+Knowledge category counts and recent-note groups now share one rule: explicit frontmatter type takes precedence, then the nearest recognized category directory, then filename keywords for untyped notes. A method named `mapping-tools.md` remains a method; a typed concept is not relabeled from its filename. This is a local source candidate, not an npm publication claim.
