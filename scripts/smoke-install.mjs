@@ -14,7 +14,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
-const packageNames = ["pi-knowledge", "pi-analysis", "pi-evidence", "pi-connectors", "desktop-ui-pack", "research-suite"];
+const packageNames = ["pi-knowledge", "pi-research", "pi-analysis", "pi-evidence", "pi-connectors", "desktop-ui-pack", "research-suite"];
 const smokeRoot = await mkdtemp(join(tmpdir(), "drone-plugin-install-smoke-"));
 const tarballRoot = join(smokeRoot, "tarballs");
 const installRoot = join(smokeRoot, "install");
@@ -132,6 +132,14 @@ try {
 		"evidence_validate_capsule",
 		"evidence_verify_replay",
 	]);
+	const piResearch = await discoverInstalled("pi-research", [
+		"research_search_sources",
+		"research_read_source",
+		"research_deposit_research_note",
+		"research_answer_sources",
+		"research_status",
+		"research_loop",
+	]);
 	const piConnectors = await discoverInstalled("pi-connectors", ["connector_list", "connector_get"]);
 	const suiteRoot = join(installRoot, "node_modules", "@gyoungwe", "research-suite");
 	const suitePackage = JSON.parse(await readFile(join(suiteRoot, "package.json"), "utf8"));
@@ -196,6 +204,7 @@ try {
 				piKnowledgeTools: tools.size,
 				piAnalysisTools: [...piAnalysis.tools.keys()],
 				piEvidenceTools: [...piEvidence.tools.keys()],
+				piResearchTools: [...piResearch.tools.keys()],
 				piConnectorTools: [...piConnectors.tools.keys()],
 				piAnalysisLoaderDiscovered: true,
 				knowledgeStatus: status.details.status,

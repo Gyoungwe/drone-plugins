@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+const root = new URL("..", import.meta.url).pathname;
+const { default: register } = await import(pathToFileURL(join(root, "dist/index.mjs")));
+const tools = new Map();
+register({registerTool(tool) { tools.set(tool.name, tool); }});
+assert.deepEqual([...tools.keys()], ["research_search_sources", "research_read_source", "research_deposit_research_note", "research_answer_sources", "research_status", "research_loop"]);
+const workspace = await mkdtemp(join(tmpdir(), "pi-research-smoke-"));
+await writeFile(join(workspace, "research.md"), "# Evidence\nLocal source text\n", "utf8");
+const ctx = {cwd: workspace, sessionId: "smoke"};
+const search = await tools.get("research_search_sources").execute("smoke", {query: "source", source_dir: "."}, new AbortController().signal, () => undefined, ctx);
+assert.equal(search.details.count, 1);
+const run = await tools.get("research_loop").execute("smoke", {action: "start", query: "source"}, new AbortController().signal, () => undefined, ctx);
+assert.equal(run.details.stage, "created");
+await rm(workspace, {recursive: true, force: true});
+console.log(JSON.stringify({registered: [...tools.keys()], searchCount: search.details.count, lifecycleStage: run.details.stage}));

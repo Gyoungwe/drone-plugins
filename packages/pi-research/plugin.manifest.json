@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "drone-pi-research",
+  "version": "0.1.1",
+  "pi": {"apiVersion": 1, "minHostVersion": "1.1.0", "testedHosts": ["1.1.0", "latest"]},
+  "drone": {"pluginApi": 1, "resultContract": "drone-result/v3"},
+  "entrypoints": {"extension": "./dist/index.mjs", "skills": "./skills"},
+  "capabilities": ["research", "search", "evidence-context", "files"],
+  "tools": ["research_search_sources", "research_read_source", "research_deposit_research_note", "research_answer_sources", "research_status", "research_loop"],
+  "hosts": ["native-pi", "drone-desktop"],
+  "permissions": {"filesystem": ["workspace"], "network": [], "subprocess": [], "externalWrites": false}
+}

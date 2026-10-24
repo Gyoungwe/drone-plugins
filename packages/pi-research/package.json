@@ -1,0 +1,25 @@
+{
+  "name": "@gyoungwe/pi-research",
+  "version": "0.1.1",
+  "description": "Evidence-gated research retrieval, reading, deposition and source-grounded answer tools for native Pi",
+  "keywords": ["pi-package", "research", "evidence"],
+  "license": "MIT",
+  "publishConfig": {"access": "public"},
+  "repository": {"type": "git", "url": "git+https://github.com/Gyoungwe/drone-plugins.git", "directory": "packages/pi-research"},
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "files": ["dist", "skills", "plugin.manifest.json", "package.json", "README.md", "build-manifest.json"],
+  "pi": {"extensions": ["./dist/index.mjs"], "skills": ["./skills/*"]},
+  "exports": {".": {"types": "./dist/index.mjs", "import": "./dist/index.mjs", "default": "./dist/index.mjs"}},
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:check": "node scripts/build.mjs --check",
+    "check": "npm run typecheck && npm run build:check && npm test && npm run smoke",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {"pdfjs-dist": "6.3.289"},
+  "peerDependencies": {"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"},
+  "devDependencies": {"@types/node": "^22.19.19", "esbuild": "0.25.12", "typescript": "5.9.3", "vitest": "^3.2.0"}
+}
