@@ -1,0 +1,182 @@
+{
+  "repository": "https://github.com/Gyoungwe/Drone",
+  "commit": "061022ced70b9f7c207d0dce5ffd7ca1f0bd86d8",
+  "files": [
+    {
+      "source": "packages/research/src/claim-bindings.ts",
+      "destination": "packages/pi-research/src/core/claim-bindings.ts"
+    },
+    {
+      "source": "packages/research/src/institutional-access.ts",
+      "destination": "packages/pi-research/src/core/institutional-access.ts"
+    },
+    {
+      "source": "packages/research/src/institutional-proxy.ts",
+      "destination": "packages/pi-research/src/core/institutional-proxy.ts"
+    },
+    {
+      "source": "packages/research/src/literature-operations.ts",
+      "destination": "packages/pi-research/src/core/literature-operations.ts"
+    },
+    {
+      "source": "packages/research/src/literature-receipt.ts",
+      "destination": "packages/pi-research/src/core/literature-receipt.ts"
+    },
+    {
+      "source": "packages/research/src/open-access.ts",
+      "destination": "packages/pi-research/src/core/open-access.ts"
+    },
+    {
+      "source": "packages/research/src/receipt-journal-policy.ts",
+      "destination": "packages/pi-research/src/core/receipt-journal-policy.ts"
+    },
+    {
+      "source": "packages/research/src/receipt-journal.ts",
+      "destination": "packages/pi-research/src/core/receipt-journal.ts"
+    },
+    {
+      "source": "packages/research/src/research-loop.ts",
+      "destination": "packages/pi-research/src/core/research-loop.ts"
+    },
+    {
+      "source": "packages/research/src/research-run-ui.ts",
+      "destination": "packages/pi-research/src/core/research-run-ui.ts"
+    },
+    {
+      "source": "packages/research/src/run-provenance.ts",
+      "destination": "packages/pi-research/src/core/run-provenance.ts"
+    },
+    {
+      "source": "packages/research/src/source-archive-policy.ts",
+      "destination": "packages/pi-research/src/core/source-archive-policy.ts"
+    },
+    {
+      "source": "packages/research/src/source-archive.ts",
+      "destination": "packages/pi-research/src/core/source-archive.ts"
+    },
+    {
+      "source": "packages/research/src/source-delivery.ts",
+      "destination": "packages/pi-research/src/core/source-delivery.ts"
+    },
+    {
+      "source": "packages/research/src/zotero-identity.ts",
+      "destination": "packages/pi-research/src/core/zotero-identity.ts"
+    },
+    {
+      "source": "packages/research/src/zotero-library.ts",
+      "destination": "packages/pi-research/src/core/zotero-library.ts"
+    },
+    {
+      "source": "packages/research/src/zotero-reconcile-runtime.ts",
+      "destination": "packages/pi-research/src/core/zotero-reconcile-runtime.ts"
+    },
+    {
+      "source": "packages/research/src/zotero-reconcile.ts",
+      "destination": "packages/pi-research/src/core/zotero-reconcile.ts"
+    },
+    {
+      "source": "packages/research/src/zotero-setup-runtime.ts",
+      "destination": "packages/pi-research/src/core/zotero-setup-runtime.ts"
+    },
+    {
+      "source": "packages/research/src/zotero-setup.ts",
+      "destination": "packages/pi-research/src/core/zotero-setup.ts"
+    },
+    {
+      "source": "packages/research/src/zotero-write-runtime.ts",
+      "destination": "packages/pi-research/src/core/zotero-write-runtime.ts"
+    },
+    {
+      "source": "packages/research/src/zotero-write.ts",
+      "destination": "packages/pi-research/src/core/zotero-write.ts"
+    }
+  ],
+  "excluded": {
+    "run-summary": "Knowledge topic creation stays in the host composition root; no plugin-to-plugin imports.",
+    "connectors": "Host connector registry and shared contract remain in Drone.",
+    "write-connectors": "Host write authorization registry remains in Drone.",
+    "capability-discovery": "Host capability discovery remains in Drone.",
+    "evidence-gate": "Existing pi-research evidence gate remains canonical."
+  },
+  "testFiles": [
+    {
+      "source": "packages/research/test/institutional-access.test.ts",
+      "destination": "packages/pi-research/test/core/institutional-access.test.ts"
+    },
+    {
+      "source": "packages/research/test/institutional-proxy.test.ts",
+      "destination": "packages/pi-research/test/core/institutional-proxy.test.ts"
+    },
+    {
+      "source": "packages/research/test/literature-operations.test.ts",
+      "destination": "packages/pi-research/test/core/literature-operations.test.ts"
+    },
+    {
+      "source": "packages/research/test/literature-receipt.test.ts",
+      "destination": "packages/pi-research/test/core/literature-receipt.test.ts"
+    },
+    {
+      "source": "packages/research/test/open-access.test.ts",
+      "destination": "packages/pi-research/test/core/open-access.test.ts"
+    },
+    {
+      "source": "packages/research/test/receipt-journal-policy.test.ts",
+      "destination": "packages/pi-research/test/core/receipt-journal-policy.test.ts"
+    },
+    {
+      "source": "packages/research/test/research-run-ui.test.ts",
+      "destination": "packages/pi-research/test/core/research-run-ui.test.ts"
+    },
+    {
+      "source": "packages/research/test/run-provenance.test.ts",
+      "destination": "packages/pi-research/test/core/run-provenance.test.ts"
+    },
+    {
+      "source": "packages/research/test/source-archive-policy.test.ts",
+      "destination": "packages/pi-research/test/core/source-archive-policy.test.ts"
+    },
+    {
+      "source": "packages/research/test/source-delivery.test.ts",
+      "destination": "packages/pi-research/test/core/source-delivery.test.ts"
+    },
+    {
+      "source": "packages/research/test/zotero-identity.test.ts",
+      "destination": "packages/pi-research/test/core/zotero-identity.test.ts"
+    },
+    {
+      "source": "packages/research/test/zotero-library.test.ts",
+      "destination": "packages/pi-research/test/core/zotero-library.test.ts"
+    },
+    {
+      "source": "packages/research/test/zotero-reconcile.test.ts",
+      "destination": "packages/pi-research/test/core/zotero-reconcile.test.ts"
+    },
+    {
+      "source": "packages/research/test/zotero-setup.test.ts",
+      "destination": "packages/pi-research/test/core/zotero-setup.test.ts"
+    },
+    {
+      "source": "packages/research/test/zotero-update.test.ts",
+      "destination": "packages/pi-research/test/core/zotero-update.test.ts"
+    },
+    {
+      "source": "packages/research/test/zotero-write.test.ts",
+      "destination": "packages/pi-research/test/core/zotero-write.test.ts"
+    },
+    {
+      "source": "packages/backend/test/research-loop.test.mjs",
+      "destination": "packages/pi-research/test/core/research-loop.test.mjs",
+      "adaptation": "Host composition replaced with injected test ports; extension UI wiring remains in host tests."
+    },
+    {
+      "source": "packages/backend/test/source-archive-open-access.test.mjs",
+      "destination": "packages/pi-research/test/core/source-archive-open-access.test.mjs",
+      "adaptation": "Host composition replaced with injected test ports; extension UI wiring remains in host tests."
+    }
+  ],
+  "helper": {
+    "source": "packages/compute/src/jobs/idempotency.ts#externalEffectKey",
+    "destination": "packages/pi-research/src/core/external-effect-key.ts",
+    "change": "Exact pure key algorithm copied without compute runtime dependencies."
+  }
+}

@@ -1,12 +1,81 @@
 {
   "schemaVersion": 1,
   "id": "drone-pi-research",
-  "version": "0.1.1",
-  "pi": {"apiVersion": 1, "minHostVersion": "1.1.0", "testedHosts": ["1.1.0", "latest"]},
-  "drone": {"pluginApi": 1, "resultContract": "drone-result/v3"},
-  "entrypoints": {"extension": "./dist/index.mjs", "skills": "./skills"},
-  "capabilities": ["research", "search", "evidence-context", "files"],
-  "tools": ["research_search_sources", "research_read_source", "research_deposit_research_note", "research_answer_sources", "research_status", "research_loop"],
-  "hosts": ["native-pi", "drone-desktop"],
-  "permissions": {"filesystem": ["workspace"], "network": [], "subprocess": [], "externalWrites": false}
+  "version": "0.2.0",
+  "pi": {
+    "apiVersion": 1,
+    "minHostVersion": "1.1.0",
+    "testedHosts": [
+      "1.1.0",
+      "latest"
+    ]
+  },
+  "drone": {
+    "pluginApi": 1,
+    "resultContract": "drone-result/v3"
+  },
+  "entrypoints": {
+    "extension": "./dist/index.mjs",
+    "skills": "./skills",
+    "host": "./dist/host.mjs"
+  },
+  "capabilities": [
+    "research",
+    "search",
+    "evidence-context",
+    "files"
+  ],
+  "tools": [
+    "research_search_sources",
+    "research_read_source",
+    "research_deposit_research_note",
+    "research_answer_sources",
+    "research_status",
+    "research_loop"
+  ],
+  "hosts": [
+    "native-pi",
+    "drone-desktop"
+  ],
+  "permissions": {
+    "filesystem": [
+      "workspace",
+      "configured-vault"
+    ],
+    "network": [
+      "api.zotero.org",
+      "127.0.0.1",
+      "localhost",
+      "www.ebi.ac.uk",
+      "europepmc.org",
+      "pmc-oa-opendata.s3.amazonaws.com",
+      "api.unpaywall.org",
+      "api.openalex.org",
+      "api.semanticscholar.org",
+      "api.crossref.org",
+      "arxiv.org",
+      "doi.org",
+      "astral.sh",
+      "pypi.org",
+      "files.pythonhosted.org",
+      "host-authorized source and institutional endpoints"
+    ],
+    "subprocess": [
+      "uv",
+      "uvx",
+      "zotero-mcp",
+      "sh",
+      "curl",
+      "powershell",
+      "where.exe"
+    ],
+    "externalWrites": true,
+    "credentials": [
+      "host-supplied Zotero environment or local API reference"
+    ],
+    "externalSideEffects": [
+      "host-authorized Zotero item and attachment writes",
+      "host-authorized Zotero MCP and uv installation"
+    ]
+  }
 }
