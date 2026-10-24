@@ -3,7 +3,7 @@ import { createResearchLoop, type ResearchLoopPorts } from "./core/research-loop
 import { observeExecutionReceipt } from "./core/run-provenance.js";
 
 export interface ResearchExtensionPorts extends ResearchLoopPorts {
- resolveSessionProject(ctx: any, requested?: string): Promise<{ project: string; [key: string]: unknown }>;
+ resolveSessionProject(ctx: any, requested?: string): Promise<{ project: string }>;
  describeProject(resolution: any): unknown;
  registerTool(pi: any, tool: any): void;
  run<T>(operation: () => T | Promise<T>): Promise<T>;
