@@ -237,3 +237,8 @@ export * as zoteroWriteRuntime from "./core/zotero-write-runtime.js";
 export * as zoteroWrite from "./core/zotero-write.js";
 
 export { registerResearchExtension, type ResearchExtensionPorts } from "./extension.js";
+export { readMethodsFacts, saveMethodsSection } from "./core/run-provenance.js";
+export { assessManualPage } from "./core/source-delivery.js";
+export { zoteroLibraryEnvValue, zoteroLibraryPath } from "./core/zotero-library.js";
+export { describeZoteroUpdatePlan, executeZoteroUpdate, prepareZoteroUpdate, receiptWithoutUpdate } from "./core/zotero-write-runtime.js";
+export * from "./evidence-gate.js";

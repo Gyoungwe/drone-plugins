@@ -5331,11 +5331,62 @@ For substantive research, use research_loop(action=start) when a tracked run is 
     })
   );
 }
+
+// src/evidence-gate.ts
+var EVIDENCE_STAGES = Object.freeze([
+  "created",
+  "local_query_recorded",
+  "external_search_recorded",
+  "sources_inspected",
+  "sources_archived",
+  "claims_bound",
+  "answerable"
+]);
+var TERMINAL_FAILURES = /* @__PURE__ */ new Set(["unavailable", "browser_required", "failed"]);
+function createEvidenceGate({ scope = "factual-answer" } = {}) {
+  const events = [];
+  let stage = "created";
+  const record = (type, details = {}) => {
+    events.push({ type, at: (/* @__PURE__ */ new Date()).toISOString(), ...details });
+  };
+  const snapshot = () => ({
+    scope,
+    stage,
+    status: "ok",
+    answerable: stage === "answerable",
+    events: [...events]
+  });
+  const advance = (next, details = {}) => {
+    if (!EVIDENCE_STAGES.includes(next)) throw new Error(`Unknown evidence stage: ${next}`);
+    const current = EVIDENCE_STAGES.indexOf(stage);
+    const target = EVIDENCE_STAGES.indexOf(next);
+    if (target < current) throw new Error(`Evidence stage cannot move backwards: ${stage} -> ${next}`);
+    stage = next;
+    record(next, details);
+    return snapshot();
+  };
+  const fail = (status, details = {}) => {
+    if (!TERMINAL_FAILURES.has(status)) throw new Error(`Unknown evidence failure: ${status}`);
+    record(status, details);
+    return { ...snapshot(), status, answerable: false };
+  };
+  return Object.freeze({ advance, fail, snapshot });
+}
+function assertEvidenceAnswerable(gate, { claimBindings = [] } = {}) {
+  const state = gate.snapshot();
+  if (state.stage !== "answerable" || !Array.isArray(claimBindings) || claimBindings.length === 0 || claimBindings.some((binding) => !binding || typeof binding !== "object" || Array.isArray(binding))) {
+    throw new Error(
+      "Evidence gate is closed: complete retrieval, inspection, archiving and structured claim binding first"
+    );
+  }
+  return state;
+}
 export {
   CLAIM_BINDING_SCHEMA,
   CORE_RESEARCH_RECEIPT_TOOLS,
   DEFAULT_MAX_BYTES,
   DEFAULT_TIMEOUT_MS,
+  EVIDENCE_STAGES,
   INSTITUTIONAL_AGENT_DIR,
   INSTITUTIONAL_CONFIG_NAME,
   INSTITUTIONAL_CONFIG_PATH,
@@ -5354,6 +5405,8 @@ export {
   ZOTERO_SETUP_BINDING,
   ZOTERO_WRITE_LIMITS,
   archiveSource,
+  assertEvidenceAnswerable,
+  assessManualPage,
   bootstrapZotero,
   buildProxiedUrl,
   claimBindingRefs,
@@ -5363,6 +5416,7 @@ export {
   connectorTargetId,
   contactEmail,
   createCompositeZoteroReconciler,
+  createEvidenceGate,
   createLiteratureOperations,
   createLocalZoteroReconciler,
   createResearchLoop,
@@ -5370,11 +5424,13 @@ export {
   createZoteroReconciler,
   deliveryContract,
   describeZoteroSavePlan,
+  describeZoteroUpdatePlan,
   destinationRecovery,
   detectAndSaveTemplateFromUrl,
   emptyInstitutionalConfig,
   exactDoiItems,
   executeZoteroSave,
+  executeZoteroUpdate,
   findZoteroItemsByIdentity,
   getResearchRun,
   hasMagic,
@@ -5412,13 +5468,16 @@ export {
   open_access_exports as openAccess,
   pmcCloudHttps,
   prepareZoteroSave,
+  prepareZoteroUpdate,
   probeZoteroConnector,
   probeZoteroLocalApi,
+  readMethodsFacts,
   readZoteroMcp,
   readZoteroMcpConfig,
   receiptBelongsToRun,
   receipt_journal_exports as receiptJournal,
   receipt_journal_policy_exports as receiptJournalPolicy,
+  receiptWithoutUpdate,
   receiptWithoutWrite,
   recordRunProvenance,
   registerResearchExtension,
@@ -5433,6 +5492,7 @@ export {
   run_provenance_exports as runProvenance,
   safeFilename,
   saveInstitutionalConfig,
+  saveMethodsSection,
   setupZoteroAgentMessage,
   shouldRecordResearchReceipt,
   source_archive_exports as sourceArchive,
@@ -5454,6 +5514,8 @@ export {
   zotero_identity_exports as zoteroIdentity,
   zoteroItemDoi,
   zotero_library_exports as zoteroLibrary,
+  zoteroLibraryEnvValue,
+  zoteroLibraryPath,
   zoteroLocalWriteConfig,
   zoteroMcpSpec,
   zotero_reconcile_exports as zoteroReconcile,
