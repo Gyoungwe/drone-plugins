@@ -119,6 +119,7 @@ async function call(session, name, args) {
 	}
 }
 let session = await openSession();
+const firstSession = session;
 try {
 	const search = await call(session, "research_search_sources", {
 		query: "SDKRESEARCH",
@@ -178,16 +179,20 @@ try {
 	const emptyBind = await call(session, "research_loop", {
 		action: "bind_claims",
 		run_dir: runDir,
-		claims: [],
+		claim_bindings: [],
 	});
 	const emptyFinalize = await call(session, "research_loop", {
 		action: "finalize",
 		run_dir: runDir,
 	});
-	assert(emptyBind.isError || emptyBind.result.details.answerable !== true);
+	assert(
+		emptyBind.isError ||
+			emptyBind.result.details.evidence_gate.answerable === false,
+	);
 	const emptyClaimsBlocked =
-		emptyFinalize.isError || emptyFinalize.result.details.answerable !== true;
-	session.dispose();
+		emptyFinalize.isError ||
+		emptyFinalize.result.details.evidence_gate.answerable === false;
+	// Keep the first session active so its run remains owned.
 	// Reuse this loader, so both sessions exercise the same extension closure and maps.
 	session = await openSession();
 	assert.notEqual(ids[0], ids[1]);
@@ -230,5 +235,6 @@ try {
 	);
 	if (!emptyClaimsBlocked) process.exitCode = 1;
 } finally {
-	session.dispose();
+	firstSession.dispose();
+	if (session !== firstSession) session.dispose();
 }
