@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "drone-research-suite",
-	"version": "0.1.8",
+	"version": "0.1.9",
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",
@@ -77,8 +77,40 @@
 			"workspace",
 			"configured-vault"
 		],
-		"network": [],
-		"subprocess": [],
-		"externalWrites": true
+		"network": [
+			"api.zotero.org",
+			"127.0.0.1",
+			"localhost",
+			"www.ebi.ac.uk",
+			"europepmc.org",
+			"pmc-oa-opendata.s3.amazonaws.com",
+			"api.unpaywall.org",
+			"api.openalex.org",
+			"api.semanticscholar.org",
+			"api.crossref.org",
+			"arxiv.org",
+			"doi.org",
+			"astral.sh",
+			"pypi.org",
+			"files.pythonhosted.org",
+			"host-authorized source and institutional endpoints"
+		],
+		"subprocess": [
+			"uv",
+			"uvx",
+			"zotero-mcp",
+			"sh",
+			"curl",
+			"powershell",
+			"where.exe"
+		],
+		"externalWrites": true,
+		"credentials": [
+			"host-supplied Zotero environment or local API reference"
+		],
+		"externalSideEffects": [
+			"host-authorized Zotero item and attachment writes",
+			"host-authorized Zotero MCP and uv installation"
+		]
 	}
 }
