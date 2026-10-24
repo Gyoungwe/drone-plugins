@@ -1,38 +1,35 @@
 # @gyoungwe/pi-research
 
-Native Pi package for a bounded, evidence-gated research loop.
+Self-contained research evidence tools for native Pi and Drone's public host
+composition. Version 0.2.0 is a release candidate in this repository; this change
+does not publish it to npm.
 
-The package exposes local source discovery, hash-checked reads, source-linked
-candidate note deposition and a source-grounded answer packet. A source must be
-discovered before it can be read; an answer packet requires two distinct read
-receipts. The packet is evidence for a model or host to assess, and never claims
+The native entry registers `research_search_sources`, `research_read_source`,
+`research_deposit_research_note`, `research_answer_sources`, `research_status`,
+and `research_loop`. Source discovery and hash-checked reading stay inside the
+workspace. Candidate notes go into `.pi/research-notes`. The answer packet requires
+two distinct current-session read receipts; it is evidence to assess, not an
 independent scientific verification.
 
-`research_loop` from the existing research domain remains available for the
-run-level evidence lifecycle. Network, Zotero and institutional adapters stay
-at the host boundary until their Electron-free package split is complete.
+The run lifecycle uses the complete persisted research core: archive integrity,
+observed reading receipts, structured claim bindings, provenance, and recovery.
+Empty claims or invented source references cannot make a run answerable. Run
+journals are isolated by Pi session identity and extension instance, without a
+process-global ledger. Native run artifacts default to `results/`; optional
+project-local `.pi/research-workspace.json` can supply `resultsRoot`,
+`obsidianVault`, and `knowledgeBindingRevision`.
 
-The package is self-contained after `npm run build`; the Pi host is a peer
-dependency and is not bundled.
-# @gyoungwe/pi-research
+The `/host` entry exports the complete research core, Zotero identity/write/
+reconciliation algorithms, institutional access, and `registerResearchExtension`.
+Desktop supplies workspace/project binding, scheduling, authorization, transport
+and Vault ports. Network access, setup subprocesses, and external writes belong
+to these host-mediated operations; loading the native entry does not implicitly
+perform them. Writes require authorization and read-back. Actual Zotero account
+and Protocols.io write acceptance remains separate from isolated unit tests.
 
-Native Pi research evidence tools. This package owns the host-neutral evidence
-loop, bounded local source search/read/deposition, PDF page markers, and the
-current-session `research_loop` receipt lifecycle. It has no dependency on
-Drone host packages, Electron, or a Desktop checkout.
-
-Tools: `research_search_sources`, `research_read_source`,
-`research_deposit_research_note`, `research_answer_sources`, `research_status`,
-and `research_loop`. It reads bounded files under the current workspace and
-writes candidate notes under `.pi/research-notes`; it does not access the
-network, subprocesses, credentials, or external systems.
-
-When a workspace source directory is missing, a source changes after search, or
-the evidence lifecycle is incomplete, the tool returns an explicit error and
-does not claim an answerable result. Remote search, institutional access and
-Zotero are reported as host responsibilities rather than silently simulated.
-
-Source archive persistence, institutional access, and Zotero adapters remain
-host ports until their contracts and isolated read/write evidence are migrated;
-the package reports those capabilities as host responsibilities instead of
-silently falling back to a second implementation.
+Pi is a peer dependency and is never bundled. There are no `@drone/*`, Electron,
+plugin-to-plugin, or source-checkout dependencies. `migration-sources.json` records
+original paths and reachable Git ancestry. Build with `npm run build`; `npm run
+check` runs reproducible artifact checks, unit tests, package smoke, and real SDK
+sessions on pinned Pi 1.1.0 and npm latest using isolated HOME and an offline faux
+provider. These sessions exercise actual SDK tool dispatch without user credentials.

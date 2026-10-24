@@ -178,5 +178,10 @@
     "source": "packages/compute/src/jobs/idempotency.ts#externalEffectKey",
     "destination": "packages/pi-research/src/core/external-effect-key.ts",
     "change": "Exact pure key algorithm copied without compute runtime dependencies."
+  },
+  "history": {
+    "method": "git subtree split --prefix=packages/research main; merge --allow-unrelated-histories -s ours",
+    "splitCommit": "a512d84807228fc7f872b30856e09af0ab657235",
+    "note": "Original research package ancestry is reachable from this repository; files maps old paths to migrated core paths."
   }
 }
