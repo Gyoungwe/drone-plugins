@@ -1,4 +1,4 @@
-import type { KnowledgeGraph } from "@drone/shared";
+import type { KnowledgeGraph } from "@gyoungwe/plugin-api/ui";
 import { describe, expect, it } from "vitest";
 import {
 	classifyKnowledgeHit,

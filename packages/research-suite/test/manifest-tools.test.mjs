@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import test from "node:test";
 import { tmpdir } from "node:os";
@@ -13,10 +14,14 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 	const previous = process.env.DRONE_KNOWLEDGE_DIR;
 	process.env.DRONE_KNOWLEDGE_DIR = knowledgeDir;
 	const names = [];
+	const bus = new EventEmitter();
 	const pi = {
 		registerTool(tool) { names.push(tool.name); },
 		registerCommand() {},
-		events: { on() {} },
+		events: {
+			on(name, listener) { bus.on(name, listener); return () => bus.off(name, listener); },
+			emit(name, payload) { bus.emit(name, payload); },
+		},
 		on() {},
 		appendEntry() {},
 		sendMessage() {},
@@ -37,7 +42,7 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 
 test("bundled versions and public research host resources match the suite pins", async () => {
 	const suite = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-	assert.equal(suite.version, "0.1.10");
+	assert.equal(suite.version, "0.1.11");
 	assert.equal(manifest.version, suite.version);
 	for (const name of suite.bundleDependencies) {
 		const dependencyRoot = join(root, "node_modules", ...name.split("/"));

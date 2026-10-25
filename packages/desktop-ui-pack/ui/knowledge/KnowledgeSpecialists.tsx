@@ -1,17 +1,16 @@
+import { PROTECTED_KNOWLEDGE_AGENTS, SUBAGENT_THINKING_LEVELS } from "../api";
 import {
 	type KnowledgeSpecialistMode,
 	type KnowledgeSpecialistRun,
 	type KnowledgeSpecialistSettings,
-	PROTECTED_KNOWLEDGE_AGENTS,
-	SUBAGENT_THINKING_LEVELS,
 	type SubagentThinkingLevel,
-} from "@drone/shared";
+} from "@gyoungwe/plugin-api/ui";
 import { useState } from "react";
-import { getPi } from "../../api";
-import { useKnowledgeStore } from "../../stores/knowledge";
-import { useSessionsStore } from "../../stores/sessions";
-import { useSettingsStore } from "../../stores/settings";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { useKnowledgeStore } from "../api";
+import { useSessionsStore } from "../api";
+import { useSettingsStore } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 
 export function KnowledgeSpecialists({
@@ -39,7 +38,7 @@ export function KnowledgeSpecialists({
 		setBusy(true);
 		setError(null);
 		try {
-			await getPi().setKnowledgeSpecialistSettings({ mode, revision: settings.revision, bindingRevision });
+			await getKnowledgeApi().setKnowledgeSpecialistSettings({ mode, revision: settings.revision, bindingRevision });
 			await refresh();
 		} catch (e) {
 			setError(String((e as Error).message || e));

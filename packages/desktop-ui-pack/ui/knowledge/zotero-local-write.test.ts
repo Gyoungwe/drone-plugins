@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../../api", () => ({ getPi: () => ({}) }));
-vi.mock("../../i18n", () => ({ useI18nStore: () => "zh", useT: () => (key: string) => key }));
 
 import { isZoteroLocalWriteStatus, localWriteStateKey } from "./ZoteroLocalWriteSection";
 

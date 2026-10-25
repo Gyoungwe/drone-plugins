@@ -1,7 +1,7 @@
-import type { ResearchRunDetail, ResearchRunListItem } from "@drone/shared";
+import type { ResearchRunDetail, ResearchRunListItem } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { RoadmapLane, roadmapStatus } from "../route/Roadmap";
+import { getKnowledgeApi } from "../api";
+import { RoadmapLane, roadmapStatus } from "../api";
 import { useKnowledgeText } from "./copy";
 import { KnowledgeNoteViewer } from "./KnowledgeNoteViewer";
 
@@ -31,7 +31,7 @@ export function ResearchRunsCard({
 		}
 		setLoading(true);
 		setError(null);
-		void getPi()
+		void getKnowledgeApi()
 			.getResearchRuns({ cwd, project, limit: 8 })
 			.then(async (result) => {
 				if (cancelled) return;
@@ -42,7 +42,7 @@ export function ResearchRunsCard({
 				}
 				const current = result.items.find((item) => item.runId === selected?.runId) ?? result.items.at(0);
 				if (!current) return;
-				const detail = await getPi().getResearchRun({ cwd, runId: current.runId });
+				const detail = await getKnowledgeApi().getResearchRun({ cwd, runId: current.runId });
 				if (!cancelled) setSelected(detail);
 			})
 			.catch((reason) => {
@@ -60,7 +60,7 @@ export function ResearchRunsCard({
 		if (!cwd) return;
 		setError(null);
 		try {
-			setSelected(await getPi().getResearchRun({ cwd, runId: run.runId }));
+			setSelected(await getKnowledgeApi().getResearchRun({ cwd, runId: run.runId }));
 		} catch (reason) {
 			setError(String((reason as Error)?.message || reason));
 		}

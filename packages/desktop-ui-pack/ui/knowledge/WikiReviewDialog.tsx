@@ -1,10 +1,10 @@
-import type { WikiReviewPreview } from "@drone/shared";
+import type { WikiReviewPreview } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { getPi } from "../../api";
-import { useKnowledgeStore } from "../../stores/knowledge";
-import { ActionSurface } from "../ui/ActionSurface";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { useKnowledgeStore } from "../api";
+import { ActionSurface } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 import { knowledgeLineDiff } from "./line-diff";
 import { WikiModelReview } from "./WikiModelReview";
@@ -40,18 +40,18 @@ export function WikiReviewDialog({
 		setReviewing(false);
 		setVerdict(null);
 		setPending(true);
-		void getPi()
+		void getKnowledgeApi()
 			.getKnowledgeOverview({ cwd })
 			.then((overview) => {
 				const binding = overview.binding?.revision;
 				if (binding == null) throw new Error("not-bound");
-				if (id) return getPi().previewKnowledgeReview({ cwd, id, revision: binding });
-				return getPi()
+				if (id) return getKnowledgeApi().previewKnowledgeReview({ cwd, id, revision: binding });
+				return getKnowledgeApi()
 					.getKnowledgeReviews({ cwd, revision: binding, offset: 0, limit: 1 })
 					.then((page) => {
 						const first = page.items[0];
 						if (!first) throw new Error("empty");
-						return getPi().previewKnowledgeReview({ cwd, id: first.id, revision: binding });
+						return getKnowledgeApi().previewKnowledgeReview({ cwd, id: first.id, revision: binding });
 					});
 			})
 			.then(
@@ -83,7 +83,7 @@ export function WikiReviewDialog({
 		setPending(true);
 		setError(null);
 		try {
-			const value = await getPi().decideKnowledgeReview({ cwd, token: preview.reviewToken, decision });
+			const value = await getKnowledgeApi().decideKnowledgeReview({ cwd, token: preview.reviewToken, decision });
 			const text =
 				value.status === "rejected"
 					? t("rejected")
@@ -107,7 +107,7 @@ export function WikiReviewDialog({
 	const blocked = !preview?.canApply || preview.expired || preview.targetChanged;
 	const errorText = error === "not-bound" ? t("notBound") : error === "empty" ? t("empty") : error;
 	return createPortal(
-		<ActionSurface
+		<div className="drone-knowledge-ui"><ActionSurface
 			contentRef={box}
 			ariaLabel={t("reviewTitle")}
 			tone="warn"
@@ -284,7 +284,7 @@ export function WikiReviewDialog({
 					</div>
 				</div>
 			</div>
-		</ActionSurface>,
+		</ActionSurface></div>,
 		document.body,
 	);
 }

@@ -1,9 +1,10 @@
-import type { WikiModelReviewResult, WikiReviewPreview } from "@drone/shared";
+import { reportKnowledgeError } from "./hooks";
+import type { WikiModelReviewResult, WikiReviewPreview } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useRef, useState } from "react";
-import { getPi } from "../../api";
-import { useSessionsStore } from "../../stores/sessions";
-import { useSettingsStore } from "../../stores/settings";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { useSessionsStore } from "../api";
+import { useSettingsStore } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 
 function compactTokens(value: number): string {
@@ -54,9 +55,9 @@ export function WikiModelReview({
 		return () => {
 			generation.current++;
 			if (active.current) {
-				void getPi()
+				void getKnowledgeApi()
 					.cancelKnowledgeModelReview(active.current)
-					.catch(() => {});
+					.catch(reportKnowledgeError);
 				active.current = null;
 			}
 		};
@@ -70,7 +71,7 @@ export function WikiModelReview({
 		onBusy(true);
 		setError(null);
 		try {
-			const value = await getPi().reviewKnowledgeWithModel({
+			const value = await getKnowledgeApi().reviewKnowledgeWithModel({
 				cwd,
 				...request,
 				token: preview.reviewToken,
@@ -151,7 +152,7 @@ export function WikiModelReview({
 					</span>
 					<Button
 						onClick={() => {
-							if (active.current) void getPi().cancelKnowledgeModelReview(active.current);
+							if (active.current) void getKnowledgeApi().cancelKnowledgeModelReview(active.current);
 						}}
 					>
 						{t("cancel")}

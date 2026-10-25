@@ -2,10 +2,10 @@ import type {
 	KnowledgeSemanticConfig,
 	KnowledgeSemanticIndexResult,
 	KnowledgeSemanticStatus,
-} from "@drone/shared";
+} from "@gyoungwe/plugin-api/ui";
 import { useEffect, useRef, useState } from "react";
-import { getPi } from "../../api";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 
 const EMPTY_CONFIG: KnowledgeSemanticConfig = {
@@ -39,7 +39,7 @@ export function SemanticManagement({
 		const current = ++epoch.current;
 		setStatus(null);
 		setError(null);
-		void getPi()
+		void getKnowledgeApi()
 			.getKnowledgeSemanticStatus({ cwd, bindingRevision })
 			.then((next) => {
 				if (current !== epoch.current) return;
@@ -74,7 +74,7 @@ export function SemanticManagement({
 		setError(null);
 		setMessage(null);
 		try {
-			const safe = await getPi().saveKnowledgeSemanticSettings({
+			const safe = await getKnowledgeApi().saveKnowledgeSemanticSettings({
 				config,
 				bindingRevision,
 				expectedSettingsRevision: status?.settings.revision ?? 0,
@@ -94,7 +94,7 @@ export function SemanticManagement({
 		setError(null);
 		setMessage(null);
 		try {
-			await getPi().testKnowledgeSemanticProvider({ config, bindingRevision });
+			await getKnowledgeApi().testKnowledgeSemanticProvider({ config, bindingRevision });
 			setMessage(t("semanticTested"));
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
@@ -112,7 +112,7 @@ export function SemanticManagement({
 		setError(null);
 		setMessage(null);
 		try {
-			const next = await getPi().indexKnowledgeSemantic({
+			const next = await getKnowledgeApi().indexKnowledgeSemantic({
 				cwd: projectCwd,
 				bindingRevision,
 				requestId,
@@ -137,7 +137,7 @@ export function SemanticManagement({
 		try {
 			const requestId = requestIdRef.current;
 			if (!requestId) return;
-			await getPi().cancelKnowledgeSemanticIndex({ cwd, bindingRevision, requestId });
+			await getKnowledgeApi().cancelKnowledgeSemanticIndex({ cwd, bindingRevision, requestId });
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
 		}

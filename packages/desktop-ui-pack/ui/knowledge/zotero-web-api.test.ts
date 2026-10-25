@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../../api", () => ({ getPi: () => ({}) }));
-vi.mock("../../i18n", () => ({
-	useI18nStore: (selector: (s: { language: "zh" | "en" }) => unknown) => selector({ language: "zh" }),
-}));
 
 import { isZoteroWebApiStatus } from "./ZoteroWebApiSection";
 import { formatZoteroText } from "./zotero-copy";

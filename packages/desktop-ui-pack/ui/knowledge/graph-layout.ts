@@ -1,4 +1,4 @@
-import type { KnowledgeGraph as GraphData } from "@drone/shared";
+import type { KnowledgeGraph as GraphData } from "@gyoungwe/plugin-api/ui";
 
 export const GRAPH_WIDTH = 720;
 export const GRAPH_HEIGHT = 440;

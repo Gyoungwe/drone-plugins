@@ -1,12 +1,12 @@
-import type { KnowledgeGraph as GraphData, KnowledgeNoteLinks } from "@drone/shared";
+import type { KnowledgeGraph as GraphData, KnowledgeNoteLinks } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getPi } from "../../api";
-import { useI18nStore } from "../../i18n";
-import { COMPOSER_FOCUS_EVENT, useDraftStore } from "../../stores/drafts";
-import { useKnowledgeStore } from "../../stores/knowledge";
-import { useSessionsStore } from "../../stores/sessions";
-import { useUiStore } from "../../stores/ui";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { useLanguage } from "../api";
+import { COMPOSER_FOCUS_EVENT, useDraftStore } from "../api";
+import { useKnowledgeStore } from "../api";
+import { useSessionsStore } from "../api";
+import { useUiStore } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 import {
 	declutterLayout,
@@ -211,7 +211,7 @@ export function KnowledgeGraph({
 	indexKey?: string;
 }) {
 	const t = useKnowledgeText();
-	const language = useI18nStore((state) => state.language);
+	const language = useLanguage();
 	const categoryLabels = language === "zh" ? CATEGORY_LABELS_ZH : CATEGORY_LABELS_EN;
 	const nonce = useKnowledgeStore((s) => s.revision);
 	const [data, setData] = useState<GraphData | null>(null);
@@ -270,7 +270,7 @@ export function KnowledgeGraph({
 	useEffect(() => {
 		let live = true;
 		setError(null);
-		void getPi()
+		void getKnowledgeApi()
 			.getKnowledgeGraph({ revision, limit: GRAPH_LIMIT, view, mergeMirrors })
 			.then(
 				(value) => live && setData(value),
@@ -308,7 +308,7 @@ export function KnowledgeGraph({
 			return;
 		}
 		let live = true;
-		void getPi()
+		void getKnowledgeApi()
 			.getKnowledgeNoteLinks({ path: selected, revision })
 			.then(
 				(value) => live && setLinks(value),

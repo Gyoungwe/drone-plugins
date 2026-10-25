@@ -1,9 +1,9 @@
-import type { KnowledgeSetupPreview } from "@drone/shared";
+import type { KnowledgeSetupPreview } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { useSessionsStore } from "../../stores/sessions";
-import { useSettingsStore } from "../../stores/settings";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { useSessionsStore } from "../api";
+import { useSettingsStore } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 import { launchKnowledgeSetup, reportKnowledgeError, useKnowledgeOverview } from "./hooks";
 import { KnowledgeCloudSection } from "./KnowledgeCloudSection";
@@ -62,7 +62,7 @@ export function KnowledgePanel({
 	async function switchFolder() {
 		setActionError(null);
 		try {
-			const selected = await getPi().pickDirectory();
+			const selected = await getKnowledgeApi().pickDirectory();
 			if (selected) setup(selected);
 		} catch (e) {
 			setActionError(String((e as Error).message || e));
@@ -71,7 +71,7 @@ export function KnowledgePanel({
 	async function folders() {
 		setActionError(null);
 		try {
-			const selected = await getPi().pickDirectory();
+			const selected = await getKnowledgeApi().pickDirectory();
 			if (selected) {
 				setPath(selected);
 				setPreview(null);
@@ -84,7 +84,7 @@ export function KnowledgePanel({
 		setBusy(true);
 		setActionError(null);
 		try {
-			setPreview(await getPi().previewKnowledgeSetup({ cwd, path: path.trim() || binding?.vault || null }));
+			setPreview(await getKnowledgeApi().previewKnowledgeSetup({ cwd, path: path.trim() || binding?.vault || null }));
 		} catch (e) {
 			setActionError(String((e as Error).message || e));
 		} finally {
@@ -213,7 +213,7 @@ export function KnowledgePanel({
 								<Button
 									size="sm"
 									onClick={() =>
-										void getPi()
+										void getKnowledgeApi()
 											.openKnowledgeTarget({ cwd, revision: binding.revision })
 											.catch(reportKnowledgeError)
 									}
@@ -241,7 +241,7 @@ export function KnowledgePanel({
 							<Button
 								size="sm"
 								onClick={() =>
-									void getPi().openExternal("https://www.zotero.org/download").catch(reportKnowledgeError)
+									void getKnowledgeApi().openExternal("https://www.zotero.org/download").catch(reportKnowledgeError)
 								}
 							>
 								{t("literatureDownload")}
@@ -261,7 +261,7 @@ export function KnowledgePanel({
 										setBusy(true);
 										setActionError(null);
 										try {
-											await getPi().maintainKnowledge({ cwd, revision: binding.revision, action });
+											await getKnowledgeApi().maintainKnowledge({ cwd, revision: binding.revision, action });
 											refresh();
 										} catch (err) {
 											setActionError(String(err));
@@ -298,7 +298,7 @@ export function KnowledgePanel({
 													setBusy(true);
 													setActionError(null);
 													try {
-														await getPi().maintainKnowledge({
+														await getKnowledgeApi().maintainKnowledge({
 															cwd,
 															revision: binding.revision,
 															action: "undo-wiki",

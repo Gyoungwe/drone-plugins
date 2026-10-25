@@ -1,7 +1,7 @@
-import type { InstitutionalStatus } from "@drone/shared";
+import type { InstitutionalStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { Button } from "../api";
 import { useZoteroText } from "./zotero-copy";
 
 function Row({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
@@ -28,7 +28,7 @@ export function InstitutionalAccessSection() {
 		setLoading(true);
 		setError(null);
 		try {
-			const s = await getPi().getInstitutionalStatus();
+			const s = await getKnowledgeApi().getInstitutionalStatus();
 			setStatus(s);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
@@ -44,7 +44,7 @@ export function InstitutionalAccessSection() {
 	const openLogin = async (url?: string) => {
 		setError(null);
 		try {
-			await getPi().openInstitutionalLogin(url);
+			await getKnowledgeApi().openInstitutionalLogin(url);
 			setTimeout(() => void refresh(), 1500);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
@@ -54,7 +54,7 @@ export function InstitutionalAccessSection() {
 	const clear = async () => {
 		setError(null);
 		try {
-			const next = await getPi().clearInstitutionalSession();
+			const next = await getKnowledgeApi().clearInstitutionalSession();
 			setStatus(next);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
@@ -66,7 +66,7 @@ export function InstitutionalAccessSection() {
 		setTestResult(null);
 		setError(null);
 		try {
-			const res = await getPi().testInstitutionalAccess(testUrl);
+			const res = await getKnowledgeApi().testInstitutionalAccess(testUrl);
 			setTestResult(JSON.stringify(res, null, 2));
 			await refresh();
 		} catch (e) {

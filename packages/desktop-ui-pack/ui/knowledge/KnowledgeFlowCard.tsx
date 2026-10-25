@@ -1,14 +1,14 @@
-import type { KnowledgeReadRecord } from "@drone/shared";
+import type { KnowledgeReadRecord } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { useT } from "../../i18n";
-import { useKnowledgeStore } from "../../stores/knowledge";
-import { isDraftSessionId, useSessionsStore } from "../../stores/sessions";
-import { useSettingsStore } from "../../stores/settings";
-import { selectTranscript, useTranscriptStore } from "../../stores/transcript";
-import { useUiStore } from "../../stores/ui";
-import { ChevronDownIcon, ObsidianIcon } from "../icons";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { useT } from "../api";
+import { useKnowledgeStore } from "../api";
+import { isDraftSessionId, useSessionsStore } from "../api";
+import { useSettingsStore } from "../api";
+import { selectTranscript, useTranscriptStore } from "../api";
+import { useUiStore } from "../api";
+import { ChevronDownIcon, ObsidianIcon } from "../api";
+import { Button } from "../api";
 import { mergeKnowledgeArtifacts } from "./artifacts";
 import { type knowledgeZh, useKnowledgeText } from "./copy";
 import { reportKnowledgeError } from "./hooks";
@@ -50,12 +50,12 @@ export function KnowledgeFlowCard({ sessionId }: { sessionId: string | null }) {
 		setResuming(false);
 		if (!sessionId || isDraftSessionId(sessionId)) return;
 		let live = true;
-		void getPi()
+		void getKnowledgeApi()
 			.getKnowledgeOverview({ cwd, sessionId })
 			.then((value) => {
 				if (live && value.flow) useKnowledgeStore.getState().apply({ kind: "flow", flow: value.flow });
 			})
-			.catch(() => {});
+			.catch(reportKnowledgeError);
 		return () => {
 			live = false;
 		};
@@ -120,7 +120,7 @@ export function KnowledgeFlowCard({ sessionId }: { sessionId: string | null }) {
 		if (resuming || !sessionId) return;
 		setResuming(true);
 		try {
-			await getPi().resumeKnowledgeCheck(sessionId);
+			await getKnowledgeApi().resumeKnowledgeCheck(sessionId);
 		} catch (e) {
 			reportKnowledgeError(e);
 		} finally {

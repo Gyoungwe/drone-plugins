@@ -1,8 +1,8 @@
-import type { KnowledgeSearchResult } from "@drone/shared";
+import type { KnowledgeSearchResult } from "@gyoungwe/plugin-api/ui";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { getPi } from "../../api";
-import { useKnowledgeStore } from "../../stores/knowledge";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { useKnowledgeStore } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 import type { KnowledgeCategory } from "./knowledge-home-model";
 import { classifyKnowledgeHit } from "./knowledge-home-model";
@@ -59,7 +59,7 @@ export function KnowledgeSearch({
 		setBusy(true);
 		setError(null);
 		try {
-			setResult(await getPi().searchKnowledge({ cwd, bindingRevision, query: text }));
+			setResult(await getKnowledgeApi().searchKnowledge({ cwd, bindingRevision, query: text }));
 		} catch (cause) {
 			setError(String(cause instanceof Error ? cause.message : cause));
 		} finally {

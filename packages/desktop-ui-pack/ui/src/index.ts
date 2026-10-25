@@ -1,7 +1,7 @@
 /**
- * The host supplies the React instance and UI hooks through window.DroneUI.
- * Keeping this package import-free makes the tarball safe to install without
- * bundling a second React copy and keeps the renderer boundary explicit.
+ * The host supplies React and UI services through window.DroneUI.
+ * The knowledge bundle keeps React external, so every contribution shares
+ * the host instance; public package imports provide types only.
  */
 type DroneUiRuntime = {
 	React: { createElement: (type: unknown, props: Record<string, unknown> | null, ...children: unknown[]) => unknown };
@@ -38,3 +38,5 @@ export function ResearchStatusPanel(): unknown {
 		),
 	);
 }
+
+export { KnowledgePage, KnowledgeOverlay, KnowledgeSurface } from "../entry";

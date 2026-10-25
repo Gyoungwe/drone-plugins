@@ -1,4 +1,4 @@
-import { useI18nStore } from "../../i18n";
+import { useLanguage } from "../api";
 
 /** Zotero 面板文案（独立于 Obsidian 知识库 copy.ts；同样 zh 为键源、en 必须镜像每个键）。 */
 export const zoteroZh = {
@@ -173,7 +173,7 @@ export function formatZoteroText(template: string, params: Record<string, string
 }
 
 export function useZoteroText() {
-	const language = useI18nStore((s) => s.language);
+	const language = useLanguage();
 	const dictionary = language === "zh" ? zoteroZh : zoteroEn;
 	return (key: keyof typeof zoteroZh, params?: Record<string, string | number>) =>
 		formatZoteroText(dictionary[key], params);

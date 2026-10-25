@@ -1,9 +1,9 @@
-import type { KnowledgePage, WikiReviewItem, WikiReviewPreview } from "@drone/shared";
+import type { KnowledgePage, WikiReviewItem, WikiReviewPreview } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getPi } from "../../api";
-import { useKnowledgeStore } from "../../stores/knowledge";
-import { Button } from "../ui/Button";
-import { StatePanel } from "../ui/StatePanel";
+import { getKnowledgeApi } from "../api";
+import { useKnowledgeStore } from "../api";
+import { Button } from "../api";
+import { StatePanel } from "../api";
 import { useKnowledgeText } from "./copy";
 import { KnowledgeNoteViewer } from "./KnowledgeNoteViewer";
 import { knowledgeLineDiff } from "./line-diff";
@@ -45,7 +45,7 @@ export function WikiReviewPanel({
 	useEffect(() => {
 		let live = true;
 		setLoading(true);
-		void getPi()
+		void getKnowledgeApi()
 			.getKnowledgeReviews({ cwd, revision, offset, limit: 12 })
 			.then(
 				(value) => {
@@ -74,7 +74,7 @@ export function WikiReviewPanel({
 			setReadPath(null);
 			setPending(true);
 			try {
-				const value = await getPi().previewKnowledgeReview({ cwd, id, revision });
+				const value = await getKnowledgeApi().previewKnowledgeReview({ cwd, id, revision });
 				if (seq === request.current) {
 					setPreview(value);
 					setPreviewNonce(useKnowledgeStore.getState().revision);
@@ -111,7 +111,7 @@ export function WikiReviewPanel({
 		setError(null);
 		setResult(null);
 		try {
-			const value = await getPi().decideKnowledgeReview({ cwd, token: preview.reviewToken, decision });
+			const value = await getKnowledgeApi().decideKnowledgeReview({ cwd, token: preview.reviewToken, decision });
 			const text =
 				value.status === "rejected"
 					? t("rejected")

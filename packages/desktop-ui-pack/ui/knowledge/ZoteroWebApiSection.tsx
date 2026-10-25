@@ -1,7 +1,7 @@
-import type { ZoteroWebApiStatus } from "@drone/shared";
+import type { ZoteroWebApiStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { Button } from "../api";
 import { useZoteroText } from "./zotero-copy";
 
 /**
@@ -24,7 +24,7 @@ export function ZoteroWebApiSection() {
 
 	const refresh = useCallback(async () => {
 		try {
-			setStatus(await getPi().getZoteroWebApi());
+			setStatus(await getKnowledgeApi().getZoteroWebApi());
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
 		}
@@ -72,7 +72,7 @@ export function ZoteroWebApiSection() {
 							.replace("{library}", library)
 							.replace("{hint}", status.keyHint ?? "")}
 					</p>
-					<Button size="sm" disabled={busy} onClick={() => void act(() => getPi().clearZoteroWebApi())}>
+					<Button size="sm" disabled={busy} onClick={() => void act(() => getKnowledgeApi().clearZoteroWebApi())}>
 						{t("webClear")}
 					</Button>
 				</div>
@@ -107,7 +107,7 @@ export function ZoteroWebApiSection() {
 						onClick={() =>
 							void act(
 								() =>
-									getPi().saveZoteroWebApi(
+									getKnowledgeApi().saveZoteroWebApi(
 										groupId
 											? { apiKey: apiKey.trim(), libraryType: "groups", libraryId: groupId }
 											: { apiKey: apiKey.trim() },

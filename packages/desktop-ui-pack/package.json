@@ -1,29 +1,47 @@
 {
   "name": "@gyoungwe/desktop-ui-pack",
-  "version": "0.1.1",
-	"description": "Optional Drone Desktop UI contributions loaded by the installed package boundary",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/Gyoungwe/drone-plugins.git",
-		"directory": "packages/desktop-ui-pack"
-	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"license": "MIT",
+  "version": "0.2.0",
+  "description": "Knowledge workspace, review overlays and research UI for Drone Desktop",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Gyoungwe/drone-plugins.git",
+    "directory": "packages/desktop-ui-pack"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
   "type": "module",
-	"files": ["ui", "plugin.manifest.json", "README.md", "package.json"],
+  "files": [
+    "ui",
+    "plugin.manifest.json",
+    "README.md",
+    "package.json",
+    "build-manifest.json",
+    "dist"
+  ],
   "scripts": {
-		"build": "node scripts/build.mjs",
-		"build:check": "node scripts/build.mjs --check",
-		"smoke": "node scripts/smoke.mjs"
+    "build": "node scripts/build.mjs",
+    "build:check": "node scripts/build.mjs --check",
+    "smoke": "node scripts/smoke.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "check": "npm run build:check && npm run typecheck && npm test && npm run smoke",
+    "test:styles": "node scripts/check-styles.mjs"
   },
   "peerDependencies": {
-    "@gyoungwe/plugin-api": ">=1.1.0 <2.0.0"
+    "@gyoungwe/plugin-api": ">=1.2.0 <2.0.0"
   },
   "peerDependenciesMeta": {
     "@gyoungwe/plugin-api": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "graphology": "^0.26.0",
+    "graphology-communities-louvain": "^2.0.2",
+    "graphology-layout-forceatlas2": "^0.10.1",
+    "graphology-types": "^0.24.8",
+    "sigma": "^3.0.3"
   }
 }

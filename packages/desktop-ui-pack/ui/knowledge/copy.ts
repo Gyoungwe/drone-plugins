@@ -1,4 +1,4 @@
-import { useI18nStore } from "../../i18n";
+import { useLanguage } from "../api";
 export const knowledgeZh = {
 	cancel: "取消",
 	specialist_reviewer: "Wiki 模型审核员",
@@ -1115,7 +1115,7 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	resumeUnavailable: "A writable current-project session is required, and its task must not be streaming.",
 };
 export function useKnowledgeText() {
-	const language = useI18nStore((s) => s.language);
+	const language = useLanguage();
 	const dictionary = language === "zh" ? knowledgeZh : knowledgeEn;
 	return (key: keyof typeof knowledgeZh) => dictionary[key];
 }

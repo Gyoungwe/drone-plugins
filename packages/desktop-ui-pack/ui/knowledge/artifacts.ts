@@ -1,5 +1,5 @@
-import type { KnowledgeFlowCard, WorkbenchTask } from "@drone/shared";
-import { taskArtifactLinks } from "../chat/TaskArtifactLinks";
+import type { KnowledgeFlowCard, WorkbenchTask } from "@gyoungwe/plugin-api/ui";
+import { taskArtifactLinks } from "../api";
 
 /**
  * 会话产物列表：flow.cards 里带路径的回执卡（归档 / 入库 / 总结……）+ 工作台观察到的任务文件。

@@ -4,10 +4,10 @@ import type {
 	KnowledgeCloudSyncResult,
 	KnowledgeNote,
 	KnowledgeSearchResult,
-} from "@drone/shared";
+} from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 
 const MODE_COPY_KEYS = {
@@ -66,7 +66,7 @@ export function KnowledgeCloudSection({
 
 	const refresh = useCallback(async () => {
 		try {
-			setStatus(await getPi().getKnowledgeCloudStatus());
+			setStatus(await getKnowledgeApi().getKnowledgeCloudStatus());
 		} catch (value) {
 			setError(value instanceof Error ? value.message : String(value));
 		}
@@ -80,7 +80,7 @@ export function KnowledgeCloudSection({
 		setError(null);
 		try {
 			setStatus(
-				await (kind === "probe" ? getPi().probeKnowledgeCloud() : getPi().initializeKnowledgeCloud()),
+				await (kind === "probe" ? getKnowledgeApi().probeKnowledgeCloud() : getKnowledgeApi().initializeKnowledgeCloud()),
 			);
 		} catch (value) {
 			setError(value instanceof Error ? value.message : String(value));
@@ -92,7 +92,7 @@ export function KnowledgeCloudSection({
 		setBusy("password");
 		setError(null);
 		try {
-			setStatus(await getPi().setKnowledgeCloudPassword({ password: value }));
+			setStatus(await getKnowledgeApi().setKnowledgeCloudPassword({ password: value }));
 			setPassword("");
 		} catch (error_) {
 			setError(error_ instanceof Error ? error_.message : String(error_));
@@ -105,7 +105,7 @@ export function KnowledgeCloudSection({
 		setBusy("search");
 		setError(null);
 		try {
-			setSearchResult(await getPi().searchKnowledge({ cwd, bindingRevision, query: query.trim(), limit: 8 }));
+			setSearchResult(await getKnowledgeApi().searchKnowledge({ cwd, bindingRevision, query: query.trim(), limit: 8 }));
 		} catch (value) {
 			setError(value instanceof Error ? value.message : String(value));
 		} finally {
@@ -123,8 +123,8 @@ export function KnowledgeCloudSection({
 		setBusy("preview");
 		setError(null);
 		const [local, remote] = await Promise.allSettled([
-			getPi().readKnowledgeNote({ cwd, path, startLine: 1, revision: bindingRevision }),
-			getPi().readKnowledgeCloudNote({ path }),
+			getKnowledgeApi().readKnowledgeNote({ cwd, path, startLine: 1, revision: bindingRevision }),
+			getKnowledgeApi().readKnowledgeCloudNote({ path }),
 		]);
 		if (local.status === "fulfilled" && !local.value.missing) setLocalNote(local.value);
 		else if (local.status === "rejected")
@@ -143,7 +143,7 @@ export function KnowledgeCloudSection({
 		setBusy("sync");
 		setError(null);
 		try {
-			const result = await getPi().syncKnowledgeCloud({
+			const result = await getKnowledgeApi().syncKnowledgeCloud({
 				cwd,
 				mode,
 				bindingRevision,

@@ -170,6 +170,9 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 | 区域：`app.background`、`app.overlay`、`chat.corner.*`、`chat.diff-sidebar`、`settings.panel`、`panel.tab`、`rail.view` | 已有 |
 | 无头插件 `headless: true` | 已有 |
 | 区域 `knowledge.tab`：知识库页的页签（与「总览 / 网络图 / 审阅 / 设置」并列） | 已有 |
+| 区域 `knowledge.page`：知识整页贡献；无贡献/错误时宿主显示轻量默认页 | 已有；0.2.0 完整页面迁移候选待正式 GUI 验收 |
+| 区域 `knowledge.surface`：设置、笔记、流程、Zotero、机构访问嵌入；`KnowledgeSurfaceProps` 通过公开 host mount 传递 | 1.2.0 API 候选 |
+| 公开 `@gyoungwe/plugin-api/ui` 类型与 `window.DroneUI.knowledge` 服务端口 | 1.2.0 API 候选；授权/持久化仍由宿主负责 |
 | 区域 `home.section`：新任务首页的卡片区 | 已有 |
 | 区域 `skills.section`：技能与连接页的分区 | 已有 |
 | 从任意已安装 npm 包的 `plugin.manifest.json` → `entrypoints.ui` 发现 UI 插件 | 已有 |

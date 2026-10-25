@@ -2,13 +2,12 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { dialogStack } from "../ui/dialog-stack";
+import { services } from "../../test/setup";
 import { WikiReviewDialog } from "./WikiReviewDialog";
 
 vi.stubGlobal("React", React);
 afterEach(() => {
 	cleanup();
-	dialogStack.reset();
 });
 
 const preview = {
@@ -35,12 +34,12 @@ const preview = {
 };
 
 function mockPi(resolvePreview: Promise<unknown>) {
-	(window as unknown as { pi: unknown }).pi = {
+	Object.assign(services, {
 		getKnowledgeOverview: () => Promise.resolve({ binding: { revision: 1 } }),
 		previewKnowledgeReview: () => resolvePreview,
 		getKnowledgeReviews: () => Promise.resolve({ items: [] }),
 		decideKnowledgeReview: () => new Promise(() => undefined),
-	};
+	});
 }
 
 it("ignores Escape while the preview is still loading (no defer race)", async () => {

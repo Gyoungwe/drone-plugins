@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { useI18nStore } from "../../i18n";
-import { relativeTime } from "../../lib/relative-time";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { useLanguage } from "../api";
+import { relativeTime } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 import { launchKnowledgeSetup, reportKnowledgeError, useKnowledgeOverview } from "./hooks";
 import { KnowledgeGraph } from "./KnowledgeGraph";
@@ -10,18 +10,18 @@ import { KnowledgeGraph } from "./KnowledgeGraph";
 /** Full-screen knowledge network tab, including an actionable unbound state. */
 export function KnowledgeNetwork({ cwd, sessionId }: { cwd: string | null; sessionId: string | null }) {
 	const t = useKnowledgeText();
-	const language = useI18nStore((state) => state.language);
+	const language = useLanguage();
 	const { data, error, loading } = useKnowledgeOverview(cwd, sessionId);
 	const [busy, setBusy] = useState(false);
 	const binding = data?.binding;
 	const revision = binding?.revision ?? 0;
 	const indexKey = `${data?.index?.noteCount ?? 0}:${data?.index?.lastReconciledAt ?? ""}`;
 	const [formalVault, setFormalVault] = useState<string | null>(null);
-	const isDevelopment = import.meta.env.DEV || formalVault !== null;
+	const isDevelopment = formalVault !== null;
 	useEffect(() => {
 		if (binding) return;
 		let live = true;
-		void getPi()
+		void getKnowledgeApi()
 			.formalKnowledgeVault()
 			.then(
 				(path) => live && setFormalVault(path),
@@ -48,7 +48,7 @@ export function KnowledgeNetwork({ cwd, sessionId }: { cwd: string | null; sessi
 		if (!cwd) return;
 		setBusy(true);
 		try {
-			const path = await getPi().pickDirectory();
+			const path = await getKnowledgeApi().pickDirectory();
 			if (path) await launchKnowledgeSetup(cwd, sessionId, path);
 		} catch (cause) {
 			reportKnowledgeError(cause);

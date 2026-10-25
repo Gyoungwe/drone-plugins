@@ -1,4 +1,4 @@
-import type { KnowledgeGraph as GraphData } from "@drone/shared";
+import type { KnowledgeGraph as GraphData } from "@gyoungwe/plugin-api/ui";
 import type Graph from "graphology";
 import { useEffect, useRef, useState } from "react";
 import { buildNebulaGraph, labelledNodes, type NebulaNodeAttributes, neighbourhood } from "./nebula-model";

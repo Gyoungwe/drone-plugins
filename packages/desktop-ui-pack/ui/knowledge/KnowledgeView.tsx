@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { PluginEntryHost, usePluginEntries } from "../../plugins/PluginRegions";
-import { UI_REGIONS } from "../../plugins/slots";
-import { useKnowledgeStore } from "../../stores/knowledge";
-import { useSessionsStore } from "../../stores/sessions";
-import { type KnowledgeTab, useUiStore } from "../../stores/ui";
-import { Button } from "../ui/Button";
-import { PageHeader } from "../ui/PageHeader";
+import { useEffect, useRef, useState } from "react";
+import { getKnowledgeApi } from "../api";
+import { PluginEntryHost, usePluginEntries } from "../api";
+import { UI_REGIONS } from "../api";
+import { useKnowledgeStore } from "../api";
+import { useSessionsStore } from "../api";
+import { type KnowledgeTab, useUiStore } from "../api";
+import { Button } from "../api";
+import { PageHeader } from "../api";
 import { useKnowledgeText } from "./copy";
 import { reportKnowledgeError, useKnowledgeOverview } from "./hooks";
 import { KnowledgeHome } from "./KnowledgeHome";
@@ -28,11 +28,12 @@ export function KnowledgeView() {
 	const open = useKnowledgeStore((s) => s.open);
 	const cwd = useSessionsStore((s) => s.cwd);
 	const activeSessionId = useSessionsStore((s) => s.activeSessionId);
+	const lastSession = useRef({ cwd, sessionId: activeSessionId });
+	const contextChanged = lastSession.current.cwd !== cwd || lastSession.current.sessionId !== activeSessionId;
 	const requestedTab = useUiStore((s) => s.knowledgeTab);
 	const setRequestedTab = useUiStore((s) => s.setKnowledgeTab);
 	const [tab, setTab] = useState<KnowledgeTab>(requestedTab);
 	const pluginTabs = usePluginEntries(UI_REGIONS.KnowledgeTab);
-	const knowledgePage = usePluginEntries(UI_REGIONS.KnowledgePage)[0];
 	const [pluginTab, setPluginTab] = useState<string | null>(null);
 	const selectedPlugin = pluginTabs.find((entry) => entry.id === pluginTab);
 	useEffect(() => {
@@ -40,13 +41,18 @@ export function KnowledgeView() {
 	}, [pluginTab, pluginTabs]);
 	useEffect(() => setTab(requestedTab), [requestedTab]);
 	const selectTab = (next: KnowledgeTab) => {
+		setPluginTab(null);
 		setTab(next);
 		setRequestedTab(next);
 	};
 
 	useEffect(() => {
-		if (dialog) return;
-		open({ cwd, sessionId: activeSessionId, tab: "reviews" });
+		const changed = lastSession.current.cwd !== cwd || lastSession.current.sessionId !== activeSessionId;
+		lastSession.current = { cwd, sessionId: activeSessionId };
+		if (!dialog || changed) {
+			setPluginTab(null);
+			open({ cwd, sessionId: activeSessionId, tab: "reviews" });
+		}
 	}, [dialog, open, cwd, activeSessionId]);
 
 	useEffect(() => {
@@ -66,7 +72,7 @@ export function KnowledgeView() {
 	const overview = useKnowledgeOverview(dialog?.cwd ?? null, dialog?.sessionId ?? null).data;
 	const binding = overview?.binding;
 
-	if (!dialog) return null;
+	if (!dialog || contextChanged) return null;
 	const vault = binding?.vault?.replace(/[\\/]$/u, "") ?? "";
 	const vaultLabel = vault.slice(Math.max(vault.lastIndexOf("/"), vault.lastIndexOf("\\")) + 1) || vault;
 	const description = binding
@@ -89,7 +95,7 @@ export function KnowledgeView() {
 									disabled={!binding}
 									onClick={() => {
 										if (binding)
-											void getPi()
+											void getKnowledgeApi()
 												.openKnowledgeTarget({ cwd: dialog.cwd, revision: binding.revision })
 												.catch(reportKnowledgeError);
 									}}
@@ -104,7 +110,7 @@ export function KnowledgeView() {
 											key={item}
 											type="button"
 											role="tab"
-											aria-selected={tab === item}
+											aria-selected={!pluginTab && tab === item}
 											className={`-mb-px border-b-2 px-3 py-2 text-[13px] ${tab === item ? "border-ink font-semibold text-ink" : "border-transparent text-ink-dim hover:text-ink"}`}
 											onClick={() => selectTab(item)}
 										>
@@ -168,16 +174,5 @@ export function KnowledgeView() {
 			</div>
 		</section>
 	);
-	if (knowledgePage) {
-		return (
-			<section className="knowledge-view" aria-label={t("title")} data-testid="knowledge-plugin-page">
-				<div className="knowledge-view-body">
-					<div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-1">
-						<PluginEntryHost entry={knowledgePage} fallback={builtinPage} />
-					</div>
-				</div>
-			</section>
-		);
-	}
 	return builtinPage;
 }

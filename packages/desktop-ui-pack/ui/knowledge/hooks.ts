@@ -1,11 +1,11 @@
-import type { KnowledgeOverview } from "@drone/shared";
+import type { KnowledgeOverview } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getPi } from "../../api";
-import { useKnowledgeStore } from "../../stores/knowledge";
-import { isDraftSessionId, useSessionsStore } from "../../stores/sessions";
-import { useSettingsStore } from "../../stores/settings";
-import { pushToast } from "../../stores/toasts";
-import { useUiStore } from "../../stores/ui";
+import { getKnowledgeApi } from "../api";
+import { useKnowledgeStore } from "../api";
+import { isDraftSessionId, useSessionsStore } from "../api";
+import { useSettingsStore } from "../api";
+import { pushToast } from "../api";
+import { useUiStore } from "../api";
 
 function errText(error: unknown): string {
 	const raw = error instanceof Error ? error.message : String(error);
@@ -23,7 +23,7 @@ export function useKnowledgeOverview(cwd: string | null, sessionId: string | nul
 		setLoading(true);
 		setError(null);
 		try {
-			const result = await getPi().getKnowledgeOverview({
+			const result = await getKnowledgeApi().getKnowledgeOverview({
 				cwd,
 				sessionId: isDraftSessionId(sessionId) ? null : sessionId,
 			});
@@ -68,7 +68,7 @@ export async function launchKnowledgeSetup(cwd: string | null, sessionId: string
 	try {
 		// Keep settings open until the slash command is accepted so confirm dialogs
 		// and failures stay visible instead of dumping the user into a blank chat.
-		await getPi().startKnowledgeSetup({
+		await getKnowledgeApi().startKnowledgeSetup({
 			sessionId: id,
 			...(path ? { path } : {}),
 		});
@@ -89,7 +89,7 @@ export async function launchZoteroSetup(cwd: string | null, sessionId: string | 
 	}
 	if (!id || isDraftSessionId(id)) throw new Error("Could not create the setup session");
 	try {
-		await getPi().prompt(id, "/zotero-setup");
+		await getKnowledgeApi().prompt(id, "/zotero-setup");
 		useSettingsStore.getState().setOpen(false);
 		useUiStore.getState().setView("chat");
 		useKnowledgeStore.getState().close();

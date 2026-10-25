@@ -1,7 +1,7 @@
-import type { KnowledgeLinkRef, KnowledgeNoteLinks } from "@drone/shared";
+import type { KnowledgeLinkRef, KnowledgeNoteLinks } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { useKnowledgeStore } from "../../stores/knowledge";
+import { getKnowledgeApi } from "../api";
+import { useKnowledgeStore } from "../api";
 import { useKnowledgeText } from "./copy";
 
 /** 打开另一篇笔记（保持当前知识库视图的会话与目录上下文） */
@@ -33,7 +33,7 @@ export function KnowledgeLinks({
 	useEffect(() => {
 		let live = true;
 		setLinks(null);
-		void getPi()
+		void getKnowledgeApi()
 			.getKnowledgeNoteLinks({ path, revision })
 			.then(
 				(value) => {

@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../../api", () => ({ getPi: () => ({}) }));
-vi.mock("../../stores/knowledge", () => ({ useKnowledgeStore: () => 0 }));
-vi.mock("../../i18n", () => ({ useI18nStore: () => "zh", useT: () => (key: string) => key }));
 
 import { emptyReason, lastRunNote } from "./DailyIdeas";
 

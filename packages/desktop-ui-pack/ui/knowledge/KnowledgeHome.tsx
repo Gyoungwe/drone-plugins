@@ -1,10 +1,10 @@
-import type { KnowledgeGraph as GraphData, KnowledgePage, WikiReviewItem } from "@drone/shared";
+import type { KnowledgeGraph as GraphData, KnowledgePage, WikiReviewItem } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useMemo, useState } from "react";
-import { getPi } from "../../api";
-import { useI18nStore } from "../../i18n";
-import { useKnowledgeStore } from "../../stores/knowledge";
-import { useSettingsStore } from "../../stores/settings";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { useLanguage } from "../api";
+import { useKnowledgeStore } from "../api";
+import { useSettingsStore } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 import { DailyIdeas } from "./DailyIdeas";
 import { useKnowledgeOverview } from "./hooks";
@@ -92,8 +92,8 @@ export function KnowledgeHome({
 		}
 		setReviewError(null);
 		void Promise.allSettled([
-			getPi().getKnowledgeReviews({ cwd, revision, offset: 0, limit: REVIEW_LIMIT }),
-			getPi().getKnowledgeGraph({ revision, limit: 400, view: "all", mergeMirrors: true }),
+			getKnowledgeApi().getKnowledgeReviews({ cwd, revision, offset: 0, limit: REVIEW_LIMIT }),
+			getKnowledgeApi().getKnowledgeGraph({ revision, limit: 400, view: "all", mergeMirrors: true }),
 		]).then((results) => {
 			if (!live) return;
 			const [reviewResult, graphResult] = results;
@@ -134,7 +134,7 @@ export function KnowledgeHome({
 	const openReview = (id: string) => {
 		if (cwd) useKnowledgeStore.getState().openReview({ cwd, sessionId, id });
 	};
-	const language = useI18nStore((state) => state.language);
+	const language = useLanguage();
 
 	return (
 		<div className="knowledge-home mx-auto w-full max-w-[1440px] text-ink" data-testid="knowledge-home">

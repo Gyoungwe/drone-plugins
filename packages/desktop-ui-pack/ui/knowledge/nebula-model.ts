@@ -1,4 +1,4 @@
-import type { KnowledgeGraph as GraphData } from "@drone/shared";
+import type { KnowledgeGraph as GraphData } from "@gyoungwe/plugin-api/ui";
 import Graph from "graphology";
 import louvain from "graphology-communities-louvain";
 

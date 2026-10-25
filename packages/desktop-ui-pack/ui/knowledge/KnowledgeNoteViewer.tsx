@@ -1,9 +1,9 @@
-import type { KnowledgeNote } from "@drone/shared";
-import { legacyEvidenceNotice } from "@drone/shared";
+import type { KnowledgeNote } from "@gyoungwe/plugin-api/ui";
+import { legacyEvidenceNotice } from "../api";
 import { useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { Markdown } from "../chat/Markdown";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { Markdown } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 import { KnowledgeLinks } from "./KnowledgeLinks";
 import { noteDisplayText } from "./note-display";
@@ -29,7 +29,7 @@ export function KnowledgeNoteViewer({
 		setLoading(true);
 		setNote(null);
 		setError(null);
-		void getPi()
+		void getKnowledgeApi()
 			.readKnowledgeNote({ cwd, path, startLine: line, revision })
 			.then(
 				(value) => {
@@ -121,7 +121,7 @@ export function KnowledgeNoteViewer({
 					size="sm"
 					disabled={loading || note?.missing}
 					onClick={() =>
-						void getPi()
+						void getKnowledgeApi()
 							.openKnowledgeTarget({ cwd, path, revision })
 							.catch((e) => setError(String(e.message || e)))
 					}

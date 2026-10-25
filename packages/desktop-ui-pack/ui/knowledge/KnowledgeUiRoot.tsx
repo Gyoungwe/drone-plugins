@@ -1,9 +1,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { getPi } from "../../api";
-import { useKnowledgeStore } from "../../stores/knowledge";
-import { useSessionsStore } from "../../stores/sessions";
-import { Button } from "../ui/Button";
+import { useKnowledgeStore } from "../api";
+import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
 import { WikiReviewDialog } from "./WikiReviewDialog";
 /**
@@ -18,37 +16,6 @@ export function KnowledgeUiRoot() {
 	const deferReview = useKnowledgeStore((s) => s.deferReview),
 		dismiss = useKnowledgeStore((s) => s.dismiss);
 	useEffect(() => {
-		let timer: ReturnType<typeof setTimeout> | null = null;
-		const unsubscribe = getPi().onKnowledgeEvent((event) => {
-			const store = useKnowledgeStore.getState();
-			if (event.kind === "invalidate") {
-				if (timer) clearTimeout(timer);
-				timer = setTimeout(() => {
-					timer = null;
-					store.invalidate();
-				}, 250);
-				return;
-			}
-			if (event.kind === "open-review") {
-				const sessions = useSessionsStore.getState();
-				const source = sessions.sessions.find((s) => s.sessionId === event.sessionId);
-				const cwd = source?.cwd || sessions.cwd;
-				if (cwd)
-					store.openReview({
-						cwd,
-						sessionId: event.sessionId,
-						id: event.id || "",
-					});
-				return;
-			}
-			store.apply(event);
-		});
-		return () => {
-			unsubscribe();
-			if (timer) clearTimeout(timer);
-		};
-	}, []);
-	useEffect(() => {
 		if (!notice || notice.severity === "error") return;
 		const timer = setTimeout(dismiss, 6500);
 		return () => clearTimeout(timer);
@@ -60,7 +27,7 @@ export function KnowledgeUiRoot() {
 			)}
 			{notice &&
 				createPortal(
-					<div
+					<div className="drone-knowledge-ui"><div
 						role={notice.severity === "error" ? "alert" : "status"}
 						className="fixed bottom-5 right-4 z-(--z-toast) w-[min(420px,calc(100vw-32px))] rounded-xl border border-border bg-surface p-4 text-ink shadow-dialog"
 						data-testid="knowledge-notice"
@@ -78,7 +45,7 @@ export function KnowledgeUiRoot() {
 						<p className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs leading-relaxed">
 							{notice.text}
 						</p>
-					</div>,
+					</div></div>,
 					document.body,
 				)}
 		</>

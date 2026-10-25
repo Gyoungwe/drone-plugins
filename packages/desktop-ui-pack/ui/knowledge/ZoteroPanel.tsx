@@ -1,7 +1,7 @@
-import type { ZoteroStatus } from "@drone/shared";
+import type { ZoteroStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { getPi } from "../../api";
-import { Button } from "../ui/Button";
+import { getKnowledgeApi } from "../api";
+import { Button } from "../api";
 import { ZoteroLocalWriteSection } from "./ZoteroLocalWriteSection";
 import { ZoteroWebApiSection } from "./ZoteroWebApiSection";
 import { useZoteroText } from "./zotero-copy";
@@ -18,7 +18,7 @@ export function ZoteroPanel() {
 		setLoading(true);
 		setError(null);
 		try {
-			setStatus(await getPi().getZoteroStatus());
+			setStatus(await getKnowledgeApi().getZoteroStatus());
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {

@@ -1,4 +1,4 @@
-import type { KnowledgeGraph as GraphData, KnowledgeOverview } from "@drone/shared";
+import type { KnowledgeGraph as GraphData, KnowledgeOverview } from "@gyoungwe/plugin-api/ui";
 
 export type KnowledgeCategory = "all" | "paper" | "software" | "method" | "idea";
 export type KnowledgeLeafCategory = Exclude<KnowledgeCategory, "all"> | "other";
