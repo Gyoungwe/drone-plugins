@@ -1,7 +1,7 @@
 # @gyoungwe/pi-research
 
 Self-contained research evidence tools for native Pi and Drone's public host
-composition. Version 0.2.0 is a release candidate in this repository; this change
+composition. Version 0.3.1 is a release candidate in this repository; this change
 does not publish it to npm.
 
 The native entry registers `research_search_sources`, `research_read_source`,
@@ -24,6 +24,12 @@ to 16 individual observed ranges for the current source hash; unread gaps are
 never represented as read. The host research loop also retains separate receipt
 IDs for non-contiguous source excerpts and resets them at its existing turn and
 session boundaries.
+
+`research_loop` exposes the same structured claim schema used by its runtime:
+each claim requires `claim`, `relationship`, `limitations`, and bounded
+`sources` with `path`, `start_line`, `end_line`, and a verbatim `quote`. The
+host records source hashes and reading receipt IDs. `result_slug` determines
+the persisted topic ID; there is no separate `topic` input.
 
 `registerResearchExtension` returns a host-scoped delivery handle. Desktop uses
 that same loop and journal to recheck evidence before writing a summary, hash the

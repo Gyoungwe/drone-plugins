@@ -1,10 +1,10 @@
 {
   "version": 1,
   "generator": "packages/pi-research/scripts/build.mjs",
-  "inputsSha256": "90bd7a943f30893f07362874f4a10e377239fb1617906cdb9d00ecb19329e60b",
+  "inputsSha256": "ae5e64d5168657721c8a2ecef36b458e085b664b456f0204c7237bd8ce2300fa",
   "outputs": {
-    "dist/host.mjs": "3eaf94b2b59f3941ceb6135403a38d91255405d603613e7147bd9affadb50d3a",
-    "dist/index.mjs": "41e3c8e8b74dc91faa8241e935e5907187079f4c8bbdf712cab4cae98be05bf9",
+    "dist/host.mjs": "646d84d501f8a84815a44c9de9750417ad7fbbdb274be77ebb85631eead8e64c",
+    "dist/index.mjs": "92997dad78af82ce4585c9179f24f44a44729e7a7d922bd710436ad8cc92ee05",
     "dist/types/core/claim-bindings.d.ts": "cf2ab2c03ff2ef73967de61f7f4d98ed63b598c64731aaeebb65d42204254ab4",
     "dist/types/core/external-effect-key.d.ts": "dbd00836bea9e1c8541fecebdcc5e6687351eb3d0cf3a9757ee9c489dad86d7f",
     "dist/types/core/institutional-access.d.ts": "12677b6e0873f89c2eb7b4c6001cf2a7feec63024f8f0004144f85ed780018ba",

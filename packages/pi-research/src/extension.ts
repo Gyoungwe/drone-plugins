@@ -1,4 +1,5 @@
 import { createResearchReceiptJournal } from "./core/receipt-journal.js";
+import { CLAIM_BINDING_SCHEMA } from "./core/claim-bindings.js";
 import { createResearchLoop, type ResearchLoopPorts } from "./core/research-loop.js";
 import { observeExecutionReceipt } from "./core/run-provenance.js";
 import {
@@ -19,11 +20,6 @@ export interface ResearchExtensionPorts extends ResearchLoopPorts {
 	reviewSummary?(ctx: any, packet: ResearchSummaryReviewPacket): Promise<unknown>;
 }
 
-const CLAIM_BINDING_SCHEMA = {
-	type: "array",
-	maxItems: 24,
-	items: { type: "object", additionalProperties: true },
-};
 const USER_QUESTION_FOCUS =
 	"Answer the user's current question. Use evidence for factual research claims, not unrelated citations for ordinary chat. For a simple factual question that can be answered from existing local knowledge, take the light path: retrieve, answer, and auto-deposit a bounded note when appropriate; do not create a task_plan or ask for write authorization just to answer. For substantive tasks, do bounded read-only preparation and consolidate scope, assumptions, needed permissions and deliverables into one task_plan for one user authorization. After authorization, carry out routine steps and recoverable checks within that scope without repeatedly asking whether to continue. Respect prior decisions, especially declined installs. New risks or scope, missing credentials and genuinely unavailable user data still require a specific request; never infer consent. At completion, explain what changed, link actual outputs or show key figures, separate execution from validation, and give one next step only if needed. Keep internal counters and tool logs out of the main answer.";
 
@@ -111,9 +107,10 @@ export function registerResearchExtension(
 			activity: { text: "正在检查研究证据链…", phase: "verification" },
 		},
 		description:
-			"Create or inspect a scientific evidence gate. Prefer start and status; the host advances search, inspection, archive, claims and finalize from successful tools. Structured claim_bindings with observed source excerpts are required before complete/finalize; claim_refs alone do not establish support.",
+			"Create or inspect a scientific evidence gate. Prefer start and status; result_slug determines the topic ID. The host advances search, inspection, archive, claims and finalize from successful tools. Structured claim_bindings require claim, relationship, limitations and sources with path/start_line/end_line/quote. The host supplies source hashes and read receipt IDs; never invent them. claim_refs alone do not establish support.",
 		parameters: {
 			type: "object",
+			additionalProperties: false,
 			properties: {
 				action: {
 					type: "string",

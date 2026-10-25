@@ -35,7 +35,7 @@
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "1.1.0",
     "@gyoungwe/pi-core": "0.1.9",
-    "@gyoungwe/pi-research": "0.3.0",
+    "@gyoungwe/pi-research": "0.3.1",
     "@gyoungwe/plugin-api": "^1.2.0",
     "@types/node": "^22.19.19",
     "typescript": "5.9.3"

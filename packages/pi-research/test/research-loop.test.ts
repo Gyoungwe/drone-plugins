@@ -54,7 +54,7 @@ function setup(cwd: string) {
 				context(id),
 			);
 	};
-	return { call, event };
+	return { call, event, tool: tools.get("research_loop") };
 }
 const startedEvent = (query: string) => ({
 	toolCallId: "same-tool-call",
@@ -69,6 +69,20 @@ const endedEvent = {
 };
 
 describe("complete research extension lifecycle", () => {
+	it("exposes the complete claim and source input contract to the model", async () => {
+		const { tool } = setup(await workspace());
+		const claims = tool.parameters.properties.claim_bindings;
+		expect(claims.items.required).toEqual(["claim", "relationship", "limitations", "sources"]);
+		expect(claims.items.properties.relationship.enum).toEqual([
+			"direct", "indirect", "hypothesis", "unsupported",
+		]);
+		expect(claims.items.properties.sources.items.required).toEqual([
+			"path", "start_line", "end_line", "quote",
+		]);
+		expect(claims.items.properties.sources.items.properties).not.toHaveProperty("readReceiptId");
+		expect(tool.parameters.additionalProperties).toBe(false);
+	});
+
 	it("persists the full gate and rejects empty claims and direct finalization", async () => {
 		const host = setup(await workspace());
 		const started = await host.call("one", "start", { query: "evidence" });

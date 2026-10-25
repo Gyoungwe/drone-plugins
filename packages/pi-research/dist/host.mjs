@@ -5433,11 +5433,6 @@ ${changes.map((line) => `- ${line}`).join("\n")}`);
 }
 
 // src/extension.ts
-var CLAIM_BINDING_SCHEMA2 = {
-  type: "array",
-  maxItems: 24,
-  items: { type: "object", additionalProperties: true }
-};
 var USER_QUESTION_FOCUS = "Answer the user's current question. Use evidence for factual research claims, not unrelated citations for ordinary chat. For a simple factual question that can be answered from existing local knowledge, take the light path: retrieve, answer, and auto-deposit a bounded note when appropriate; do not create a task_plan or ask for write authorization just to answer. For substantive tasks, do bounded read-only preparation and consolidate scope, assumptions, needed permissions and deliverables into one task_plan for one user authorization. After authorization, carry out routine steps and recoverable checks within that scope without repeatedly asking whether to continue. Respect prior decisions, especially declined installs. New risks or scope, missing credentials and genuinely unavailable user data still require a specific request; never infer consent. At completion, explain what changed, link actual outputs or show key figures, separate execution from validation, and give one next step only if needed. Keep internal counters and tool logs out of the main answer.";
 function sessionKey(ctx) {
   return ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || ctx?.cwd || "";
@@ -5478,9 +5473,10 @@ function registerResearchExtension(pi, ports) {
       capabilities: ["research"],
       activity: { text: "\u6B63\u5728\u68C0\u67E5\u7814\u7A76\u8BC1\u636E\u94FE\u2026", phase: "verification" }
     },
-    description: "Create or inspect a scientific evidence gate. Prefer start and status; the host advances search, inspection, archive, claims and finalize from successful tools. Structured claim_bindings with observed source excerpts are required before complete/finalize; claim_refs alone do not establish support.",
+    description: "Create or inspect a scientific evidence gate. Prefer start and status; result_slug determines the topic ID. The host advances search, inspection, archive, claims and finalize from successful tools. Structured claim_bindings require claim, relationship, limitations and sources with path/start_line/end_line/quote. The host supplies source hashes and read receipt IDs; never invent them. claim_refs alone do not establish support.",
     parameters: {
       type: "object",
+      additionalProperties: false,
       properties: {
         action: {
           type: "string",
@@ -5506,7 +5502,7 @@ function registerResearchExtension(pi, ports) {
         requires_provenance: { type: "boolean" },
         source_refs: { type: "array", items: { type: "string" } },
         claim_refs: { type: "array", items: { type: "string" } },
-        claim_bindings: CLAIM_BINDING_SCHEMA2,
+        claim_bindings: CLAIM_BINDING_SCHEMA,
         outcome: { type: "string" },
         notes: { type: "string" }
       },
