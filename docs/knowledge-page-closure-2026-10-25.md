@@ -34,3 +34,9 @@ API/core 的可复现 tarball、SHA-256 和用途见 [vendor/README.md](../vendo
 CSS 回归根因：`@theme inline` 输出在插件 wrapper 内生成自引用 `--color-ink:var(--color-ink)`，遮蔽宿主继承值；`@property --tw-*` 注册则不受选择器作用域限制。修复使用 reference theme、插件专属 property 和 layer 名称。浏览器 RED 实测原样式将宿主卡片边框从 3px 改成 0px；修复后浅色/深色输入、列表及宿主启停快照一致。
 
 宿主最终 DMG SHA-256：`a6498216ee13032bb8fe5f29b19f8d11d02d5bb4fd262f66dcaf6e830e29b8bb`。宿主完整记录位于 Drone 仓库 `docs/releases/knowledge-page-closure-2026-10-25.json`。渲染崩溃与第三方知识页签由自动化回归覆盖，未在正式 GUI 人为注入故障。
+
+## 合并后验证
+
+两实现分支已快进合入各自 main 并推送，fetch 后远端 SHA 与本地一致；干净工作区复跑跨仓库 migration/lifecycle 通过，保留迁移历史；本次验证基线为 Drone `f743b41ee64d2a8499332db59d70358ebcd802f4` / drone-plugins `118a01313f7c4bdc9607f4bbff6dae880e75a640`。使用隔离 HOME 和 npm 配置，不设置 `DRONE_PLUGINS_DIR`，通过相邻插件仓库绑定重跑宿主 12 项门禁，以及插件 `npm ci`、完整 `npm run check`。额外浏览器样式检查使用独立临时 profile；精简环境下 Chrome 两次在退出阶段崩溃，恢复桌面环境后相同脚本与浏览器通过，未绕过退出码或断言。命令、退出码和日志摘要保存在 Drone 的机器回执 `docs/releases/knowledge-page-closure-2026-10-25.json` → `implementationMainIntegration`。
+
+插件第一次空缓存安装发现锁文件仍记录较早 API 候选的 integrity，而已提交 tarball 与公开证据 SHA-256 一致；修正锁校验值后独立安装及完整检查通过。未改候选包字节或产品源码。此前缓存下的安装结果不能作为可复现干净安装证明，本次结果替代该项。正式 DMG GUI 和双 SDK 完整流程沿用前轮相同产品源码的真实回执，本次未重新执行 GUI；合并与门禁不表示四个候选版本已发布。
