@@ -22,3 +22,5 @@ research-suite 0.1.11 顶层声明可选 @napi-rs/canvas ^1.0.0，由消费者 n
 后续收紧回归：同时检查 stdout/stderr 的 Canvas 警告，重新运行 test:pdf 通过；日志 SHA256 `299f66c83b3fd884ab960aad42b04f128bbfb125125e6d87e9528864d9c4d6f1`。
 
 修复 b5addb1 已快进合入 main；合并后 npm run check 完整通过，日志 SHA256 `48db665150fe5093857f2d6d06c46556c8458e82e77e9bf0898e1f4905f727f3`。suite 0.1.11 已 staged（`bab97837-b274-4c5a-af54-a0334c396989`），staged 下载字节与新候选一致；与 core、UI 一起保持未公开状态，等待 npm 安全认证。
+
+在线复核跟进：两个原始场景累计七次真实会话，最终方法/临床推断报告为 297/152 词，经过明确审阅反馈后有限范围通过。首次字数失败、中间范围/来源描述和指标概括问题全部保留；不能称首次自主科学质量通过。七次交付字节与 completed 回执一致，候选笔记另行回读；有些笔记引用格式与报告不同，不声称字节相同。详见 Drone 同名证据的 onlineFollowup。三个目标包在本次跟进仍 staged 且公开 registry 404，原 stage ID 保留；未完成账户/设备状态不变。
