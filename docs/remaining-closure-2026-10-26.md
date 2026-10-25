@@ -20,3 +20,5 @@ research-suite 0.1.11 顶层声明可选 @napi-rs/canvas ^1.0.0，由消费者 n
 宿主验收与最终状态在 Drone docs/releases/remaining-closure-2026-10-26.md 和对应 JSON 汇总；账户、其他平台、发布后验证不由上述候选结果替代。
 
 后续收紧回归：同时检查 stdout/stderr 的 Canvas 警告，重新运行 test:pdf 通过；日志 SHA256 `299f66c83b3fd884ab960aad42b04f128bbfb125125e6d87e9528864d9c4d6f1`。
+
+修复 b5addb1 已快进合入 main；合并后 npm run check 完整通过，日志 SHA256 `48db665150fe5093857f2d6d06c46556c8458e82e77e9bf0898e1f4905f727f3`。suite 0.1.11 已 staged（`bab97837-b274-4c5a-af54-a0334c396989`），staged 下载字节与新候选一致；与 core、UI 一起保持未公开状态，等待 npm 安全认证。
