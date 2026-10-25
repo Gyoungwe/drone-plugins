@@ -1,12 +1,22 @@
 import { createResearchReceiptJournal } from "./core/receipt-journal.js";
 import { createResearchLoop, type ResearchLoopPorts } from "./core/research-loop.js";
 import { observeExecutionReceipt } from "./core/run-provenance.js";
+import {
+	deliveryMemoryClaims,
+	summaryReviewPacket,
+	validateSummaryAssessment,
+	type PreparedResearchDelivery,
+	type ResearchDeliveryCopy,
+	type ResearchDeliveryReceipt,
+	type ResearchSummaryReviewPacket,
+} from "./core/research-delivery.js";
 
 export interface ResearchExtensionPorts extends ResearchLoopPorts {
- resolveSessionProject(ctx: any, requested?: string): Promise<{ project: string }>;
- describeProject(resolution: any): unknown;
- registerTool(pi: any, tool: any): void;
- run<T>(operation: () => T | Promise<T>): Promise<T>;
+	resolveSessionProject(ctx: any, requested?: string): Promise<{ project: string }>;
+	describeProject(resolution: any): unknown;
+	registerTool(pi: any, tool: any): void;
+	run<T>(operation: () => T | Promise<T>): Promise<T>;
+	reviewSummary?(ctx: any, packet: ResearchSummaryReviewPacket): Promise<unknown>;
 }
 
 const CLAIM_BINDING_SCHEMA = {
@@ -35,6 +45,19 @@ type Pi = {
 };
 type Loop = ReturnType<typeof createResearchLoop>;
 
+export interface ResearchDeliveryWriterResult<T> {
+	value: T;
+	copies: readonly ResearchDeliveryCopy[];
+	rollback(): Promise<void>;
+}
+export interface ResearchExtensionHandle {
+	deliver<T>(
+		ctx: any,
+		input: { runDir: string; markdown: string; claims?: unknown },
+		writer: (prepared: PreparedResearchDelivery) => Promise<ResearchDeliveryWriterResult<T>>,
+	): Promise<{ value: T; receipt: ResearchDeliveryReceipt; claims: readonly Record<string, unknown>[] }>;
+}
+
 type SessionState = {
 	journals: Map<string, ReturnType<typeof createResearchReceiptJournal>>;
 	pending: Map<
@@ -48,28 +71,31 @@ function sessionKey(ctx: any): string {
 	return ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || ctx?.cwd || "";
 }
 
-export function registerResearchExtension(pi: Pi, ports: ResearchExtensionPorts): void {
+export function registerResearchExtension(
+	pi: Pi,
+	ports: ResearchExtensionPorts,
+): ResearchExtensionHandle | undefined {
 	if (process.env.PI_SUBAGENT_CHILD === "1") return;
- const state: SessionState = { journals: new Map(), pending: new Map(), awaitingUserStart: new Set() };
- const owners = new Map<string, symbol>();
- const loop: Loop = createResearchLoop(ports);
- const run = ports.run;
- const journalPorts = {
-  workspace: ports.workspace,
-  status: async (cwd: string, runDir: string) => loop.updateResearchLoop({ cwd, runDir, action: "status" }),
-  flush: async (cwd: string, runDir: string) => loop.flushResearchReceipts({ cwd, runDir }),
-  reset: (cwd: string, runDir: string) => loop.resetResearchReceipts({ cwd, runDir }),
-  observeExecution: (event: any) => observeExecutionReceipt(event),
-  observeResearch: (event: any) => loop.observeResearchReceipt(event),
-  owners,
- };
+	const state: SessionState = { journals: new Map(), pending: new Map(), awaitingUserStart: new Set() };
+	const owners = new Map<string, symbol>();
+	const loop: Loop = createResearchLoop(ports);
+	const run = ports.run;
+	const journalPorts = {
+		workspace: ports.workspace,
+		status: async (cwd: string, runDir: string) => loop.updateResearchLoop({ cwd, runDir, action: "status" }),
+		flush: async (cwd: string, runDir: string) => loop.flushResearchReceipts({ cwd, runDir }),
+		reset: (cwd: string, runDir: string) => loop.resetResearchReceipts({ cwd, runDir }),
+		observeExecution: (event: any) => observeExecutionReceipt(event),
+		observeResearch: (event: any) => loop.observeResearchReceipt(event),
+		owners,
+	};
 	const journalFor = (ctx: any) => {
 		const key = sessionKey(ctx);
 		let journal = state.journals.get(key);
 		if (!journal) {
 			journal = createResearchReceiptJournal(ctx.cwd, {
 				sessionId: key,
-    ports: journalPorts,
+				ports: journalPorts,
 			});
 			state.journals.set(key, journal);
 		}
@@ -136,9 +162,7 @@ export function registerResearchExtension(pi: Pi, ports: ResearchExtensionPorts)
 				// One project identity per workspace (or per daily-space session); a different
 				// model-supplied project is ignored and reported back.
 				const projectResolution =
-					params.action === "start"
-						? await ports.resolveSessionProject(ctx, params.project)
-						: null;
+					params.action === "start" ? await ports.resolveSessionProject(ctx, params.project) : null;
 				const result: any = await journal.execute(runDir, async () =>
 					params.action === "start"
 						? loop.startResearchRun({
@@ -226,7 +250,7 @@ export function registerResearchExtension(pi: Pi, ports: ResearchExtensionPorts)
 				key,
 				createResearchReceiptJournal(ctx.cwd, {
 					sessionId: key,
-     ports: journalPorts,
+					ports: journalPorts,
 				}),
 			);
 			state.pending.forEach((item, id) => {
@@ -258,4 +282,42 @@ export function registerResearchExtension(pi: Pi, ports: ResearchExtensionPorts)
 			if (state.journals.size === 0) loop.dispose();
 		}),
 	);
+	return {
+		deliver: (ctx, input, writer) =>
+			run(() =>
+				journalFor(ctx).execute(input.runDir, async () => {
+					const prepared = await loop.prepareResearchDelivery({ cwd: ctx.cwd, ...input });
+					const claims = deliveryMemoryClaims(input.claims, prepared);
+					const packet = summaryReviewPacket(prepared, claims);
+					if (!ports.reviewSummary)
+						throw new Error(
+							"Summary semantic reviewer is unavailable; keep this summary as an unreviewed draft",
+						);
+					const assessment = validateSummaryAssessment(await ports.reviewSummary(ctx, packet), packet);
+					const current = await loop.prepareResearchDelivery({ cwd: ctx.cwd, ...input });
+					if (
+						current.evidenceRevision !== prepared.evidenceRevision ||
+						current.gateSha256 !== prepared.gateSha256 ||
+						current.claimsSha256 !== prepared.claimsSha256
+					)
+						throw new Error("Research evidence changed during semantic review; no summary was written");
+					const written = await writer(prepared);
+					let receipt: ResearchDeliveryReceipt;
+					try {
+						receipt = await loop.commitResearchDelivery({
+							cwd: ctx.cwd,
+							runDir: input.runDir,
+							prepared,
+							copies: written.copies,
+							assessment,
+							memoryClaims: claims,
+						});
+					} catch (error) {
+						await written.rollback();
+						throw error;
+					}
+					return { run_dir: input.runDir, value: written.value, receipt, claims };
+				}),
+			) as Promise<any>,
+	};
 }

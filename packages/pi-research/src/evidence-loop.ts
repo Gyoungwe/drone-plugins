@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import { access, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
@@ -30,7 +30,8 @@ type SourceRecord = {
 	hash: string;
 };
 
-type ReadReceipt = SourceRecord & {
+type ReadRange = {
+	receiptId: string;
 	readText: string;
 	startLine: number;
 	endLine: number;
@@ -38,6 +39,7 @@ type ReadReceipt = SourceRecord & {
 	pageEnd?: number;
 	readAt: string;
 };
+type ReadReceipt = SourceRecord & ReadRange & { ranges: readonly ReadRange[] };
 
 type ResearchState = {
 	index: Map<string, SourceRecord>;
@@ -45,6 +47,21 @@ type ResearchState = {
 	searches: number;
 	deposits: number;
 };
+
+async function currentReads(state: ResearchState, ids: readonly string[]): Promise<ReadReceipt[]> {
+	const result: ReadReceipt[] = [];
+	for (const id of ids) {
+		const receipt = state.reads.get(id);
+		if (!receipt) throw new Error("Every source_id must have an observed read receipt");
+		const current = await readSource(receipt.root, receipt.path);
+		if (!current || current.hash !== receipt.hash) {
+			state.reads.delete(id);
+			throw new Error("Source changed since reading; search and read its current version");
+		}
+		result.push(receipt);
+	}
+	return result;
+}
 
 function result(details: unknown) {
 	return {
@@ -300,6 +317,7 @@ export function registerEvidenceLoop(pi: any): void {
 			type: "object",
 			properties: {
 				source_id: { type: "string" },
+				start_line: { type: "integer", minimum: 1 },
 				max_chars: { type: "integer", minimum: 200, maximum: MAX_READ_CHARS },
 			},
 			required: ["source_id"],
@@ -319,28 +337,50 @@ export function registerEvidenceLoop(pi: any): void {
 				throw new Error("source changed after search; search again before reading");
 			const maxChars = Math.max(200, Math.min(MAX_READ_CHARS, Number(params?.max_chars) || 8000));
 			const body = parseFrontmatter(current.text).body;
-			const readText = body.slice(0, maxChars);
-			const lines = readText.split(/\r?\n/).length;
+			const startLine = params?.start_line ?? 1;
+			if (!Number.isInteger(startLine) || startLine < 1)
+				throw new Error("start_line must be a positive integer");
+			const available = body.split(/\r?\n/);
+			if (startLine > available.length) throw new Error("start_line is beyond the source body");
+			const selected: string[] = [];
+			let chars = 0;
+			for (const line of available.slice(startLine - 1)) {
+				const width = line.length + (selected.length ? 1 : 0);
+				if (chars + width > maxChars) break;
+				selected.push(line);
+				chars += width;
+			}
+			if (!selected.length)
+				throw new Error("First requested line exceeds max_chars; no complete line was read");
+			const readText = selected.join("\n");
 			const pages = pageRange(readText);
 			const previous = state.reads.get(current.id);
-			const receipt: ReadReceipt = {
-				...current,
+			const range: ReadRange = {
+				receiptId: randomUUID(),
 				readText,
-				startLine: 1,
-				endLine: lines,
+				startLine,
+				endLine: startLine + selected.length - 1,
 				...(pages ? { pageStart: pages.start, pageEnd: pages.end } : {}),
 				readAt: new Date().toISOString(),
 			};
+			const ranges = [...(previous?.hash === current.hash ? previous.ranges : []), range].slice(-16);
+			const receipt: ReadReceipt = { ...current, ...range, ranges };
 			state.reads.set(current.id, receipt);
 			return result({
 				...publicSource(current),
 				content: readText,
 				status: previous?.hash === current.hash ? "already-read" : "read",
+				read_receipts: ranges.map((item) => ({
+					receipt_id: item.receiptId,
+					start_line: item.startLine,
+					end_line: item.endLine,
+				})),
 				read_receipt: {
 					source_id: current.id,
 					hash: current.hash,
-					start_line: 1,
-					end_line: lines,
+					receipt_id: range.receiptId,
+					start_line: range.startLine,
+					end_line: range.endLine,
 					...(pages ? { page_start: pages.start, page_end: pages.end } : {}),
 				},
 			});
@@ -375,7 +415,7 @@ export function registerEvidenceLoop(pi: any): void {
 				new Set<string>((Array.isArray(params?.source_ids) ? params.source_ids : []).map(String)),
 			);
 			if (!ids.length) throw new Error("source_ids must contain at least one source read this session");
-			const sources = ids.map((id) => state.reads.get(id)).filter(Boolean) as ReadReceipt[];
+			const sources = await currentReads(state, ids);
 			if (sources.length !== ids.length) throw new Error("every source_id must have a current read receipt");
 			const cwd = resolve(String(ctx?.cwd || process.cwd()));
 			const notesRoot = join(cwd, ".pi", "research-notes");
@@ -425,7 +465,7 @@ export function registerEvidenceLoop(pi: any): void {
 			const ids = (Array.isArray(params?.source_ids) ? params.source_ids : [...state.reads.keys()]).map(
 				String,
 			) as string[];
-			const reads = [...new Set(ids)].map((id) => state.reads.get(id)).filter(Boolean) as ReadReceipt[];
+			const reads = await currentReads(state, [...new Set(ids)]);
 			if (reads.length < 2) throw new Error("answer requires at least two distinct read sources");
 			const gate = createEvidenceGate({ scope: "research-source-answer" });
 			gate.advance("local_query_recorded", { question: String(params?.question).trim() });
@@ -446,6 +486,12 @@ export function registerEvidenceLoop(pi: any): void {
 					),
 					read_hash: read.hash,
 					lines: [read.startLine, read.endLine],
+					read_receipts: read.ranges.map((item) => ({
+						receipt_id: item.receiptId,
+						start_line: item.startLine,
+						end_line: item.endLine,
+						content: item.readText,
+					})),
 					...(read.pageStart ? { pages: [read.pageStart, read.pageEnd ?? read.pageStart] } : {}),
 				})),
 				source_count: reads.length,

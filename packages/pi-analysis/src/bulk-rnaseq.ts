@@ -4,7 +4,11 @@ import type {
 	AnalysisGate,
 	AnalysisReadiness,
 	AnalysisReviewCheck,
+	AnalysisArtifactValidationInput,
 } from "./analysis-contract.js";
+import { validateBulkResults } from "./bulk-results.js";
+import { canonicalPlanJson, normalizeBulkScientificPlan } from "./bulk-scientific-plan.js";
+import { BulkRnaseqNumericalComparator } from "./bulk-comparator.js";
 import {
 	type AnalysisAdapter,
 	type AnalysisAdapterPlan,
@@ -78,7 +82,8 @@ export function assessBulkRnaseqReadiness(input: BulkRnaseqReadinessInput): Anal
 }
 
 export class BulkRnaseqAdapter implements AnalysisAdapter {
-	readonly identity = { id: "bulk-rnaseq", version: "1.0.0" };
+	readonly numericalComparator = new BulkRnaseqNumericalComparator();
+	readonly identity = { id: "bulk-rnaseq", version: "1.1.0" };
 	readonly contract = {
 		schemaVersion: 1 as const,
 		assay: "bulk-rnaseq",
@@ -94,19 +99,27 @@ export class BulkRnaseqAdapter implements AnalysisAdapter {
 		],
 		capabilities: ["analysis", "files", "coding"],
 		sideEffects: ["read-only", "code-execution", "project-write"],
-		evidenceTypes: ["sample-design", "differential-results", "dispersion-diagnostic"],
-		workflow: { id: "drone/pasilla-deseq2", version: "1.0.0" },
+		evidenceTypes: ["sample-design", "count-matrix", "differential-results", "execution-receipt", "dispersion-diagnostic"],
+		workflow: { id: "drone/deseq2-counts", version: "1.0.0" },
 	} as const;
 	readonly reviewInstructions =
-		"Review bulk RNA-seq sample/design correspondence, count and result evidence. Biological replication is distinct from technical lanes. Fixed-dispersion diagnostic results only support exploratory observations; never formal differential-expression claims. Preserve all supplied limitations. The replicate gate is screening, not proof of statistical power.";
+		"Interpret the frozen scientific plan, complete table checks and observed execution packet. Preserve the supplied sample mapping, contrast direction, filtering, threshold units and limitations. Deterministic failures pause delivery. Counts-only reference/annotation exclusions limit conclusions to supplied feature IDs. Biological replication is distinct from technical lanes. Fixed-dispersion diagnostics support exploratory observations only. The replicate gate is screening rather than proof of statistical power.";
 	supports(assay: string): boolean {
 		return assay === "bulk-rnaseq";
+	}
+	validateArtifacts(input: AnalysisArtifactValidationInput) {
+		return validateBulkResults(input);
 	}
 	buildPlan(context: AnalysisContext, spec: AnalysisComputePlanInput, value: unknown): AnalysisAdapterPlan {
 		const evidence = recordEvidence(value);
 		const method = methodIdentity(evidence.method);
 		if (!["DESeq2", "DESeq2/fixed-dispersion-diagnostic"].includes(method.id))
 			throw new Error("Bulk RNA-seq adapter requires an explicit supported DESeq2 method");
+		const scientificPlan = evidence.scientificPlan === undefined ? undefined : normalizeBulkScientificPlan(
+			spec, evidence.scientificPlan, method, evidence.groupColumn, evidence.biologicalUnitColumn,
+		);
+		if (scientificPlan && canonicalPlanJson(spec.dataDesign?.analysisPlan?.methodPlan) !== canonicalPlanJson(scientificPlan))
+			throw new Error("The scientific method plan must be frozen in the authorized analysisPlan before readiness");
 		const units = new Map<string, Set<string>>();
 		const groupsByUnit = new Map<string, string>();
 		if (typeof evidence.groupColumn !== "string" || typeof evidence.biologicalUnitColumn !== "string")
@@ -124,12 +137,17 @@ export class BulkRnaseqAdapter implements AnalysisAdapter {
 			units.set(group, groupUnits);
 		}
 		const biologicalReplicates = [...units].map(([group, members]) => ({ group, count: members.size }));
-		const assessment = assessBulkRnaseqReadiness({
+		let assessment = assessBulkRnaseqReadiness({
 			mode: context.mode,
-			contrastResolved: evidence.contrastResolved === true,
-			referenceResolved: evidence.referenceResolved === true,
+			contrastResolved: scientificPlan !== undefined || evidence.contrastResolved === true,
+			referenceResolved: scientificPlan !== undefined || evidence.referenceResolved === true,
 			biologicalReplicates,
 		});
+		if (method.id === "DESeq2" && !scientificPlan) assessment = {
+			...assessment, ok: false, inferentialClaimsAllowed: false,
+			gates: [...assessment.gates, { code: "missing-data", severity: "pause", evidenceKey: "scientificPlan",
+				message: "Standard DESeq2 requires a frozen scientific plan and observed execution receipt before delivery." }],
+		};
 		// Exploratory mode never waives the selected method's replicate requirement.
 		if (
 			(method.id === "DESeq2" && biologicalReplicates.some((item) => item.count < 2)) ||
@@ -137,6 +155,7 @@ export class BulkRnaseqAdapter implements AnalysisAdapter {
 		) {
 			return {
 				method,
+				...(scientificPlan ? { scientificPlan } : {}),
 				requiredOutputs: requiredOutputs(spec),
 				adapterSnapshotSha256: adapterSnapshotSha256(this),
 				assessment: {
@@ -158,6 +177,7 @@ export class BulkRnaseqAdapter implements AnalysisAdapter {
 		}
 		return {
 			method,
+			...(scientificPlan ? { scientificPlan } : {}),
 			requiredOutputs: requiredOutputs(spec),
 			assessment,
 			adapterSnapshotSha256: adapterSnapshotSha256(this),
@@ -174,7 +194,7 @@ export class BulkRnaseqAdapter implements AnalysisAdapter {
 				id: "rnaseq-result-table",
 				passed: header.includes("log2FoldChange") && Boolean(result?.text?.trim().includes("\n")),
 				detail:
-					"DESeq2 results.tsv must include log2FoldChange and observed rows; scientific interpretation remains a model review responsibility.",
+					"This bounded text is a result preview; delivery also requires full-file schema/NA validation and the selected method's frozen execution evidence.",
 			},
 		];
 	}

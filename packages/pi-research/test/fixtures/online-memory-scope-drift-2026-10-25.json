@@ -1,0 +1,17 @@
+{
+  "scope": "Redacted structured excerpt of an observed online model failure; not scientific gold",
+  "retrievedOn": "2026-10-25",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "originalReviewSha256": "a400f5a5a16c285fffc25661ca0e057575f3b206e512699c83a2da34a35e92f4",
+  "bodySha256": "aa06b6f786ed7e45339f6c7fa87161a4f40fd7d2fd667df03a72eda97462beff",
+  "packetSha256": "a1be598029f09dcc4e6cee84a6b05e262b22d06273ca851f1c960af634fa1e56",
+  "observedDelivery": "committed",
+  "block": {
+    "role": "claim",
+    "assessment": "supported",
+    "reasonExcerpt": "The memoryClaims metadata, however, expands scope to human patients, patient tissue, clinical treatment, and a randomized clinical trial, which contradicts the source"
+  },
+  "memoryClaimsAssessmentPresent": false,
+  "omitted": "Source text, summary text, raw session, paths, credentials, provider transport and raw network response"
+}

@@ -2,10 +2,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { runRuntimeExclusive } from "./runtime-host.js";
 import { compareClaimSets } from "./claim-conflicts.js";
 import { knowledgeDirectory } from "./config.js";
 import { canRead, readNoteFile, validateNote } from "./files.js";
+import { runRuntimeExclusive } from "./runtime-host.js";
 
 export const TOPIC_MEMORY_VERSION = 1;
 export const TOPIC_MEMORY_LIMITS = Object.freeze({
@@ -81,7 +81,14 @@ async function ensureWithin(root, target) {
 }
 function blank(vaultId, project) {
 	const now = new Date().toISOString();
-	return { version: TOPIC_MEMORY_VERSION, vaultId, project, revision: 0, updatedAt: now, topics: [] };
+	return {
+		version: TOPIC_MEMORY_VERSION,
+		vaultId,
+		project,
+		revision: 0,
+		updatedAt: now,
+		topics: [],
+	};
 }
 function validateSource(source, project = null) {
 	if (
@@ -185,7 +192,10 @@ function normalizeTopic(topic, binding, project) {
 		history: Array.isArray(topic.history)
 			? topic.history
 					.slice(-TOPIC_MEMORY_LIMITS.maxHistory)
-					.map((entry) => ({ summary: text(entry?.summary, 800), updatedAt: text(entry?.updatedAt, 40) }))
+					.map((entry) => ({
+						summary: text(entry?.summary, 800),
+						updatedAt: text(entry?.updatedAt, 40),
+					}))
 					.filter((entry) => entry.summary)
 			: [],
 		vaultId: typeof binding === "string" ? binding : binding?.vaultId,
@@ -214,14 +224,23 @@ function normalizeClaim(claim, project) {
 		subject: text(claim.subject, 180),
 		predicate: text(claim.predicate, 180),
 		...(value ? { value } : {}),
-		...["organism", "tissue", "stage", "method"].reduce((result, key) => {
+		...["organism", "tissue", "stage", "method", "endpoint", "unit"].reduce((result, key) => {
 			const value = text(claim[key], 180);
 			if (value) result[key] = value;
 			return result;
 		}, {}),
+		...(claim.direction !== undefined
+			? {
+					direction: ["increase", "decrease", "affirmed", "negated", "unknown"].includes(claim.direction)
+						? claim.direction
+						: "unknown",
+				}
+			: {}),
+		...(Number.isFinite(claim.effect) ? { effect: claim.effect } : {}),
 		sourcePath,
 		sourceHash,
 		...(claim.location ? { location: text(claim.location, 120) } : {}),
+		...(claim.limitations ? { limitations: text(claim.limitations, 4000) } : {}),
 		relation,
 	};
 }
@@ -253,6 +272,15 @@ function normalizeConflict(conflict, project) {
 		previousSourcePath: text(conflict.previousSourcePath, 240),
 		incomingSourcePath: text(conflict.incomingSourcePath, 240),
 		detectedAt: text(conflict.detectedAt, 40),
+		...(conflict.comparisonVersion === 2
+			? {
+					comparisonVersion: 2,
+					previousSourceHash: text(conflict.previousSourceHash, 64),
+					incomingSourceHash: text(conflict.incomingSourceHash, 64),
+					missingConditions: conflict.missingConditions,
+					differingConditions: conflict.differingConditions,
+				}
+			: {}),
 	};
 	if (!["contradicts", "supports", "refines", "supersedes", "unresolved"].includes(result.relation))
 		return null;
@@ -279,7 +307,10 @@ function validateDocument(value, vaultId, project) {
 		throw new Error("Corrupt topic memory; refusing overwrite");
 	if (value.topics.length > TOPIC_MEMORY_LIMITS.maxTopics)
 		throw new Error("Topic memory exceeds its bounded record limit");
-	return { ...value, topics: value.topics.map((topic) => normalizeTopic(topic, vaultId, project)) };
+	return {
+		...value,
+		topics: value.topics.map((topic) => normalizeTopic(topic, vaultId, project)),
+	};
 }
 async function readDocument(path, vaultId, project) {
 	try {
@@ -298,7 +329,10 @@ async function atomicWrite(path, value) {
 	await mkdir(dirname(path), { recursive: true, mode: 0o700 });
 	const temp = join(dirname(path), `.${randomUUID()}.tmp`);
 	try {
-		await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+		await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, {
+			flag: "wx",
+			mode: 0o600,
+		});
 		await rename(temp, path);
 	} finally {
 		await unlink(temp).catch((error) => {
@@ -308,22 +342,6 @@ async function atomicWrite(path, value) {
 }
 async function withLock(path, operation) {
 	return runRuntimeExclusive("topic-memory", path, operation);
-}
-function tokens(value) {
-	return new Set(
-		text(value, 6000)
-			.toLowerCase()
-			.split(/[^\p{L}\p{N}]+/u)
-			.filter((x) => x.length > 2),
-	);
-}
-function overlap(a, b) {
-	const left = tokens(a),
-		right = tokens(b);
-	if (!left.size || !right.size) return 0;
-	let common = 0;
-	for (const item of left) if (right.has(item)) common++;
-	return common / Math.max(left.size, right.size);
 }
 
 export function classifyTopic(existing, incoming) {
@@ -346,8 +364,7 @@ export function classifyTopic(existing, incoming) {
 		compareClaimSets(previousClaims, incomingClaims).some((comparison) => comparison.blocking)
 	)
 		return "conflict-candidate";
-	if (overlap(existing.summary, incoming.summary) < 0.12 && overlap(existing.title, incoming.title) < 0.2)
-		return "conflict-candidate";
+	// Text similarity cannot establish a scientific contradiction.
 	return "additional";
 }
 
@@ -444,7 +461,11 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 				entities: value.entities.slice(0, 6),
 			});
 		if (output.length > TOPIC_MEMORY_LIMITS.maxContextChars)
-			output = JSON.stringify({ id: value.id, title: value.title, entities: value.entities.slice(0, 3) });
+			output = JSON.stringify({
+				id: value.id,
+				title: value.title,
+				entities: value.entities.slice(0, 3),
+			});
 		return output;
 	};
 	return {
@@ -505,7 +526,10 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 				});
 			}
 			return {
-				topic: { ...compact(topic), status: stale.length ? "stale" : topic.status },
+				topic: {
+					...compact(topic),
+					status: stale.length ? "stale" : topic.status,
+				},
 				stale,
 				status: stale.length ? "stale" : topic.status,
 			};
@@ -556,6 +580,11 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 						conflicts: [
 							...(previous?.conflicts || []),
 							...claimComparisons.map((comparison) => ({
+								comparisonVersion: 2,
+								previousSourceHash: comparison.previous.sourceHash,
+								incomingSourceHash: comparison.incoming.sourceHash,
+								missingConditions: comparison.missingConditions,
+								differingConditions: comparison.differingConditions,
 								relation: comparison.relation,
 								confidence: comparison.confidence,
 								reason: comparison.reason,
@@ -607,7 +636,12 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 					(input.topicId ? value.topics.find((topic) => topic.id === text(input.topicId, 120)) : null);
 				const classification = classifyTopic(existing, input);
 				if (classification === "duplicate") {
-					receipt = { classification, revision: value.revision, topic: compact(existing), changed: false };
+					receipt = {
+						classification,
+						revision: value.revision,
+						topic: compact(existing),
+						changed: false,
+					};
 					value.__topicNoop = true;
 					return value;
 				}
@@ -624,6 +658,11 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 					: [];
 				claimComparisons = compareClaimSets(priorClaims, incomingClaims);
 				const conflictRecords = claimComparisons.map((comparison) => ({
+					comparisonVersion: 2,
+					previousSourceHash: comparison.previous.sourceHash,
+					incomingSourceHash: comparison.incoming.sourceHash,
+					missingConditions: comparison.missingConditions,
+					differingConditions: comparison.differingConditions,
 					relation: comparison.relation,
 					confidence: comparison.confidence,
 					reason: comparison.reason,

@@ -8,7 +8,9 @@ let extensionHost: KnowledgeExtensionHost = defaultHost;
 export function configureKnowledgeExtensionHost(host: KnowledgeExtensionHost = {}): void {
 	extensionHost = { ...defaultHost, ...host };
 }
-function bindAcceptanceVerifierEvents(pi: any): void { extensionHost.bindAcceptanceVerifierEvents?.(pi); }
+function bindAcceptanceVerifierEvents(pi: any): void {
+	extensionHost.bindAcceptanceVerifierEvents?.(pi);
+}
 function registerAcceptanceVerifier(name: string, definition: any): any {
 	return extensionHost.registerAcceptanceVerifier?.(name, definition) ?? definition;
 }
@@ -16,7 +18,9 @@ function registerTaskRuntime(pi: any, options: any): any {
 	if (extensionHost.registerTaskRuntime) return extensionHost.registerTaskRuntime(pi, options);
 	return { snapshot: () => ({ id: null, goal: "" }), isAutoContinuation: () => false };
 }
-function registerTool(pi: any, definition: any): void { (extensionHost.registerTool || ((target: any, value: any) => target.registerTool(value)))(pi, definition); }
+function registerTool(pi: any, definition: any): void {
+	(extensionHost.registerTool || ((target: any, value: any) => target.registerTool(value)))(pi, definition);
+}
 import { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } from "../core/config.js";
 import {
 	continuesTopic,
@@ -36,6 +40,8 @@ import { createTaskFeedback, guardResearchToolResult } from "../core/task-feedba
 import { createToolBudget } from "../core/tool-budget.js";
 import { autoTopicCandidate } from "../core/topic-candidate.js";
 import { createTopicMemory, topicRunHash } from "../core/topic-memory.js";
+import { summaryDeliveryClaims } from "../core/delivery-claims.js";
+import { searchExperiences } from "../core/experience-store.js";
 import {
 	beginKnowledgeFlow,
 	invalidateKnowledgeUi,
@@ -98,7 +104,11 @@ export function registerWikiReviewAcceptance() {
 		resolve: async (review, { cwd }) => {
 			try {
 				const service = await getKnowledgeService();
-				const p = await previewWikiProposal(service, review.id, review.project || (await currentProject(cwd)));
+				const p = await previewWikiProposal(
+					service,
+					review.id,
+					review.project || (await currentProject(cwd)),
+				);
 				const stale = p.sources.some((s) => s.changed);
 				return {
 					status: p.status,
@@ -220,9 +230,9 @@ export function registerKnowledgeInterface(pi, { readOnly = false, runtime = nul
 	const isKnowledgeRequest = (prompt, researchContinuation = false) =>
 		Boolean(
 			deliveryContract(prompt, { researchContinuation }) ||
-			/知识(?:库|内容|有哪些|记录)?|研究|文献|论文|证据|检索|软件|工具包|方法|算法|协议|怎么用|如何使用|用法|\bknowledge\b|obsidian|vault|wiki|evidence\s+note|\bresearch\b|\bpapers?\b|\bsoftware\b|\bmethods?\b|\bprotocols?\b|\bhow\s+(?:do|to)\s+(?:i\s+)?use\b/i.test(
-				String(prompt || ""),
-			),
+				/知识(?:库|内容|有哪些|记录)?|研究|文献|论文|证据|检索|软件|工具包|方法|算法|协议|怎么用|如何使用|用法|\bknowledge\b|obsidian|vault|wiki|evidence\s+note|\bresearch\b|\bpapers?\b|\bsoftware\b|\bmethods?\b|\bprotocols?\b|\bhow\s+(?:do|to)\s+(?:i\s+)?use\b/i.test(
+					String(prompt || ""),
+				),
 		);
 	// Zotero item edits and status return host receipts and never read Vault evidence, so they
 	// must not promote an ordinary turn into one that requires research_prepare_knowledge.
@@ -350,8 +360,33 @@ export function registerKnowledgeInterface(pi, { readOnly = false, runtime = nul
 		)
 			return;
 		try {
-			const evidence = await current.service.currentReadEvidence(current.ticket, ctx.cwd, { limit: 6 });
+			const deliveredClaims = summaryDeliveryClaims(
+				event.result.details,
+				String(args.summary_markdown || ""),
+			);
+			const readEvidence = await current.service.currentReadEvidence(current.ticket, ctx.cwd, { limit: 12 });
+			const deliveredSources = event.result.details.delivery_receipt.sources.map((source) => ({
+				path: source.path,
+				hash: source.sha256,
+			}));
+			const evidence = {
+				...readEvidence,
+				sources: readEvidence.sources.filter((source) =>
+					deliveredSources.some((bound) => bound.path === source.path && bound.hash === source.hash),
+				),
+			};
 			if (!evidence.sources.length) return;
+			if (
+				deliveredClaims.some(
+					(claim) =>
+						!evidence.sources.some(
+							(source) => source.path === claim.sourcePath && source.hash === claim.sourceHash,
+						),
+				)
+			)
+				throw new Error(
+					"A delivered memory claim is outside the bounded current knowledge-read evidence; topic memory was not updated",
+				);
 			const memoryInput = {
 				topicId: explainerTopicId(
 					activeTopic?.id ||
@@ -377,10 +412,10 @@ export function registerKnowledgeInterface(pi, { readOnly = false, runtime = nul
 					.filter((line) => /\?|unknown|unresolved|future work/i.test(line))
 					.slice(0, 16),
 				sources: evidence.sources.map((source) => ({ path: source.path, hash: source.hash })),
-				claims: Array.isArray(args.claims) ? args.claims : [],
+				claims: deliveredClaims,
 				artifacts: [event.result.details.run, args.run_dir].filter(Boolean),
 				sessionId: ctx.sessionId || null,
-				runHash: topicRunHash(args.summary_markdown, evidence.sources),
+				runHash: topicRunHash(args.summary_markdown, deliveredSources),
 				lastRunId: event.result.details.run || args.run_dir || null,
 			};
 			if (!topicMemory)
@@ -805,7 +840,12 @@ export function registerKnowledgeInterface(pi, { readOnly = false, runtime = nul
 				}
 				// 双向链接：把出链/反链一并返回，省去 agent 再去搜索邻居笔记的往返
 				let links;
-				if (page.hash && !page.missing && (p.start_line ?? 1) === 1 && typeof c.service.request === "function") {
+				if (
+					page.hash &&
+					!page.missing &&
+					(p.start_line ?? 1) === 1 &&
+					typeof c.service.request === "function"
+				) {
 					try {
 						const nl = await c.service.request("noteLinks", { path: page.path || p.path });
 						const slim = (xs) =>
@@ -889,11 +929,14 @@ export function registerKnowledgeInterface(pi, { readOnly = false, runtime = nul
 		},
 		label: "Obsidian · 增量索引检索",
 		description:
-			"Search application-wide shared knowledge plus the current project. Requires current navigation; read linked Wiki before evidence search. Incomplete indexes never mean no knowledge.",
+			"Search application-wide shared knowledge plus the current project. Requires current navigation; read linked Wiki before evidence search. Incomplete indexes never mean no knowledge. Explicit kind=experiences requires workflow and host_id; it searches only this Vault/project/host and returns navigation, never scientific evidence or execution instructions.",
 		parameters: {
 			type: "object",
 			properties: {
 				query: { type: "string" },
+				kind: { type: "string", enum: ["knowledge", "experiences"] },
+				workflow: { type: "string" },
+				host_id: { type: "string" },
 				wiki_only: { type: "boolean" },
 				limit: { type: "integer", minimum: 1, maximum: 12 },
 			},
@@ -901,8 +944,28 @@ export function registerKnowledgeInterface(pi, { readOnly = false, runtime = nul
 		},
 		execute: async (_id, p, _s, _u, ctx) => {
 			const c = await ensureTurn(ctx, p.query);
-			const blocked = toolBudget.consume("search", p.query);
+			const blocked = toolBudget.consume(
+				"search",
+				p.kind === "experiences" ? JSON.stringify([p.kind, p.workflow, p.host_id, p.query]) : p.query,
+			);
 			if (blocked) return result(blocked);
+			if (p.kind === "experiences") {
+				if (!p.workflow?.trim() || !p.host_id?.trim())
+					throw new Error("Experience navigation requires explicit workflow and host_id");
+				const scope = await requireTopicTurn(ctx);
+				return result(
+					await searchExperiences({
+						binding: scope.binding,
+						project: scope.project,
+						hostId: p.host_id,
+						query: p.query,
+						workflow: p.workflow,
+						hostFilter: p.host_id,
+						limit: p.limit,
+						includeObserved: true,
+					}),
+				);
+			}
 			updateKnowledgeFlow(ctx, { phase: "searching", error: null });
 			try {
 				const found = await c.service.search(c.ticket, ctx.cwd, {
@@ -921,10 +984,10 @@ export function registerKnowledgeInterface(pi, { readOnly = false, runtime = nul
 				// 只把定位所需的字段交给模型：片段 ≤700 字，去掉排序内部分数；全文用 research_read_knowledge 读
 				const slimHits = Array.isArray(found?.hits)
 					? found.hits.map(({ rank: _r, fusionScore: _f, ...hit }) =>
-						typeof hit.text === "string" && hit.text.length > 700
-							? { ...hit, text: hit.text.slice(0, 700), truncated: true }
-							: hit,
-					)
+							typeof hit.text === "string" && hit.text.length > 700
+								? { ...hit, text: hit.text.slice(0, 700), truncated: true }
+								: hit,
+						)
 					: found?.hits;
 				return result(slimHits ? { ...found, hits: slimHits } : found);
 			} catch (error) {
@@ -1036,6 +1099,13 @@ export function registerKnowledgeInterface(pi, { readOnly = false, runtime = nul
 								tissue: { type: "string", maxLength: 180 },
 								stage: { type: "string", maxLength: 180 },
 								method: { type: "string", maxLength: 180 },
+								direction: {
+									type: "string",
+									enum: ["increase", "decrease", "affirmed", "negated", "unknown"],
+								},
+								endpoint: { type: "string", maxLength: 180 },
+								unit: { type: "string", maxLength: 180 },
+								effect: { type: "number" },
 								sourcePath: { type: "string", maxLength: 240 },
 								sourceHash: { type: "string", minLength: 64, maxLength: 64 },
 								location: { type: "string", maxLength: 120 },
@@ -1256,8 +1326,8 @@ export function registerKnowledgeInterface(pi, { readOnly = false, runtime = nul
 				flowCards: wikiProposalCard,
 			},
 			label: "Obsidian · 更新 Wiki",
-				description:
-					"Write a Wiki update from actual read source_paths (Vault-relative .md notes). In automatic review mode a new page, or a page previously written by the agent, is written immediately (status=applied); a page with human edits, or strict review mode, stays pending until the user accepts it in Wiki review (pending text is not live knowledge). Do not retry a write just because a reminder remains.",
+			description:
+				"Write a Wiki update from actual read source_paths (Vault-relative .md notes). In automatic review mode a new page, or a page previously written by the agent, is written immediately (status=applied); a page with human edits, or strict review mode, stays pending until the user accepts it in Wiki review (pending text is not live knowledge). Do not retry a write just because a reminder remains.",
 			parameters: {
 				type: "object",
 				properties: {
@@ -1541,7 +1611,7 @@ export function registerKnowledgeInterface(pi, { readOnly = false, runtime = nul
 										(c) =>
 											["skill:show-me", "skill:research-show-me"].includes(c.name) && c.source === "skill",
 									),
-						})?.guidance || "",
+							})?.guidance || "",
 					};
 				beginKnowledgeFlow(ctx, binding);
 				const _visible = await prepare(ctx, event.prompt || "");

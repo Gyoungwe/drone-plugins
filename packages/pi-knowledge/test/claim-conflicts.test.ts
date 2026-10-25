@@ -15,6 +15,43 @@ const claim = (overrides: Partial<KnowledgeClaim> = {}): KnowledgeClaim => ({
 });
 
 describe("structured knowledge claim comparison", () => {
+	it("retains missing conditions and unknown directions as unresolved", () => {
+		expect(compareClaims(claim(), claim({ organism: undefined }))).toMatchObject({
+			relation: "unresolved",
+			blocking: false,
+			missingConditions: ["organism"],
+		});
+		expect(
+			compareClaims(
+				claim({ predicate: "relates to", value: "growth" }),
+				claim({ predicate: "relates to", value: "growth" }),
+			),
+		).toMatchObject({ relation: "unresolved", blocking: false });
+	});
+	it("recognizes increases/decreases and does not turn not-increased into a decrease", () => {
+		const increased = claim({ predicate: "expression", value: "increases expression" });
+		expect(compareClaims(increased, { ...increased, value: "decreases expression" })).toMatchObject({
+			relation: "contradicts",
+			blocking: true,
+		});
+		expect(compareClaims(increased, { ...increased, value: "does not increase expression" })).toMatchObject({
+			relation: "unresolved",
+			blocking: false,
+		});
+	});
+	it("compares explicit endpoint and direction without inventing missing endpoints", () => {
+		const previous = claim({ endpoint: "transcript abundance", direction: "increase" });
+		expect(
+			compareClaims(previous, claim({ endpoint: "protein abundance", direction: "decrease" })),
+		).toMatchObject({ relation: "unresolved", blocking: false });
+		expect(compareClaims(previous, claim({ direction: "decrease" }))).toMatchObject({
+			relation: "unresolved",
+			missingConditions: ["endpoint"],
+		});
+		expect(compareClaims(claim({ value: "促进生长" }), claim({ value: "不促进生长" }))).toMatchObject({
+			relation: "contradicts",
+		});
+	});
 	it("only calls same-condition opposite observations a blocking contradiction", () => {
 		const result = compareClaims(
 			claim(),

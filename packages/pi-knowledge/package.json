@@ -1,6 +1,6 @@
 {
 	"name": "@gyoungwe/pi-knowledge",
-	"version": "0.2.1",
+	"version": "0.3.0",
 	"description": "Knowledge and Vault tools for native Pi hosts",
 	"repository": {
 		"type": "git",

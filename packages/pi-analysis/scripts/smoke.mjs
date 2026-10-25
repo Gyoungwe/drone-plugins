@@ -27,19 +27,21 @@ try {
 	const metadata = JSON.parse(packOutput.stdout.trim())[0];
 	assert(metadata?.filename?.endsWith(".tgz"), "npm pack did not produce a tarball");
 	const tarball = join(temp, metadata.filename);
+	const apiTarball = join(workspaceRoot, "vendor", "gyoungwe-plugin-api-1.2.0.tgz");
 	await execFileAsync(
 		"npm",
-		["install", "--prefix", installRoot, "--ignore-scripts", "--no-audit", "--no-fund", tarball],
+		["install", "--prefix", installRoot, "--ignore-scripts", "--no-audit", "--no-fund", apiTarball, tarball],
 		{ cwd: workspaceRoot, maxBuffer: 16 * 1024 * 1024 },
 	);
 	const packageJson = JSON.parse(
 		await readFile(join(installRoot, "node_modules/@gyoungwe/pi-analysis/package.json"), "utf8"),
 	);
 	assert.equal(packageJson.name, "@gyoungwe/pi-analysis");
-	assert.equal(packageJson.dependencies?.["@gyoungwe/plugin-api"], "^1.1.0");
+	assert.equal(packageJson.dependencies?.["@gyoungwe/plugin-api"], "^1.2.0");
 	assert.equal(packageJson.peerDependencies?.["@earendil-works/pi-coding-agent"], ">=1.1.0 <2.0.0");
 	assert.equal(packageJson.dependencies?.["@earendil-works/pi-coding-agent"], undefined);
-	await readFile(join(installRoot, "node_modules/@gyoungwe/plugin-api/package.json"), "utf8");
+	const apiPackage = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/plugin-api/package.json"), "utf8"));
+	assert.equal(apiPackage.version, "1.2.0");
 	await readFile(join(installRoot, "node_modules/@gyoungwe/pi-analysis/dist/index.d.ts"), "utf8");
 	const extensionPath = join(installRoot, "node_modules/@gyoungwe/pi-analysis", packageJson.pi.extensions[0]);
 	const hostPath = join(installRoot, "node_modules/@gyoungwe/pi-analysis", "dist/host.mjs");

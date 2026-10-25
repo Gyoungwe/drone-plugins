@@ -345,6 +345,25 @@ export async function getResearchRun(input: ResearchRunUiDetailInput): Promise<a
 		runClaims = claims(gate),
 		runProvenance = await provenance(runDir),
 		gaps: string[] = [];
+	const summary = await hashFile(join(runDir, "SUMMARY.md"));
+	const delivery = metadata.delivery_receipt;
+	const deliveryVersion =
+		delivery?.version === 1
+			? {
+					status:
+						summary.hash === delivery.bodySha256
+							? "body-matched"
+							: summary.hash
+								? "body-changed"
+								: "body-missing",
+					bodySha256: delivery.bodySha256,
+					currentBodySha256: summary.hash,
+					semanticAssessment: delivery.semanticAssessment,
+					evidenceFreshness: "requires-current-scope-recheck",
+					scientificallyVerified: false,
+				}
+			: { status: "historical-unreviewed", scientificallyVerified: false };
+	if (delivery && deliveryVersion.status !== "body-matched") gaps.push("总结正文与交付回执不一致");
 	const hashGroups = new Map<string, string[]>();
 	for (const source of sourceData.items) {
 		if (source.hash) hashGroups.set(source.hash, [...(hashGroups.get(source.hash) || []), source.path]);
@@ -379,6 +398,7 @@ export async function getResearchRun(input: ResearchRunUiDetailInput): Promise<a
 		timeline: timeline(metadata),
 		sources: sourceData.items,
 		claims: runClaims,
+		delivery: deliveryVersion,
 		warnings: gate.warnings,
 		coverage: metadata.retrieval_coverage || metadata.metrics?.index?.semantic || null,
 		archive: {

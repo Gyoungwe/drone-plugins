@@ -321,4 +321,61 @@ describe("experience store", () => {
 			found.records.map((item) => item.record.id),
 		);
 	});
+	it("keeps explicit experience navigation in the requested workflow and host", async () => {
+		const directory = await root();
+		const store = createExperienceStore({ binding, project: "project-a", hostId: "host-a", directory });
+		await store.record(
+			input({
+				featureKey: "workflow-one",
+				workflow: "one/workflow",
+				observation: { id: "one", outcome: "failure" },
+			}),
+			0,
+		);
+		await store.record(
+			input({
+				featureKey: "workflow-two",
+				workflow: "two/workflow",
+				observation: { id: "two", outcome: "failure" },
+			}),
+			1,
+		);
+		const found = await searchExperiences({
+			binding,
+			project: "project-a",
+			hostId: "host-a",
+			directory,
+			query: "",
+			workflow: "one/workflow",
+			hostFilter: "host-a",
+		});
+		expect(found.records.map((hit) => hit.record.featureKey)).toEqual(["workflow-one"]);
+		expect(found).toMatchObject({
+			navigationOnly: true,
+			evidenceEligible: false,
+			instructionEligible: false,
+		});
+		expect(
+			(
+				await searchExperiences({
+					binding,
+					project: "project-b",
+					hostId: "host-a",
+					directory,
+					workflow: "one/workflow",
+				})
+			).records,
+		).toEqual([]);
+		expect(
+			(
+				await searchExperiences({
+					binding,
+					project: "project-a",
+					hostId: "host-b",
+					directory,
+					workflow: "one/workflow",
+				})
+			).records,
+		).toEqual([]);
+	});
 });

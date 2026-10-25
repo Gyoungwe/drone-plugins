@@ -281,7 +281,12 @@ export {
 	registerAnswerPublication,
 } from "./publication.js";
 
-export { KnowledgeService, closeKnowledgeServices, getKnowledgeService, notifyKnowledgeChange } from "./service.js";
+export {
+	KnowledgeService,
+	closeKnowledgeServices,
+	getKnowledgeService,
+	notifyKnowledgeChange,
+} from "./service.js";
 
 export {
 	checkKnowledgeReceiptFreshness,
@@ -323,10 +328,10 @@ export {
 	SPECIALIST_LIMITS,
 	contextSessionId,
 	knowledgeSpecialistHost,
-	registerKnowledgeSpecialistHost,	
+	registerKnowledgeSpecialistHost,
 	setSpecialistSettings,
 	specialistQueueSnapshot,
-	specialistSettings,	
+	specialistSettings,
 	withSpecialistSlot,
 } from "./specialist-host.js";
 
@@ -369,3 +374,4 @@ export {
 	type WorkflowSpecDiffValue,
 } from "./experience-store.js";
 export { EvolutionIndex, type EvolutionIndexStore } from "./evolution.js";
+export { summaryDeliveryClaims } from "./delivery-claims.js";

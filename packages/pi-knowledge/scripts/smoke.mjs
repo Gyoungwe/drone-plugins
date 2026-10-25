@@ -18,10 +18,14 @@ const packRoot = join(root, "pack");
 const extractRoot = join(root, "extract");
 await mkdir(packRoot, { recursive: true });
 await mkdir(extractRoot, { recursive: true });
-const output = await execFileAsync("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", packRoot], {
-	cwd: packageRoot,
-	maxBuffer: 8 * 1024 * 1024,
-});
+const output = await execFileAsync(
+	"npm",
+	["pack", "--json", "--ignore-scripts", "--pack-destination", packRoot],
+	{
+		cwd: packageRoot,
+		maxBuffer: 8 * 1024 * 1024,
+	},
+);
 const pack = JSON.parse(output.stdout.trim());
 const files = new Set(pack[0]?.files?.map((file) => file.path) || []);
 for (const required of [
@@ -32,15 +36,22 @@ for (const required of [
 	"build-manifest.json",
 	"skills/research-vault/SKILL.md",
 	"skills/research-show-me/SKILL.md",
-]) assert(files.has(required), `npm pack is missing ${required}`);
-assert(!files.has("skills/research-workflow/SKILL.md"), "npm pack includes the pi-research-owned research-workflow skill");
-for (const forbidden of ["src/index.ts", "types/host-shims.d.ts"]) assert(!files.has(forbidden), `npm pack includes ${forbidden}`);
+])
+	assert(files.has(required), `npm pack is missing ${required}`);
+assert(
+	!files.has("skills/research-workflow/SKILL.md"),
+	"npm pack includes the pi-research-owned research-workflow skill",
+);
+for (const forbidden of ["src/index.ts", "types/host-shims.d.ts"])
+	assert(!files.has(forbidden), `npm pack includes ${forbidden}`);
 const tarball = join(packRoot, pack[0]?.filename || "");
 assert(tarball.endsWith(".tgz"), "npm pack did not produce a tarball");
 await execFileAsync("tar", ["-xzf", tarball, "-C", extractRoot]);
 const artifactRoot = join(extractRoot, "package");
 const worker = await readFile(join(artifactRoot, "lib/knowledge/runtime/worker.mjs"));
-const workerManifest = JSON.parse(await readFile(join(artifactRoot, "lib/knowledge/runtime/.knowledge-worker-manifest.json"), "utf8"));
+const workerManifest = JSON.parse(
+	await readFile(join(artifactRoot, "lib/knowledge/runtime/.knowledge-worker-manifest.json"), "utf8"),
+);
 assert.equal(workerManifest.outputSha256, createHash("sha256").update(worker).digest("hex"));
 const previousKnowledgeDir = process.env.DRONE_KNOWLEDGE_DIR;
 try {
@@ -68,6 +79,12 @@ try {
 	};
 	register(pi);
 	assert.deepEqual([...tools.keys()], packageManifest.tools);
+	assert.deepEqual(tools.get("research_search_knowledge").parameters.properties.kind.enum, [
+		"knowledge",
+		"experiences",
+	]);
+	assert(tools.get("research_search_knowledge").parameters.properties.workflow);
+	assert(tools.get("research_search_knowledge").parameters.properties.host_id);
 	for (const name of ["task_status", "task_plan", "task_wait", "task_reconcile", "task_evidence_restore"])
 		assert(!tools.has(name), `${name} must be owned by pi-core, not pi-knowledge`);
 	for (const name of ["task-status", "task-action"])
@@ -81,16 +98,20 @@ try {
 		sessionManager: { getSessionId: () => "external-package-smoke", getBranch: () => [] },
 		ui: { notify: () => undefined },
 	};
-	const status = await tools.get("knowledge_status").execute("smoke:status", {}, new AbortController().signal, () => undefined, ctx);
+	const status = await tools
+		.get("knowledge_status")
+		.execute("smoke:status", {}, new AbortController().signal, () => undefined, ctx);
 	assert.equal(status.details.status, "unconfigured");
 	assert.equal(status.details.next, "/drone-init");
-	const search = await tools.get("knowledge_search").execute(
-		"smoke:search",
-		{ query: "package-fixture-marker" },
-		new AbortController().signal,
-		() => undefined,
-		ctx,
-	);
+	const search = await tools
+		.get("knowledge_search")
+		.execute(
+			"smoke:search",
+			{ query: "package-fixture-marker" },
+			new AbortController().signal,
+			() => undefined,
+			ctx,
+		);
 	assert.equal(search.details.local.status, "unconfigured");
 	console.log(
 		JSON.stringify({

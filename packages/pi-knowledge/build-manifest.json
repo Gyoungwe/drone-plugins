@@ -4,11 +4,12 @@
 	"artifactSource": "source",
 	"sourceHashes": {
 		"src/core/capability-discovery.ts": "962bef1c1c6e9e30d585af8d2f4ce0f31766fde9ec4afea11365be8ea79d31ef",
-		"src/core/claim-conflicts.ts": "6b4e4bd055f1b9e76b973aa2a08a0e6548db812caa8a6d72c3c5d62584254d58",
+		"src/core/claim-conflicts.ts": "41f93500278f5c001dc09fada205ea36ff66a21bbb54e2253f2aa2c352ef9af3",
 		"src/core/config.ts": "fd6015f981b5487bad8a3b1a0ecedb04a2e5e84991f38e7a1f8d0d0ea21b4960",
 		"src/core/daily-discovery-prompt.ts": "c28637942e1fd1c36a91c4dfb50a04a983a1e3bd7200d18d3f77ac2d520874f4",
 		"src/core/daily-discovery.ts": "02e54436862455e852b337f7f26780438f3591a85718645506a5b6596ef9087f",
 		"src/core/deliverable-review.ts": "808e3f5c1df55ceb78829edf22aa9d0d1639d20f3ff666fb7e51649c2c110e0f",
+		"src/core/delivery-claims.ts": "5373cc27807d46b07af07c3018bf110d51199aa1f122b241917a54e382245e79",
 		"src/core/evolution.ts": "f4167966c7ecaf8c93165831752129c02d85a0f024501dc5a61f66a3c33b8234",
 		"src/core/experience-store.ts": "84e191dd30b7006983d94110de070e98701d13456de777868327ac87f85f5e6f",
 		"src/core/extension-helpers.ts": "b48cb2b8d88989c845cf7644eb171f36466f0b4f8878af90531e21b0b90285fa",
@@ -17,7 +18,7 @@
 		"src/core/graph-cache.ts": "69877e42ea611ca0c2a244dd83017ce91de1d511735253bff815e5238e7b78d6",
 		"src/core/graph-retrieval.ts": "ac74005cf7fed222cb0548669608cd65ed3eb320bdef2e8537084d76c0ee8f2c",
 		"src/core/host.ts": "08cefa64947a98f96c91563f70beedaf941a811b57abf02418013f5afa75fd73",
-		"src/core/index.ts": "03360d191330d1be71541b1633814b76f4e4f07a48d652a45031edb17e6ec990",
+		"src/core/index.ts": "06f10be18fef1a4705674d336940e328dad9a5c7a43084f1fd04a64ef323c579",
 		"src/core/ingest-frontmatter.ts": "371fc6970211fd72a0efab65ff07abd1f470066c01e6c3b48c3dd771ee5ba68a",
 		"src/core/ingest-identity.ts": "7c631e59cb9efc1ee3df05732ee936e934388488979bdf83625b9c5e6432d75d",
 		"src/core/ingest-policy.ts": "c4d9fbae139d14bf1f93e050507a733e903e3b35f0e79b0e54b6b11816616386",
@@ -48,7 +49,7 @@
 		"src/core/task-feedback.ts": "144926c766b1bdb1724fc9704f217a73f627d502a4dcb3ecac266098e42c7529",
 		"src/core/tool-budget.ts": "29b26bb53617efde0b5c180b4b764153c082ea6aa5f4a1f179d276e716312ec1",
 		"src/core/topic-candidate.ts": "f43f25ccb6d757fa97bedacb99e976c225bf665f89c62be2b7694ee540089ba0",
-		"src/core/topic-memory.ts": "94f3ec85a7e56e338671a0db636aeed79546b78c12c33df0c7f2587fdc17c76f",
+		"src/core/topic-memory.ts": "ab467d33c7924558f38ee523b29f777eeb2be7eacab8f832b772587de1c5e412",
 		"src/core/topic-probe.ts": "b6b80e8aba33c8319eff5862524d0e54bc0ed70516cc3ef4706999a3f66c3e61",
 		"src/core/ui-service.ts": "603991ba9cb4375bddec74aa8b339db09576628f9ca86745f7323b7a047ab334",
 		"src/core/ui-state.ts": "9b54f9e406c3287fdae6073b65a1cf361d75185e7f15de77587023e7d1eeec39",
@@ -56,7 +57,7 @@
 		"src/core/wiki-policy.ts": "ffd5f16638d2f31b49ecbb944683a13b503dac91fd499fb901124dad8cec2ff8",
 		"src/core/wiki-review.ts": "634b6ad5efc3b15b569d1e429ca23aae5171200f7599cee0ca14d5e97fac6a4f",
 		"src/core/worker.ts": "e8408325f117e2879b8efb6a7676ba6ceaaecb09c75dad34677027ee1138eac2",
-		"src/extension/internal-knowledge-extension.ts": "af59f7e8c32c550efa28f8c0a4b7397b539b5751cab5053ddff3dfabe3e57682",
+		"src/extension/internal-knowledge-extension.ts": "4c3f9ef5774dfe9fb0343feaaaedaa2166b015e991c47eb526a16f0cd7f98cb4",
 		"src/extension/knowledge-extension.ts": "5e76e1b7c1ad914355f13892ced890f455ce547f9c5e4cc04329232420f0fc73",
 		"src/extension/knowledge-worker.ts": "bf3bf802e766d34bd01d7d9e2af73dbcd98f2f9afd27f127b4bbf3de9f5015de",
 		"src/host.ts": "82dbdabd97476b1772d9a6497141d24caf157810ef7e491149ba5c0e6f75316a",
@@ -66,11 +67,11 @@
 		"src/maintenance/run.ts": "2575e35c4a879955e0e0d6dae32456318a34fef8ea6d19a63797bbd06d2f3460"
 	},
 	"outputs": {
-		"dist/index.mjs": "288560ce36b5ee78af1b16315d0185e4c9d15026b027fc2a4229f7687d3cef7e",
-		"dist/host.mjs": "0256049ce11471e6f7a5b5a39c5e3bfb5a2d5301b84d599327d5c17337d7bbc1",
+		"dist/index.mjs": "c933f6fd5e8729c604cf67e302d7aac2ac134ae194b55abefdb0247e629968d4",
+		"dist/host.mjs": "53a8d4a360ae9c1a703835efde6e81d25065767eb0e4497ac0224de8432ca413",
 		"dist/host.d.ts": "e3c39a52cae72e221fe82c53390d9ccc6acb81a92a1723ef1a826d37bf7ebd81",
 		"lib/knowledge/runtime/worker.mjs": "cd5f0d322a88d8d62b82d43643c684d604ed0fc159c68dd2e2503cf2fdfd8eaf",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "46c31895cbf7df29fefca971934bab2da4a80e426a10f02b1dbbf02366d9f4a0"
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "dda99b83a1aa13a142e8a1d426d8464c394deba52b0ed731c622f293714a7ba2"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",

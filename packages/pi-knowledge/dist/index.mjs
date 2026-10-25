@@ -4,15 +4,22 @@ var __esm = (fn, res) => function __init() {
 };
 
 // src/core/claim-conflicts.ts
-function polarity(value) {
-  const text2 = normalize(value);
-  return /\b(?:not|no|without|does not|do not|fails|decrease|decreased|inhibits|inhibit)\b|不|无|未|抑制|降低/.test(
-    text2
-  ) ? "negative" : "positive";
+function direction(claim) {
+  if (claim.direction) return claim.direction;
+  const text3 = normalize(`${claim.predicate} ${claim.value || claim.claim}`);
+  const negated = /\b(?:not|no|without|fails)\b|不|未|无/.test(text3);
+  const increase = /\b(?:increases?|increased|upregulated)\b|增加|升高|上调/.test(text3);
+  const decrease = /\b(?:decreases?|decreased|downregulated)\b|减少|降低|下调/.test(text3);
+  if (increase && decrease || negated && (increase || decrease)) return "unknown";
+  if (increase) return "increase";
+  if (decrease) return "decrease";
+  if (/\b(?:activates?|promotes?|supports?)\b|激活|促进|支持/.test(text3))
+    return negated ? "negated" : "affirmed";
+  return "unknown";
 }
-function withoutNegation(value) {
+function comparableValue(value) {
   return normalize(value).replace(
-    /\b(?:does not|do not|not|no|without|fails|decreased|decrease|inhibits|inhibit)\b|不|无|未|抑制|降低/g,
+    /\b(?:does|do|not|no|without|fails|increase[sd]?|decrease[sd]?|activate[sd]?)\b|不|无|未|增加|减少|降低|升高|激活/g,
     " "
   );
 }
@@ -25,7 +32,7 @@ function compareClaims(previous, incoming) {
       blocking: false
     };
   }
-  if (field(previous, "subject") !== field(incoming, "subject") || field(previous, "predicate") !== field(incoming, "predicate"))
+  if (!field(previous, "subject") || !field(previous, "predicate") || field(previous, "subject") !== field(incoming, "subject") || field(previous, "predicate") !== field(incoming, "predicate"))
     return {
       relation: "unresolved",
       confidence: "low",
@@ -33,7 +40,18 @@ function compareClaims(previous, incoming) {
       blocking: false
     };
   const conditions = ["organism", "tissue", "stage", "method"];
-  const changed = conditions.filter(
+  const optional = ["endpoint", "unit"].filter((key) => field(previous, key) || field(incoming, key));
+  const required = [...conditions, ...optional];
+  const missing = required.filter((key) => !field(previous, key) || !field(incoming, key));
+  if (missing.length)
+    return {
+      relation: "unresolved",
+      confidence: "low",
+      blocking: false,
+      missingConditions: missing,
+      reason: `\u7F3A\u5C11\u53EF\u6BD4\u8F83\u6761\u4EF6\uFF08${missing.join("\u3001")}\uFF09\uFF0C\u4E0D\u80FD\u5224\u65AD\u652F\u6301\u6216\u51B2\u7A81\u3002`
+    };
+  const changed = required.filter(
     (key) => field(previous, key) && field(incoming, key) && field(previous, key) !== field(incoming, key)
   );
   if (changed.length)
@@ -41,6 +59,7 @@ function compareClaims(previous, incoming) {
       relation: "unresolved",
       confidence: "medium",
       reason: `\u5B9E\u9A8C\u6761\u4EF6\u4E0D\u540C\uFF08${changed.join("\u3001")}\uFF09\uFF0C\u9700\u8981\u6309\u6761\u4EF6\u5E76\u5217\u89E3\u91CA\u3002`,
+      differingConditions: changed,
       blocking: false
     };
   if (field(previous, "relation") !== "observation" || field(incoming, "relation") !== "observation")
@@ -50,8 +69,8 @@ function compareClaims(previous, incoming) {
       reason: "\u89E3\u91CA\u6216\u5047\u8BBE\u4E0D\u80FD\u76F4\u63A5\u63A8\u7FFB\u89C2\u5BDF\u7ED3\u679C\u3002",
       blocking: false
     };
-  const priorValue = withoutNegation(`${previous.predicate} ${previous.value || previous.claim}`);
-  const nextValue = withoutNegation(`${incoming.predicate} ${incoming.value || incoming.claim}`);
+  const priorValue = comparableValue(`${previous.predicate} ${previous.value || previous.claim}`);
+  const nextValue = comparableValue(`${incoming.predicate} ${incoming.value || incoming.claim}`);
   if (overlap(priorValue, nextValue) < 0.5)
     return {
       relation: "unresolved",
@@ -59,12 +78,28 @@ function compareClaims(previous, incoming) {
       reason: "\u547D\u9898\u5185\u5BB9\u76F8\u4F3C\u5EA6\u4E0D\u8DB3\uFF0C\u4EA4\u7531\u4EBA\u5DE5\u5224\u65AD\u3002",
       blocking: false
     };
-  if (polarity(previous.value || previous.claim) === polarity(incoming.value || incoming.claim))
+  const priorDirection = direction(previous), nextDirection = direction(incoming);
+  if (priorDirection === "unknown" || nextDirection === "unknown")
+    return {
+      relation: "unresolved",
+      confidence: "low",
+      blocking: false,
+      reason: "\u89C2\u5BDF\u65B9\u5411\u672A\u77E5\uFF0C\u4E0D\u80FD\u5224\u65AD\u652F\u6301\u6216\u51B2\u7A81\u3002"
+    };
+  if (priorDirection === nextDirection)
     return {
       relation: "supports",
       confidence: "medium",
-      reason: "\u540C\u6761\u4EF6\u4E0B\u65B9\u5411\u4E00\u81F4\uFF0C\u53EF\u5E76\u5217\u4FDD\u7559\u3002",
-      blocking: false
+      blocking: false,
+      reason: "\u540C\u6761\u4EF6\u4E0B\u65B9\u5411\u4E00\u81F4\uFF0C\u53EF\u5E76\u5217\u4FDD\u7559\u3002"
+    };
+  const opposite = /* @__PURE__ */ new Set([priorDirection, nextDirection]);
+  if (!(opposite.has("increase") && opposite.has("decrease")) && !(opposite.has("affirmed") && opposite.has("negated")))
+    return {
+      relation: "unresolved",
+      confidence: "low",
+      blocking: false,
+      reason: "\u65B9\u5411\u7C7B\u578B\u4E0D\u540C\uFF0C\u4E0D\u80FD\u76F4\u63A5\u6BD4\u8F83\u3002"
     };
   return {
     relation: "contradicts",
@@ -78,7 +113,8 @@ function compareClaimSets(previousClaims = [], incomingClaims = []) {
   for (const incoming of incomingClaims) {
     for (const previous of previousClaims) {
       const result2 = compareClaims(previous, incoming);
-      if (result2.relation !== "unresolved") comparisons.push({ previous, incoming, ...result2 });
+      if (field(previous, "subject") && field(previous, "subject") === field(incoming, "subject") && field(previous, "predicate") === field(incoming, "predicate"))
+        comparisons.push({ previous, incoming, ...result2 });
     }
   }
   return comparisons;
@@ -312,13 +348,13 @@ function flowCard(input) {
   };
 }
 function failureCard(event) {
-  const text2 = (event.result?.content || []).filter((block) => block?.type === "text").map((block) => block.text).join(" ");
+  const text3 = (event.result?.content || []).filter((block) => block?.type === "text").map((block) => block.text).join(" ");
   return flowCard({
     key: event.toolCallId,
     kind: "failure",
     title: event.toolName,
     status: "failed",
-    detail: text2,
+    detail: text3,
     source: event.toolName
   });
 }
@@ -403,18 +439,18 @@ var init_review_policy = __esm({
 // src/core/wiki-policy.ts
 import { createHash as createHash6 } from "node:crypto";
 function stripManagedHeader(body, pageTitle) {
-  let text2 = String(body).replace(/^\uFEFF/u, "").trim();
-  const fenced = text2.match(/^```(?:markdown|md)?[ \t]*\n([\s\S]*?)\n```\s*$/iu);
-  if (fenced?.[1] !== void 0) text2 = fenced[1].trim();
-  text2 = text2.replace(/^---[ \t]*\n[\s\S]*?\n---[ \t]*(?:\n|$)/u, "").trim();
-  const heading = text2.match(/^#[ \t]+([^\n]+)(?:\n+|$)/u);
+  let text3 = String(body).replace(/^\uFEFF/u, "").trim();
+  const fenced = text3.match(/^```(?:markdown|md)?[ \t]*\n([\s\S]*?)\n```\s*$/iu);
+  if (fenced?.[1] !== void 0) text3 = fenced[1].trim();
+  text3 = text3.replace(/^---[ \t]*\n[\s\S]*?\n---[ \t]*(?:\n|$)/u, "").trim();
+  const heading = text3.match(/^#[ \t]+([^\n]+)(?:\n+|$)/u);
   if (heading?.[1] !== void 0) {
     const found = heading[1].trim();
     const expected = pageTitle?.trim();
     if (!expected || found === expected || expected.startsWith(found) || found.startsWith(expected))
-      text2 = text2.slice(heading[0].length).trim();
+      text3 = text3.slice(heading[0].length).trim();
   }
-  return text2;
+  return text3;
 }
 var init_wiki_policy = __esm({
   "src/core/wiki-policy.ts"() {
@@ -600,8 +636,15 @@ async function ensureWithin(root, target) {
   return target;
 }
 function blank(vaultId, project) {
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  return { version: TOPIC_MEMORY_VERSION, vaultId, project, revision: 0, updatedAt: now, topics: [] };
+  const now2 = (/* @__PURE__ */ new Date()).toISOString();
+  return {
+    version: TOPIC_MEMORY_VERSION,
+    vaultId,
+    project,
+    revision: 0,
+    updatedAt: now2,
+    topics: []
+  };
 }
 function validateSource(source, project = null) {
   if (!source || typeof source !== "object" || typeof source.path !== "string" || isAbsolute5(source.path) || source.path.includes("\\") || source.path.split("/").includes("..") || !/^[^\0]+\.md$/.test(source.path) || source.path.length > 240 || /(?:^|\/)(?:Runs|Explainers)\//i.test(source.path) || !/^[a-f0-9]{64}$/.test(source.hash || ""))
@@ -620,10 +663,10 @@ function normalizeTopic(topic, binding, project) {
   const sources = Array.isArray(topic.sources) ? (topic.sources.some((source) => !validateSource(source, project)) ? (() => {
     throw new Error("Invalid or out-of-scope topic source");
   })() : topic.sources).map((source) => validateSource(source, project)).filter(Boolean).slice(0, TOPIC_MEMORY_LIMITS.maxSources) : [];
-  const id = text(topic.id, 120);
-  if (!/^[a-z0-9][a-z0-9_-]{0,95}$/i.test(id)) throw new Error("Invalid topic id");
+  const id2 = text(topic.id, 120);
+  if (!/^[a-z0-9][a-z0-9_-]{0,95}$/i.test(id2)) throw new Error("Invalid topic id");
   return {
-    id,
+    id: id2,
     title: text(topic.title || topic.id, 180),
     aliases: [
       ...new Set(
@@ -662,7 +705,10 @@ function normalizeTopic(topic, binding, project) {
     keyFindings: Array.isArray(topic.keyFindings) ? topic.keyFindings.map((x) => text(x, 300)).filter(Boolean).slice(0, 16) : [],
     claims: Array.isArray(topic.claims) ? topic.claims.map((claim) => normalizeClaim(claim, project)).filter(Boolean).slice(-TOPIC_MEMORY_LIMITS.maxClaims) : [],
     conflicts: Array.isArray(topic.conflicts) ? topic.conflicts.map((conflict) => normalizeConflict(conflict, project)).filter(Boolean).slice(-TOPIC_MEMORY_LIMITS.maxConflicts) : [],
-    history: Array.isArray(topic.history) ? topic.history.slice(-TOPIC_MEMORY_LIMITS.maxHistory).map((entry) => ({ summary: text(entry?.summary, 800), updatedAt: text(entry?.updatedAt, 40) })).filter((entry) => entry.summary) : [],
+    history: Array.isArray(topic.history) ? topic.history.slice(-TOPIC_MEMORY_LIMITS.maxHistory).map((entry) => ({
+      summary: text(entry?.summary, 800),
+      updatedAt: text(entry?.updatedAt, 40)
+    })).filter((entry) => entry.summary) : [],
     vaultId: typeof binding === "string" ? binding : binding?.vaultId,
     project
   };
@@ -682,14 +728,19 @@ function normalizeClaim(claim, project) {
     subject: text(claim.subject, 180),
     predicate: text(claim.predicate, 180),
     ...value ? { value } : {},
-    ...["organism", "tissue", "stage", "method"].reduce((result2, key) => {
+    ...["organism", "tissue", "stage", "method", "endpoint", "unit"].reduce((result2, key) => {
       const value2 = text(claim[key], 180);
       if (value2) result2[key] = value2;
       return result2;
     }, {}),
+    ...claim.direction !== void 0 ? {
+      direction: ["increase", "decrease", "affirmed", "negated", "unknown"].includes(claim.direction) ? claim.direction : "unknown"
+    } : {},
+    ...Number.isFinite(claim.effect) ? { effect: claim.effect } : {},
     sourcePath,
     sourceHash,
     ...claim.location ? { location: text(claim.location, 120) } : {},
+    ...claim.limitations ? { limitations: text(claim.limitations, 4e3) } : {},
     relation
   };
 }
@@ -711,7 +762,14 @@ function normalizeConflict(conflict, project) {
     reason: text(conflict.reason, 600),
     previousSourcePath: text(conflict.previousSourcePath, 240),
     incomingSourcePath: text(conflict.incomingSourcePath, 240),
-    detectedAt: text(conflict.detectedAt, 40)
+    detectedAt: text(conflict.detectedAt, 40),
+    ...conflict.comparisonVersion === 2 ? {
+      comparisonVersion: 2,
+      previousSourceHash: text(conflict.previousSourceHash, 64),
+      incomingSourceHash: text(conflict.incomingSourceHash, 64),
+      missingConditions: conflict.missingConditions,
+      differingConditions: conflict.differingConditions
+    } : {}
   };
   if (!["contradicts", "supports", "refines", "supersedes", "unresolved"].includes(result2.relation))
     return null;
@@ -728,7 +786,10 @@ function validateDocument(value, vaultId, project) {
     throw new Error("Corrupt topic memory; refusing overwrite");
   if (value.topics.length > TOPIC_MEMORY_LIMITS.maxTopics)
     throw new Error("Topic memory exceeds its bounded record limit");
-  return { ...value, topics: value.topics.map((topic) => normalizeTopic(topic, vaultId, project)) };
+  return {
+    ...value,
+    topics: value.topics.map((topic) => normalizeTopic(topic, vaultId, project))
+  };
 }
 async function readDocument(path, vaultId, project) {
   try {
@@ -748,7 +809,10 @@ async function atomicWrite(path, value) {
   const temp = join7(dirname3(path), `.${randomUUID5()}.tmp`);
   try {
     await writeFile5(temp, `${JSON.stringify(value, null, 2)}
-`, { flag: "wx", mode: 384 });
+`, {
+      flag: "wx",
+      mode: 384
+    });
     await rename5(temp, path);
   } finally {
     await unlink3(temp).catch((error) => {
@@ -758,18 +822,6 @@ async function atomicWrite(path, value) {
 }
 async function withLock(path, operation) {
   return runRuntimeExclusive("topic-memory", path, operation);
-}
-function tokens2(value) {
-  return new Set(
-    text(value, 6e3).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((x) => x.length > 2)
-  );
-}
-function overlap2(a, b) {
-  const left = tokens2(a), right = tokens2(b);
-  if (!left.size || !right.size) return 0;
-  let common = 0;
-  for (const item of left) if (right.has(item)) common++;
-  return common / Math.max(left.size, right.size);
 }
 function classifyTopic(existing, incoming) {
   if (!existing) return "new";
@@ -783,8 +835,6 @@ function classifyTopic(existing, incoming) {
   const previousClaims = existing.claims || [];
   const incomingClaims = incoming.claims || [];
   if (previousClaims.length && incomingClaims.length && compareClaimSets(previousClaims, incomingClaims).some((comparison) => comparison.blocking))
-    return "conflict-candidate";
-  if (overlap2(existing.summary, incoming.summary) < 0.12 && overlap2(existing.title, incoming.title) < 0.2)
     return "conflict-candidate";
   return "additional";
 }
@@ -875,7 +925,11 @@ function createTopicMemory({ binding, project, directory = knowledgeDirectory() 
         entities: value.entities.slice(0, 6)
       });
     if (output.length > TOPIC_MEMORY_LIMITS.maxContextChars)
-      output = JSON.stringify({ id: value.id, title: value.title, entities: value.entities.slice(0, 3) });
+      output = JSON.stringify({
+        id: value.id,
+        title: value.title,
+        entities: value.entities.slice(0, 3)
+      });
     return output;
   };
   return {
@@ -931,7 +985,10 @@ function createTopicMemory({ binding, project, directory = knowledgeDirectory() 
         });
       }
       return {
-        topic: { ...compact(topic), status: stale.length ? "stale" : topic.status },
+        topic: {
+          ...compact(topic),
+          status: stale.length ? "stale" : topic.status
+        },
         stale,
         status: stale.length ? "stale" : topic.status
       };
@@ -961,9 +1018,9 @@ function createTopicMemory({ binding, project, directory = knowledgeDirectory() 
         ]);
         for (const key of Object.keys(input || {}))
           if (!allowed.has(key)) throw new Error(`Unsupported topic metadata field: ${key}`);
-        const id = text(input.id, 120);
-        if (!id) throw new Error("Topic id is required");
-        const index = doc.topics.findIndex((topic) => topic.id === id);
+        const id2 = text(input.id, 120);
+        if (!id2) throw new Error("Topic id is required");
+        const index = doc.topics.findIndex((topic) => topic.id === id2);
         const previous = index >= 0 ? doc.topics[index] : null;
         const incomingClaims = Array.isArray(input.claims) ? input.claims.map((claim) => normalizeClaim(claim, scope.project)).filter(Boolean) : [];
         const claimComparisons = compareClaimSets(previous?.claims || [], incomingClaims);
@@ -975,6 +1032,11 @@ function createTopicMemory({ binding, project, directory = knowledgeDirectory() 
             conflicts: [
               ...previous?.conflicts || [],
               ...claimComparisons.map((comparison) => ({
+                comparisonVersion: 2,
+                previousSourceHash: comparison.previous.sourceHash,
+                incomingSourceHash: comparison.incoming.sourceHash,
+                missingConditions: comparison.missingConditions,
+                differingConditions: comparison.differingConditions,
                 relation: comparison.relation,
                 confidence: comparison.confidence,
                 reason: comparison.reason,
@@ -983,7 +1045,7 @@ function createTopicMemory({ binding, project, directory = knowledgeDirectory() 
                 detectedAt: (/* @__PURE__ */ new Date()).toISOString()
               }))
             ],
-            id,
+            id: id2,
             createdAt: previous?.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
             updatedAt: (/* @__PURE__ */ new Date()).toISOString()
           },
@@ -995,10 +1057,10 @@ function createTopicMemory({ binding, project, directory = knowledgeDirectory() 
         return doc;
       });
     },
-    archive: async (id, expectedRevision) => {
+    archive: async (id2, expectedRevision) => {
       if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
       return mutate(expectedRevision, (doc) => {
-        const topic = doc.topics.find((item) => item.id === text(id, 120));
+        const topic = doc.topics.find((item) => item.id === text(id2, 120));
         if (!topic) throw new Error("Topic not found");
         topic.status = "archived";
         topic.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -1020,18 +1082,28 @@ function createTopicMemory({ binding, project, directory = knowledgeDirectory() 
         const existing = matches[0] || (input.topicId ? value.topics.find((topic) => topic.id === text(input.topicId, 120)) : null);
         const classification = classifyTopic(existing, input);
         if (classification === "duplicate") {
-          receipt = { classification, revision: value.revision, topic: compact(existing), changed: false };
+          receipt = {
+            classification,
+            revision: value.revision,
+            topic: compact(existing),
+            changed: false
+          };
           value.__topicNoop = true;
           return value;
         }
-        const id = existing?.id || text(input.topicId, 96) || `${slug(input.title)}-${digest2(input.title).slice(0, 8)}`;
-        if (!/^[a-z0-9][a-z0-9_-]{0,95}$/i.test(id)) throw new Error("Invalid topic id");
-        const index = value.topics.findIndex((topic) => topic.id === id);
+        const id2 = existing?.id || text(input.topicId, 96) || `${slug(input.title)}-${digest2(input.title).slice(0, 8)}`;
+        if (!/^[a-z0-9][a-z0-9_-]{0,95}$/i.test(id2)) throw new Error("Invalid topic id");
+        const index = value.topics.findIndex((topic) => topic.id === id2);
         const prior = index >= 0 ? value.topics[index] : null;
         const priorClaims = prior?.claims || [];
         const incomingClaims = Array.isArray(input.claims) ? input.claims.map((claim) => normalizeClaim(claim, scope.project)).filter(Boolean) : [];
         claimComparisons = compareClaimSets(priorClaims, incomingClaims);
         const conflictRecords = claimComparisons.map((comparison) => ({
+          comparisonVersion: 2,
+          previousSourceHash: comparison.previous.sourceHash,
+          incomingSourceHash: comparison.incoming.sourceHash,
+          missingConditions: comparison.missingConditions,
+          differingConditions: comparison.differingConditions,
           relation: comparison.relation,
           confidence: comparison.confidence,
           reason: comparison.reason,
@@ -1055,7 +1127,7 @@ function createTopicMemory({ binding, project, directory = knowledgeDirectory() 
           {
             ...prior,
             ...input,
-            id,
+            id: id2,
             aliases: [.../* @__PURE__ */ new Set([...prior?.aliases || [], ...input.aliases || []])].slice(-12),
             entities: [.../* @__PURE__ */ new Set([...prior?.entities || [], ...input.entities || []])].slice(
               -TOPIC_MEMORY_LIMITS.maxEntities
@@ -1117,10 +1189,10 @@ var TOPIC_MEMORY_VERSION, TOPIC_MEMORY_LIMITS, digest2, text, slug;
 var init_topic_memory = __esm({
   "src/core/topic-memory.ts"() {
     "use strict";
-    init_runtime_host();
     init_claim_conflicts();
     init_config();
     init_files();
+    init_runtime_host();
     TOPIC_MEMORY_VERSION = 1;
     TOPIC_MEMORY_LIMITS = Object.freeze({
       maxTopics: 64,
@@ -1195,10 +1267,10 @@ function saveAnswerStats() {
   }
 }
 function beginKnowledgeFlow(ctx, binding) {
-  const id = sessionId(ctx);
-  if (!id) return;
+  const id2 = sessionId(ctx);
+  if (!id2) return;
   const flow = {
-    sessionId: id,
+    sessionId: id2,
     turnId: randomUUID7(),
     vaultId: binding?.vaultId || null,
     bindingRevision: binding?.revision || null,
@@ -1214,17 +1286,17 @@ function beginKnowledgeFlow(ctx, binding) {
     localAnswerRate: { ...state.localAnswerStats },
     cards: []
   };
-  state.flows.delete(id);
-  state.flows.set(id, flow);
+  state.flows.delete(id2);
+  state.flows.set(id2, flow);
   while (state.flows.size > MAX_SESSIONS) state.flows.delete(state.flows.keys().next().value);
   updateKnowledgeFlow(ctx, {});
 }
 function updateKnowledgeFlow(ctx, patch) {
-  const id = sessionId(ctx), old = state.flows.get(id);
+  const id2 = sessionId(ctx), old = state.flows.get(id2);
   if (!old) return;
   const next = { ...old, ...patch, updatedAt: Date.now() };
   next.stages = deriveStages(next);
-  state.flows.set(id, next);
+  state.flows.set(id2, next);
   emitKnowledgeUi({ kind: "flow", flow: next });
 }
 function deriveStages(flow) {
@@ -1236,7 +1308,7 @@ function deriveStages(flow) {
   };
 }
 function noteKnowledgeRead(ctx, page) {
-  const id = sessionId(ctx), old = state.flows.get(id);
+  const id2 = sessionId(ctx), old = state.flows.get(id2);
   if (!old) return;
   const row = {
     path: page.path,
@@ -1253,9 +1325,9 @@ function noteKnowledgeRead(ctx, page) {
   updateKnowledgeFlow(ctx, { reads, phase: row.kind === "wiki" ? "reading-wiki" : "reading-evidence" });
 }
 function publicationKnowledgeFlow(ctx, proof) {
-  const id = sessionId(ctx);
-  if (!state.flows.has(id)) return;
-  const current = state.flows.get(id);
+  const id2 = sessionId(ctx);
+  if (!state.flows.has(id2)) return;
+  const current = state.flows.get(id2);
   const completed = ["released", "no-hits"].includes(proof.status);
   if (completed && !current.localAnswerRecorded) {
     loadAnswerStats();
@@ -1283,27 +1355,27 @@ function publicationKnowledgeFlow(ctx, proof) {
     }
   });
 }
-function requestWikiReviewUi(ctx, id = "") {
+function requestWikiReviewUi(ctx, id2 = "") {
   const sid = sessionId(ctx);
   if (!sid) return false;
-  emitKnowledgeUi({ kind: "open-review", sessionId: sid, id: String(id || "") });
+  emitKnowledgeUi({ kind: "open-review", sessionId: sid, id: String(id2 || "") });
   return state.listeners.size > 0;
 }
-function notifyKnowledgeUi(text2, severity = "info", id = null) {
-  if (typeof text2 !== "string" || !text2.trim()) return;
+function notifyKnowledgeUi(text3, severity = "info", id2 = null) {
+  if (typeof text3 !== "string" || !text3.trim()) return;
   emitKnowledgeUi({
     kind: "notice",
     id: randomUUID7(),
-    sessionId: id,
+    sessionId: id2,
     severity: ["info", "warning", "error"].includes(severity) ? severity : "info",
-    text: text2.slice(0, 2e3)
+    text: text3.slice(0, 2e3)
   });
 }
 function invalidateKnowledgeUi() {
   emitKnowledgeUi({ kind: "invalidate" });
 }
-function knowledgeExcerpt(text2, limit = 320) {
-  return String(text2 || "").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "").replace(/<!--[\s\S]*?-->/g, "").replace(/\s+/g, " ").trim().slice(0, limit);
+function knowledgeExcerpt(text3, limit = 320) {
+  return String(text3 || "").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "").replace(/<!--[\s\S]*?-->/g, "").replace(/\s+/g, " ").trim().slice(0, limit);
 }
 function noteKnowledgeSearch(ctx, found, wikiOnly = false) {
   updateKnowledgeFlow(ctx, {
@@ -1366,7 +1438,7 @@ function validCard(card) {
   return flowCard({ ...card, fields: card.fields, links: card.links });
 }
 function noteKnowledgeOperation(ctx, event) {
-  const id = sessionId(ctx), old = state.flows.get(id);
+  const id2 = sessionId(ctx), old = state.flows.get(id2);
   if (!old || !event?.toolName) return;
   const meta = toolMeta(event.toolName);
   const builder = flowCardBuilder(event.toolName);
@@ -1397,7 +1469,7 @@ function noteKnowledgeOperation(ctx, event) {
   updateKnowledgeFlow(ctx, { cards: next.slice(-MAX_CARDS) });
 }
 function noteKnowledgeSpecialist(ctx, run) {
-  const id = sessionId(ctx), old = state.flows.get(id);
+  const id2 = sessionId(ctx), old = state.flows.get(id2);
   if (!old) return;
   const allowed = [
     "id",
@@ -1489,9 +1561,9 @@ async function exclusive(key, operation) {
 function rootFor(service) {
   return join11(knowledgeDirectory(), service.binding.vaultId, "wiki-review");
 }
-function checkId(id) {
-  if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id)) throw new Error("Invalid Wiki proposal id");
-  return id;
+function checkId(id2) {
+  if (typeof id2 !== "string" || !/^[0-9a-f-]{36}$/.test(id2)) throw new Error("Invalid Wiki proposal id");
+  return id2;
 }
 function targetPath(path, project) {
   validateNote(path);
@@ -1539,11 +1611,11 @@ async function currentNote(service, path) {
     throw error;
   }
 }
-function managedParts(text2) {
-  const start = text2.indexOf(START2), end = text2.indexOf(END2);
-  if (start < 0 !== end < 0 || end < start || start >= 0 && (text2.indexOf(START2, start + 1) >= 0 || text2.indexOf(END2, end + 1) >= 0))
+function managedParts(text3) {
+  const start = text3.indexOf(START2), end = text3.indexOf(END2);
+  if (start < 0 !== end < 0 || end < start || start >= 0 && (text3.indexOf(START2, start + 1) >= 0 || text3.indexOf(END2, end + 1) >= 0))
     throw new Error("Invalid managed block markers");
-  return { start, end, body: start < 0 ? "" : text2.slice(start + START2.length, end).trim() };
+  return { start, end, body: start < 0 ? "" : text3.slice(start + START2.length, end).trim() };
 }
 function normalizeCandidate(markdown) {
   return stripManagedHeader(markdown);
@@ -1569,19 +1641,19 @@ ${block}
   return start < 0 ? `${original}${original.endsWith("\n") ? "\n" : "\n\n"}${block}
 ` : original.slice(0, start) + block + original.slice(end + END2.length);
 }
-async function loadProposal(service, id, project) {
-  checkId(id);
+async function loadProposal(service, id2, project) {
+  checkId(id2);
   const root = rootFor(service);
-  let text2;
+  let text3;
   try {
-    text2 = await readFile6(join11(root, "pending", `${id}.json`), "utf8");
+    text3 = await readFile6(join11(root, "pending", `${id2}.json`), "utf8");
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
-    text2 = await readFile6(join11(root, "reviewed", `${id}.json`), "utf8");
+    text3 = await readFile6(join11(root, "reviewed", `${id2}.json`), "utf8");
   }
-  if (Buffer.byteLength(text2) > 256 * 1024) throw new Error("Wiki proposal exceeds its storage budget");
-  const p = JSON.parse(text2);
-  if (p.id !== id || p.project !== project || p.vaultId !== service.binding.vaultId || p.bindingRevision !== service.binding.revision)
+  if (Buffer.byteLength(text3) > 256 * 1024) throw new Error("Wiki proposal exceeds its storage budget");
+  const p = JSON.parse(text3);
+  if (p.id !== id2 || p.project !== project || p.vaultId !== service.binding.vaultId || p.bindingRevision !== service.binding.revision)
     throw new Error("Proposal belongs to a different project or binding");
   targetPath(p.path, project);
   if (immutableHash(p) !== p.proposalHash || digest3(p.after) !== p.afterHash || (p.before === null ? p.beforeHash !== null : digest3(p.before) !== p.beforeHash))
@@ -1685,13 +1757,13 @@ ${refs}`
     };
   });
 }
-async function mergeWikiProposal(service, ticket, cwd, id, { markdown, rationale, source_paths } = {}) {
-  checkId(id);
+async function mergeWikiProposal(service, ticket, cwd, id2, { markdown, rationale, source_paths } = {}) {
+  checkId(id2);
   return exclusive(
-    `${rootFor(service)}:${id}`,
+    `${rootFor(service)}:${id2}`,
     () => withKnowledgeBinding(service.binding, async () => {
       const { project, sources: newSources } = await service.evidenceReceipts(ticket, cwd, source_paths);
-      const p = await loadProposal(service, id, project);
+      const p = await loadProposal(service, id2, project);
       if (p.status !== "pending")
         throw new Error("Only a pending Wiki candidate can accumulate another research round");
       if (Date.now() > p.createdAt + MAX_AGE)
@@ -1761,10 +1833,10 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
     })
   );
 }
-async function previewWikiProposal(service, id, project) {
+async function previewWikiProposal(service, id2, project) {
   return withKnowledgeBinding(service.binding, async () => {
-    const p = await loadProposal(service, id, project);
-    const now = Date.now(), target = await currentNote(service, p.path);
+    const p = await loadProposal(service, id2, project);
+    const now2 = Date.now(), target = await currentNote(service, p.path);
     const sources = [];
     for (const source of p.sources) {
       let current = null, error = null;
@@ -1780,7 +1852,7 @@ async function previewWikiProposal(service, id, project) {
         error
       });
     }
-    const expired = now > p.createdAt + MAX_AGE, targetChanged = (target?.hash ?? null) !== p.beforeHash;
+    const expired = now2 > p.createdAt + MAX_AGE, targetChanged = (target?.hash ?? null) !== p.beforeHash;
     const protectedText = p.before === null ? "" : p.before.replace(
       /<!-- pi-agent:managed:start -->[\s\S]*?<!-- pi-agent:managed:end -->/,
       "\uFF08\u6B64\u5904\u4E3A\u667A\u80FD\u4F53\u6258\u7BA1\u533A\uFF09"
@@ -1875,21 +1947,21 @@ async function finish(service, p, status, review = { actor: "human" }) {
   });
   invalidateKnowledgeUi();
 }
-async function decideWikiProposal(service, id, project, expectedHash, decision, review = { actor: "human" }) {
-  checkId(id);
+async function decideWikiProposal(service, id2, project, expectedHash, decision, review = { actor: "human" }) {
+  checkId(id2);
   if (!["human", "model", "automatic"].includes(review.actor) || review.actor === "automatic" && review.authority !== AUTOMATIC_AUTHORITY || review.actor === "model" && (!review.auditId || review.verdict !== "approve" || typeof review.checkCurrent !== "function"))
     throw new Error("Invalid model-review authority");
   return exclusive(
-    `${rootFor(service)}:${id}`,
+    `${rootFor(service)}:${id2}`,
     () => withKnowledgeBinding(service.binding, async () => {
       await review.checkCurrent?.();
-      const p = await loadProposal(service, id, project);
+      const p = await loadProposal(service, id2, project);
       if (expectedHash !== p.proposalHash)
         throw new Error("The reviewed candidate changed; preview it again");
-      if (p.status !== "pending") return { id, status: p.status, alreadyReviewed: true };
+      if (p.status !== "pending") return { id: id2, status: p.status, alreadyReviewed: true };
       if (decision === "reject") {
         await finish(service, p, "rejected", review);
-        return { id, status: "rejected", vaultWritten: false };
+        return { id: id2, status: "rejected", vaultWritten: false };
       }
       if (decision !== "apply") throw new Error("Unknown review decision");
       if (service.binding.depositMode === "run-only")
@@ -1942,7 +2014,7 @@ async function decideWikiProposal(service, id, project, expectedHash, decision, 
           indexError = error.message;
         }
         return {
-          id,
+          id: id2,
           status: "applied",
           path: p.path,
           vaultWritten: true,
@@ -1960,15 +2032,15 @@ async function decideWikiProposal(service, id, project, expectedHash, decision, 
     })
   );
 }
-async function autoApplyWikiProposal(service, id, project, expectedHash) {
-  if (await readReviewMode() !== "automatic") return { id, status: "pending", reason: "strict-review" };
+async function autoApplyWikiProposal(service, id2, project, expectedHash) {
+  if (await readReviewMode() !== "automatic") return { id: id2, status: "pending", reason: "strict-review" };
   try {
-    return await decideWikiProposal(service, id, project, expectedHash, "apply", {
+    return await decideWikiProposal(service, id2, project, expectedHash, "apply", {
       actor: "automatic",
       authority: AUTOMATIC_AUTHORITY
     });
   } catch (error) {
-    return { id, status: "pending", reason: String(error?.message || error).slice(0, 300) };
+    return { id: id2, status: "pending", reason: String(error?.message || error).slice(0, 300) };
   }
 }
 async function wikiHistory(service, project) {
@@ -2000,8 +2072,8 @@ async function wikiHistory(service, project) {
     return items.sort((a, b) => b.reviewedAt - a.reviewedAt);
   });
 }
-async function knownGeneratedPage(service, project, path, hash3) {
-  return (await wikiHistory(service, project)).some((p) => p.path === path && p.afterHash === hash3);
+async function knownGeneratedPage(service, project, path, hash4) {
+  return (await wikiHistory(service, project)).some((p) => p.path === path && p.afterHash === hash4);
 }
 async function renameWithRetry(from, to, options = {}) {
   const attempts = options.attempts ?? 6;
@@ -2031,7 +2103,7 @@ var init_wiki_review = __esm({
     AUTOMATIC_AUTHORITY = Symbol("host-automatic-wiki");
     START2 = "<!-- pi-agent:managed:start -->";
     END2 = "<!-- pi-agent:managed:end -->";
-    digest3 = (text2) => createHash12("sha256").update(text2).digest("hex");
+    digest3 = (text3) => createHash12("sha256").update(text3).digest("hex");
     MAX_PENDING = 100;
     MAX_AGE = 24 * 60 * 60 * 1e3;
     RENAME_RETRY_CODES = /* @__PURE__ */ new Set(["EPERM", "EACCES", "EBUSY"]);
@@ -2043,8 +2115,8 @@ import { randomUUID as randomUUID11 } from "node:crypto";
 import { mkdir as mkdir8, readFile as readFile7, rename as rename8, unlink as unlink5, writeFile as writeFile8 } from "node:fs/promises";
 import { join as join12 } from "node:path";
 function knowledgeSpecialistHost(ctx) {
-  const id = contextSessionId(ctx);
-  return state3.hosts.get(id);
+  const id2 = contextSessionId(ctx);
+  return state3.hosts.get(id2);
 }
 async function specialistSettings() {
   const dir = knowledgeDirectory();
@@ -2330,11 +2402,11 @@ function continuationHint(value) {
 }
 function continuesTopic(prompt, topic) {
   if (!topic) return false;
-  const text2 = String(prompt || "").trim();
-  if (!text2) return true;
-  if (/(?:switch|new topic|different topic|换个|另一个|新的主题|切换主题)/i.test(text2)) return false;
-  if (continuationHint(text2)) return true;
-  const lower = text2.toLowerCase();
+  const text3 = String(prompt || "").trim();
+  if (!text3) return true;
+  if (/(?:switch|new topic|different topic|换个|另一个|新的主题|切换主题)/i.test(text3)) return false;
+  if (continuationHint(text3)) return true;
+  const lower = text3.toLowerCase();
   return [topic.id, topic.title, ...topic.aliases || [], ...topic.entities || []].filter((value) => typeof value === "string" && value.trim().length >= 2).some((value) => lower.includes(value.toLowerCase()));
 }
 
@@ -2512,11 +2584,11 @@ function createSpecialistBudget({
   const updateUsage = (usage = {}, usageTurn = turn) => {
     if (usageTurn !== turn) return false;
     const nonnegativeFinite = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
-    const tokens4 = nonnegativeFinite(usage.totalTokens);
+    const tokens3 = nonnegativeFinite(usage.totalTokens);
     const cost = nonnegativeFinite(usage.cost);
-    if (tokens4 !== null) {
-      turnTokens += tokens4;
-      sessionTokens += tokens4;
+    if (tokens3 !== null) {
+      turnTokens += tokens3;
+      sessionTokens += tokens3;
     }
     if (cost !== null) {
       turnCost += cost;
@@ -2654,10 +2726,10 @@ function knowledgeFailure(error) {
 function classifyFailureCode(error) {
   const code = errorCode2(error);
   if (code in publicationNotices) return code;
-  const text2 = errorMessage(error);
-  if (/binding changed/i.test(text2)) return "binding-changed";
-  if (/navigation changed/i.test(text2)) return "navigation-changed";
-  if (/navigation|prepare_knowledge/i.test(text2)) return "not-prepared";
+  const text3 = errorMessage(error);
+  if (/binding changed/i.test(text3)) return "binding-changed";
+  if (/navigation changed/i.test(text3)) return "navigation-changed";
+  if (/navigation|prepare_knowledge/i.test(text3)) return "not-prepared";
   return "check-failed";
 }
 
@@ -2666,8 +2738,8 @@ var MAX_FAILURES = 16;
 var MAX_TEXT = 600;
 var SHA256 = /^[a-f0-9]{64}$/i;
 function bounded(value, max = MAX_TEXT) {
-  const text2 = typeof value === "string" ? value : JSON.stringify(value);
-  return String(text2 ?? "").replace(/[\r\n]+/g, " ").slice(0, max);
+  const text3 = typeof value === "string" ? value : JSON.stringify(value);
+  return String(text3 ?? "").replace(/[\r\n]+/g, " ").slice(0, max);
 }
 function sameValue(left, right) {
   if (Object.is(left, right)) return true;
@@ -3039,9 +3111,9 @@ async function readBounded(response) {
     throw new Error("Semantic provider response is too large");
   const reader = response.body?.getReader();
   if (!reader) {
-    const text2 = await response.text();
-    if (Buffer.byteLength(text2) > MAX_RESPONSE) throw new Error("Semantic provider response is too large");
-    return text2;
+    const text3 = await response.text();
+    if (Buffer.byteLength(text3) > MAX_RESPONSE) throw new Error("Semantic provider response is too large");
+    return text3;
   }
   const chunks = [];
   let total = 0;
@@ -3084,7 +3156,7 @@ function vectors(value, expected) {
 async function embedTexts(rawConfig, texts, { signal } = {}) {
   const config = validateSemanticConfig(rawConfig);
   if (!config.enabled) throw new Error("Semantic embeddings are disabled");
-  if (!Array.isArray(texts) || !texts.length || texts.length > MAX_BATCH || texts.some((text2) => typeof text2 !== "string" || !text2.length || text2.length > 16e3) || texts.join("\n").length > MAX_CHARS)
+  if (!Array.isArray(texts) || !texts.length || texts.length > MAX_BATCH || texts.some((text3) => typeof text3 !== "string" || !text3.length || text3.length > 16e3) || texts.join("\n").length > MAX_CHARS)
     throw new Error("Semantic embedding batch is outside bounded limits");
   const headers = { "content-type": "application/json", accept: "application/json" };
   if (config.credentialEnv) {
@@ -3385,8 +3457,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { lstat as lstat4, realpath as realpath5 } from "node:fs/promises";
 import { relative as relative4, resolve as resolve5, sep as sep4 } from "node:path";
 import { pathToFileURL as pathToFileURL2 } from "node:url";
-var replaceControl = (text2) => [...String(text2 || "")].map((char) => char.charCodeAt(0) < 32 ? " " : char).join("");
-var clean2 = (text2, limit = 300) => replaceControl(text2).replace(/(?:bearer\s+|api[_-]?key[=:]\s*)[^\s]+/gi, "[redacted]").trim().slice(0, limit);
+var replaceControl = (text3) => [...String(text3 || "")].map((char) => char.charCodeAt(0) < 32 ? " " : char).join("");
+var clean2 = (text3, limit = 300) => replaceControl(text3).replace(/(?:bearer\s+|api[_-]?key[=:]\s*)[^\s]+/gi, "[redacted]").trim().slice(0, limit);
 var feedbackReason = (reason) => {
   const labels = {
     "not-prepared": "\u77E5\u8BC6\u5E93\u51C6\u5907\u5C1A\u672A\u5B8C\u6210",
@@ -3498,8 +3570,8 @@ function createTaskFeedback() {
 }
 function guardResearchToolResult(event) {
   if (!["fetch_content", "webfetch", "research_archive_source"].includes(String(event.toolName))) return;
-  const text2 = (event.content || []).filter((block) => block.type === "text").map((block) => String(block.text || "")).join("\n");
-  if (/(?:^|\n)%PDF-\d\.\d/.test(text2.slice(0, 1800)) && (text2.includes("\0") || /(?:\uFFFD|\d+\s+\d+\s+obj|\nstream)/.test(text2.slice(0, 6e3))))
+  const text3 = (event.content || []).filter((block) => block.type === "text").map((block) => String(block.text || "")).join("\n");
+  if (/(?:^|\n)%PDF-\d\.\d/.test(text3.slice(0, 1800)) && (text3.includes("\0") || /(?:\uFFFD|\d+\s+\d+\s+obj|\nstream)/.test(text3.slice(0, 6e3))))
     return {
       content: [
         {
@@ -3600,7 +3672,7 @@ import { dirname as dirname4 } from "node:path";
 init_files();
 var START = "<!-- pi-agent:managed:start -->";
 var END = "<!-- pi-agent:managed:end -->";
-var hash = (text2) => createHash8("sha256").update(text2).digest("hex");
+var hash = (text3) => createHash8("sha256").update(text3).digest("hex");
 async function updateNavigation(vault, path, heading, body) {
   if (!["Home.md", "Wiki/Index.md", "Library/Index.md"].includes(path) && !/^Projects\/[a-z0-9-]+\/Index\.md$/.test(path))
     throw new Error("Not an allowed navigation target");
@@ -3722,16 +3794,16 @@ var STOP = new Set(
     " "
   )
 );
-var tokens3 = (text2) => String(text2 || "").toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+var tokens2 = (text3) => String(text3 || "").toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 function mentionedWikiTitle(query, titles) {
   const q = String(query || "").toLocaleLowerCase();
   if (q.trim().length < 3) return null;
-  const queryTokens = new Set(tokens3(q).filter((t) => /[a-z0-9]/.test(t) && t.length >= 4 && !STOP.has(t)));
+  const queryTokens = new Set(tokens2(q).filter((t) => /[a-z0-9]/.test(t) && t.length >= 4 && !STOP.has(t)));
   for (const raw of titles) {
     const title = String(raw || "").toLocaleLowerCase().replace(/\.md$/, "").replace(/[-_]+/g, " ").trim();
     if (!title) continue;
     if (title.length >= 3 && q.includes(title)) return raw;
-    const lead = tokens3(title).filter((t) => t.length >= 4 && !STOP.has(t));
+    const lead = tokens2(title).filter((t) => t.length >= 4 && !STOP.has(t));
     if (lead.some((t) => queryTokens.has(t))) return raw;
   }
   return null;
@@ -3984,19 +4056,19 @@ var KnowledgeService = class {
       return Promise.reject(new Error("Knowledge service is closed"));
     const post = () => {
       if (this.closed) return Promise.reject(new Error("Knowledge service is closed"));
-      const id = ++this.next;
+      const id2 = ++this.next;
       this.worker.ref();
       return new Promise((resolvePromise, reject) => {
         const timer = setTimeout(
           () => {
-            this.pending.delete(id);
+            this.pending.delete(id2);
             if (!this.pending.size) this.worker.unref();
             reject(new Error(`Knowledge ${op} timed out; it was not reported as a successful empty result`));
           },
           op === "reconcile" ? 12e4 : 2e4
         );
-        this.pending.set(id, { resolve: resolvePromise, reject, timer });
-        this.worker.postMessage({ id, op, args });
+        this.pending.set(id2, { resolve: resolvePromise, reject, timer });
+        this.worker.postMessage({ id: id2, op, args });
       });
     };
     if (op === "close") return post();
@@ -4218,20 +4290,20 @@ var KnowledgeService = class {
    */
   /** Cheap lexical probe: the Wiki page whose title the question names, or null. */
   async probeTopic({ query, project = "" }) {
-    const text2 = String(query || "").slice(0, 200);
-    if (!text2.trim()) return null;
+    const text3 = String(query || "").slice(0, 200);
+    if (!text3.trim()) return null;
     return withKnowledgeBinding(this.binding, async () => {
-      const result2 = await this.request("search", { query: text2, wikiOnly: true, project, limit: 6 });
+      const result2 = await this.request("search", { query: text3, wikiOnly: true, project, limit: 6 });
       const hits = (result2?.hits || []).filter((hit) => hit.kind === "wiki");
       const titles = hits.map((hit) => hit.title || String(hit.path || "").split("/").pop());
-      const title = mentionedWikiTitle(text2, titles);
+      const title = mentionedWikiTitle(text3, titles);
       return title ? hits[titles.indexOf(title)]?.path || null : null;
     });
   }
   async relatedForMemory({ query, project = "", limit = 4 }) {
-    const text2 = String(query || "").slice(0, 2e3);
-    if (!text2.trim()) return [];
-    const lexical = await this.request("search", { query: text2.slice(0, 200), limit: 8, project });
+    const text3 = String(query || "").slice(0, 2e3);
+    if (!text3.trim()) return [];
+    const lexical = await this.request("search", { query: text3.slice(0, 200), limit: 8, project });
     const byPath = new Map((lexical.hits || []).map((hit) => [hit.path, hit]));
     const order = [];
     try {
@@ -4241,7 +4313,7 @@ var KnowledgeService = class {
         const timer = setTimeout(() => controller.abort(new Error("semantic deadline exceeded")), 1500);
         try {
           const embedded = await awaitSemanticDeadline(
-            embedTexts(providerConfig(settings), [text2], { signal: controller.signal }),
+            embedTexts(providerConfig(settings), [text3], { signal: controller.signal }),
             controller
           );
           const result2 = await this.request("semanticCandidates", {
@@ -4588,14 +4660,14 @@ var KnowledgeService = class {
       role: "delivery-only"
     };
   }
-  async validateAnswer(ticket, cwd, text2, { deliveries = [] } = {}) {
+  async validateAnswer(ticket, cwd, text3, { deliveries = [] } = {}) {
     const state5 = await this.check(ticket, cwd);
     const searched = state5.answerSearch;
     const citationLimit = 12;
     const verifiedSources = [], verifiedOutputs = [];
     const citedPaths2 = [
       ...new Set(
-        Array.from(String(text2).matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g), (match) => {
+        Array.from(String(text3).matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g), (match) => {
           const path = match[1].trim();
           return path.endsWith(".md") ? path : `${path}.md`;
         })
@@ -4876,8 +4948,8 @@ var state2 = runtimeSlot(
 );
 var FIELD = "knowledgePublication";
 var hash2 = (content) => createHash11("sha256").update(JSON.stringify(content ?? [])).digest("hex");
-function sanitizeError(text2) {
-  return diagnosticText(text2, 4096).trim();
+function sanitizeError(text3) {
+  return diagnosticText(text3, 4096).trim();
 }
 function isUserAbortError(message) {
   return /was aborted|request aborted/i.test(String(message?.errorMessage || ""));
@@ -5047,7 +5119,7 @@ ${String(footer).slice(0, 2e3)}` }] : [];
       metacognitive ? { metacognition: metacognitive } : null
     );
   };
-  const evaluateMetacognition = async (ctx, current, text2) => {
+  const evaluateMetacognition = async (ctx, current, text3) => {
     if (typeof getMetacognition !== "function") return null;
     let snapshot;
     try {
@@ -5069,7 +5141,7 @@ ${String(footer).slice(0, 2e3)}` }] : [];
       });
     }
     if (snapshot == null) return null;
-    const evaluation = evaluateMetacognitivePublication(text2, snapshot);
+    const evaluation = evaluateMetacognitivePublication(text3, snapshot);
     if (!evaluation.ok)
       throw Object.assign(new Error("Metacognitive publication checks failed"), {
         code: evaluation.failures.some((failure2) => failure2.code === "artifact-pending-review") ? "artifact-pending-review" : "metacognitive-inconsistency",
@@ -5187,8 +5259,8 @@ ${String(footer).slice(0, 2e3)}` }] : [];
       return report(
         seal(message, content, { status: "unconfigured", turnId, scientificallyVerified: false })
       );
-    const text2 = content.map((b) => b.text).join("\n");
-    if (Buffer.byteLength(text2, "utf8") > 128 * 1024)
+    const text3 = content.map((b) => b.text).join("\n");
+    if (Buffer.byteLength(text3, "utf8") > 128 * 1024)
       return report(blocked(message, "answer-too-large", turnId));
     updateKnowledgeFlow(flowCtx, { phase: "checking" });
     let currentTurn;
@@ -5196,7 +5268,7 @@ ${String(footer).slice(0, 2e3)}` }] : [];
       const c = getCurrent(ctx);
       currentTurn = c;
       if (!c) throw Object.assign(new Error("not prepared"), { code: "not-prepared" });
-      let publishText = text2;
+      let publishText = text3;
       let publishContent = content;
       const attachMaterializedCitations = async (refresh = false) => {
         if (typeof c.service.materializeCitations !== "function") return;
@@ -5340,26 +5412,26 @@ ${String(footer).slice(0, 2e3)}` }] : published;
       );
       while (deliveries.size > 12) deliveries.delete(deliveries.keys().next().value);
     },
-    async preflight(ctx, text2) {
+    async preflight(ctx, text3) {
       const sessionId2 = sessionIdFor(ctx);
       const cwd = ctx?.cwd;
       const flowCtx = { sessionId: sessionId2 };
       let timer;
       try {
-        if (typeof text2 !== "string" || Buffer.byteLength(text2, "utf8") > 128 * 1024)
+        if (typeof text3 !== "string" || Buffer.byteLength(text3, "utf8") > 128 * 1024)
           throw { code: "answer-too-large" };
         const c = getCurrent(ctx), proof = await Promise.race([
-          c.service.validateAnswer(c.ticket, cwd, text2, { deliveries: [...deliveries.values()] }),
+          c.service.validateAnswer(c.ticket, cwd, text3, { deliveries: [...deliveries.values()] }),
           new Promise((_, reject) => {
             timer = setTimeout(() => reject({ code: "check-timeout" }), 5e3);
           })
         ]);
-        const metacognition = await evaluateMetacognition(flowCtx, c, text2);
+        const metacognition = await evaluateMetacognition(flowCtx, c, text3);
         if (reviewer && typeof getMetacognition === "function") {
           try {
             const snapshot = await getMetacognition(flowCtx, c);
             if (snapshot && typeof snapshot === "object")
-              scheduleReview(flowCtx, { ...snapshot, body: text2 }, "publication-projection");
+              scheduleReview(flowCtx, { ...snapshot, body: text3 }, "publication-projection");
           } catch {
           }
         }
@@ -5495,11 +5567,11 @@ function knowledgeReadStart({ start_line, startLine } = {}) {
   return value;
 }
 function shouldOrientKnowledge(prompt) {
-  const text2 = String(prompt || "").trim();
-  if (!text2 || text2.startsWith("/") || /初始化|取消任务|停止任务/.test(text2)) return false;
-  if (/只读|read[- ]only/i.test(text2) && /复用|既有|已有|reuse|existing/i.test(text2) && !/调用.{0,8}子代理|委派|delegate|specialist/i.test(text2))
+  const text3 = String(prompt || "").trim();
+  if (!text3 || text3.startsWith("/") || /初始化|取消任务|停止任务/.test(text3)) return false;
+  if (/只读|read[- ]only/i.test(text3) && /复用|既有|已有|reuse|existing/i.test(text3) && !/调用.{0,8}子代理|委派|delegate|specialist/i.test(text3))
     return false;
-  return !!deliveryContract(text2) || /比较|对比|分析|综述|compare|analy[sz]|review/i.test(text2) && /论文|文献|研究|证据|方法|软件|papers?|evidence|software/i.test(text2) || /知识库|已有知识|主题.{0,8}(?:知识|进展)|根据.{0,10}(?:文献|笔记)|(?:介绍|解读|讲解).{0,12}(?:论文|文献)|下载.{0,12}(?:软件说明书|说明书|软件文档)|show\s*-?\s*me|\bwiki\b/i.test(text2);
+  return !!deliveryContract(text3) || /比较|对比|分析|综述|compare|analy[sz]|review/i.test(text3) && /论文|文献|研究|证据|方法|软件|papers?|evidence|software/i.test(text3) || /知识库|已有知识|主题.{0,8}(?:知识|进展)|根据.{0,10}(?:文献|笔记)|(?:介绍|解读|讲解).{0,12}(?:论文|文献)|下载.{0,12}(?:软件说明书|说明书|软件文档)|show\s*-?\s*me|\bwiki\b/i.test(text3);
 }
 function createKnowledgeSpecialists(pi, { getCurrent, readOnly = false }) {
   let epoch = 0, goal = "", oriented = false, handoffs = [], used = /* @__PURE__ */ new Set(), controllers = /* @__PURE__ */ new Set(), decisions = [], budget = createSpecialistBudget();
@@ -5588,9 +5660,9 @@ function createKnowledgeSpecialists(pi, { getCurrent, readOnly = false }) {
     if (!host) return skip("host-unavailable");
     if (decision.decision !== "run") {
       remember({ decision: decision.decision, reasonCode: decision.reasonCode });
-      const id2 = randomUUID12();
+      const id3 = randomUUID12();
       noteKnowledgeSpecialist(ctx, {
-        id: id2,
+        id: id3,
         role,
         name: profiles[role][0],
         label: profiles[role][1],
@@ -5648,9 +5720,9 @@ function createKnowledgeSpecialists(pi, { getCurrent, readOnly = false }) {
     if (parentSignal?.aborted) abort();
     else parentSignal?.addEventListener("abort", abort, { once: true });
     const deadline = setTimeout(abort, settings.timeoutMs);
-    const [name, label] = profiles[role], id = randomUUID12();
+    const [name, label] = profiles[role], id2 = randomUUID12();
     let progress = {
-      id,
+      id: id2,
       role,
       name,
       label,
@@ -5876,7 +5948,7 @@ function createKnowledgeSpecialists(pi, { getCurrent, readOnly = false }) {
         elapsedMs: Math.max(0, Date.now() - progress.startedAt),
         budget: budget.snapshot
       });
-      return { status: "completed", role, id, skillName, ...answer };
+      return { status: "completed", role, id: id2, skillName, ...answer };
     } catch (error) {
       const cancelled = controller.signal.aborted || generation !== epoch;
       publish({
@@ -5890,7 +5962,7 @@ function createKnowledgeSpecialists(pi, { getCurrent, readOnly = false }) {
       return {
         status: cancelled ? "cancelled" : "failed",
         role,
-        id,
+        id: id2,
         reason: String(error.message).slice(0, 300),
         decision: cancelled ? "skip" : "run",
         nextAction: cancelled ? "Start a new turn before retrying." : "Inspect the provider failure before retrying."
@@ -6066,6 +6138,7 @@ init_runtime_host();
 import { createHash as createHash14, randomUUID as randomUUID16 } from "node:crypto";
 import { lstat as lstat10, mkdir as mkdir12, readFile as readFile11, rename as rename10, unlink as unlink7, writeFile as writeFile12 } from "node:fs/promises";
 import { isAbsolute as isAbsolute9, join as join16, relative as relative10, resolve as resolve11, sep as sep9 } from "node:path";
+var EXPERIENCE_VERSION = 1;
 var EXPERIENCE_LIMITS = Object.freeze({
   maxRecords: 128,
   maxFileBytes: 512 * 1024,
@@ -6089,6 +6162,557 @@ var EXPERIENCE_LIMITS = Object.freeze({
   maxSchedulerJobIdChars: 180,
   maxQueryChars: 200
 });
+var HASH = (value) => createHash14("sha256").update(value).digest("hex");
+var now = () => (/* @__PURE__ */ new Date()).toISOString();
+function text2(value, limit) {
+  if (typeof value !== "string" && typeof value !== "number") return "";
+  return String(value).normalize("NFKC").replace(/[\u0000-\u001f\u007f<>]/g, " ").replace(/(?:bearer\s+)[^\s,;"']+/gi, "Bearer [redacted]").replace(/(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|authorization|cookie)["']?\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, "$1[redacted]").replace(/https?:\/\/[^\s<>"]+/gi, (raw) => {
+    try {
+      const url = new URL(raw);
+      url.username = "";
+      url.password = "";
+      url.search = "";
+      url.hash = "";
+      return url.toString();
+    } catch {
+      return "[URL omitted]";
+    }
+  }).trim().slice(0, limit);
+}
+function id(value, label, limit = 180) {
+  const result2 = text2(value, limit);
+  if (!result2) throw new Error(`${label} is required`);
+  if (/[\\/]/.test(result2) || result2 === "." || result2 === "..") throw new Error(`Invalid ${label}`);
+  return result2;
+}
+function projectKey2(value) {
+  const project = text2(value, EXPERIENCE_LIMITS.maxProjectChars).toLowerCase();
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(project)) throw new Error("Invalid experience project");
+  return project;
+}
+function hostKey(value) {
+  const host = text2(value, EXPERIENCE_LIMITS.maxHostIdChars).toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(host)) throw new Error("Invalid experience host");
+  return host;
+}
+function vaultKey(value) {
+  const vault = text2(value, 64).toLowerCase();
+  if (!/^[a-f0-9]{24}$/.test(vault)) throw new Error("Invalid experience binding");
+  return vault;
+}
+function hash3(value) {
+  const result2 = text2(value, 128).toLowerCase();
+  return /^[a-f0-9]{64}$/.test(result2) ? result2 : null;
+}
+function opaqueRef(value, limit = 180) {
+  const result2 = text2(value, limit);
+  if (!result2 || /[\\/]/.test(result2)) return "";
+  return result2;
+}
+function boundedStringList(value, limit) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((item) => text2(item, 240)).filter(Boolean))].slice(0, limit);
+}
+function finiteNonNegative(value, maximum = 1e12) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > maximum) return null;
+  return value;
+}
+function finiteNumber(value, maximum = 1e12) {
+  if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > maximum) return null;
+  return value;
+}
+function normalizeExitCode(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= -1 && value <= 255 ? value : null;
+}
+function normalizeRepair(value) {
+  if (typeof value === "boolean") return { succeeded: value };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const item = value;
+  const succeeded = item.succeeded === true || item.success === true;
+  const summary = text2(item.summary, 400) || null;
+  const observationId = opaqueRef(item.observationId, 180) || null;
+  if (item.succeeded !== void 0 && typeof item.succeeded !== "boolean" || item.success !== void 0 && typeof item.success !== "boolean")
+    return null;
+  return {
+    succeeded,
+    ...summary ? { summary } : {},
+    ...observationId ? { observationId } : {}
+  };
+}
+function normalizeDiffValue(value) {
+  if (value === null || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) && Math.abs(value) <= 1e12 ? value : void 0;
+  if (typeof value === "string") return text2(value, 240) || null;
+  return void 0;
+}
+function normalizeWorkflowSpecDiff(value) {
+  let entries = [];
+  if (Array.isArray(value)) entries = value;
+  else if (value && typeof value === "object") {
+    entries = Object.entries(value).map(([path, after]) => ({ path, after }));
+  }
+  const result2 = [];
+  for (const entry of entries.slice(0, EXPERIENCE_LIMITS.maxWorkflowSpecDiffs)) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const item = entry;
+    const path = text2(item.path ?? item.field ?? item.key, 180);
+    if (!path || /[\\]/.test(path)) continue;
+    const before = normalizeDiffValue(item.before);
+    const after = normalizeDiffValue(item.after ?? item.value);
+    if (before === void 0 && after === void 0) continue;
+    result2.push({ path, ...before === void 0 ? {} : { before }, ...after === void 0 ? {} : { after } });
+  }
+  return result2;
+}
+function normalizeResourceUse(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result2 = {};
+  for (const [key, raw] of Object.entries(value).slice(0, 32)) {
+    const name = text2(key, 64);
+    if (!/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(name) || /(token|secret|password|credential|command|output|path|url)/i.test(name)) continue;
+    const number = finiteNonNegative(raw);
+    if (number !== null) result2[name] = number;
+    if (Object.keys(result2).length >= 16) break;
+  }
+  return result2;
+}
+function normalizeQcMetrics(value) {
+  let entries = [];
+  if (Array.isArray(value)) {
+    entries = value.map((entry) => ["", entry]);
+  } else if (value && typeof value === "object") {
+    entries = Object.entries(value);
+  }
+  const result2 = [];
+  for (const [mapName, raw] of entries.slice(0, EXPERIENCE_LIMITS.maxQcMetrics)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const item = raw;
+    const name = text2(item.name ?? mapName, 120);
+    if (!name) continue;
+    const unit = text2(item.unit, 32) || null;
+    const valueNumber = finiteNonNegative(item.value, 1e12);
+    const count = finiteNonNegative(item.count, 1e9);
+    const distributionInput = item.distribution && typeof item.distribution === "object" ? item.distribution : item;
+    const distribution = {};
+    for (const [rawKey, rawValue] of Object.entries(distributionInput).slice(0, 16)) {
+      const key = text2(rawKey, 32);
+      if (!/^[A-Za-z][A-Za-z0-9_.-]{0,31}$/.test(key) || ["count", "name", "unit", "value", "values"].includes(key)) continue;
+      const number = finiteNumber(rawValue, 1e12);
+      if (number !== null) distribution[key] = number;
+    }
+    const distributionCount = finiteNonNegative(distributionInput.count, 1e9);
+    if (distributionCount !== null) distribution.count = distributionCount;
+    const values = Array.isArray(item.values) ? item.values.map((entry) => finiteNumber(entry, 1e12)).filter((entry) => entry !== null).slice(0, EXPERIENCE_LIMITS.maxQcValues) : [];
+    if (valueNumber === null && count === null && Object.keys(distribution).length === 0 && values.length === 0) continue;
+    result2.push({
+      name,
+      ...unit ? { unit } : {},
+      ...valueNumber === null ? {} : { value: valueNumber },
+      ...count === null ? {} : { count },
+      ...Object.keys(distribution).length ? { distribution } : {},
+      ...values.length ? { values } : {}
+    });
+  }
+  return result2;
+}
+function normalizeArtifact(value) {
+  if (!value || typeof value !== "object") return null;
+  const item = value;
+  const sha256 = hash3(item.sha256);
+  if (!sha256) return null;
+  const bytes = typeof item.bytes === "number" && Number.isSafeInteger(item.bytes) && item.bytes >= 0 ? item.bytes : void 0;
+  const pathValue = text2(item.path, 240).replaceAll("\\", "/");
+  const safePath = pathValue && !isAbsolute9(pathValue) && !pathValue.split("/").includes("..") && !/(?:^|\/)(?:\.env(?:\.[^/]*)?|auth\.json|credentials(?:\.json)?|\.ssh|\.git)(?:\/|$)/i.test(pathValue) ? pathValue : "";
+  return {
+    ...safePath ? { path: safePath } : {},
+    sha256,
+    ...bytes === void 0 ? {} : { bytes }
+  };
+}
+function normalizeArtifactRefs(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(normalizeArtifact).filter((item) => Boolean(item)).slice(0, EXPERIENCE_LIMITS.maxArtifacts);
+}
+function normalizeWorkflow(value) {
+  const result2 = text2(value, EXPERIENCE_LIMITS.maxWorkflowChars);
+  return result2 || null;
+}
+function normalizeWorkflowRevision(value) {
+  const result2 = text2(value, EXPERIENCE_LIMITS.maxRevisionChars);
+  return result2 || null;
+}
+function normalizeScheduler(value) {
+  const result2 = text2(value, EXPERIENCE_LIMITS.maxSchedulerChars).toLowerCase();
+  return result2 && /^[a-z][a-z0-9._-]{0,31}$/.test(result2) ? result2 : null;
+}
+function normalizeSchedulerJobId(value) {
+  return opaqueRef(value, EXPERIENCE_LIMITS.maxSchedulerJobIdChars) || null;
+}
+function normalizeProvenance(input) {
+  if (!input || typeof input !== "object") throw new Error("Experience provenance is required");
+  const item = input;
+  const manifestSha256 = hash3(item.manifestSha256 ?? item.manifestHash);
+  const artifactHashes = Array.isArray(item.artifactHashes) ? item.artifactHashes.map(normalizeArtifact).filter((value) => Boolean(value)).slice(0, EXPERIENCE_LIMITS.maxArtifacts) : [];
+  const runId = opaqueRef(item.runId);
+  const observationId = opaqueRef(item.observationId);
+  const receiptId = opaqueRef(item.receiptId);
+  const result2 = {
+    ...runId ? { runId } : {},
+    ...observationId ? { observationId } : {},
+    ...receiptId ? { receiptId } : {},
+    ...manifestSha256 ? { manifestSha256 } : {},
+    ...artifactHashes.length ? { artifactHashes } : {}
+  };
+  if (!result2.runId && !result2.receiptId && !result2.manifestSha256 && !result2.artifactHashes?.length)
+    throw new Error("Experience provenance must reference a host receipt or manifest");
+  return result2;
+}
+function blank2(vaultId, project, hostId) {
+  return { version: EXPERIENCE_VERSION, vaultId, project, hostId, revision: 0, updatedAt: now(), records: [] };
+}
+function validateDocument2(value, vaultId, project, hostId) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Corrupt experience document");
+  const item = value;
+  if (item.version !== EXPERIENCE_VERSION || item.vaultId !== vaultId || item.project !== project || item.hostId !== hostId)
+    throw new Error("Experience binding mismatch");
+  if (!Number.isSafeInteger(item.revision) || Number(item.revision) < 0 || !Array.isArray(item.records))
+    throw new Error("Corrupt experience document");
+  if (item.records.length > EXPERIENCE_LIMITS.maxRecords) throw new Error("Experience record limit exceeded");
+  return {
+    version: EXPERIENCE_VERSION,
+    vaultId,
+    project,
+    hostId,
+    revision: Number(item.revision),
+    updatedAt: text2(item.updatedAt, 40) || now(),
+    records: item.records.map((record) => normalizeRecord(record, vaultId, project, hostId))
+  };
+}
+function normalizeRecord(value, vaultId, project, hostId) {
+  if (!value || typeof value !== "object") throw new Error("Invalid experience record");
+  const item = value;
+  const status = item.status === "verified" ? "verified" : item.status === "observed" ? "observed" : null;
+  const outcome = ["success", "failure", "blocked", "unknown"].includes(String(item.outcome)) ? item.outcome : null;
+  if (!status || !outcome || item.navigationOnly !== true || item.evidenceEligible !== false || item.instructionEligible !== false)
+    throw new Error("Invalid experience record safety flags");
+  const result2 = {
+    id: id(item.id, "experience id"),
+    version: EXPERIENCE_VERSION,
+    vaultId,
+    project,
+    hostId,
+    jobId: id(item.jobId, "jobId"),
+    featureKey: id(item.featureKey, "featureKey", 240),
+    topicId: text2(item.topicId, 180) || null,
+    summary: text2(item.summary, EXPERIENCE_LIMITS.maxSummaryChars),
+    reason: text2(item.reason, EXPERIENCE_LIMITS.maxReasonChars) || null,
+    outcome,
+    status,
+    observedAt: text2(item.observedAt, 40) || now(),
+    observationIds: boundedStringList(item.observationIds, EXPERIENCE_LIMITS.maxObservationIds),
+    observationCount: Number.isSafeInteger(item.observationCount) && Number(item.observationCount) > 0 ? Number(item.observationCount) : 1,
+    jobIds: (() => {
+      const values = boundedStringList(item.jobIds, EXPERIENCE_LIMITS.maxJobIds);
+      return values.length ? values : [id(item.jobId, "jobId")];
+    })(),
+    jobCount: Number.isSafeInteger(item.jobCount) && Number(item.jobCount) > 0 ? Math.min(Number(item.jobCount), EXPERIENCE_LIMITS.maxJobIds) : 1,
+    failureSignature: text2(item.failureSignature, 240) || null,
+    exitCode: normalizeExitCode(item.exitCode),
+    failedStep: text2(item.failedStep, 240) || null,
+    repair: normalizeRepair(item.repair),
+    workflowSpecDiff: normalizeWorkflowSpecDiff(item.workflowSpecDiff ?? item.workflowSpecDiffs),
+    resourceUse: normalizeResourceUse(item.resourceUse),
+    qcMetrics: normalizeQcMetrics(item.qcMetrics ?? item.qc ?? item.qcMetricDistribution),
+    modelSummary: text2(item.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars) || null,
+    modelGenerated: item.modelGenerated === true && Boolean(text2(item.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars)),
+    contractHash: hash3(item.contractHash),
+    workflow: normalizeWorkflow(item.workflow),
+    workflowRevision: normalizeWorkflowRevision(item.workflowRevision ?? item.workflowRevisionId),
+    scheduler: normalizeScheduler(item.scheduler),
+    schedulerJobId: normalizeSchedulerJobId(item.schedulerJobId),
+    artifactRefs: normalizeArtifactRefs(item.artifactRefs ?? item.artifacts),
+    provenance: normalizeProvenance(item.provenance || {}),
+    tags: boundedStringList(item.tags, EXPERIENCE_LIMITS.maxTags),
+    sourceRefs: boundedStringList(item.sourceRefs, EXPERIENCE_LIMITS.maxSources),
+    navigationOnly: true,
+    evidenceEligible: false,
+    instructionEligible: false,
+    createdAt: text2(item.createdAt, 40) || now(),
+    updatedAt: text2(item.updatedAt, 40) || now()
+  };
+  if (!result2.summary) throw new Error("Experience summary is required");
+  return result2;
+}
+function pathFor2(directory, vaultId, project, hostId) {
+  if (!isAbsolute9(directory)) throw new Error("Experience directory must be absolute");
+  return join16(resolve11(directory), vaultId, "experience", project, `${hostId}.json`);
+}
+async function ensureSafePath(directory, path) {
+  const root = resolve11(directory);
+  const relativePath = relative10(root, resolve11(path));
+  if (isAbsolute9(relativePath) || relativePath === ".." || relativePath.startsWith(`..${sep9}`)) throw new Error("Experience path escapes knowledge directory");
+  let current = root;
+  for (const segment of relativePath.split(sep9).slice(0, -1)) {
+    current = join16(current, segment);
+    try {
+      const stat4 = await lstat10(current);
+      if (stat4.isSymbolicLink()) throw new Error("Experience path cannot traverse symlinks");
+      if (!stat4.isDirectory()) throw new Error("Experience path parent must be a directory");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      await mkdir12(current, { mode: 448 });
+    }
+  }
+}
+async function readDocument2(path, vaultId, project, hostId) {
+  try {
+    const stat4 = await lstat10(path);
+    if (stat4.isSymbolicLink() || !stat4.isFile()) throw new Error("Experience file must be a regular file");
+    if (stat4.size > EXPERIENCE_LIMITS.maxFileBytes) throw new Error("Experience file exceeds size limit");
+    return validateDocument2(JSON.parse(await readFile11(path, "utf8")), vaultId, project, hostId);
+  } catch (error) {
+    if (error.code === "ENOENT") return blank2(vaultId, project, hostId);
+    if (error instanceof SyntaxError) throw new Error("Corrupt experience document");
+    throw error;
+  }
+}
+async function atomicWrite2(path, value) {
+  const temporary = `${path}.${randomUUID16()}.tmp`;
+  try {
+    await writeFile12(temporary, `${JSON.stringify(value, null, 2)}
+`, { flag: "wx", mode: 384 });
+    await rename10(temporary, path);
+  } finally {
+    await unlink7(temporary).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
+}
+function tokenSet(value) {
+  return new Set(value.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((token) => token.length > 1));
+}
+function scoreRecord(record, query) {
+  if (!query) return 0;
+  const queryTokens = tokenSet(query);
+  const fields = [
+    record.featureKey,
+    record.summary,
+    record.reason || "",
+    record.failureSignature || "",
+    record.failedStep || "",
+    record.modelSummary || "",
+    record.workflow || "",
+    record.workflowRevision || "",
+    record.scheduler || "",
+    record.schedulerJobId || "",
+    record.hostId,
+    ...record.tags,
+    record.topicId || ""
+  ];
+  const recordTokens = tokenSet(fields.join(" "));
+  let score = 0;
+  for (const token of queryTokens) if (recordTokens.has(token)) score++;
+  if (record.featureKey.toLowerCase().includes(query.toLowerCase())) score += 2;
+  return score;
+}
+function createExperienceStore(options) {
+  const vaultId = vaultKey(options.binding?.vaultId);
+  const project = projectKey2(options.project);
+  const hostId = hostKey(options.hostId);
+  const directory = options.directory === void 0 || options.directory === null ? knowledgeDirectory() : options.directory;
+  if (!directory) throw new Error("Knowledge directory is not configured");
+  const path = pathFor2(directory, vaultId, project, hostId);
+  const read = async () => {
+    await ensureSafePath(directory, path);
+    return readDocument2(path, vaultId, project, hostId);
+  };
+  const mutate = async (expectedRevision, updater) => runRuntimeExclusive("experience-store", path, async () => {
+    await ensureSafePath(directory, path);
+    const current = await readDocument2(path, vaultId, project, hostId);
+    if (expectedRevision !== void 0 && current.revision !== expectedRevision) throw new Error("Experience revision changed");
+    const next = updater(structuredClone(current));
+    if (next.noop) return { document: current, result: next.result };
+    const candidate = { ...next.document, version: EXPERIENCE_VERSION, vaultId, project, hostId, revision: current.revision + 1, updatedAt: now(), records: next.document.records.slice(-EXPERIENCE_LIMITS.maxRecords) };
+    const document = validateDocument2(candidate, vaultId, project, hostId);
+    await atomicWrite2(path, document);
+    return { document, result: next.result };
+  });
+  return {
+    path,
+    scope: { vaultId, project, hostId },
+    read,
+    record: async (input, expectedRevision) => {
+      if (!input || typeof input !== "object") throw new Error("Invalid experience input");
+      const rawInput = input;
+      const jobId = id(input.jobId || rawInput.job?.id || rawInput.terminalJob?.id, "jobId");
+      const observation = input.observation || input.hostObservation;
+      const featureKey = id(
+        input.featureKey || observation?.featureKey || input.failureSignature || observation?.failureSignature || input.failedStep || input.step,
+        "featureKey",
+        240
+      );
+      if (!observation || typeof observation !== "object") throw new Error("Terminal host observation is required");
+      const observationId = id(observation.id, "observation id");
+      const outcome = observation.outcome;
+      if (!["success", "failure", "blocked", "unknown"].includes(outcome)) throw new Error("Invalid experience outcome");
+      const provenance = normalizeProvenance(input.provenance || observation.provenance || {});
+      const summary = text2(input.summary, EXPERIENCE_LIMITS.maxSummaryChars);
+      if (!summary) throw new Error("Experience summary is required");
+      const failureSignature = text2(input.failureSignature ?? observation.failureSignature, 240) || null;
+      const exitCode = normalizeExitCode(input.exitCode ?? observation.exitCode);
+      const failedStep = text2(input.failedStep ?? input.step ?? observation.failedStep ?? observation.step, 240) || null;
+      const repair = normalizeRepair(input.repair ?? observation.repair ?? (input.repairSucceeded === true || observation.repairSucceeded === true ? { succeeded: true } : null));
+      const repairSucceeded = input.repairSucceeded === true || observation.repairSucceeded === true || repair?.succeeded === true;
+      const workflowSpecDiff = normalizeWorkflowSpecDiff(input.workflowSpecDiff ?? observation.workflowSpecDiff);
+      const resourceUse = normalizeResourceUse(input.resourceUse ?? observation.resourceUse);
+      const qcMetrics = normalizeQcMetrics(input.qcMetrics ?? input.qc ?? observation.qcMetrics ?? observation.qc);
+      const modelSummary = text2(input.modelSummary ?? observation.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars) || null;
+      const contractHash = hash3(input.contractHash ?? observation.contractHash);
+      const workflow = normalizeWorkflow(input.workflow ?? observation.workflow);
+      const workflowRevision = normalizeWorkflowRevision(input.workflowRevision ?? observation.workflowRevision);
+      const scheduler = normalizeScheduler(input.scheduler ?? observation.scheduler);
+      const schedulerJobId = normalizeSchedulerJobId(input.schedulerJobId ?? observation.schedulerJobId);
+      const artifactRefs = normalizeArtifactRefs(input.artifactRefs ?? observation.artifactRefs);
+      const observedAt = text2(observation.observedAt, 40) || now();
+      const sanitizedTags = boundedStringList(input.tags, EXPERIENCE_LIMITS.maxTags);
+      const sanitizedSources = boundedStringList(input.sourceRefs, EXPERIENCE_LIMITS.maxSources);
+      const key = featureKey;
+      const out = await mutate(expectedRevision, (document) => {
+        const matching = document.records.filter((record2) => record2.featureKey === featureKey);
+        const existing = document.records.find((record2) => record2.id === HASH(key).slice(0, 32));
+        if (existing?.observationIds.includes(observationId)) return { document, result: { classification: "duplicate", record: existing }, noop: true };
+        const observations = new Set(matching.flatMap((record2) => record2.observationIds));
+        observations.add(observationId);
+        const jobs = new Set(matching.flatMap((record2) => record2.jobIds.length ? record2.jobIds : [record2.jobId]));
+        jobs.add(jobId);
+        const status = repairSucceeded || jobs.size >= 2 ? "verified" : "observed";
+        const record = existing || {
+          id: HASH(key).slice(0, 32),
+          version: EXPERIENCE_VERSION,
+          vaultId,
+          project,
+          hostId,
+          jobId,
+          featureKey,
+          topicId: text2(input.topicId, 180) || null,
+          summary,
+          // A failure reason may be supplied as summary context, but raw output is never accepted.
+          reason: text2(input.reason, EXPERIENCE_LIMITS.maxReasonChars) || null,
+          outcome,
+          status,
+          observedAt,
+          observationIds: [],
+          observationCount: 0,
+          jobIds: [],
+          jobCount: 0,
+          failureSignature,
+          exitCode,
+          failedStep,
+          repair,
+          workflowSpecDiff,
+          resourceUse,
+          qcMetrics,
+          modelSummary,
+          modelGenerated: Boolean(modelSummary),
+          contractHash,
+          workflow,
+          workflowRevision,
+          scheduler,
+          schedulerJobId,
+          artifactRefs,
+          provenance,
+          tags: sanitizedTags,
+          sourceRefs: sanitizedSources,
+          navigationOnly: true,
+          evidenceEligible: false,
+          instructionEligible: false,
+          createdAt: now(),
+          updatedAt: now()
+        };
+        record.observationIds = [...observations].slice(-EXPERIENCE_LIMITS.maxObservationIds);
+        record.observationCount = Math.min(observations.size, EXPERIENCE_LIMITS.maxObservationIds);
+        record.jobIds = [...jobs].slice(-EXPERIENCE_LIMITS.maxJobIds);
+        record.jobCount = Math.min(jobs.size, EXPERIENCE_LIMITS.maxJobIds);
+        record.status = status;
+        record.updatedAt = now();
+        record.observedAt = observedAt;
+        record.outcome = outcome;
+        record.summary = summary;
+        record.provenance = provenance;
+        record.tags = sanitizedTags;
+        record.sourceRefs = sanitizedSources;
+        if (failureSignature) record.failureSignature = failureSignature;
+        if (input.exitCode !== void 0 || observation.exitCode !== void 0) record.exitCode = exitCode;
+        if (failedStep) record.failedStep = failedStep;
+        if (repair) record.repair = repair;
+        if (input.workflowSpecDiff !== void 0 || observation.workflowSpecDiff !== void 0) record.workflowSpecDiff = workflowSpecDiff;
+        if (input.resourceUse !== void 0 || observation.resourceUse !== void 0) record.resourceUse = resourceUse;
+        if (input.qcMetrics !== void 0 || input.qc !== void 0 || observation.qcMetrics !== void 0 || observation.qc !== void 0) record.qcMetrics = qcMetrics;
+        if (modelSummary) {
+          record.modelSummary = modelSummary;
+          record.modelGenerated = true;
+        }
+        if (contractHash) record.contractHash = contractHash;
+        if (workflow) record.workflow = workflow;
+        if (workflowRevision) record.workflowRevision = workflowRevision;
+        if (scheduler) record.scheduler = scheduler;
+        if (schedulerJobId) record.schedulerJobId = schedulerJobId;
+        if (artifactRefs.length) record.artifactRefs = artifactRefs;
+        if (!existing) document.records.unshift(record);
+        return { document, result: { classification: existing ? "updated" : "new", record } };
+      });
+      return { ...out.result, revision: out.document.revision, record: out.result.record };
+    },
+    search: async (query = "", options2 = {}) => {
+      const document = await read();
+      const q = text2(query, EXPERIENCE_LIMITS.maxQueryChars);
+      const limit = Math.min(EXPERIENCE_LIMITS.maxSearchResults, Math.max(1, Math.floor(options2.limit || EXPERIENCE_LIMITS.maxSearchResults)));
+      const workflowFilter = normalizeWorkflow(options2.workflow);
+      const hostFilter = options2.hostId === void 0 ? null : hostKey(options2.hostId);
+      const failureFilter = text2(options2.failureSignature, 240).toLowerCase() || null;
+      const records = document.records.filter((record) => !workflowFilter || record.workflow?.toLowerCase() === workflowFilter.toLowerCase()).filter((record) => !hostFilter || record.hostId === hostFilter).filter((record) => !failureFilter || record.failureSignature?.toLowerCase() === failureFilter).filter((record) => options2.includeObserved !== false || record.status === "verified").map((record) => ({ record, score: scoreRecord(record, q) })).filter((hit) => !q || hit.score > 0).sort((left, right) => right.score - left.score || right.record.updatedAt.localeCompare(left.record.updatedAt) || left.record.id.localeCompare(right.record.id)).slice(0, limit);
+      return { revision: document.revision, query: q, records, navigationOnly: true, evidenceEligible: false, instructionEligible: false };
+    }
+  };
+}
+async function searchExperiences(options) {
+  const { query = "", limit, includeObserved, workflow, failureSignature, hostFilter, ...storeOptions } = options;
+  const store = createExperienceStore(storeOptions);
+  return store.search(query, { limit, includeObserved, workflow, hostId: hostFilter, failureSignature });
+}
+
+// src/core/delivery-claims.ts
+import { createHash as createHash15 } from "node:crypto";
+var digest4 = (text3) => createHash15("sha256").update(text3).digest("hex");
+function summaryDeliveryClaims(details, markdown) {
+  const receipt = details.delivery_receipt;
+  if (!receipt || receipt.version !== 1 || receipt.semanticAssessment?.status !== "model-assessed" || receipt.bodySha256 !== digest4(`${markdown.trim()}
+`))
+    throw new Error("Topic memory requires a current, reviewed summary delivery receipt");
+  if (!Array.isArray(details.claims) || receipt.memoryClaimsSha256 !== digest4(JSON.stringify(details.claims)))
+    throw new Error("Topic memory claims differ from the reviewed delivery packet");
+  const reviewed = receipt.semanticAssessment.memoryClaims;
+  if (!Array.isArray(reviewed) || reviewed.length !== details.claims.length)
+    throw new Error("Topic memory requires a separate assessment for every delivered memory claim");
+  const seen = /* @__PURE__ */ new Set();
+  for (const claim of details.claims) {
+    if (claim.deliveryBodySha256 !== receipt.bodySha256 || !receipt.sources.some(
+      (source) => source.path === claim.sourcePath && source.sha256 === claim.sourceHash
+    ))
+      throw new Error("Topic memory claim does not reference the delivered evidence version");
+    const assessment = reviewed.find((item) => item.bindingId === claim.bindingId);
+    if (!assessment || seen.has(claim.bindingId) || assessment.assessment !== "supported" || assessment.memoryClaimSha256 !== digest4(JSON.stringify(claim)))
+      throw new Error("Topic memory claim lacks its exact supported scope assessment");
+    seen.add(claim.bindingId);
+    if (!Array.isArray(assessment.evidence) || !assessment.evidence.some(
+      (ref) => ref.path === claim.sourcePath && ref.sha256 === claim.sourceHash && receipt.sources.some(
+        (source) => source.path === ref.path && source.sha256 === ref.sha256 && source.readReceiptIds.includes(ref.readReceiptId)
+      )
+    ))
+      throw new Error("Topic memory scope assessment lacks a delivered read reference");
+  }
+  return details.claims;
+}
 
 // src/extension/internal-knowledge-extension.ts
 init_runtime_host();
@@ -6134,7 +6758,11 @@ function registerWikiReviewAcceptance() {
     resolve: async (review, { cwd }) => {
       try {
         const service = await getKnowledgeService();
-        const p = await previewWikiProposal(service, review.id, review.project || await currentProject(cwd));
+        const p = await previewWikiProposal(
+          service,
+          review.id,
+          review.project || await currentProject(cwd)
+        );
         const stale = p.sources.some((s) => s.changed);
         return {
           status: p.status,
@@ -6227,8 +6855,8 @@ function registerKnowledgeInterface(pi, { readOnly = false, runtime = null } = {
   let current = null;
   let bootstrap = null;
   let activeTopic = null, topicMemory = null, sessionScopeId = null, awaitingUserStart = false, explicitTopicProposal = false, deliveryFooter = null;
-  const appendFooter = (text2) => {
-    if (text2) deliveryFooter = [deliveryFooter, text2].filter(Boolean).join("\n");
+  const appendFooter = (text3) => {
+    if (text3) deliveryFooter = [deliveryFooter, text3].filter(Boolean).join("\n");
   };
   const toolInputs = /* @__PURE__ */ new Map();
   const isKnowledgeRequest = (prompt, researchContinuation = false) => Boolean(
@@ -6326,8 +6954,30 @@ function registerKnowledgeInterface(pi, { readOnly = false, runtime = null } = {
     if (readOnly || event.toolName !== "research_summarize_run" || event.isError || !event.result?.details?.summary_saved || !current || current.cwd !== resolve12(ctx.cwd) || current.binding.depositMode === "run-only")
       return;
     try {
-      const evidence = await current.service.currentReadEvidence(current.ticket, ctx.cwd, { limit: 6 });
+      const deliveredClaims = summaryDeliveryClaims(
+        event.result.details,
+        String(args.summary_markdown || "")
+      );
+      const readEvidence = await current.service.currentReadEvidence(current.ticket, ctx.cwd, { limit: 12 });
+      const deliveredSources = event.result.details.delivery_receipt.sources.map((source) => ({
+        path: source.path,
+        hash: source.sha256
+      }));
+      const evidence = {
+        ...readEvidence,
+        sources: readEvidence.sources.filter(
+          (source) => deliveredSources.some((bound) => bound.path === source.path && bound.hash === source.hash)
+        )
+      };
       if (!evidence.sources.length) return;
+      if (deliveredClaims.some(
+        (claim) => !evidence.sources.some(
+          (source) => source.path === claim.sourcePath && source.hash === claim.sourceHash
+        )
+      ))
+        throw new Error(
+          "A delivered memory claim is outside the bounded current knowledge-read evidence; topic memory was not updated"
+        );
       const memoryInput = {
         topicId: explainerTopicId(
           activeTopic?.id || args.result_slug || String(args.run_dir || "").split(/[\\/]/).slice(-2, -1)[0]
@@ -6342,10 +6992,10 @@ function registerKnowledgeInterface(pi, { readOnly = false, runtime = null } = {
         entities: String(args.summary_markdown || "").match(/\b[A-Z][A-Za-z0-9_-]{2,}\b/g)?.slice(0, 24) || [],
         unresolvedQuestions: String(args.summary_markdown || "").split(/\n/).filter((line) => /\?|unknown|unresolved|future work/i.test(line)).slice(0, 16),
         sources: evidence.sources.map((source) => ({ path: source.path, hash: source.hash })),
-        claims: Array.isArray(args.claims) ? args.claims : [],
+        claims: deliveredClaims,
         artifacts: [event.result.details.run, args.run_dir].filter(Boolean),
         sessionId: ctx.sessionId || null,
-        runHash: topicRunHash(args.summary_markdown, evidence.sources),
+        runHash: topicRunHash(args.summary_markdown, deliveredSources),
         lastRunId: event.result.details.run || args.run_dir || null
       };
       if (!topicMemory)
@@ -6804,11 +7454,14 @@ ${JSON.stringify(visible)}`
       activity: { text: "\u6B63\u5728\u68C0\u7D22\u77E5\u8BC6\u5E93\u7D22\u5F15\u2026", phase: "knowledge-search" }
     },
     label: "Obsidian \xB7 \u589E\u91CF\u7D22\u5F15\u68C0\u7D22",
-    description: "Search application-wide shared knowledge plus the current project. Requires current navigation; read linked Wiki before evidence search. Incomplete indexes never mean no knowledge.",
+    description: "Search application-wide shared knowledge plus the current project. Requires current navigation; read linked Wiki before evidence search. Incomplete indexes never mean no knowledge. Explicit kind=experiences requires workflow and host_id; it searches only this Vault/project/host and returns navigation, never scientific evidence or execution instructions.",
     parameters: {
       type: "object",
       properties: {
         query: { type: "string" },
+        kind: { type: "string", enum: ["knowledge", "experiences"] },
+        workflow: { type: "string" },
+        host_id: { type: "string" },
         wiki_only: { type: "boolean" },
         limit: { type: "integer", minimum: 1, maximum: 12 }
       },
@@ -6816,8 +7469,28 @@ ${JSON.stringify(visible)}`
     },
     execute: async (_id, p, _s, _u, ctx) => {
       const c = await ensureTurn(ctx, p.query);
-      const blocked2 = toolBudget.consume("search", p.query);
+      const blocked2 = toolBudget.consume(
+        "search",
+        p.kind === "experiences" ? JSON.stringify([p.kind, p.workflow, p.host_id, p.query]) : p.query
+      );
       if (blocked2) return result(blocked2);
+      if (p.kind === "experiences") {
+        if (!p.workflow?.trim() || !p.host_id?.trim())
+          throw new Error("Experience navigation requires explicit workflow and host_id");
+        const scope = await requireTopicTurn(ctx);
+        return result(
+          await searchExperiences({
+            binding: scope.binding,
+            project: scope.project,
+            hostId: p.host_id,
+            query: p.query,
+            workflow: p.workflow,
+            hostFilter: p.host_id,
+            limit: p.limit,
+            includeObserved: true
+          })
+        );
+      }
       updateKnowledgeFlow(ctx, { phase: "searching", error: null });
       try {
         const found = await c.service.search(c.ticket, ctx.cwd, {
@@ -6938,6 +7611,13 @@ ${JSON.stringify(visible)}`
                 tissue: { type: "string", maxLength: 180 },
                 stage: { type: "string", maxLength: 180 },
                 method: { type: "string", maxLength: 180 },
+                direction: {
+                  type: "string",
+                  enum: ["increase", "decrease", "affirmed", "negated", "unknown"]
+                },
+                endpoint: { type: "string", maxLength: 180 },
+                unit: { type: "string", maxLength: 180 },
+                effect: { type: "number" },
                 sourcePath: { type: "string", maxLength: 240 },
                 sourceHash: { type: "string", minLength: 64, maxLength: 64 },
                 location: { type: "string", maxLength: 120 },
@@ -6954,9 +7634,9 @@ ${JSON.stringify(visible)}`
         const c = await requireTopicTurn(ctx);
         if (!Number.isSafeInteger(p.expected_revision)) throw new Error("expected_revision is required");
         const memory = topicMemory || createTopicMemory({ binding: c.binding, project: c.project });
-        const { id, title, summary, aliases, entities, unresolvedQuestions, keyFindings, claims } = p;
+        const { id: id2, title, summary, aliases, entities, unresolvedQuestions, keyFindings, claims } = p;
         const updated = await memory.update(
-          { id, title, summary, aliases, entities, unresolvedQuestions, keyFindings, claims },
+          { id: id2, title, summary, aliases, entities, unresolvedQuestions, keyFindings, claims },
           p.expected_revision
         );
         activeTopic = (await memory.get(p.id)).matches[0] || activeTopic;
@@ -7207,8 +7887,8 @@ ${JSON.stringify(visible)}`
         const binding = await readKnowledgeBinding();
         if (!binding) throw new Error("No application Vault is bound");
         const service = await getKnowledgeService(binding), project = await currentProject(ctx.cwd, ctx);
-        let id = args.trim();
-        if (!id) {
+        let id2 = args.trim();
+        if (!id2) {
           const pending = await listWikiProposals(service, project);
           if (!pending.items.length) {
             pi.sendMessage({
@@ -7221,10 +7901,10 @@ ${JSON.stringify(visible)}`
           const options = pending.items.map((item) => `${item.id} \xB7 ${item.title}`);
           const selected = await ctx.ui.select("Obsidian \xB7 \u9009\u62E9\u5F85\u5BA1\u6838 Wiki", options);
           if (!selected) return;
-          id = selected.split(" \xB7 ")[0];
+          id2 = selected.split(" \xB7 ")[0];
         }
-        const preview = await previewWikiProposal(service, id, project);
-        const text2 = [
+        const preview = await previewWikiProposal(service, id2, project);
+        const text3 = [
           `Vault\uFF1A${binding.vault}`,
           `\u9875\u9762\uFF1A${preview.path}`,
           `\u7406\u7531\uFF1A${preview.rationale}`,
@@ -7237,7 +7917,7 @@ ${JSON.stringify(visible)}`
         ].join("\n\n");
         const choice = await ctx.ui.select(`Obsidian \xB7 \u5BA1\u6838\u5177\u4F53 Wiki \u4FEE\u6539
 
-${text2}`, [
+${text3}`, [
           "\u786E\u8BA4\u5E94\u7528\u6B64\u5019\u9009",
           "\u62D2\u7EDD\u6B64\u5019\u9009",
           "\u53D6\u6D88"
@@ -7245,7 +7925,7 @@ ${text2}`, [
         if (!choice || choice === "\u53D6\u6D88") return;
         const output = await decideWikiProposal(
           service,
-          id,
+          id2,
           project,
           preview.proposalHash,
           choice === "\u786E\u8BA4\u5E94\u7528\u6B64\u5019\u9009" ? "apply" : "reject"

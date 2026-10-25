@@ -4,6 +4,175 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// src/core/research-delivery.ts
+import { createHash } from "node:crypto";
+var summaryHash = (value) => createHash("sha256").update(value).digest("hex");
+var summaryBody = (markdown) => `${markdown.trim()}
+`;
+function deliveryMemoryClaims(input, prepared) {
+  if (input === void 0) return [];
+  if (!Array.isArray(input) || input.length > 24) throw new Error("Provide at most 24 summary memory claims");
+  const bindings = /* @__PURE__ */ new Set();
+  return input.map((claim) => {
+    if (!claim || typeof claim !== "object") throw new Error("Invalid summary memory claim");
+    const binding = prepared.claims.find(
+      (candidate) => claim.bindingId ? candidate.id === claim.bindingId : candidate.claim === claim.claim
+    );
+    if (!binding) throw new Error("Summary memory claim is not bound to this research run");
+    if (bindings.has(binding.id)) throw new Error("Provide one memory claim per bindingId");
+    bindings.add(binding.id);
+    const source = binding.sources.find(
+      (item) => item.path === claim.sourcePath && item.hash === claim.sourceHash
+    );
+    if (!source) throw new Error("Summary memory claim source/hash differs from the bound evidence");
+    for (const key of ["subject", "predicate"]) {
+      if (typeof claim[key] !== "string" || !claim[key].trim() || claim[key].length > 180)
+        throw new Error(`Invalid memory claim ${key}`);
+    }
+    if (!["observation", "interpretation", "hypothesis"].includes(claim.relation))
+      throw new Error("Invalid memory claim relation");
+    const result = {
+      bindingId: binding.id,
+      claim: binding.claim,
+      subject: claim.subject,
+      predicate: claim.predicate,
+      sourcePath: source.path,
+      sourceHash: source.hash,
+      startLine: source.start_line,
+      endLine: source.end_line,
+      location: `${source.start_line}-${source.end_line}`,
+      limitations: binding.limitations,
+      relation: binding.relationship === "hypothesis" || binding.relationship === "unsupported" ? "hypothesis" : claim.relation,
+      deliveryBodySha256: prepared.bodySha256
+    };
+    for (const key of ["value", "organism", "tissue", "stage", "method", "direction", "endpoint", "unit"]) {
+      if (claim[key] !== void 0) {
+        if (typeof claim[key] !== "string" || claim[key].length > 600)
+          throw new Error(`Invalid memory claim ${key}`);
+        result[key] = claim[key];
+      }
+    }
+    if (claim.effect !== void 0) {
+      if (!Number.isFinite(claim.effect)) throw new Error("Invalid memory claim effect");
+      result.effect = claim.effect;
+    }
+    return result;
+  });
+}
+function summaryReviewPacket(prepared, memoryClaims) {
+  const blocks = [...prepared.body.matchAll(/\S[\s\S]*?(?=\n\s*\n|$)/g)].map((match, index) => ({
+    blockId: `block-${index + 1}`,
+    text: match[0],
+    start: match.index,
+    end: match.index + match[0].length,
+    proposedClaimIds: prepared.claims.map((claim) => claim.id)
+  }));
+  const packet = {
+    version: 1,
+    body: prepared.body,
+    bodySha256: prepared.bodySha256,
+    gateSha256: prepared.gateSha256,
+    claimsSha256: prepared.claimsSha256,
+    evidenceRevision: prepared.evidenceRevision,
+    blocks,
+    claims: prepared.claims,
+    readReceipts: prepared.readReceipts,
+    memoryClaims: memoryClaims.map((claim) => ({
+      ...claim,
+      memoryClaimSha256: summaryHash(JSON.stringify(claim))
+    }))
+  };
+  const bytes = JSON.stringify(packet);
+  if (Buffer.byteLength(bytes) > 512 * 1024)
+    throw new Error("Summary evidence packet exceeds 512 KiB; narrow the delivery before review");
+  return { ...packet, packetSha256: summaryHash(bytes) };
+}
+function validateSummaryAssessment(value, packet) {
+  if (!value || typeof value !== "object") throw new Error("Missing summary semantic assessment");
+  const review = value;
+  if (review.packetSha256 !== packet.packetSha256 || review.bodySha256 !== packet.bodySha256)
+    throw new Error("Summary semantic assessment belongs to different body/evidence bytes");
+  if (typeof review.provider !== "string" || !review.provider.trim() || typeof review.model !== "string" || !review.model.trim() || !Array.isArray(review.blocks) || review.blocks.length !== packet.blocks.length)
+    throw new Error("Incomplete summary semantic assessment");
+  const validateRead = (ref) => {
+    const read = packet.readReceipts.find(
+      (item) => item.receiptId === ref.readReceiptId && item.path === ref.path && item.sha256 === ref.sha256
+    );
+    if (!read || !Number.isInteger(ref.startLine) || !Number.isInteger(ref.endLine) || ref.startLine < read.startLine || ref.endLine < ref.startLine || ref.endLine > read.endLine)
+      throw new Error("Summary assessment cites evidence that was not read in this scope");
+  };
+  const seen = /* @__PURE__ */ new Set();
+  for (const block of review.blocks) {
+    if (!block || !packet.blocks.some((item) => item.blockId === block.blockId) || seen.has(block.blockId) || !["claim", "limitation", "navigation"].includes(block.role) || !["supported", "contradicted", "out-of-scope", "unknown"].includes(block.assessment) || typeof block.reason !== "string" || !block.reason.trim() || !Array.isArray(block.claimIds) || !Array.isArray(block.evidence))
+      throw new Error("Invalid summary block assessment");
+    seen.add(block.blockId);
+    const claims2 = block.claimIds.map((id) => {
+      const claim = packet.claims.find((candidate) => candidate.id === id);
+      if (!claim) throw new Error("Summary block references an unknown claim");
+      return claim;
+    });
+    if (!claims2.length) throw new Error("Every summary block requires a valid claim mapping");
+    for (const ref of block.evidence) validateRead(ref);
+    if (block.assessment === "supported")
+      for (const claim of claims2) {
+        if (claim.relationship !== "direct" && claim.relationship !== "indirect") continue;
+        let mapped = false;
+        for (const ref of block.evidence) {
+          if (claim.sources.some(
+            (source) => source.path === ref.path && source.hash === ref.sha256 && ref.startLine >= source.start_line && ref.endLine <= source.end_line
+          ))
+            mapped = true;
+        }
+        if (!mapped)
+          throw new Error(`Summary factual block lacks evidence from its mapped claim: ${claim.id}`);
+      }
+  }
+  if (!Array.isArray(review.memoryClaims) || review.memoryClaims.length !== packet.memoryClaims.length)
+    throw new Error("Incomplete summary memory claim assessment");
+  const reviewedMemory = /* @__PURE__ */ new Set();
+  for (const result of review.memoryClaims) {
+    const memory = packet.memoryClaims.find((claim) => claim.bindingId === result.bindingId);
+    if (!memory || reviewedMemory.has(result.bindingId) || result.memoryClaimSha256 !== memory.memoryClaimSha256 || !["supported", "contradicted", "out-of-scope", "unknown"].includes(result.assessment) || typeof result.reason !== "string" || !result.reason.trim() || !Array.isArray(result.evidence))
+      throw new Error("Invalid summary memory claim assessment or object hash");
+    reviewedMemory.add(result.bindingId);
+    for (const ref of result.evidence) validateRead(ref);
+    if (result.assessment === "supported") {
+      const spans = result.evidence.filter(
+        (ref) => ref.path === memory.sourcePath && ref.sha256 === memory.sourceHash && ref.startLine >= memory.startLine && ref.endLine <= memory.endLine
+      ).sort((a, b) => a.startLine - b.startLine);
+      let nextLine = memory.startLine;
+      for (const ref of spans) {
+        if (ref.startLine > nextLine) break;
+        nextLine = Math.max(nextLine, ref.endLine + 1);
+      }
+      if (nextLine <= memory.endLine)
+        throw new Error(
+          `Summary memory claim lacks complete evidence from its bound source: ${memory.bindingId}`
+        );
+    }
+  }
+  const unresolved = review.blocks.filter((block) => block.assessment !== "supported");
+  if (unresolved.length)
+    throw new Error(
+      `Summary semantic review is unresolved: ${unresolved.map((block) => `${block.blockId} ${block.assessment}: ${block.reason}`).join("; ")}`
+    );
+  const unresolvedMemory = review.memoryClaims.filter((claim) => claim.assessment !== "supported");
+  if (unresolvedMemory.length)
+    throw new Error(
+      `Summary memory claim review is unresolved: ${unresolvedMemory.map((claim) => `${claim.bindingId} ${claim.assessment}: ${claim.reason}`).join("; ")}`
+    );
+  return {
+    status: "model-assessed",
+    packetSha256: packet.packetSha256,
+    bodySha256: packet.bodySha256,
+    provider: review.provider,
+    model: review.model,
+    blocks: review.blocks,
+    memoryClaims: review.memoryClaims,
+    ...review.usage === void 0 ? {} : { usage: review.usage }
+  };
+}
+
 // src/core/claim-bindings.ts
 var claim_bindings_exports = {};
 __export(claim_bindings_exports, {
@@ -40,13 +209,17 @@ function validateClaimBindings(bindings, sources, reads) {
       const ref = rawRef;
       const path = typeof ref.path === "string" ? ref.path : "";
       const source = sources.find((candidate) => candidate.path === path);
-      const read = reads.get(path);
-      if (!source || !read || read.hash !== source.hash)
+      const observed = reads.get(path);
+      const receipts = Array.isArray(observed) ? observed : observed ? [observed] : [];
+      if (!source || !receipts.some((read2) => read2.hash === source.hash))
         throw new Error("Claim source was not read and identity-verified in this scope");
       const first = ref.start_line;
       const last = ref.end_line;
-      if (!Number.isInteger(first) || !Number.isInteger(last) || first < read.startLine || last < first || last > read.endLine)
-        throw new Error("Claim source range is outside the observed read");
+      const read = receipts.find(
+        (candidate) => candidate.hash === source.hash && Number.isInteger(first) && Number.isInteger(last) && first >= candidate.startLine && last >= first && last <= candidate.endLine
+      );
+      if (!read)
+        throw new Error("Claim source range is outside the observed read; unread gaps cannot be cited");
       const quote = text(ref.quote, "source quote", 6e3);
       const excerpt = read.text.split(/\r?\n/).slice(first - read.startLine, last - read.startLine + 1).join("\n");
       if (!excerpt.includes(quote)) throw new Error("Claim quote does not match the observed note range");
@@ -59,7 +232,8 @@ function validateClaimBindings(bindings, sources, reads) {
         end_line: last,
         quote,
         ...ref.original_location ? { original_location: text(ref.original_location, "historical original location", 600) } : {},
-        reading_basis: "current-scope-literature-note",
+        reading_basis: "current-scope-observed-excerpt",
+        ...read.receiptId ? { read_receipt_id: read.receiptId } : {},
         originalFulltextReadThisTurn: false
       };
     });
@@ -275,7 +449,7 @@ __export(literature_operations_exports, {
   destinationRecovery: () => destinationRecovery,
   literatureOperationId: () => literatureOperationId
 });
-import { createHash as createHash2, randomUUID } from "node:crypto";
+import { createHash as createHash3, randomUUID } from "node:crypto";
 
 // src/core/literature-receipt.ts
 var literature_receipt_exports = {};
@@ -284,7 +458,7 @@ __export(literature_receipt_exports, {
   normalizeDoi: () => normalizeDoi,
   verifyLiteratureReceipt: () => verifyLiteratureReceipt
 });
-import { createHash } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 import { readFile as readFile2, realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 function normalizeDoi(value) {
@@ -363,7 +537,7 @@ async function verifyLiteratureReceipt({
       status: linked && dois.some((item) => normalizeDoi(item.replace(/[.,;]+$/, "")) === normalizedDoi) ? "verified" : "identity-mismatch",
       path: notePath,
       vault: root,
-      hash: createHash("sha256").update(text4).digest("hex")
+      hash: createHash2("sha256").update(text4).digest("hex")
     };
   } catch (error) {
     if (vaultResolved && error instanceof Error && "code" in error && error.code === "ENOENT") {
@@ -397,7 +571,7 @@ function destinationRecovery(receipt = {}) {
 function literatureOperationId(vault, revision, doi) {
   const normalized = normalizeDoi(doi);
   if (!normalized) throw new Error("Valid DOI required");
-  return createHash2("sha256").update(JSON.stringify([vault, revision, normalized])).digest("hex");
+  return createHash3("sha256").update(JSON.stringify([vault, revision, normalized])).digest("hex");
 }
 function createLiteratureOperations(ports) {
   const now = ports.now || (() => (/* @__PURE__ */ new Date()).toISOString());
@@ -1023,7 +1197,7 @@ __export(research_loop_exports, {
   RESEARCH_STAGES: () => RESEARCH_STAGES,
   createResearchLoop: () => createResearchLoop
 });
-import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
+import { createHash as createHash4, randomUUID as randomUUID2 } from "node:crypto";
 import { access, mkdir as mkdir2, readFile as readFile3, realpath as realpath3, rename, writeFile as writeFile2 } from "node:fs/promises";
 import { dirname as dirname2, isAbsolute as isAbsolute2, join as join2, relative as relative2, resolve as resolve3, sep as sep2 } from "node:path";
 var RESEARCH_STAGES = Object.freeze([
@@ -1071,7 +1245,8 @@ function createResearchLoop(ports) {
     const root = await realpath3(config.obsidianVault);
     const state = ledger(cwd, runDir), result = [];
     for (const [path, proof] of state.verified) {
-      const read = state.reads.get(path);
+      const reads = state.reads.get(path) || [];
+      const read = reads.at(-1);
       if (!read || read.hash !== proof.obsidian?.hash || read.vault !== root || read.revision !== (config.knowledgeBindingRevision || 0) || proof.obsidian?.vault !== root)
         continue;
       const current = await verifyLiteratureReceipt2({
@@ -1100,15 +1275,19 @@ function createResearchLoop(ports) {
             startLine: read.startLine,
             endLine: read.endLine
           },
+          read_receipts: reads.map((item) => ({
+            id: item.receiptId,
+            startLine: item.startLine,
+            endLine: item.endLine
+          })),
           claimSupport: "not-assessed"
         }
       });
     }
     return result;
   }
-  async function validateReuse(cwd, runDir, gate) {
+  function validateReusedSourceSet(gate, fresh) {
     if (!gate.reuse_count) return;
-    const fresh = await reusableSources(cwd, runDir);
     if (gate.reused_sources.length !== gate.reuse_count || gate.reused_sources.some(
       (old) => !fresh.some(
         (now) => now.path === old.path && now.hash === old.hash && now.doi === old.doi && now.zotero_key === old.zotero_key
@@ -1118,6 +1297,9 @@ function createResearchLoop(ports) {
         "Reused source changed or current-turn receipt is missing; re-read and verify the existing note, do not re-import it"
       );
   }
+  async function validateReuse(cwd, runDir, gate) {
+    if (gate.reuse_count) validateReusedSourceSet(gate, await reusableSources(cwd, runDir));
+  }
   async function validateStoredClaimBindings(cwd, runDir, gate) {
     if (!Array.isArray(gate.claim_bindings) || gate.claim_bindings.length === 0)
       throw new Error("Structured claim_bindings are required before answerable");
@@ -1126,6 +1308,112 @@ function createResearchLoop(ports) {
       [...await reusableSources(cwd, runDir), ...await archivedSourceRecords(cwd, runDir)],
       ledger(cwd, runDir).reads
     );
+  }
+  async function prepareResearchDelivery({
+    cwd,
+    runDir,
+    markdown
+  }) {
+    if (typeof markdown !== "string" || !markdown.trim() || Buffer.byteLength(markdown) > 128 * 1024)
+      throw new Error("Summary must contain 1-131072 UTF-8 bytes");
+    const { path, metadataPath } = await resolveRun(cwd, runDir);
+    const metadata = await readJson4(metadataPath);
+    const gate = gateOf2(metadata);
+    if (gate.stage !== "answerable" || gate.status !== "ok" || !gate.answerable)
+      throw new Error("Evidence gate is closed; complete the research loop before summarizing");
+    if (!Number.isSafeInteger(metadata.revision))
+      throw new Error("Legacy research run needs fresh completion before delivery");
+    const reused = await reusableSources(cwd, path);
+    const archived = await archivedSourceRecords(cwd, path);
+    validateReusedSourceSet(gate, reused);
+    const claims2 = validateClaimBindings(
+      gate.claim_bindings,
+      [...reused, ...archived],
+      ledger(cwd, path).reads
+    );
+    if (summaryHash(JSON.stringify(claims2)) !== summaryHash(JSON.stringify(gate.claim_bindings)))
+      throw new Error("Claim evidence changed; complete the research loop again before delivery");
+    if (!reused.length && !archived.length)
+      throw new Error("No current verified source is available for this delivery");
+    const body = summaryBody(markdown);
+    const readReceipts = claims2.flatMap(
+      (claim) => claim.sources.map((source) => {
+        const read = ledger(cwd, path).reads.get(source.path).find((item) => item.receiptId === source.read_receipt_id);
+        return {
+          receiptId: read.receiptId,
+          path: source.path,
+          sha256: read.hash,
+          startLine: read.startLine,
+          endLine: read.endLine,
+          text: read.text
+        };
+      })
+    ).filter(
+      (item, index, all) => all.findIndex((other) => other.path === item.path && other.receiptId === item.receiptId) === index
+    );
+    return {
+      runId: metadata.run_id,
+      evidenceRevision: metadata.revision,
+      gateSha256: summaryHash(JSON.stringify(gate)),
+      claimsSha256: summaryHash(JSON.stringify(claims2)),
+      bodySha256: summaryHash(body),
+      body,
+      claims: claims2,
+      readReceipts
+    };
+  }
+  async function commitResearchDelivery({
+    cwd,
+    runDir,
+    prepared,
+    copies,
+    assessment,
+    memoryClaims = []
+  }) {
+    const current = await prepareResearchDelivery({ cwd, runDir, markdown: prepared.body });
+    if (current.evidenceRevision !== prepared.evidenceRevision || current.gateSha256 !== prepared.gateSha256 || current.claimsSha256 !== prepared.claimsSha256)
+      throw new Error("Research evidence changed during delivery; no delivery receipt was committed");
+    const observed = [];
+    for (const copy of copies) {
+      const bytes = await readFile3(copy.path);
+      const body = copy.bodyRegion ? bytes.subarray(copy.bodyRegion.start, copy.bodyRegion.end) : bytes;
+      const bodySha256 = summaryHash(body);
+      if (bodySha256 !== prepared.bodySha256)
+        throw new Error(`Summary readback differs from the prepared body: ${copy.path}`);
+      observed.push({ role: copy.role, path: copy.path, artifactSha256: summaryHash(bytes), bodySha256 });
+    }
+    if (!observed.some((copy) => copy.role === "run"))
+      throw new Error("Delivery requires a run SUMMARY readback");
+    const { metadataPath } = await resolveRun(cwd, runDir);
+    const metadata = await readJson4(metadataPath);
+    if (metadata.revision !== prepared.evidenceRevision)
+      throw new Error("Research revision changed during readback");
+    const receipt = {
+      version: 1,
+      receiptScope: "current-session-current-turn",
+      id: randomUUID2(),
+      runId: prepared.runId,
+      evidenceRevision: prepared.evidenceRevision,
+      committedRevision: prepared.evidenceRevision + 1,
+      gateSha256: prepared.gateSha256,
+      claimsSha256: prepared.claimsSha256,
+      bodySha256: prepared.bodySha256,
+      copies: observed,
+      semanticAssessment: assessment || { status: "not-reviewed" },
+      scientificallyVerified: false,
+      memoryClaimsSha256: summaryHash(JSON.stringify(memoryClaims)),
+      sources: prepared.readReceipts.map((read) => ({
+        path: read.path,
+        sha256: read.sha256,
+        readReceiptIds: [read.receiptId]
+      }))
+    };
+    metadata.revision = receipt.committedRevision;
+    metadata.summary_status = "written";
+    metadata.summary_updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    metadata.delivery_receipt = receipt;
+    await atomicJson2(metadataPath, metadata);
+    return receipt;
   }
   function safeSlug(value, label) {
     const text4 = String(value ?? "").trim();
@@ -1142,7 +1430,7 @@ function createResearchLoop(ports) {
     return rel === "" || !isAbsolute2(rel) && rel !== ".." && !rel.startsWith(`..${sep2}`);
   }
   function fileHash(bytes) {
-    return createHash3("sha256").update(bytes).digest("hex");
+    return createHash4("sha256").update(bytes).digest("hex");
   }
   async function archivedSourceRecords(cwd, runDir) {
     const archive = await sourceStatus2({ cwd, run_dir: resolve3(cwd, runDir) });
@@ -1174,6 +1462,16 @@ function createResearchLoop(ports) {
     }
     return records;
   }
+  function rememberRead(cwd, runDir, aliases, read) {
+    const state = ledger(cwd, runDir);
+    const previous = aliases.map((alias) => state.reads.get(alias)).find(Boolean) || [];
+    const current = previous.filter(
+      (item) => item.hash === read.hash && item.vault === read.vault && item.revision === read.revision
+    );
+    current.push({ ...read, receiptId: randomUUID2() });
+    const receipts = current.slice(-16);
+    for (const alias of aliases) state.reads.set(alias, receipts);
+  }
   async function recordArchivedRead(cwd, runDir, path, args, details, content) {
     const absolute = resolve3(cwd, path);
     const sourcesRoot = join2(resolve3(cwd, runDir), "sources");
@@ -1203,7 +1501,7 @@ function createResearchLoop(ports) {
       relative2(cwd, absolute),
       relative2(resolve3(cwd, runDir), absolute)
     ]);
-    for (const alias of aliases) ledger(cwd, runDir).reads.set(alias, read);
+    rememberRead(cwd, runDir, [...aliases], read);
     return true;
   }
   async function readJson4(path) {
@@ -1581,7 +1879,7 @@ function createResearchLoop(ports) {
         if (/^Library\/Papers\/.+\.md$/.test(path) && /^[a-f0-9]{64}$/i.test(details.hash || "") && typeof details.text === "string" && details.text.trim() && Number.isInteger(details.startLine) && details.endLine >= details.startLine) {
           const config = await loadWorkspaceConfig(cwd);
           if (config.obsidianVault)
-            ledger(cwd, runDir).reads.set(path, {
+            rememberRead(cwd, runDir, [path], {
               hash: details.hash,
               text: details.text,
               vault: readBinding ? readBinding.vault : await realpath3(config.obsidianVault),
@@ -1664,6 +1962,8 @@ function createResearchLoop(ports) {
     }
   }
   return {
+    prepareResearchDelivery,
+    commitResearchDelivery,
     startResearchRun,
     updateResearchLoop,
     completeResearchGate,
@@ -1681,7 +1981,7 @@ __export(research_run_ui_exports, {
   getResearchRun: () => getResearchRun,
   listResearchRuns: () => listResearchRuns
 });
-import { createHash as createHash4 } from "node:crypto";
+import { createHash as createHash5 } from "node:crypto";
 import { readdir, readFile as readFile4 } from "node:fs/promises";
 import { basename, isAbsolute as isAbsolute3, join as join3, relative as relative3, resolve as resolve4, sep as sep3 } from "node:path";
 var STAGES = [
@@ -1788,7 +2088,7 @@ function timeline(metadata) {
 async function hashFile(path) {
   try {
     const bytes = await readFile4(path);
-    return { hash: createHash4("sha256").update(bytes).digest("hex"), size: bytes.byteLength };
+    return { hash: createHash5("sha256").update(bytes).digest("hex"), size: bytes.byteLength };
   } catch {
     return { hash: null, size: null };
   }
@@ -1958,6 +2258,17 @@ async function getResearchRun(input) {
   const metadata = await readJson(join3(runDir, "metadata.json"));
   if (!metadata) throw new Error("research run metadata is invalid");
   const gate = gateOf(metadata), sourceData = await sourceManifest(runDir, gate, input.vaultRoot), runClaims = claims(gate), runProvenance = await provenance(runDir), gaps = [];
+  const summary = await hashFile(join3(runDir, "SUMMARY.md"));
+  const delivery = metadata.delivery_receipt;
+  const deliveryVersion = delivery?.version === 1 ? {
+    status: summary.hash === delivery.bodySha256 ? "body-matched" : summary.hash ? "body-changed" : "body-missing",
+    bodySha256: delivery.bodySha256,
+    currentBodySha256: summary.hash,
+    semanticAssessment: delivery.semanticAssessment,
+    evidenceFreshness: "requires-current-scope-recheck",
+    scientificallyVerified: false
+  } : { status: "historical-unreviewed", scientificallyVerified: false };
+  if (delivery && deliveryVersion.status !== "body-matched") gaps.push("\u603B\u7ED3\u6B63\u6587\u4E0E\u4EA4\u4ED8\u56DE\u6267\u4E0D\u4E00\u81F4");
   const hashGroups = /* @__PURE__ */ new Map();
   for (const source of sourceData.items) {
     if (source.hash) hashGroups.set(source.hash, [...hashGroups.get(source.hash) || [], source.path]);
@@ -1985,6 +2296,7 @@ async function getResearchRun(input) {
     timeline: timeline(metadata),
     sources: sourceData.items,
     claims: runClaims,
+    delivery: deliveryVersion,
     warnings: gate.warnings,
     coverage: metadata.retrieval_coverage || metadata.metrics?.index?.semantic || null,
     archive: {
@@ -2007,12 +2319,12 @@ __export(run_provenance_exports, {
   recordRunProvenance: () => recordRunProvenance,
   saveMethodsSection: () => saveMethodsSection
 });
-import { createHash as createHash5, randomUUID as randomUUID3 } from "node:crypto";
+import { createHash as createHash6, randomUUID as randomUUID3 } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, readFile as readFile5, realpath as realpath4, rename as rename2, stat as stat2, writeFile as writeFile3 } from "node:fs/promises";
 import { isAbsolute as isAbsolute4, join as join4, relative as relative4, resolve as resolve5, sep as sep4 } from "node:path";
 var queues = /* @__PURE__ */ new Map();
-var digest = (value) => createHash5("sha256").update(value).digest("hex");
+var digest = (value) => createHash6("sha256").update(value).digest("hex");
 var defaultWorkspaceConfig = async (cwd) => ({
   resultsRoot: resolve5(cwd, "results")
 });
@@ -2128,7 +2440,7 @@ async function recordRunProvenance({
     }
     const before = await stat2(path2);
     if (!before.isFile() || before.size > 128 * 1024 * 1024) throw new Error("Not a bounded regular file");
-    const hash = createHash5("sha256");
+    const hash = createHash6("sha256");
     for await (const chunk of createReadStream(path2)) hash.update(chunk);
     const after = await stat2(path2);
     if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
@@ -2266,19 +2578,19 @@ __export(source_archive_exports, {
   default: () => source_archive_default,
   sourceStatus: () => sourceStatus
 });
-import { createHash as createHash7, randomUUID as randomUUID4 } from "node:crypto";
+import { createHash as createHash8, randomUUID as randomUUID4 } from "node:crypto";
 import { access as access2, mkdir as mkdir3, readFile as readFile6, realpath as realpath5, rename as rename3, writeFile as writeFile4 } from "node:fs/promises";
 import { basename as basename3, dirname as dirname3, extname, isAbsolute as isAbsolute6, join as join5, relative as relative6, resolve as resolve7, sep as sep6 } from "node:path";
 
 // src/core/external-effect-key.ts
-import { createHash as createHash6 } from "node:crypto";
+import { createHash as createHash7 } from "node:crypto";
 function externalEffectKey(namespace, identity) {
   if (!namespace.trim()) throw new Error("external effect namespace is required");
   const stable = JSON.stringify(
     identity,
     (_key, entry) => entry && typeof entry === "object" && !Array.isArray(entry) ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => a.localeCompare(b))) : entry
   );
-  return `${namespace.trim()}:${createHash6("sha256").update(stable).digest("hex")}`;
+  return `${namespace.trim()}:${createHash7("sha256").update(stable).digest("hex")}`;
 }
 
 // src/core/source-archive-policy.ts
@@ -2550,7 +2862,7 @@ async function verifyManifestItems(manifest, runDir) {
       const canonical = await realpath5(isAbsolute6(path) ? path : resolve7(runDir, path));
       if (!isWithin(sourcesRoot, canonical)) throw new Error("path escapes run sources");
       const bytes = await readFile6(canonical);
-      const sha256 = createHash7("sha256").update(bytes).digest("hex");
+      const sha256 = createHash8("sha256").update(bytes).digest("hex");
       if (sha256 !== String(item.sha256 || "").toLowerCase()) throw new Error("sha256 mismatch");
       if (item.size_bytes !== void 0 && Number(item.size_bytes) !== bytes.byteLength)
         throw new Error("size mismatch");
@@ -2742,7 +3054,7 @@ async function archiveSource(options = {}, ports) {
   const persist = async (bytes, { resolvedUrl, contentType, outputName, verified = false, openAccess = null }) => withRunLock(ports, manifestPath, async () => {
     const validation = validateContent(category, contentType, outputName, bytes);
     if (!validation.ok) throw new Error(validation.reason);
-    const sha256 = createHash7("sha256").update(bytes).digest("hex");
+    const sha256 = createHash8("sha256").update(bytes).digest("hex");
     const idempotencyKey = externalEffectKey("research.download", {
       category,
       identity,
@@ -2753,7 +3065,7 @@ async function archiveSource(options = {}, ports) {
     if (!isWithin(sourcesDir, outputPath)) throw new Error("filename escapes source category directory");
     try {
       const existing = new Uint8Array(await readFile6(outputPath));
-      const existingHash = createHash7("sha256").update(existing).digest("hex");
+      const existingHash = createHash8("sha256").update(existing).digest("hex");
       if (existingHash !== sha256) {
         const extension = extname(outputName);
         const stem = outputName.slice(0, outputName.length - extension.length);
@@ -2764,7 +3076,7 @@ async function archiveSource(options = {}, ports) {
     }
     try {
       const existing = await readFile6(outputPath);
-      if (createHash7("sha256").update(existing).digest("hex") !== sha256)
+      if (createHash8("sha256").update(existing).digest("hex") !== sha256)
         throw new Error("Archived version path has different content");
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
@@ -4208,7 +4520,7 @@ __export(zotero_write_runtime_exports, {
   zoteroLocalWriteConfig: () => zoteroLocalWriteConfig,
   zoteroWebApiConfig: () => zoteroWebApiConfig
 });
-import { createHash as createHash8, randomUUID as randomUUID5 } from "node:crypto";
+import { createHash as createHash9, randomUUID as randomUUID5 } from "node:crypto";
 import { open, realpath as realpath6, stat as stat3 } from "node:fs/promises";
 import { basename as basename4, isAbsolute as isAbsolute7, relative as relative7, resolve as resolve8, sep as sep7 } from "node:path";
 var ZOTERO_ENDPOINTS = Object.freeze({
@@ -4777,7 +5089,7 @@ async function inspectLocalPdf(cwd, rawPath) {
   if (!info.isFile()) throw new Error("local_file is not a file");
   if (info.size > MAX_UPLOAD_BYTES) throw new Error("local_file is larger than 100 MB");
   const handle = await open(full, "r");
-  const hash = createHash8("md5");
+  const hash = createHash9("md5");
   const head = Buffer.alloc(5);
   try {
     await handle.read(head, 0, 5, 0);
@@ -5330,6 +5642,39 @@ For substantive research, use research_loop(action=start) when a tracked run is 
       if (state.journals.size === 0) loop.dispose();
     })
   );
+  return {
+    deliver: (ctx, input, writer) => run2(
+      () => journalFor(ctx).execute(input.runDir, async () => {
+        const prepared = await loop.prepareResearchDelivery({ cwd: ctx.cwd, ...input });
+        const claims2 = deliveryMemoryClaims(input.claims, prepared);
+        const packet = summaryReviewPacket(prepared, claims2);
+        if (!ports.reviewSummary)
+          throw new Error(
+            "Summary semantic reviewer is unavailable; keep this summary as an unreviewed draft"
+          );
+        const assessment = validateSummaryAssessment(await ports.reviewSummary(ctx, packet), packet);
+        const current = await loop.prepareResearchDelivery({ cwd: ctx.cwd, ...input });
+        if (current.evidenceRevision !== prepared.evidenceRevision || current.gateSha256 !== prepared.gateSha256 || current.claimsSha256 !== prepared.claimsSha256)
+          throw new Error("Research evidence changed during semantic review; no summary was written");
+        const written = await writer(prepared);
+        let receipt;
+        try {
+          receipt = await loop.commitResearchDelivery({
+            cwd: ctx.cwd,
+            runDir: input.runDir,
+            prepared,
+            copies: written.copies,
+            assessment,
+            memoryClaims: claims2
+          });
+        } catch (error) {
+          await written.rollback();
+          throw error;
+        }
+        return { run_dir: input.runDir, value: written.value, receipt, claims: claims2 };
+      })
+    )
+  };
 }
 
 // src/evidence-gate.ts
@@ -5423,6 +5768,7 @@ export {
   createResearchReceiptJournal,
   createZoteroReconciler,
   deliveryContract,
+  deliveryMemoryClaims,
   describeZoteroSavePlan,
   describeZoteroUpdatePlan,
   destinationRecovery,
@@ -5500,12 +5846,16 @@ export {
   source_delivery_exports as sourceDelivery,
   sourceStatus,
   summarizeZoteroAttachments,
+  summaryBody,
+  summaryHash,
+  summaryReviewPacket,
   toConnectorItem,
   toWebApiItem,
   uvBootstrapCommand,
   validateClaimBindings,
   validateContent,
   validateRunDir,
+  validateSummaryAssessment,
   verifyLiteratureReceipt,
   webChildren,
   webCreateItems,

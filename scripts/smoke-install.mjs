@@ -44,7 +44,7 @@ try {
 			...Object.fromEntries(
 				packageNames.map((name) => [tarballs[name].packageJson.name, `file:${tarballs[name].path}`]),
 			),
-			"@gyoungwe/plugin-api": `file:${join(root, "vendor", "gyoungwe-plugin-api-1.1.0.tgz")}`,
+			"@gyoungwe/plugin-api": `file:${join(root, "vendor", "gyoungwe-plugin-api-1.2.0.tgz")}`,
 		},
 	};
 	await writeFile(join(installRoot, "package.json"), `${JSON.stringify(installPackage, null, 2)}\n`);

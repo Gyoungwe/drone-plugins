@@ -36,6 +36,11 @@ function environment(dir) {
 		HOME: home,
 		TMPDIR: tmpdir(),
 		LANG: "en_US.UTF-8",
+		// Preserve an explicitly selected npm network route, never the user's npm/auth stores.
+		...(process.env.npm_config_proxy ? { npm_config_proxy: process.env.npm_config_proxy } : {}),
+		...(process.env.npm_config_https_proxy
+			? { npm_config_https_proxy: process.env.npm_config_https_proxy }
+			: {}),
 		PI_CODING_AGENT_DIR: join(home, ".pi/agent"),
 		npm_config_userconfig: join(home, ".npmrc"),
 		npm_config_globalconfig: join(home, "global.npmrc"),

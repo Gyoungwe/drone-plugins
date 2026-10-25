@@ -1,11 +1,14 @@
 {
   "schemaVersion": 1,
   "id": "drone-pi-knowledge",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "pi": {
     "apiVersion": 1,
     "minHostVersion": "1.1.0",
-    "testedHosts": ["1.1.0", "latest"]
+    "testedHosts": [
+      "1.1.0",
+      "latest"
+    ]
   },
   "drone": {
     "pluginApi": 1,
@@ -17,7 +20,11 @@
     "host": "./dist/host.mjs",
     "skills": "./skills"
   },
-  "capabilities": ["knowledge", "search", "evidence-context"],
+  "capabilities": [
+    "knowledge",
+    "search",
+    "evidence-context"
+  ],
   "tools": [
     "knowledge_status",
     "knowledge_search",
@@ -39,9 +46,15 @@
     "research_propose_wiki_update",
     "research_wiki_review_status"
   ],
-  "hosts": ["native-pi", "drone-desktop"],
+  "hosts": [
+    "native-pi",
+    "drone-desktop"
+  ],
   "permissions": {
-    "filesystem": ["workspace", "configured-vault"],
+    "filesystem": [
+      "workspace",
+      "configured-vault"
+    ],
     "network": [],
     "subprocess": [],
     "externalWrites": true

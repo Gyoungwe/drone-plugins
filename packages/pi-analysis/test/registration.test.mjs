@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { test } from "node:test";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const extension = await import(pathToFileURL(join(root, "dist/index.mjs")).href);
@@ -90,7 +91,8 @@ const bulkReady = await tools.get("analysis_assess_readiness").execute("bulk-rea
 		referenceResolved: true,
 	},
 });
-assert.equal(bulkReady.details.status, "ready");
+assert.equal(bulkReady.details.status, "blocked");
+assert.equal(bulkReady.details.assessment.gates.some((gate) => gate.evidenceKey === "scientificPlan"), true);
 
 const review = new extension.AssemblyAdapter().reviewResults(
 	{ version: 1, id: "assembly-review", question: "Review", assay: "assembly", mode: "exploratory" },
@@ -134,3 +136,42 @@ const bundle = await readFile(join(root, "dist/index.mjs"), "utf8");
 assert(!bundle.includes("@drone/backend"));
 assert(!bundle.includes("electron"));
 console.log("pi-analysis registration and readiness smoke passed");
+
+const tableHeader = "feature_id\tbaseMean\tlog2FoldChange\tlfcSE\tstat\tpvalue\tpadj";
+const validResult = "gene-a\t12\t1\t0.5\t2\t0.04\t0.08";
+const bulkContext = { version: 1, id: "bulk", question: "Check results", assay: "bulk-rnaseq", mode: "inferential" };
+async function validateTable(text) {
+	const ref = { path: "deseq2/results.tsv", bytes: Buffer.byteLength(text), sha256: "a".repeat(64) };
+	return new host.BulkRnaseqAdapter().validateArtifacts({
+		context: bulkContext, method: { id: "DESeq2", version: "1.48.2" }, artifacts: [ref],
+		reader: { async *lines() { yield* text.trimEnd().split("\n"); } },
+	});
+}
+test("full DESeq2 validation retains standard NA patterns and reports coverage", async () => {
+	const checked = await validateTable([tableHeader, validResult,
+		"zero\t0\tNA\tNA\tNA\tNA\tNA",
+		"filtered\t1\t0.1\t0.2\t0.5\t0.61\tNA",
+		"outlier\t2\t1\t0.5\t2\tNA\tNA"].join("\n"));
+	assert.equal(checked.checks[0].passed, true);
+	assert.equal(checked.summaries[0].coverage, "full-file");
+	assert.equal(checked.summaries[0].rows, 4);
+	assert.deepEqual(checked.summaries[0].naCounts, { baseMean: 0, log2FoldChange: 1, lfcSE: 1, stat: 1, pvalue: 2, padj: 3 });
+});
+test("full DESeq2 validation rejects invalid ranges, duplicate IDs, bad rows and missing columns", async () => {
+	for (const text of [
+		`${tableHeader}\n${validResult.replace("0.04\t0.08", "-1\t4")}`,
+		`${tableHeader}\n${validResult}\n${validResult}`,
+		`${tableHeader}\nbroken\t2`,
+		"feature_id\tlog2FoldChange\ngene\t1",
+		`${tableHeader}\ngene\t2\tInf\t1\t1\t0.1\t0.2`,
+		`${tableHeader}\ngene\t2\tNA\t1\t1\t0.1\t0.2`,
+	]) assert.equal((await validateTable(text)).checks[0].passed, false);
+});
+test("errors beyond the model prefix remain hard failures", async () => {
+	const rows = Array.from({ length: 1500 }, (_, i) => validResult.replace("gene-a", `gene-${i}`));
+	const prefix = [tableHeader, ...rows].join("\n");
+	assert.ok(Buffer.byteLength(prefix) > 24_000);
+	const checked = await validateTable(`${prefix}\ntail\t2\t1\t1\t1\t-1\t2`);
+	assert.equal(checked.checks[0].passed, false);
+	assert.equal(checked.summaries[0].rows, 1501);
+});

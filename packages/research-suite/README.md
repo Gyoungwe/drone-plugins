@@ -9,10 +9,10 @@ Show Me skills, so the suite exposes one copy of each skill. `pi-core` also
 provides the stable `/drone-doctor` and `/drone-example` onboarding commands;
 the latter is read-only unless the user explicitly supplies `--run <question>`.
 
-## 0.1.10 source release
+## 0.2.0 source candidate
 
-This candidate pins `pi-core@0.1.8`, `pi-knowledge@0.2.1`, and
-`pi-research@0.2.0`. The research package contains the complete evidence journal,
+This candidate pins `pi-core@0.1.9`, `pi-knowledge@0.3.0`, and
+`pi-research@0.3.0`. The research package contains the complete evidence journal,
 source archive, claim checks, provenance and Zotero domain implementation. Its
 `/host` export and declarations are included in the aggregate tarball; the suite
 only composes package resources and does not provide a second implementation.

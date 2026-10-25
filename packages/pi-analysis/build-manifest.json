@@ -1,11 +1,11 @@
 {
 	"version": 1,
 	"generator": "packages/pi-analysis/scripts/build.mjs",
-	"inputsSha256": "395301ba50a3edfbd800c310d866185c0962c8e7d6cb3681c224691d7d900608",
+	"inputsSha256": "34849ee2b081c1116a6eaea1ebb0c79e11b827a7c478cb05884a8b55c1c0f308",
 	"outputs": {
-		"dist/index.mjs": "8887473090380fc6cacebc9ced36a5f249801a3d0bc9ca0e386aa8ef6214c014",
-		"dist/host.mjs": "55a20fa3f342af0705e396f363329ba3b2d42746ca7353877d740dd3285b9bd9",
+		"dist/index.mjs": "43b35c986adcbdbb1081ec6a7572f4ed4e85228405a19af249149144816eb9f5",
+		"dist/host.mjs": "9072bfa65585e4371ebe980e7e5a62b40ac911599cb523a54ed765945e045b95",
 		"dist/index.d.ts": "8eccfe0a09ef9ffe1a30dc1629267b90fb4309a54a95936a8bef2beee26db411",
-		"dist/host.d.ts": "fcbd3094b156b755ee468d06f2b7a8ea86c4752161eecbfeff3b0c473dee3056"
+		"dist/host.d.ts": "559bd458593b403d1ba51517b2842f4bef4c6f663b1b56084c81283643d93cff"
 	}
 }

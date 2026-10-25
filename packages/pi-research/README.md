@@ -19,6 +19,22 @@ process-global ledger. Native run artifacts default to `results/`; optional
 project-local `.pi/research-workspace.json` can supply `resultsRoot`,
 `obsidianVault`, and `knowledgeBindingRevision`.
 
+`research_read_source` accepts a bounded `start_line`. Repeated reads retain up
+to 16 individual observed ranges for the current source hash; unread gaps are
+never represented as read. The host research loop also retains separate receipt
+IDs for non-contiguous source excerpts and resets them at its existing turn and
+session boundaries.
+
+`registerResearchExtension` returns a host-scoped delivery handle. Desktop uses
+that same loop and journal to recheck evidence before writing a summary, hash the
+final normalized UTF-8 body, and read back every copy before committing a receipt.
+The injected semantic reviewer sees every body block, structured claims, memory
+metadata and actual observed excerpts. Missing/unknown review, changed sources or
+out-of-scope conclusions cannot reuse an older answerable gate. A model-assessed
+receipt records model identity and observed usage but always keeps
+`scientificallyVerified:false`. Native source packets remain candidate evidence;
+they do not acquire Desktop's summary-writing or model-review ports implicitly.
+
 The `/host` entry exports the complete research core, Zotero identity/write/
 reconciliation algorithms, institutional access, and `registerResearchExtension`.
 Desktop supplies workspace/project binding, scheduling, authorization, transport
