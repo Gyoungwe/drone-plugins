@@ -627,7 +627,15 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 			if (gate.archive_count + gate.reuse_count < 1 || !refs.length)
 				throw new Error("archive verification and structured claim bindings are required before answerable");
 			if (metadata.requires_provenance === true) {
-				const provenance = await readJson(join(path, "reproducibility-manifest.json"));
+				const manifestText = await readFile(join(path, "reproducibility-manifest.json"), "utf8").catch(
+					(error: NodeJS.ErrnoException) => {
+						if (error.code !== "ENOENT") throw error;
+						throw new Error(
+							'This run requires a reproducibility manifest before it can become answerable. Next action: call research_record_run_manifest with this run_dir and files listing actual source paths with role="input", then complete the research loop again.',
+						);
+					},
+				);
+				const provenance = JSON.parse(manifestText);
 				if (provenance?.version !== 1)
 					throw new Error("This run requires a reproducibility manifest before it can become answerable");
 			}

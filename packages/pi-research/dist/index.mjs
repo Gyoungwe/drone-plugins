@@ -101577,7 +101577,15 @@ function createResearchLoop(ports) {
       if (gate.archive_count + gate.reuse_count < 1 || !refs.length)
         throw new Error("archive verification and structured claim bindings are required before answerable");
       if (metadata.requires_provenance === true) {
-        const provenance = await readJson(join3(path, "reproducibility-manifest.json"));
+        const manifestText = await readFile4(join3(path, "reproducibility-manifest.json"), "utf8").catch(
+          (error) => {
+            if (error.code !== "ENOENT") throw error;
+            throw new Error(
+              'This run requires a reproducibility manifest before it can become answerable. Next action: call research_record_run_manifest with this run_dir and files listing actual source paths with role="input", then complete the research loop again.'
+            );
+          }
+        );
+        const provenance = JSON.parse(manifestText);
         if (provenance?.version !== 1)
           throw new Error("This run requires a reproducibility manifest before it can become answerable");
       }
@@ -101988,7 +101996,10 @@ function registerResearchExtension(pi, ports) {
         },
         result_slug: { type: "string" },
         query: { type: "string" },
-        requires_provenance: { type: "boolean" },
+        requires_provenance: {
+          type: "boolean",
+          description: 'When true, call research_record_run_manifest for this run before complete/finalize, listing actual source paths in files with role="input". start does not create the manifest. This records file snapshots, not scientific validation.'
+        },
         source_refs: { type: "array", items: { type: "string" } },
         claim_refs: { type: "array", items: { type: "string" } },
         claim_bindings: CLAIM_BINDING_SCHEMA,

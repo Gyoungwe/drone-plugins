@@ -1,7 +1,7 @@
 # @gyoungwe/pi-research
 
 Self-contained research evidence tools for native Pi and Drone's public host
-composition. Version 0.3.1 is a release candidate in this repository; this change
+composition. Version 0.3.2 is a release candidate in this repository; this change
 does not publish it to npm.
 
 The native entry registers `research_search_sources`, `research_read_source`,
@@ -30,6 +30,14 @@ each claim requires `claim`, `relationship`, `limitations`, and bounded
 `sources` with `path`, `start_line`, `end_line`, and a verbatim `quote`. The
 host records source hashes and reading receipt IDs. `result_slug` determines
 the persisted topic ID; there is no separate `topic` input.
+
+`requires_provenance:true` adds an explicit manifest prerequisite. `start` does
+not create that manifest: in a host providing `research_record_run_manifest`,
+call it before `complete`/`finalize`, listing actual source paths in `files` with
+`role:"input"`. The manifest records current file snapshots and observed command
+references; it does not imply executed analysis, QC or scientific validation.
+Missing manifests keep the gate closed and name this next action. Invalid JSON
+and other filesystem errors are reported directly.
 
 `registerResearchExtension` returns a host-scoped delivery handle. Desktop uses
 that same loop and journal to recheck evidence before writing a summary, hash the

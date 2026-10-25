@@ -37,7 +37,7 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 
 test("bundled versions and public research host resources match the suite pins", async () => {
 	const suite = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-	assert.equal(suite.version, "0.2.1");
+	assert.equal(suite.version, "0.2.2");
 	assert.equal(manifest.version, suite.version);
 	for (const name of suite.bundleDependencies) {
 		const dependencyRoot = join(root, "node_modules", ...name.split("/"));
@@ -47,7 +47,7 @@ test("bundled versions and public research host resources match the suite pins",
 	}
 	const researchRoot = join(root, "node_modules/@gyoungwe/pi-research");
 	const research = JSON.parse(await readFile(join(researchRoot, "package.json"), "utf8"));
-	assert.equal(research.version, "0.3.1");
+	assert.equal(research.version, "0.3.2");
 	const host = await import(pathToFileURL(join(researchRoot, research.exports["./host"].import)).href);
 	assert.equal(typeof host.createResearchLoop, "function");
 	assert.equal(typeof host.registerResearchExtension, "function");

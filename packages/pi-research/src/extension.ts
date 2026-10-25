@@ -134,7 +134,11 @@ export function registerResearchExtension(
 				},
 				result_slug: { type: "string" },
 				query: { type: "string" },
-				requires_provenance: { type: "boolean" },
+				requires_provenance: {
+					type: "boolean",
+					description:
+						'When true, call research_record_run_manifest for this run before complete/finalize, listing actual source paths in files with role="input". start does not create the manifest. This records file snapshots, not scientific validation.',
+				},
 				source_refs: { type: "array", items: { type: "string" } },
 				claim_refs: { type: "array", items: { type: "string" } },
 				claim_bindings: CLAIM_BINDING_SCHEMA,
