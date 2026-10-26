@@ -60,7 +60,7 @@
     "filesystem": [
       "workspace",
       "configured-vault",
-    "configured-vault-write",
+      "configured-vault-write",
       "application-state",
       "application-state-write"
     ],

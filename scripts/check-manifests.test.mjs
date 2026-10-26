@@ -97,6 +97,7 @@ test("rejects a readWrite write permission when external writes are disabled", (
 test("accepts application-state and rejects invented broad state roots", () => {
 	assert.equal(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state"] } }), "");
 	assert.equal(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state-write"] } }), "");
+	assert.equal(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["configured-vault-write"] } }), "");
 	assert.match(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state/**"] } }), /invalid value/);
 	assert.match(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state-write/**"] } }), /invalid value/);
 });
