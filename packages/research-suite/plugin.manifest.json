@@ -17,6 +17,7 @@
   "entrypoints": {
     "extensions": [
       "./node_modules/@gyoungwe/pi-core/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-workbench/dist/index.mjs",
       "./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
       "./node_modules/@gyoungwe/pi-research/dist/index.mjs"
     ],
@@ -42,6 +43,10 @@
     "todo",
     "deliver_files",
     "memory_save",
+    "workbench_plan",
+    "workbench_status",
+    "workbench_todo",
+    "workbench_memory_save",
     "knowledge_status",
     "knowledge_search",
     "research_prepare_knowledge",

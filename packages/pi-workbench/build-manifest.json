@@ -1,0 +1,8 @@
+{
+	"version": 1,
+	"generator": "packages/pi-workbench/scripts/build.mjs",
+	"inputsSha256": "db1ffefccbb5673e76b4edf2b1ba00ba2f5536fd9c80fa49e6eb1f449046b5f9",
+	"outputs": {
+		"dist/index.mjs": "832e7b85c039b300c43db65a89e33a682ffb40db15655ad468716954dd25e66b"
+	}
+}

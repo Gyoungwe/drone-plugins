@@ -34,6 +34,7 @@
   "pi": {
     "extensions": [
       "./node_modules/@gyoungwe/pi-core/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-workbench/dist/index.mjs",
       "./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
       "./node_modules/@gyoungwe/pi-research/dist/index.mjs"
     ],
@@ -47,11 +48,13 @@
   },
   "dependencies": {
     "@gyoungwe/pi-core": "0.1.9",
+    "@gyoungwe/pi-workbench": "0.1.0",
     "@gyoungwe/pi-knowledge": "0.3.0",
     "@gyoungwe/pi-research": "0.2.0"
   },
   "bundleDependencies": [
     "@gyoungwe/pi-core",
+    "@gyoungwe/pi-workbench",
     "@gyoungwe/pi-knowledge",
     "@gyoungwe/pi-research"
   ],
