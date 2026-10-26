@@ -33,8 +33,9 @@ const registeredHostOperations = new Map();
 const hostAdapter = registerResearchHost({ register(name, operation) { registeredHostOperations.set(name, operation); } }, hostPort);
 assert.equal(researchHostLoader.contractVersion, 1);
 assert.equal(hostAdapter.contractVersion, 1);
-assert.deepEqual([...registeredHostOperations.keys()], ["status", "listRuns"]);
+assert.deepEqual([...registeredHostOperations.keys()], ["status", "listRuns", "detail"]);
 assert.equal((await registeredHostOperations.get("listRuns")({ workspace: "/workspace" })).total, 1);
+assert.equal((await registeredHostOperations.get("detail")({ workspace: "/workspace", runDir: "demo/run-smoke" })).runId, "run-smoke");
 const zoteroOperations = new Map();
 const zoteroAdapter = registerZoteroHost({ register(name, operation) { zoteroOperations.set(name, operation); } }, {
 	async read(path) {
@@ -49,6 +50,7 @@ assert.equal((await zoteroOperations.get("lookup")({ doi: "10.1234/smoke" })).st
 const desktopRuntime = await createDesktopRuntime({ applicationId: "smoke", signal: new AbortController().signal, resources: [], capabilities: { call: async () => { throw new Error("desktop capability was not expected during load"); } }, events: { changed() {} } });
 assert.equal(desktopRuntime.operations.status.effect, "read");
 assert.equal(desktopRuntime.operations.listRuns.effect, "read");
+assert.equal(desktopRuntime.operations.detail.effect, "read");
 const tools = new Map();
 register({registerTool(tool) { tools.set(tool.name, tool); }});
 assert.deepEqual([...tools.keys()], ["research_search_sources", "research_read_source", "research_deposit_research_note", "research_answer_sources", "research_status", "research_loop"]);

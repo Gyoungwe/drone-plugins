@@ -49,7 +49,7 @@ function portFor(capabilities: { call(name: string, input: unknown): Promise<unk
 const createDesktopRuntime: PluginRuntimeFactory = async context => {
 	const adapterFor = (capabilities: { call(name: string, input: unknown): Promise<unknown> }) =>
 		createResearchHost(portFor(capabilities));
-	const operation = (name: "status" | "listRuns"): PluginRuntimeOperation => ({
+	const operation = (name: "status" | "listRuns" | "detail"): PluginRuntimeOperation => ({
 		inputSchema: { type: "object" },
 		resultSchema: { type: "object" },
 		effect: "read",
@@ -62,13 +62,17 @@ const createDesktopRuntime: PluginRuntimeFactory = async context => {
 				project: params.project === undefined ? undefined : String(params.project),
 				limit: params.limit === undefined ? undefined : Number(params.limit),
 			};
-			return name === "status"
-				? adapter.operations.status({ ...base, runDir: params.runDir === undefined ? undefined : String(params.runDir) })
-				: adapter.operations.listRuns(base);
+			const runDir = params.runDir === undefined ? undefined : String(params.runDir);
+			if (name === "status") return adapter.operations.status({ ...base, runDir });
+			if (name === "detail") {
+				if (!adapter.operations.detail) throw new Error("Research detail operation is unavailable");
+				return adapter.operations.detail({ ...base, runDir, runId: params.runId === undefined ? undefined : String(params.runId) });
+			}
+			return adapter.operations.listRuns(base);
 		},
 	});
 	return {
-		operations: { status: operation("status"), listRuns: operation("listRuns") },
+		operations: { status: operation("status"), listRuns: operation("listRuns"), detail: operation("detail") },
 		dispose: async () => {},
 	};
 };

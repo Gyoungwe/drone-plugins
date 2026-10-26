@@ -29,6 +29,9 @@ export interface ResearchRunListInput {
 export interface ResearchRunStatusInput extends ResearchRunListInput {
     readonly runDir?: string | null;
 }
+export interface ResearchRunDetailInput extends ResearchRunStatusInput {
+    readonly runId?: string | null;
+}
 export interface ResearchRunSummary {
     readonly runId: string;
     readonly resultSlug: string;
@@ -46,18 +49,52 @@ export interface ResearchRunListResult {
     readonly items: readonly ResearchRunSummary[];
     readonly total: number;
 }
+export interface ResearchRunDetail extends ResearchRunSummary {
+    readonly route: readonly {
+        key: string;
+        state: string;
+        at: string | null;
+        detail: string | null;
+    }[];
+    readonly timeline: readonly {
+        type: string;
+        at: string | null;
+        detail: string | null;
+        status: "ok" | "failed" | "observed";
+    }[];
+    readonly sources: readonly {
+        path: string;
+        status: string;
+        hash: string | null;
+        verified: boolean;
+    }[];
+    readonly claims: readonly {
+        id: string | null;
+        claim: string;
+        support: string[];
+        status: string;
+    }[];
+    readonly warnings: readonly string[];
+    readonly coverage: Record<string, unknown> | null;
+    readonly archive: {
+        count: number;
+        reused: number;
+        verified: boolean;
+    };
+}
 export interface ResearchHostOperations {
     status(input: ResearchRunStatusInput): Promise<ResearchRunListResult | {
         item: ResearchRunSummary;
     }>;
     listRuns(input: ResearchRunListInput): Promise<ResearchRunListResult>;
+    detail?(input: ResearchRunDetailInput): Promise<ResearchRunDetail>;
 }
 export interface ResearchHostAdapter {
     readonly contractVersion: 1;
     readonly operations: ResearchHostOperations;
 }
 export interface ResearchHostRegistry {
-    register(name: "status" | "listRuns", operation: ResearchHostOperations["status"] | ResearchHostOperations["listRuns"]): void;
+    register(name: "status" | "listRuns" | "detail", operation: ResearchHostOperations["status"] | ResearchHostOperations["listRuns"] | NonNullable<ResearchHostOperations["detail"]>): void;
 }
 export interface ResearchHostLoader {
     readonly contractVersion: 1;

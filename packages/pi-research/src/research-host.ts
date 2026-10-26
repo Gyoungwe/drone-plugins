@@ -33,6 +33,10 @@ export interface ResearchRunStatusInput extends ResearchRunListInput {
 	readonly runDir?: string | null;
 }
 
+export interface ResearchRunDetailInput extends ResearchRunStatusInput {
+	readonly runId?: string | null;
+}
+
 export interface ResearchRunSummary {
 	readonly runId: string;
 	readonly resultSlug: string;
@@ -52,9 +56,25 @@ export interface ResearchRunListResult {
 	readonly total: number;
 }
 
+export interface ResearchRunDetail extends ResearchRunSummary {
+	readonly route: readonly { key: string; state: string; at: string | null; detail: string | null }[];
+	readonly timeline: readonly {
+		type: string;
+		at: string | null;
+		detail: string | null;
+		status: "ok" | "failed" | "observed";
+	}[];
+	readonly sources: readonly { path: string; status: string; hash: string | null; verified: boolean }[];
+	readonly claims: readonly { id: string | null; claim: string; support: string[]; status: string }[];
+	readonly warnings: readonly string[];
+	readonly coverage: Record<string, unknown> | null;
+	readonly archive: { count: number; reused: number; verified: boolean };
+}
+
 export interface ResearchHostOperations {
 	status(input: ResearchRunStatusInput): Promise<ResearchRunListResult | { item: ResearchRunSummary }>;
 	listRuns(input: ResearchRunListInput): Promise<ResearchRunListResult>;
+	detail?(input: ResearchRunDetailInput): Promise<ResearchRunDetail>;
 }
 
 export interface ResearchHostAdapter {
@@ -63,7 +83,13 @@ export interface ResearchHostAdapter {
 }
 
 export interface ResearchHostRegistry {
-	register(name: "status" | "listRuns", operation: ResearchHostOperations["status"] | ResearchHostOperations["listRuns"]): void;
+	register(
+		name: "status" | "listRuns" | "detail",
+		operation:
+			| ResearchHostOperations["status"]
+			| ResearchHostOperations["listRuns"]
+			| NonNullable<ResearchHostOperations["detail"]>,
+	): void;
 }
 
 export interface ResearchHostLoader {
@@ -85,6 +111,7 @@ interface RunMetadata {
 	started_at?: unknown;
 	updated_at?: unknown;
 	evidence_gate?: unknown;
+	retrieval_coverage?: unknown;
 }
 
 const STAGES = new Set([
@@ -144,6 +171,62 @@ function summary(metadata: RunMetadata, runDir: string, resultsPath: string): Re
 		startedAt: text(metadata.started_at, 80) || null,
 		updatedAt: text(metadata.updated_at || metadata.started_at, 80) || null,
 		runDir: relativeRunDir,
+	};
+}
+
+function detail(metadata: RunMetadata, runDir: string, resultsPath: string): ResearchRunDetail {
+	const item = summary(metadata, runDir, resultsPath);
+	const gateValue = metadata.evidence_gate;
+	const gateObject = gateValue && typeof gateValue === "object" && !Array.isArray(gateValue)
+		? gateValue as Record<string, unknown>
+		: {};
+	const events = Array.isArray(gateObject.events) ? gateObject.events : [];
+	const stages = [
+		"created", "local_query_recorded", "external_search_recorded", "sources_inspected",
+		"sources_archived", "sources_reused", "claims_bound", "answerable",
+	];
+	const current = stages.includes(item.stage) ? item.stage : "created";
+	const currentIndex = stages.indexOf(current);
+	const route = stages.map((key, index) => ({
+		key,
+		state: index < currentIndex || (key === current && item.answerable) ? "complete" : key === current ? "active" : "pending",
+		at: null,
+		detail: null,
+	}));
+	const timeline = events.slice(-128).map((event) => {
+		const value = event && typeof event === "object" && !Array.isArray(event) ? event as Record<string, unknown> : {};
+		return {
+			type: text(value.type, 100) || "event",
+			at: text(value.at, 80) || null,
+			detail: text(value.notes || value.outcome || value.reason, 320) || null,
+			status: value.failed === true || value.status === "failed" ? "failed" as const : value.observed === true ? "observed" as const : "ok" as const,
+		};
+	});
+	const sourceRefs = Array.isArray(gateObject.source_refs) ? gateObject.source_refs : [];
+	const sources = sourceRefs.map((source) => ({ path: text(source, 480), status: "inspected", hash: null, verified: false }));
+	const bindings = Array.isArray(gateObject.claim_bindings) ? gateObject.claim_bindings : [];
+	const claims = bindings.map((binding) => {
+		const value = binding && typeof binding === "object" && !Array.isArray(binding) ? binding as Record<string, unknown> : {};
+		const support = Array.isArray(value.sources) ? value.sources.map((source) => {
+			if (source && typeof source === "object" && !Array.isArray(source)) return text((source as Record<string, unknown>).path, 480);
+			return text(source, 480);
+		}).filter(Boolean) : [];
+		return { id: text(value.id, 120) || null, claim: text(value.claim, 480), support, status: text(value.status || value.relationship, 80) || "bound" };
+	}).filter((claim) => claim.claim);
+	const warnings = Array.isArray(gateObject.warnings) ? gateObject.warnings.map((warning) => text(warning, 240)).filter(Boolean) : [];
+	const archiveCount = Number(gateObject.archive_count);
+	const reuseCount = Number(gateObject.reuse_count);
+	return {
+		...item,
+		route,
+		timeline,
+		sources,
+		claims,
+		warnings,
+		coverage: metadata.retrieval_coverage && typeof metadata.retrieval_coverage === "object" && !Array.isArray(metadata.retrieval_coverage)
+			? metadata.retrieval_coverage as Record<string, unknown>
+			: null,
+		archive: { count: Number.isFinite(archiveCount) ? archiveCount : 0, reused: Number.isFinite(reuseCount) ? reuseCount : 0, verified: false },
 	};
 }
 
@@ -215,7 +298,18 @@ export function createResearchHost(port: ResearchHostPort): ResearchHostAdapter 
 		const items = await discover(port, root, input.project);
 		return { items: items.slice(0, limitOf(input.limit)), total: items.length };
 	};
-	return { contractVersion: 1, operations: { status, listRuns } };
+	const detailOperation = async (input: ResearchRunDetailInput): Promise<ResearchRunDetail> => {
+		const root = await configuredResultsRoot(port, input.workspace);
+		let runDir = input.runDir ? relativePath(text(input.runDir, 240), "runDir") : null;
+		if (!runDir && input.runId) {
+			const items = await discover(port, root);
+			runDir = items.find((item) => item.runId === text(input.runId, 180))?.runDir ?? null;
+		}
+		if (!runDir) throw new Error("Research run detail requires runDir or runId");
+		const metadata = await readMetadata(port, root, runDir);
+		return detail(metadata, runDir, root.path);
+	};
+	return { contractVersion: 1, operations: { status, listRuns, detail: detailOperation } };
 }
 
 /** Register the read-only operations in a host's operation registry. */
@@ -223,6 +317,7 @@ export function registerResearchHost(registry: ResearchHostRegistry, port: Resea
 	const adapter = createResearchHost(port);
 	registry.register("status", adapter.operations.status);
 	registry.register("listRuns", adapter.operations.listRuns);
+	if (adapter.operations.detail) registry.register("detail", adapter.operations.detail);
 	return adapter;
 }
 

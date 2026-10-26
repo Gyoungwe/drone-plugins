@@ -44,13 +44,17 @@ describe("research host adapter", () => {
 		expect(await adapter.operations.status({ workspace: "/workspace", runDir: "demo/run-1" })).toMatchObject({
 		item: { query: "test query", answerable: false },
 		});
+		const detail = await adapter.operations.detail?.({ workspace: "/workspace", runDir: "demo/run-1" });
+		expect(detail).toMatchObject({ runId: "run-1", warnings: [] });
+		expect(detail?.route[0]).toMatchObject({ key: "created", state: "complete" });
 	});
 
 	it("registers both read operations without side effects", async () => {
 		const registered = new Map<string, unknown>();
 		const adapter = registerResearchHost({ register(name, operation) { registered.set(name, operation); } }, port());
-		expect([...registered.keys()]).toEqual(["status", "listRuns"]);
+		expect([...registered.keys()]).toEqual(["status", "listRuns", "detail"]);
 		expect(registered.get("status")).toBe(adapter.operations.status);
+		expect(registered.get("detail")).toBe(adapter.operations.detail);
 	});
 
 	it("does not touch the host for application-independent construction", () => {
