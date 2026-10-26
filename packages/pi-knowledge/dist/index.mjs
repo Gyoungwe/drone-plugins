@@ -3018,6 +3018,11 @@ function createKnowledgeNativeAdapter(owner, controller, register, cleanup) {
   let registered = false;
   let closed = false;
   let disposal = null;
+  const eventUnsubscribers = /* @__PURE__ */ new Set();
+  const assertOpen = () => {
+    if (closed) throw new Error("Knowledge session has been disposed");
+    owner.assertActive();
+  };
   function run(work, signal = controller.signal) {
     if (closed) throw new Error("Knowledge session has been disposed");
     const operation = owner.run(async () => {
@@ -3037,6 +3042,8 @@ function createKnowledgeNativeAdapter(owner, controller, register, cleanup) {
     disposal = (async () => {
       const cleanupResult = await Promise.allSettled([sessionCleanup]);
       await Promise.allSettled([...operations]);
+      for (const unsubscribe of eventUnsubscribers) unsubscribe();
+      eventUnsubscribers.clear();
       detach();
       if (cleanupResult[0].status === "rejected") throw cleanupResult[0].reason;
     })();
@@ -3044,17 +3051,53 @@ function createKnowledgeNativeAdapter(owner, controller, register, cleanup) {
   }
   const detach = owner.attachSession(dispose);
   function extension(pi) {
-    owner.assertActive();
+    assertOpen();
     if (closed || registered) throw new Error("A native knowledge session can only be registered once");
     registered = true;
     const scopedContext = (context, signal) => new Proxy(context, {
       get(target, property) {
-        return property === "signal" ? signal : Reflect.get(target, property, target);
+        if (property === "signal") return signal;
+        if (property === "sessionManager" && target.sessionManager) {
+          return new Proxy(target.sessionManager, {
+            get(manager, key) {
+              const value = Reflect.get(manager, key, manager);
+              if (typeof value !== "function") return value;
+              return (...args) => {
+                assertOpen();
+                return Reflect.apply(value, manager, args);
+              };
+            }
+          });
+        }
+        return Reflect.get(target, property, target);
       }
     });
+    const scopedEvents = pi.events && typeof pi.events === "object" ? {
+      on: (channel, handler) => {
+        assertOpen();
+        const unsubscribe = pi.events.on(channel, (data) => {
+          if (!closed) handler(data);
+        });
+        eventUnsubscribers.add(unsubscribe);
+        return () => {
+          eventUnsubscribers.delete(unsubscribe);
+          unsubscribe();
+        };
+      },
+      emit: (channel, data) => {
+        assertOpen();
+        return pi.events.emit(channel, data);
+      }
+    } : pi.events;
     const scopedSignal = (signal) => signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
     const ownedPi = new Proxy(pi, {
       get(target, property) {
+        if (property === "appendEntry") return (...args) => {
+          assertOpen();
+          return target.appendEntry(...args);
+        };
+        if (property === "sendUserMessage") return (...args) => run(() => target.sendUserMessage(...args));
+        if (property === "events") return scopedEvents;
         if (property === "registerTool") return (definition) => target.registerTool({
           ...definition,
           execute: (id, input, signal, update, context) => {

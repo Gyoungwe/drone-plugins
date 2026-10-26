@@ -28,7 +28,12 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 		sendUserMessage() {},
 	};
 	try {
-		for (const packageName of ["@gyoungwe/pi-core", "@gyoungwe/pi-knowledge", "@gyoungwe/pi-research"]) {
+		for (const packageName of [
+			"@gyoungwe/pi-core",
+			"@gyoungwe/pi-workbench",
+			"@gyoungwe/pi-knowledge",
+			"@gyoungwe/pi-research",
+		]) {
 			const module = await import(pathToFileURL(join(root, "node_modules", ...packageName.split("/"), "dist/index.mjs")).href);
 			module.default(pi);
 		}
