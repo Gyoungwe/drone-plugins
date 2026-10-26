@@ -104,10 +104,10 @@ function validateBinding(value: unknown): asserts value is KnowledgeBinding {
 /** Read the current app binding, or null when the desktop binding directory is not configured. */
 async function readKnowledgeBindingWithState(
 	state: KnowledgeConfigState,
+	directory: string | null,
 	{ fresh = false }: ReadKnowledgeBindingOptions = {},
 ): Promise<KnowledgeBinding | null> {
 	if (!fresh && state.local.getStore()) return state.local.getStore() ?? null;
-	const directory = knowledgeDirectory();
 	if (!directory) return null;
 	let value: unknown;
 	try {
@@ -125,23 +125,25 @@ async function readKnowledgeBindingWithState(
 export async function readKnowledgeBinding(
 	options: ReadKnowledgeBindingOptions = {},
 ): Promise<KnowledgeBinding | null> {
-	return readKnowledgeBindingWithState(defaultState, options);
+	return readKnowledgeBindingWithState(defaultState, knowledgeDirectory(), options);
 }
 
 /** Save an app binding atomically, with an optional optimistic revision check. */
 
 async function saveKnowledgeBindingWithState(
 	state: KnowledgeConfigState,
+	directory: string | null,
 	input: KnowledgeBindingInput,
 	expectedRevision: number | null = null,
 ): Promise<KnowledgeBinding> {
-	const directory = knowledgeDirectory();
 	if (!directory) throw new Error("Application knowledge directory is not configured");
 	const previous = state.queues.get(directory) || Promise.resolve();
 	const operation = previous
-		.catch(() => {})
+		// The previous write rejects to its own caller. Its settlement only orders
+		// this write; errors from the new operation below still reject unchanged.
+		.catch(() => undefined)
 		.then(async () => {
-			const current = await readKnowledgeBindingWithState(state, { fresh: true });
+			const current = await readKnowledgeBindingWithState(state, directory, { fresh: true });
 			if (expectedRevision !== null && (current?.revision || 0) !== expectedRevision)
 				throw new Error("Knowledge binding changed while confirming; review the new binding");
 			const vault = await realpath(input.vault);
@@ -174,17 +176,18 @@ export async function saveKnowledgeBinding(
 	input: KnowledgeBindingInput,
 	expectedRevision: number | null = null,
 ): Promise<KnowledgeBinding> {
-	return saveKnowledgeBindingWithState(defaultState, input, expectedRevision);
+	return saveKnowledgeBindingWithState(defaultState, knowledgeDirectory(), input, expectedRevision);
 }
 
 /** Run a binding-scoped operation only when the persisted binding still matches the caller's revision. */
 
 async function withKnowledgeBindingWithState<T>(
 	state: KnowledgeConfigState,
+	directory: string | null,
 	binding: KnowledgeBinding,
 	operation: BindingOperation<T>,
 ): Promise<T> {
-	const current = await readKnowledgeBindingWithState(state, { fresh: true });
+	const current = await readKnowledgeBindingWithState(state, directory, { fresh: true });
 	if (!binding || current?.vaultId !== binding.vaultId || current?.revision !== binding.revision)
 		throw new Error("Knowledge binding changed; start a new turn before reading or writing");
 	return state.local.run(binding, operation);
@@ -194,21 +197,27 @@ export async function withKnowledgeBinding<T>(
 	binding: KnowledgeBinding,
 	operation: BindingOperation<T>,
 ): Promise<T> {
-	return withKnowledgeBindingWithState(defaultState, binding, operation);
+	return withKnowledgeBindingWithState(defaultState, knowledgeDirectory(), binding, operation);
 }
 
-/** Build bindings backed by a host-owned state object. */
+/** Build bindings with an immutable directory and a host-owned state object. */
 export function createKnowledgeConfigApi(
 	state: KnowledgeConfigState = createKnowledgeConfigState(),
+	directory: string | null = knowledgeDirectory(),
 ): KnowledgeConfigApi {
+	if (directory !== null && !isAbsolute(directory)) throw new Error("Knowledge directory must be absolute");
+	const fixedDirectory = directory === null ? null : resolve(directory);
 	return {
-		knowledgeDirectory,
+		knowledgeDirectory: () => fixedDirectory,
 		projectIdentity,
-		readKnowledgeBinding: (options = {}) => readKnowledgeBindingWithState(state, options),
+		readKnowledgeBinding: (options = {}) => readKnowledgeBindingWithState(state, fixedDirectory, options),
 		saveKnowledgeBinding: (input, expectedRevision = null) =>
-			saveKnowledgeBindingWithState(state, input, expectedRevision),
-		withKnowledgeBinding: (binding, operation) => withKnowledgeBindingWithState(state, binding, operation),
+			saveKnowledgeBindingWithState(state, fixedDirectory, input, expectedRevision),
+		withKnowledgeBinding: (binding, operation) => withKnowledgeBindingWithState(state, fixedDirectory, binding, operation),
 	};
 }
 
+// 0.2 compatibility: module-level APIs retain their environment-selected directory.
+// Remove this default path after the 0.3 runtime migration has switched every
+// native/Desktop consumer to an explicitly owned factory instance.
 const defaultState = createKnowledgeConfigState();

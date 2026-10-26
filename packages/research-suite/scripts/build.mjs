@@ -77,6 +77,15 @@ for (const name of bundled) {
 	}
 }
 
+// The native composition keeps its existing three extension entries. Knowledge's
+// optional Desktop resource is carried by that same dependency, never registered
+// as a second native extension or copied into a standalone suite UI bundle.
+const knowledgeManifest = JSON.parse(await readFile(join(packageAt("@gyoungwe/pi-knowledge"), "plugin.manifest.json"), "utf8"));
+if (knowledgeManifest.entrypoints.ui !== "./ui/plugin.json") fail("knowledge package is missing its co-packaged UI entrypoint");
+const knowledgeUi = JSON.parse(await readFile(join(packageAt("@gyoungwe/pi-knowledge"), knowledgeManifest.entrypoints.ui), "utf8"));
+await readFile(join(packageAt("@gyoungwe/pi-knowledge"), "ui", knowledgeUi.main));
+if (JSON.stringify(knowledgeUi.contributions.map(entry => entry.region)) !== JSON.stringify(["knowledge.page", "knowledge.surface", "app.overlay"])) fail("knowledge UI ownership is incorrect");
+
 const knowledgeSkills = await readdir(join(packageAt("@gyoungwe/pi-knowledge"), "skills"), { withFileTypes: true });
 const researchSkills = await readdir(join(packageAt("@gyoungwe/pi-research"), "skills"), { withFileTypes: true });
 const skillNames = (entries) => entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);

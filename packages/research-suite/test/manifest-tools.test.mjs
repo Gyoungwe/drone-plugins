@@ -42,7 +42,7 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 
 test("bundled versions and public research host resources match the suite pins", async () => {
 	const suite = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-	assert.equal(suite.version, "0.1.11");
+	assert.equal(suite.version, "0.2.0");
 	assert.equal(manifest.version, suite.version);
 	for (const name of suite.bundleDependencies) {
 		const dependencyRoot = join(root, "node_modules", ...name.split("/"));

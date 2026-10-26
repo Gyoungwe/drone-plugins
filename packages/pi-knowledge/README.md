@@ -1,31 +1,15 @@
 # @gyoungwe/pi-knowledge
 
-The first native Pi package in Drone. It exposes the knowledge/Vault extension
-through one installable Pi entry point. The published package contains a
-self-contained `dist/index.mjs` bundle and its package-local knowledge worker;
-it has no runtime dependency on a Drone checkout or private Drone package.
+Knowledge/Vault tools for official Pi, with an optional Drone Desktop knowledge workspace in the same package. **0.3.0 is an unpublished candidate.** The latest release established before this change is 0.2.1.
 
-The package is intentionally honest on first run: `knowledge_status` returns
-`{ "status": "unconfigured", "next": "/drone-init" }` until a Vault binding
-exists. The package does not create a Vault implicitly and does not change the
-existing `.pi/` or Vault file formats.
+`pi.extensions` points only to the self-contained `dist/index.mjs`; the worker lives in `lib/knowledge/runtime`. Native Pi does not import the UI, React, Electron or Drone private modules. `plugin.manifest.json` additionally declares `ui/plugin.json`, whose independent `drone-knowledge-ui` contribution exports the knowledge page, embedded surfaces and review overlay. React stays external and is provided by Desktop; graph libraries and scoped styles are bundled in `ui/bundle.js`.
 
-Task authorization and progress tools (`task_*`, `task-status` and
-`task-action`) are provided by `@gyoungwe/pi-core`; this package registers only
-knowledge and research tools. The `research-workflow` skill is owned by
-`@gyoungwe/pi-research` and is intentionally not bundled here.
+Until a Vault is bound, `knowledge_status` returns `{ "status": "unconfigured", "next": "/drone-init" }`. Installation never creates a Vault implicitly or changes existing `.pi/` or Vault formats. Task tools belong to pi-core; the research-workflow skill belongs to pi-research.
 
-The bundle is produced by the host build and committed here as the release
-artifact. The external repository deliberately does not rebuild private Drone
-source; `npm run build` verifies the checked-in artifact and refreshes its
-content manifest, while `npm run build:check` is the CI freshness gate.
+The source and worker build are owned here. `npm run build` rebuilds native bundles, declarations and UI from this package; `build:check` verifies hashes and independently rebuilds UI for comparison. `npm run check` includes native and UI types/tests plus packed native extension and clean UI installation smoke tests. The native smoke dispatches `knowledge_status` through a real official SDK AgentSession with an offline deterministic provider. These checks do not replace formal installed-app acceptance.
 
-`npm run smoke` loads the packaged extension with the native registration
-contract, checks the first-run `unconfigured` response, and verifies that the
-dry-run tarball contains only publishable package files. Pi 1.1.0 can record a
-local `.tgz` as an extension path instead of unpacking it; install the unpacked
-package directory when using that host version.
+The moved UI source, tests and styles retain Git ancestry through `git mv` from desktop-ui-pack (and its earlier non-squashed Drone subtree import). The 0.3.0 desktop-ui-pack companion now provides only the research status panel. **Before enabling this candidate, disable or remove desktop-ui-pack 0.2.0**, which still owns the historical knowledge contributions. Do not enable those old contributions alongside this package. The public 0.2.0 artifact is unchanged; rollback disables this candidate UI and reinstalls/re-enables the prior package while preserving Vault and binding data.
 
-## 0.2.1 source candidate
+This is the P2 co-packaging slice, not completed backend extraction: UI still uses the published `window.DroneUI.knowledge` contract, and host services remain responsible for authorization, persistence, credentials and named domain operations. That port and the backend runtime must move in later P2 work. See [migration evidence](../../docs/knowledge-ui-co-package-2026-10-26.md).
 
-Knowledge category counts and recent-note groups now share one rule: explicit frontmatter type takes precedence, then the nearest recognized category directory, then filename keywords for untyped notes. A method named `mapping-tools.md` remains a method; a typed concept is not relabeled from its filename. This is a local source candidate, not an npm publication claim.
+`npm run test:styles` checks light/dark computed styles and host sibling isolation in a fresh headless Chromium profile. Set `DRONE_UI_TEST_BROWSER` for the executable and optionally `DRONE_UI_TEST_HOST_CSS` for compiled host styles. Fixture checks are not formal GUI acceptance.

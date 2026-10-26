@@ -8,6 +8,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
 
 const execFileAsync = promisify(execFile);
 const packageRoot = resolve(import.meta.dirname, "..");
@@ -26,6 +28,9 @@ const pack = JSON.parse(output.stdout.trim());
 const files = new Set(pack[0]?.files?.map((file) => file.path) || []);
 for (const required of [
 	"dist/index.mjs",
+	"ui/plugin.json",
+	"ui/bundle.js",
+	"ui/build-manifest.json",
 	"lib/knowledge/runtime/worker.mjs",
 	"lib/knowledge/runtime/.knowledge-worker-manifest.json",
 	"plugin.manifest.json",
@@ -92,6 +97,47 @@ try {
 		ctx,
 	);
 	assert.equal(search.details.local.status, "unconfigured");
+	// A real official SDK session loads the packed native entry without Desktop,
+	// React or the new UI entrypoint. The model is deterministic and offline.
+	const agentDir = join(root, "agent");
+	await mkdir(agentDir);
+	const settingsManager = SettingsManager.inMemory({ projectTrusted: true });
+	const loader = new DefaultResourceLoader({
+		cwd: root, agentDir, settingsManager, noExtensions: true, noSkills: true,
+		additionalExtensionPaths: [join(artifactRoot, "dist/index.mjs")],
+	});
+	await loader.reload();
+	assert.deepEqual(loader.getExtensions().errors, []);
+	const modelRuntime = await ModelRuntime.create({
+		authPath: join(agentDir, "auth.json"), modelsPath: null,
+		modelsStorePath: join(agentDir, "models.json"), allowModelNetwork: false, refreshOnCreate: false,
+	});
+	const provider = fauxProvider({ provider: "knowledge-package-smoke", tokensPerSecond: 100000 });
+	modelRuntime.registerNativeProvider(provider.provider);
+	await modelRuntime.setRuntimeApiKey("knowledge-package-smoke", "offline-test-only");
+	const { session } = await createAgentSession({
+		cwd: root, agentDir, settingsManager, resourceLoader: loader, modelRuntime,
+		model: provider.getModel(), sessionManager: SessionManager.inMemory(root), tools: ["knowledge_status"],
+	});
+	const receipts = [];
+	const unsubscribe = session.subscribe(event => {
+		if (event.type === "tool_execution_end") receipts.push(event);
+	});
+	try {
+		await session.bindExtensions({});
+		provider.setResponses([
+			fauxAssistantMessage([fauxToolCall("knowledge_status", {})], { stopReason: "toolUse" }),
+			fauxAssistantMessage("Knowledge package is unconfigured."),
+		]);
+		await session.prompt("Check the current knowledge binding without creating a Vault.");
+		assert.equal(receipts.length, 1);
+		assert.equal(receipts[0].toolName, "knowledge_status");
+		assert.equal(receipts[0].isError, false);
+		assert.equal(receipts[0].result.details.status, "unconfigured");
+	} finally {
+		unsubscribe();
+		await session.dispose();
+	}
 	console.log(
 		JSON.stringify({
 			package: packageJson.name,
@@ -101,6 +147,9 @@ try {
 			tools: [...tools.keys()],
 			status: status.details.status,
 			search: search.details.local.status,
+			realAgentSession: true,
+			dispatchCount: receipts.length,
+			model: "Official SDK faux provider; offline deterministic model",
 		}),
 	);
 } finally {

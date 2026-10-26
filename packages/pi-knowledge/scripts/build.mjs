@@ -19,7 +19,7 @@ const artifactOutputs = [
 	"dist/host.d.ts",
 	"lib/knowledge/runtime/worker.mjs",
 ];
-const outputs = [...artifactOutputs, "lib/knowledge/runtime/.knowledge-worker-manifest.json"];
+const outputs = [...artifactOutputs, "lib/knowledge/runtime/.knowledge-worker-manifest.json", "ui/bundle.js", "ui/build-manifest.json"];
 const expectedSkills = ["research-vault", "research-show-me"];
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -90,6 +90,8 @@ if (!checkOnly) {
 	const tsc = join(workspaceRoot, "node_modules/.bin/tsc");
 	execFileSync(tsc, ["-p", join(packageRoot, "tsconfig.build.json")], { cwd: packageRoot, stdio: "inherit" });
 }
+
+execFileSync(process.execPath, [join(packageRoot, "scripts/build-ui.mjs"), ...(checkOnly ? ["--check"] : [])], { cwd: packageRoot, stdio: "inherit" });
 
 for (const relativePath of artifactOutputs) await ensureFile(relativePath);
 for (const relativePath of ["dist/index.mjs", "dist/host.mjs", "lib/knowledge/runtime/worker.mjs"]) {

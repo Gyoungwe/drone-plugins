@@ -1,0 +1,120 @@
+{
+  "date": "2026-10-26",
+  "status": "PARTIAL",
+  "scope": "P2 knowledge UI co-packaging and runtime foundations; host domain migration and formal app acceptance incomplete",
+  "published": false,
+  "basePluginCommit": "d2f76a0",
+  "candidates": [
+    {
+      "name": "@gyoungwe/pi-knowledge",
+      "version": "0.3.0",
+      "sha256": "cb15c4bc9347de7ecc2cb24eca5fdf5140cabe682079b8c5bad3ce0aca548832",
+      "integrity": "sha512-iYyGhL7WKLKSlwm2DionqlJ85Bh7atJx2IsnDLJHw1BYbtSiXyx+cOdU/amjLuV5NrkNLDad39iiqBQwWlTCTA==",
+      "files": 189
+    },
+    {
+      "name": "@gyoungwe/desktop-ui-pack",
+      "version": "0.3.0",
+      "sha256": "557cbd5ab4e9f6ec855e15cad90fb607639f88a13fc6e0bcc2af9bbc9a1b762e",
+      "integrity": "sha512-nH94HCWu6zRKlH85cuVhBK3iRBOHni+j3NspyUFZUl4BlCiE0Ep3Qx6n9jjL9zRdp5i23VG39ZxxcUUeGeEBaA==",
+      "files": 9
+    },
+    {
+      "name": "@gyoungwe/research-suite",
+      "version": "0.2.0",
+      "sha256": "9b2f1a9b4e1a5bb6336086655bbd8db7e380f27ac778d164f53d39055c02daa3",
+      "integrity": "sha512-vjVYVD1JC5lzgbCA+kiuKO0DAG0aKRiBNnkh/Yhlo8dibnaVd+JRMBGpi72r/I5OiNlNscALX4Aonr8Sp83aww==",
+      "files": 1240
+    }
+  ],
+  "checks": [
+    {
+      "command": "npm run check",
+      "exitCode": 0,
+      "logSha256": "6691f616d92f6bdb119f2fe9ed398928835103d98a5b97224a4c331f2196f733"
+    },
+    {
+      "command": "npm run test:styles -w @gyoungwe/pi-knowledge",
+      "exitCode": 0,
+      "scope": "isolated headless Chromium light/dark contract fixture; not formal GUI acceptance"
+    }
+  ],
+  "knowledgeTests": {
+    "files": 56,
+    "tests": 398
+  },
+  "desktopTests": {
+    "files": 1,
+    "tests": 1
+  },
+  "nativeKnowledgeSession": {
+    "sdk": "1.1.0",
+    "realAgentSession": true,
+    "tool": "knowledge_status",
+    "dispatchCount": 1,
+    "result": "unconfigured",
+    "provider": "offline deterministic SDK faux provider"
+  },
+  "cleanCandidateInstall": {
+    "knowledgeUiName": "drone-knowledge-ui",
+    "knowledgeContributions": [
+      "knowledge.page",
+      "knowledge.surface",
+      "app.overlay"
+    ],
+    "desktopContributions": [
+      "panel.tab"
+    ],
+    "distinctContributions": true,
+    "gui": "NOT_RUN"
+  },
+  "suite": {
+    "version": "0.2.0",
+    "pins": {
+      "pi-core": "0.1.9",
+      "pi-knowledge": "0.3.0",
+      "pi-research": "0.2.0"
+    },
+    "desktopUiPackDependencyAdded": false,
+    "nestedKnowledgeUiInTarball": true,
+    "nestedUiHostDiscovery": "NOT_RUN",
+    "installedPdfPage": 1,
+    "installedPdfMarkedPixels": 1082
+  },
+  "researchRegression": {
+    "sdkVersions": [
+      "1.1.0",
+      "1.4.0"
+    ],
+    "realAgentSession": true,
+    "sessionsPerVersion": 2,
+    "dispatchCountPerVersion": 14
+  },
+  "remaining": [
+    "Host knowledge services, named IPC and process event bridge extraction",
+    "Formal installed-app discovery, disable/re-enable, uninstall/reinstall and old-UI rollback",
+    "Zero-domain-plugin host build/start/chat",
+    "Previously deferred four external acceptance items unchanged"
+  ],
+  "runtimeFoundation": {
+    "fixedFactoryDirectory": true,
+    "legacy02ModuleApiRetained": true,
+    "namespaceKeyExclusiveQueue": true,
+    "realSqliteWriterReplacement": {
+      "oldWriterExitsBeforeNewStarts": true,
+      "simultaneousCallersShareReplacement": true,
+      "integrityCheck": "ok",
+      "indexedNoteReadBack": true,
+      "startupFailureReported": true,
+      "repairRetryReadBack": true,
+      "failureLifecycleStage": "disabled",
+      "failureReasonPresent": true,
+      "falseRollbackReceiptAbsent": true
+    },
+    "scope": "Same runtime worker pool; cross-process sole-writer lease and native/UI runtime unification not implemented",
+    "targetedFiles": 2,
+    "targetedTests": 7,
+    "queuedWriteFailureReturnedToCaller": true,
+    "nextQueuedWriteSucceeds": true
+  }
+}

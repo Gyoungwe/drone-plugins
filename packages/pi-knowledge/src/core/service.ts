@@ -136,9 +136,9 @@ export class KnowledgeService {
 			this.worker = createKnowledgeWorker(new URL("./worker.mjs", import.meta.url), workerOptions);
 		} catch (error) {
 			this.closed = true;
-			this.lifecycle = "rolled_back";
+			this.lifecycle = "disabled";
 			readyReject(error);
-			emitKnowledgeWorkerLifecycle("rolled_back", {
+			emitKnowledgeWorkerLifecycle("disabled", {
 				version: this.workerVersion,
 				source: this.workerMetadata.source,
 				integrity: this.workerMetadata.integrity,
@@ -149,14 +149,14 @@ export class KnowledgeService {
 		const fail = (error) => {
 			if (!this.ready) readyReject(error);
 			this.closed = true;
-			this.lifecycle = "rolled_back";
+			this.lifecycle = "disabled";
 			for (const item of this.pending.values()) {
 				clearTimeout(item.timer);
 				item.reject(error);
 			}
 			this.pending.clear();
 			this.worker.unref();
-			emitKnowledgeWorkerLifecycle("rolled_back", {
+			emitKnowledgeWorkerLifecycle("disabled", {
 				version: this.workerVersion,
 				source: this.workerMetadata.source,
 				integrity: this.workerMetadata.integrity,
@@ -1105,9 +1105,8 @@ export async function getKnowledgeService(binding: KnowledgeBinding | null = nul
 			emitProcessEvent(SERVICE_EVENT, { action: "request", key, origin: serviceModule });
 			service = pool.get(key);
 		}
-		// A rebound Vault reuses the same database. Stage and health-check the
-		// replacement before retiring the old worker, so an unavailable packaged
-		// resource never destroys a usable service.
+		// A rebound Vault reuses the same database. Worker startup performs SQLite
+		// writes, so the old worker must exit before a replacement can be created.
 		const needsReplacement =
 			!service ||
 			service.closed ||
@@ -1119,6 +1118,10 @@ export async function getKnowledgeService(binding: KnowledgeBinding | null = nul
 		if (!needsReplacement) return service;
 		let candidate;
 		try {
+			if (service) {
+				await service.drain();
+				pool.delete(key);
+			}
 			candidate = new KnowledgeService(binding, directory);
 			await candidate.healthCheck();
 			candidate.lifecycle = "enabled";
@@ -1130,8 +1133,7 @@ export async function getKnowledgeService(binding: KnowledgeBinding | null = nul
 			});
 			pool.set(key, candidate);
 			emitProcessEvent(SERVICE_EVENT, { action: "register", key, service: candidate, origin: serviceModule });
-			if (service && !service.closed) {
-				await service.drain();
+			if (service) {
 				emitKnowledgeWorkerLifecycle("reloaded", {
 					version: candidate.workerVersion,
 					previousVersion: service.workerVersion,
@@ -1148,15 +1150,16 @@ export async function getKnowledgeService(binding: KnowledgeBinding | null = nul
 			}
 			return candidate;
 		} catch (error) {
-			if (candidate && !candidate.closed) await candidate.close().catch(() => {});
-			emitKnowledgeWorkerLifecycle("rolled_back", {
+			if (candidate) await candidate.close();
+			emitKnowledgeWorkerLifecycle("disabled", {
 				version: candidate?.workerVersion || knowledgeWorkerMetadata().version,
 				previousVersion: service?.workerVersion,
 				source: candidate?.workerMetadata?.source,
 				integrity: candidate?.workerMetadata?.integrity,
 				reason: String(error?.message || error).slice(0, 400),
 			});
-			if (service && !service.closed) throw error;
+			// The previous worker has drained. Do not report it as a usable fallback;
+			// the caller sees the startup failure and may retry a verified resource.
 			throw error;
 		}
 	})();

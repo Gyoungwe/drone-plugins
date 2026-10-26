@@ -130,9 +130,8 @@ function validateBinding(value) {
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1 || !isAbsolute(String(value.vault || "")) || !/^[a-f0-9]{24}$/.test(String(value.vaultId || "")) || !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !["project", "literature", "hybrid"].includes(String(value.profile)) || !["run-only", "verified", "rich"].includes(String(value.depositMode)) || !["none", "read-local"].includes(String(value.subagentPolicy)) || typeof value.updatedAt !== "string")
     throw new Error("Invalid application knowledge binding; no project fallback was used");
 }
-async function readKnowledgeBindingWithState(state5, { fresh = false } = {}) {
+async function readKnowledgeBindingWithState(state5, directory, { fresh = false } = {}) {
   if (!fresh && state5.local.getStore()) return state5.local.getStore() ?? null;
-  const directory = knowledgeDirectory();
   if (!directory) return null;
   let value;
   try {
@@ -147,16 +146,16 @@ async function readKnowledgeBindingWithState(state5, { fresh = false } = {}) {
   return value;
 }
 async function readKnowledgeBinding(options = {}) {
-  return readKnowledgeBindingWithState(defaultState, options);
+  return readKnowledgeBindingWithState(defaultState, knowledgeDirectory(), options);
 }
-async function withKnowledgeBindingWithState(state5, binding, operation) {
-  const current = await readKnowledgeBindingWithState(state5, { fresh: true });
+async function withKnowledgeBindingWithState(state5, directory, binding, operation) {
+  const current = await readKnowledgeBindingWithState(state5, directory, { fresh: true });
   if (!binding || current?.vaultId !== binding.vaultId || current?.revision !== binding.revision)
     throw new Error("Knowledge binding changed; start a new turn before reading or writing");
   return state5.local.run(binding, operation);
 }
 async function withKnowledgeBinding(binding, operation) {
-  return withKnowledgeBindingWithState(defaultState, binding, operation);
+  return withKnowledgeBindingWithState(defaultState, knowledgeDirectory(), binding, operation);
 }
 var defaultState;
 var init_config = __esm({
@@ -506,19 +505,21 @@ var init_runtime_host = __esm({
   "src/core/runtime-host.ts"() {
     "use strict";
     locks = /* @__PURE__ */ new Map();
-    defaultRunRuntimeExclusive = async (_namespace, key, work) => {
-      const previous = locks.get(key) ?? Promise.resolve();
+    defaultRunRuntimeExclusive = async (namespace, key, work) => {
+      const lockKey = JSON.stringify([namespace, key]);
+      const previous = locks.get(lockKey) ?? Promise.resolve();
       let release;
       const current = new Promise((resolve13) => {
         release = resolve13;
       });
-      locks.set(key, previous.then(() => current));
+      const tail = previous.then(() => current);
+      locks.set(lockKey, tail);
       await previous;
       try {
         return await work();
       } finally {
         release();
-        if (locks.get(key) === current) locks.delete(key);
+        if (locks.get(lockKey) === tail) locks.delete(lockKey);
       }
     };
     runtimeExclusive = defaultRunRuntimeExclusive;
@@ -3908,9 +3909,9 @@ var KnowledgeService = class {
       this.worker = createKnowledgeWorker(new URL("./worker.mjs", import.meta.url), workerOptions);
     } catch (error) {
       this.closed = true;
-      this.lifecycle = "rolled_back";
+      this.lifecycle = "disabled";
       readyReject(error);
-      emitKnowledgeWorkerLifecycle("rolled_back", {
+      emitKnowledgeWorkerLifecycle("disabled", {
         version: this.workerVersion,
         source: this.workerMetadata.source,
         integrity: this.workerMetadata.integrity,
@@ -3921,14 +3922,14 @@ var KnowledgeService = class {
     const fail = (error) => {
       if (!this.ready) readyReject(error);
       this.closed = true;
-      this.lifecycle = "rolled_back";
+      this.lifecycle = "disabled";
       for (const item of this.pending.values()) {
         clearTimeout(item.timer);
         item.reject(error);
       }
       this.pending.clear();
       this.worker.unref();
-      emitKnowledgeWorkerLifecycle("rolled_back", {
+      emitKnowledgeWorkerLifecycle("disabled", {
         version: this.workerVersion,
         source: this.workerMetadata.source,
         integrity: this.workerMetadata.integrity,
@@ -4784,6 +4785,10 @@ async function getKnowledgeService(binding = null) {
     if (!needsReplacement) return service;
     let candidate;
     try {
+      if (service) {
+        await service.drain();
+        pool.delete(key);
+      }
       candidate = new KnowledgeService(binding, directory);
       await candidate.healthCheck();
       candidate.lifecycle = "enabled";
@@ -4795,8 +4800,7 @@ async function getKnowledgeService(binding = null) {
       });
       pool.set(key, candidate);
       emitProcessEvent(SERVICE_EVENT, { action: "register", key, service: candidate, origin: serviceModule });
-      if (service && !service.closed) {
-        await service.drain();
+      if (service) {
         emitKnowledgeWorkerLifecycle("reloaded", {
           version: candidate.workerVersion,
           previousVersion: service.workerVersion,
@@ -4812,16 +4816,14 @@ async function getKnowledgeService(binding = null) {
       }
       return candidate;
     } catch (error) {
-      if (candidate && !candidate.closed) await candidate.close().catch(() => {
-      });
-      emitKnowledgeWorkerLifecycle("rolled_back", {
+      if (candidate) await candidate.close();
+      emitKnowledgeWorkerLifecycle("disabled", {
         version: candidate?.workerVersion || knowledgeWorkerMetadata().version,
         previousVersion: service?.workerVersion,
         source: candidate?.workerMetadata?.source,
         integrity: candidate?.workerMetadata?.integrity,
         reason: String(error?.message || error).slice(0, 400)
       });
-      if (service && !service.closed) throw error;
       throw error;
     }
   })();

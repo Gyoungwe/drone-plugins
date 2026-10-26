@@ -70,6 +70,8 @@ try {
 	for (const required of [
 		"package/node_modules/@gyoungwe/pi-core/dist/index.mjs",
 		"package/node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
+		"package/node_modules/@gyoungwe/pi-knowledge/ui/plugin.json",
+		"package/node_modules/@gyoungwe/pi-knowledge/ui/bundle.js",
 		"package/node_modules/@gyoungwe/pi-knowledge/lib/knowledge/runtime/.knowledge-worker-manifest.json",
 		"package/node_modules/@gyoungwe/pi-research/dist/index.mjs",
 		"package/node_modules/@gyoungwe/plugin-api/package.json",
@@ -81,6 +83,13 @@ try {
 		![...suiteListing].some((entry) => entry.endsWith("pi-knowledge/skills/research-workflow/SKILL.md")),
 		"research-suite tarball contains a duplicate pi-knowledge research-workflow skill",
 	);
+
+	const knowledgeUi = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/pi-knowledge/ui/plugin.json"), "utf8"));
+	const desktopUi = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/desktop-ui-pack/ui/plugin.json"), "utf8"));
+	assert.notEqual(knowledgeUi.name, desktopUi.name);
+	assert.deepEqual(knowledgeUi.contributions.map(entry => entry.region), ["knowledge.page", "knowledge.surface", "app.overlay"]);
+	assert.deepEqual(desktopUi.contributions.map(entry => entry.region), ["panel.tab"]);
+	assert(!desktopUi.contributions.some(entry => knowledgeUi.contributions.some(knowledge => knowledge.id === entry.id)), "installed candidates duplicate knowledge contributions");
 
 	const piAnalysisRoot = join(installRoot, "node_modules", "@gyoungwe", "pi-analysis");
 	const piAnalysisPackage = JSON.parse(await readFile(join(piAnalysisRoot, "package.json"), "utf8"));

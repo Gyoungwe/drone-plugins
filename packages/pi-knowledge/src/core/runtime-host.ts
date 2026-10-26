@@ -12,19 +12,21 @@ export type FlowCardBuilder = (toolName: string) => unknown;
 export type DeliveryContract = (prompt: string, options?: Record<string, unknown>) => unknown;
 
 const locks = new Map<string, Promise<void>>();
-const defaultRunRuntimeExclusive: RuntimeExclusive = async <T>(_namespace: string, key: string, work: () => Promise<T>) => {
-	const previous = locks.get(key) ?? Promise.resolve();
+const defaultRunRuntimeExclusive: RuntimeExclusive = async <T>(namespace: string, key: string, work: () => Promise<T>) => {
+	const lockKey = JSON.stringify([namespace, key]);
+	const previous = locks.get(lockKey) ?? Promise.resolve();
 	let release!: () => void;
 	const current = new Promise<void>((resolve) => {
 		release = resolve;
 	});
-	locks.set(key, previous.then(() => current));
+	const tail = previous.then(() => current);
+	locks.set(lockKey, tail);
 	await previous;
 	try {
 		return await work();
 	} finally {
 		release();
-		if (locks.get(key) === current) locks.delete(key);
+		if (locks.get(lockKey) === tail) locks.delete(lockKey);
 	}
 };
 

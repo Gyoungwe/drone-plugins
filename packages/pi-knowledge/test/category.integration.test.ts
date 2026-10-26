@@ -31,8 +31,8 @@ it("keeps worker counts and recent method/software groups aligned after reopenin
 		const status = await service.request("status", {});
 		const { groups: recent } = await service.request("recentByCategory", { limit: 10 });
 		expect(status.categoryCounts).toMatchObject({ method: 2, software: 1, paper: 0 });
-		expect(recent.method.map((note) => note.path).sort()).toEqual([...methods].sort());
-		expect(recent.software.map((note) => note.path)).toEqual([software]);
+		expect(recent.method.map((note: { path: string }) => note.path).sort()).toEqual([...methods].sort());
+		expect(recent.software.map((note: { path: string }) => note.path)).toEqual([software]);
 		await closeKnowledgeServices();
 	}
 });

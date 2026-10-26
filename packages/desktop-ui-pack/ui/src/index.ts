@@ -1,6 +1,6 @@
 /**
  * The host supplies React and UI services through window.DroneUI.
- * The knowledge bundle keeps React external, so every contribution shares
+ * The research status bundle keeps React external, so every contribution shares
  * the host instance; public package imports provide types only.
  */
 type DroneUiRuntime = {
@@ -38,5 +38,3 @@ export function ResearchStatusPanel(): unknown {
 		),
 	);
 }
-
-export { KnowledgePage, KnowledgeOverlay, KnowledgeSurface } from "../entry";

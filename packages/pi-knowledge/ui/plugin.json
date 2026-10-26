@@ -1,0 +1,28 @@
+{
+  "name": "drone-knowledge-ui",
+  "version": "0.3.0",
+  "displayName": "Knowledge workspace",
+  "description": "Knowledge workspace and review surfaces supplied by pi-knowledge.",
+  "droneUi": 1,
+  "main": "bundle.js",
+  "contributions": [
+    {
+      "id": "knowledge-page",
+      "region": "knowledge.page",
+      "export": "KnowledgePage",
+      "title": "Knowledge"
+    },
+    {
+      "id": "knowledge-surfaces",
+      "region": "knowledge.surface",
+      "export": "KnowledgeSurface",
+      "title": "Knowledge surfaces"
+    },
+    {
+      "id": "knowledge-review-overlay",
+      "region": "app.overlay",
+      "export": "KnowledgeOverlay",
+      "title": "Knowledge review"
+    }
+  ]
+}

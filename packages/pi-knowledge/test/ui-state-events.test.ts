@@ -1,13 +1,15 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { EventEmitter } from "node:events";
 import { flowFor, subscribeKnowledgeUi } from "../src/core/ui-state.js";
 
 describe("knowledge UI module boundary", () => {
 	it("receives a flow event forwarded by a second bundle", () => {
 		const sessionId = `cross-bundle-${Date.now()}`;
 		const received: unknown[] = [];
-		const unsubscribe = subscribeKnowledgeUi((event) => received.push(event));
+		const unsubscribe = subscribeKnowledgeUi((event: unknown) => received.push(event));
 		try {
-			process.emit("drone:knowledge-ui/v1", {
+			const events: EventEmitter = process;
+			events.emit("drone:knowledge-ui/v1", {
 				event: { kind: "flow", sequence: 7, flow: { sessionId, phase: "searching" } },
 				origin: {},
 			});

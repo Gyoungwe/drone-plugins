@@ -1,66 +1,75 @@
 {
-	"name": "@gyoungwe/pi-knowledge",
-	"version": "0.2.1",
-	"description": "Knowledge and Vault tools for native Pi hosts",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/Gyoungwe/drone-plugins.git",
-		"directory": "packages/pi-knowledge"
-	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"keywords": [
-		"pi-package"
-	],
-	"license": "MIT",
-	"type": "module",
-	"main": "./dist/index.mjs",
-	"exports": {
-		".": {
-			"types": "./dist/host.d.ts",
-			"import": "./dist/index.mjs",
-			"default": "./dist/index.mjs"
-		},
-		"./host": {
-			"types": "./dist/host.d.ts",
-			"import": "./dist/host.mjs",
-			"default": "./dist/host.mjs"
-		}
-	},
-	"files": [
-		"dist",
-		"lib",
-		"skills",
-		"plugin.manifest.json",
-		"package.json",
-		"README.md",
-		"build-manifest.json"
-	],
-	"pi": {
-		"extensions": [
-			"./dist/index.mjs"
-		],
-		"skills": [
-			"./skills/*"
-		]
-	},
-	"scripts": {
-		"build": "node scripts/build.mjs",
-		"build:check": "node scripts/build.mjs --check",
-		"smoke": "node scripts/smoke.mjs",
-		"typecheck": "tsc -p tsconfig.json --noEmit",
-		"test": "vitest run"
-	},
-	"dependencies": {
-		"@gyoungwe/plugin-api": "^1.1.0"
-	},
-	"peerDependencies": {
-		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
-	},
-	"devDependencies": {
-		"esbuild": "0.25.12",
-		"typescript": "^5.9.0",
-		"vitest": "^3.2.0"
-	}
+  "name": "@gyoungwe/pi-knowledge",
+  "version": "0.3.0",
+  "description": "Native Pi knowledge and Vault tools with optional Drone Desktop knowledge UI",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Gyoungwe/drone-plugins.git",
+    "directory": "packages/pi-knowledge"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/host.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./host": {
+      "types": "./dist/host.d.ts",
+      "import": "./dist/host.mjs",
+      "default": "./dist/host.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "lib",
+    "skills",
+    "plugin.manifest.json",
+    "package.json",
+    "README.md",
+    "build-manifest.json",
+    "ui"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist/index.mjs"
+    ],
+    "skills": [
+      "./skills/*"
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:check": "node scripts/build.mjs --check",
+    "smoke": "node scripts/smoke.mjs && node scripts/smoke-ui.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
+    "test": "vitest run",
+    "test:styles": "node scripts/check-styles.mjs",
+    "check": "npm run build:check && npm run typecheck && npm test && npm run smoke"
+  },
+  "dependencies": {
+    "@gyoungwe/plugin-api": "^1.2.0",
+    "graphology": "^0.26.0",
+    "graphology-communities-louvain": "^2.0.2",
+    "graphology-layout-forceatlas2": "^0.10.1",
+    "graphology-types": "^0.24.8",
+    "sigma": "^3.0.3"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0",
+    "@earendil-works/pi-ai": "1.1.0"
+  }
 }
