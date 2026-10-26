@@ -165,3 +165,11 @@ CLI 默认 export 保持官方同步注册形状，但由 wrapper 创建自己�
 新页面复用纯差异视图，保留来源行号/hash导航、分页与刷新；apply/reject、模型审核和写入票据尚未提供。`canApply` 仅保留旧内容条件判断，不是写授权。完整 pool 的 Desktop resource adapter、semantic 设置及 metrics 端口仍在下一片，当前不宣称 full owner 或完整审核完成。历史 68012bd 设置与 f26ce487 阅读 tarball 不变，新包门禁/正式 GUI 记录独立更新。
 
 本片固定候选、实际 SDK/coordinator 回执与未完成 GUI 范围见 [审阅阅读证据](native-knowledge-review-2026-10-26.md)。
+
+## 14. Desktop 服务资源与语义设置（实现中）
+
+Desktop read owner 已改用显式 `createKnowledgeServicePool` 与受管 resource transport：resource key 由 state handle 与 binding VaultId 组成，实际 `resource.create/invoke/dispose` 由宿主 broker 执行。服务池不再从宿主目录猜索引路径；activation 关闭使用宿主 `resourcesLifecycle.dispose()` 等待真实子进程，最终 owner 关闭后才释放 reservations。活跃 resource close 的失败 receipt 可重试，不能把失败或取消报告为 drained。
+
+语义配置算法现在共享 `SemanticSettingsStorage`：CLI 适配保留本地原子文件、revision/CAS、写后读回；读取缺失只返回默认值，不创建目录。Desktop 写入先调用独立的 `state.ensureDirectory` 再 `state.writeJson`，每次保存均要求绑定 revision 与 expected settings revision；provider 执行仍标记 unavailable，未获得网络/model 能力时不伪造语义结果。focused 回归覆盖真实 resource close race、worker drain、无目录 read 和现有 SQLite owner。
+
+该切片尚未生成新正式 tarball或接入完整 GUI；旧 68012bd/fb8a0c 候选和真实回执保持独立。metrics、native hooks、publication/recovery、写审阅与旧 facade 删除仍未完成。

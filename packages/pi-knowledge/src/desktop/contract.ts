@@ -623,3 +623,19 @@ export const previewReviewResultSchema = object({
 	expiresAt: integer,
 	scientificallyVerified: { const: false },
 });
+
+export interface KnowledgeSemanticPreferences {
+ binding:KnowledgeBindingSummary|null;
+ settings:import("../core/semantic-settings.js").SemanticSettings|null;
+ canWriteState:boolean;
+ /** Config storage is available; model/provider execution has not been granted to this adapter. */
+ providerExecution:"unavailable";
+}
+export interface KnowledgeSetSemanticSettingsInput {
+ bindingRevision:number;expectedSettingsRevision:number;
+ settings:Partial<import("../core/semantic-settings.js").SemanticConfig>;
+}
+const semanticConfigProperties={enabled:boolean,provider:{enum:["none","ollama","openai-compatible"]},baseUrl:string,model:string,credentialEnv:string,remoteConsent:boolean,timeoutMs:{type:"integer",minimum:500,maximum:30000},chunkChars:{type:"integer",minimum:256,maximum:8000},minSimilarity:{type:"number",minimum:0,maximum:1}};
+export const semanticPreferencesInputSchema={type:"null"};
+export const semanticPreferencesResultSchema=object({binding:nullable(object({vaultId:string,revision:bindingRevision,label:string})),settings:nullable(object({...semanticConfigProperties,version:{const:1},revision:integer,updatedAt:string},["enabled","provider","baseUrl","model","credentialEnv","remoteConsent","version","revision","updatedAt"])),canWriteState:boolean,providerExecution:{const:"unavailable"}});
+export const setSemanticSettingsInputSchema=object({bindingRevision,expectedSettingsRevision:integer,settings:object(semanticConfigProperties,[])});

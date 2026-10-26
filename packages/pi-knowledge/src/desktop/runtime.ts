@@ -1,3 +1,11 @@
+import { createKnowledgeSemanticPreferences } from "./semantic-preferences.js";
+import {semanticPreferencesInputSchema,semanticPreferencesResultSchema,setSemanticSettingsInputSchema,type KnowledgeSetSemanticSettingsInput} from "./contract.js";
+import { createKnowledgeRuntimeHost } from "../core/runtime-host.js";
+import { createKnowledgeServicePool } from "../core/service.js";
+import { createStoredKnowledgeReviewPolicy } from "../core/review-policy.js";
+import { createBrokerReviewPolicyStorage } from "./state-policy.js";
+import { createBrokerSemanticSettings } from "./semantic-settings.js";
+import { createResourceServiceTransportFactory } from "./service-transport.js";
 import { createKnowledgeReviewReads } from "./reviews.js";
 import { reviewsInputSchema, reviewsResultSchema, previewReviewInputSchema, previewReviewResultSchema, type KnowledgeReviewsInput, type KnowledgePreviewReviewInput } from "./contract.js";
 import type { PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
@@ -30,6 +38,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 	const states = context.resources.filter(resource => resource.kind === "state");
 	if (states.length !== 1) throw new Error("Knowledge runtime requires exactly one authorized application-state root");
 	const state = states[0].handle;
+ if (!context.resourcesLifecycle) throw new Error("Knowledge services require the host resource shutdown barrier");
 	async function readKnowledgeBinding(): Promise<KnowledgeBinding | null> {
 		const response = await context.capabilities.call("state.readJson", { root: state, path: "binding.json" }) as
 			{ kind: "missing" } | { kind: "value"; value: unknown };
@@ -44,41 +53,26 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 			return operation();
 		},
 	};
-	type Resource = { handle: string; request(operation: string, input?: object): Promise<any> };
-	const resources = new Map<string, Promise<Resource>>();
-	async function getKnowledgeService(binding?: KnowledgeBinding): Promise<Resource> {
-		const current = binding ?? await readKnowledgeBinding();
-		if (!current) throw new Error("No application knowledge Vault is bound");
-		const existing = resources.get(current.vaultId);
-		if (existing) return existing;
-		const opening = (async () => {
-			const vault = await context.capabilities.call("roots.resolve", { path: current.vault, kind: "files" }) as { handle: string };
-			const resource = await context.capabilities.call("resource.create", {
-				resource: "index", storage: { root: state, key: current.vaultId }, parameters: { vaultRoot: vault.handle },
-				reservation: { namespace: "knowledge-writers", roots: [{ root: vault.handle, path: "", kind: "vault" }],
-					storage: { path: "index.sqlite", kind: "index" } },
-			}) as { handle: string };
-			return { handle: resource.handle, request: (operation: string, input: object = {}) =>
-				context.capabilities.call("resource.invoke", { handle: resource.handle, operation, input }) };
-		})();
-		resources.set(current.vaultId, opening);
-		try { return await opening; }
-		catch (error) { resources.delete(current.vaultId); throw error; }
-	}
-	const lifecycle = createKnowledgeOwnerLifecycle({
-		async dispose() {
-			// The host owns resource processes and reservations. After our calls
-			// drain, its activation cleanup closes children and reports failures.
-			// Shutdown has no caller authority for new capability requests.
-			resources.clear();
-		},
-	});
-	const owner: KnowledgeReadOwner = { config, services: { getKnowledgeService }, ...lifecycle };
+ const host=createKnowledgeRuntimeHost();
+ const semantic=createBrokerSemanticSettings(context.capabilities,state);
+ const policy=createStoredKnowledgeReviewPolicy(createBrokerReviewPolicyStorage(context.capabilities,state),()=>false);
+ const transports=createResourceServiceTransportFactory(context,state,context.resourcesLifecycle);
+ const services=createKnowledgeServicePool(host,config,semantic,policy,transports);
+ const lifecycle=createKnowledgeOwnerLifecycle({async dispose(){
+  // No live-caller capability is created during shutdown. The host closes all
+  // activation resources, then service views settle against that real barrier.
+  await transports.dispose();
+  await services.dispose();
+ }});
+	const owner: KnowledgeReadOwner = { config, services, ...lifecycle };
 	const reads = createKnowledgeReadModel(owner);
  const reviews = createKnowledgeReviewReads(owner, context.capabilities, state);
 	const preferences = createKnowledgePreferences(owner, context.capabilities, state, states[0].access === "read-write");
+ const semanticPreferences=createKnowledgeSemanticPreferences(owner,semantic,states[0].access === "read-write");
 	return {
 		operations: {
+   semanticSettings:{inputSchema:semanticPreferencesInputSchema,resultSchema:semanticPreferencesResultSchema,effect:"read",execute:()=>semanticPreferences.read()},
+   setSemanticSettings:{inputSchema:setSemanticSettingsInputSchema,resultSchema:semanticPreferencesResultSchema,effect:"write",execute:async input=>{const saved=await semanticPreferences.write(input as KnowledgeSetSemanticSettingsInput);context.events.changed();return saved;}},
    reviews: {inputSchema:reviewsInputSchema,resultSchema:reviewsResultSchema,effect:"read",execute:async(input,call)=>reviews.reviews(input as KnowledgeReviewsInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory))},
    previewReview: {inputSchema:previewReviewInputSchema,resultSchema:previewReviewResultSchema,effect:"read",execute:async(input,call)=>reviews.previewReview(input as KnowledgePreviewReviewInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory))},
 			preferences: { inputSchema: preferencesInputSchema, resultSchema: preferencesResultSchema, effect: "read",

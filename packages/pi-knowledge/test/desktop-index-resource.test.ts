@@ -72,7 +72,7 @@ it("Desktop runtime and its two native tools use one real broker-backed index wi
 		throw new Error(`Capability not provided: ${name}`);
 	} };
 	vi.useFakeTimers();
-	const runtime = await createDesktopRuntime({ applicationId: "test", resources: [{ kind: "state", handle: "state-root" }], signal: controller.signal, capabilities, events: { changed } });
+	const runtime = await createDesktopRuntime({ applicationId: "test", resourcesLifecycle: {dispose: async () => {if(index) await index.dispose();}}, resources: [{ kind: "state", handle: "state-root" }], signal: controller.signal, capabilities, events: { changed } });
 	const call = { scope: { kind: "application" as const }, signal: controller.signal, capabilities };
 	try {
 		const overview = await runtime.operations.overview.execute(null, call) as KnowledgeOverview;

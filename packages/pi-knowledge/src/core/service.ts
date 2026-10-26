@@ -916,7 +916,12 @@ function createKnowledgeServicePoolApi(
 			};
 		}
 		close() {
-			if (!this.closePromise) this.closePromise = this.transport.close().finally(() => this.tickets.clear());
+			if (!this.closePromise) this.closePromise = this.transport.close().catch(error => {
+                // Resource close can finish after a caller is revoked. The adapter
+                // retains the actual receipt; a subsequent caller must be able to await it.
+                this.closePromise = null;
+                throw error;
+            }).finally(() => this.tickets.clear());
 			return this.closePromise;
 		}
 		prepareUnload() { return this.transport.prepareUnload(); }

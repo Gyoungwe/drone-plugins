@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +34,16 @@ describe("semantic settings package", () => {
 		);
 	});
 
-	it("keeps revision compare-and-swap and default timestamps per state", async () => {
+	it("does not create a missing state directory while reading defaults", async () => {
+        const absent = "abcdef0123456789abcdef01";
+        const api = createSemanticSettingsApi(undefined, root);
+        expect(await api.readSemanticSettings(absent)).toMatchObject({revision:0,enabled:false});
+        await expect(stat(join(root,absent))).rejects.toMatchObject({code:"ENOENT"});
+        await api.saveSemanticSettings(absent,{provider:"none"},0);
+        expect((await api.readSemanticSettings(absent)).revision).toBe(1);
+    });
+
+    it("keeps revision compare-and-swap and default timestamps per state", async () => {
 		const first = createSemanticSettingsApi(createSemanticSettingsState());
 		const second = createSemanticSettingsApi(createSemanticSettingsState());
 		const initial = await first.readSemanticSettings(vaultId);
