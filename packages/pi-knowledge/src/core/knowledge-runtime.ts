@@ -11,6 +11,7 @@ import { createKnowledgeWikiReview } from "./wiki-review.js";
 import { createTopicMemoryApi } from "./topic-memory.js";
 import { createSpecialistDelivery } from "./specialist-delivery.js";
 import { acquireKnowledgeWriterLease } from "./writer-lease.js";
+import { createKnowledgeWriterLeaseGroup } from "./writer-lease-group.js";
 
 /** Plugin-owned application resources. Publication identities live in session adapters. */
 export function createKnowledgeRuntime(
@@ -22,7 +23,8 @@ export function createKnowledgeRuntime(
 	const ui = createKnowledgeUi(host, config);
 	const semantic = createSemanticSettingsApi(undefined, config.knowledgeDirectory());
 	const reviewPolicy = createKnowledgeReviewPolicy(config);
-	const services = createKnowledgeServicePool(host, config, ui, semantic, reviewPolicy, acquireWriterLease);
+	const writerReservations = createKnowledgeWriterLeaseGroup(acquireWriterLease);
+	const services = createKnowledgeServicePool(host, config, ui, semantic, reviewPolicy, writerReservations.acquireWorker);
 	const specialists = createKnowledgeSpecialistHost(host, config, ui);
 	const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
 	const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui);
@@ -55,8 +57,9 @@ export function createKnowledgeRuntime(
 			specialists.dispose();
 			const operationResults = await Promise.allSettled([...operations]);
 			const serviceResults = await Promise.allSettled([services.dispose()]);
+			const reservationResults = await Promise.allSettled([Promise.resolve().then(() => writerReservations.dispose())]);
 			ui.dispose();
-			const failures = [...sessionResults, ...operationResults, ...serviceResults]
+			const failures = [...sessionResults, ...operationResults, ...serviceResults, ...reservationResults]
 				.filter((result): result is PromiseRejectedResult => result.status === "rejected");
 			if (failures.length) throw new AggregateError(failures.map((result) => result.reason), "Knowledge runtime disposal failed");
 		})();
