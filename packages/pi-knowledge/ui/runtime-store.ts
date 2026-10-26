@@ -11,6 +11,10 @@ import type {
 	KnowledgeJobsInput,
 	KnowledgeJobsResult,
 	KnowledgeRecentByCategoryResult,
+	KnowledgeReviewsInput,
+	KnowledgeReviewsResult,
+	KnowledgePreviewReviewInput,
+	KnowledgePreviewReviewResult,
 } from "../src/desktop/contract.js";
 
 export interface KnowledgeRuntimeState {
@@ -20,7 +24,7 @@ export interface KnowledgeRuntimeState {
 		startLine: number;
 		expectedHash?: string;
 	} | null;
-	view: "reading" | "graph" | "jobs" | "settings";
+	view: "reading" | "graph" | "jobs" | "settings" | "reviews";
 	observationRevision: number;
 	overview: KnowledgeOverview | null;
 	overviewLoading: boolean;
@@ -219,6 +223,10 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 			read<KnowledgeGraphResult>("graph", input),
 		jobs: (input: Omit<KnowledgeJobsInput, "revision">) =>
 			read<KnowledgeJobsResult>("jobs", input),
+		reviews: (input: Omit<KnowledgeReviewsInput, "revision">) =>
+			read<KnowledgeReviewsResult>("reviews", input),
+		previewReview: (input: Omit<KnowledgePreviewReviewInput, "revision">) =>
+			read<KnowledgePreviewReviewResult>("previewReview", input),
 		recentByCategory: () =>
 			read<KnowledgeRecentByCategoryResult>("recentByCategory", { limit: 8 }),
 	};

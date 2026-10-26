@@ -3,6 +3,7 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { Button, usePluginRuntime, useSessionsStore } from "./runtime-api";
 import { useNativeKnowledgeText } from "./native-copy";
 import { NativeKnowledgePreferences } from "./NativeKnowledgePreferences";
+import { NativeKnowledgeReviews } from "./NativeKnowledgeReviews";
 import { NativeKnowledgeReading } from "./NativeKnowledgeReading";
 import { createKnowledgeRuntimeStore } from "./runtime-store";
 
@@ -56,17 +57,19 @@ function CallerKnowledgePage({ client }: { client: PluginUiRuntimeClient }) {
 						</Button>
 					</header>
 					<nav className="flex gap-2" aria-label={t.readingNavigation}>
-						{(["reading", "graph", "jobs", "settings"] as const).map((view) => (
-							<Button
-								key={view}
-								size="sm"
-								aria-pressed={state.view === view}
-								disabled={view !== "settings" && !overview?.binding}
-								onClick={() => store.setView(view)}
-							>
-								{t[view]}
-							</Button>
-						))}
+						{(["reading", "graph", "jobs", "reviews", "settings"] as const).map(
+							(view) => (
+								<Button
+									key={view}
+									size="sm"
+									aria-pressed={state.view === view}
+									disabled={view !== "settings" && !overview?.binding}
+									onClick={() => store.setView(view)}
+								>
+									{t[view]}
+								</Button>
+							),
+						)}
 					</nav>
 					{state.view === "settings" && (
 						<NativeKnowledgePreferences
@@ -101,13 +104,19 @@ function CallerKnowledgePage({ client }: { client: PluginUiRuntimeClient }) {
 									? `${overview.index.noteCount} ${t.notes} · ${t[overview.index.coverage]}`
 									: t.indexMissing}
 							</p>
-							{!state.overviewLoading && (
-								<NativeKnowledgeReading
-									key={state.view}
-									store={store}
-									state={state}
-								/>
-							)}
+							{!state.overviewLoading &&
+								(state.view === "reviews" ? (
+									<NativeKnowledgeReviews
+										store={store}
+										observationRevision={state.observationRevision}
+									/>
+								) : (
+									<NativeKnowledgeReading
+										key={state.view}
+										store={store}
+										state={state}
+									/>
+								))}
 						</>
 					)}
 					<NativeKnowledgeUnavailable />

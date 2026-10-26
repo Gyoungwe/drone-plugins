@@ -3,6 +3,18 @@ import { useLanguage } from "./runtime-api";
 const zh = {
 	title: "知识库",
 	settings: "设置",
+	reviews: "待审候选",
+	reviewReadOnly:
+		"此处只读浏览候选及其来源。应用、拒绝和模型审核尚未迁移，当前预览不授予写入权限。",
+	reviewBack: "关闭预览",
+	reviewCount: "条候选",
+	reviewEmpty: "当前课题暂无候选。",
+	reviewProjectRequired: "选择一个真实项目会话，以查看该课题的候选。",
+	reviewExpired: "候选已过期，仅供查看。",
+	reviewBindingChanged: "知识库绑定已变化，请刷新候选。",
+	reviewTargetChanged: "目标笔记已变化；此处显示生成候选时的原文与建议内容。",
+	reviewVersion: "候选版本",
+	reviewNotVerified: "差异预览不代表科学核验，也不会确认或应用候选。",
 	bindingDetails: "当前知识库绑定",
 	vaultPath: "目录",
 	profile: "资料组织",
@@ -73,12 +85,29 @@ const zh = {
 	lines: "行",
 	unsupportedTitle: "其他知识功能暂不可用",
 	unsupported:
-		"当前支持总览、搜索、笔记阅读、链接、图谱和索引任务查询。候选审核、其他设置、绑定编辑、自动发现、云同步及 Zotero 功能仍在迁移中。",
+		"当前支持总览、搜索、笔记阅读、链接、图谱、索引任务查询及候选列表和差异预览。候选写入审核、其他设置、绑定编辑、自动发现、云同步及 Zotero 功能仍在迁移中。",
 	readOnly: "搜索片段仅供浏览，不代表当前会话已读取原文或完成证据核验。",
 };
 const en: Record<keyof typeof zh, string> = {
 	title: "Knowledge",
 	settings: "Settings",
+	reviews: "Review candidates",
+	reviewReadOnly:
+		"Read candidates and their sources here. Apply, reject and model review are still being migrated; this preview grants no write permission.",
+	reviewBack: "Close preview",
+	reviewCount: "candidates",
+	reviewEmpty: "This project has no candidates.",
+	reviewProjectRequired:
+		"Select a real project session to view its candidates.",
+	reviewExpired:
+		"This candidate has expired and is available for reading only.",
+	reviewBindingChanged:
+		"The library binding changed. Refresh the candidate list.",
+	reviewTargetChanged:
+		"The target note changed. This view shows the original text and suggestion recorded in the candidate.",
+	reviewVersion: "Candidate version",
+	reviewNotVerified:
+		"A diff is not scientific verification and does not approve or apply a candidate.",
 	bindingDetails: "Current library binding",
 	vaultPath: "Directory",
 	profile: "Organization",
@@ -153,7 +182,7 @@ const en: Record<keyof typeof zh, string> = {
 	lines: "Lines",
 	unsupportedTitle: "Other knowledge features are temporarily unavailable",
 	unsupported:
-		"Overview, search, note reading, links, graphs and index jobs are available. Candidate reviews, other settings, binding changes, discovery, cloud sync and Zotero are still being migrated.",
+		"Overview, search, note reading, links, graphs, index jobs, candidate lists and diff previews are available. Candidate decisions, other settings, binding changes, discovery, cloud sync and Zotero are still being migrated.",
 	readOnly:
 		"Search excerpts are for browsing. They do not establish that this session read the source or verified its evidence.",
 };

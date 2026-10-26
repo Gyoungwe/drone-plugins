@@ -1,3 +1,5 @@
+import { createKnowledgeReviewReads } from "./reviews.js";
+import { reviewsInputSchema, reviewsResultSchema, previewReviewInputSchema, previewReviewResultSchema, type KnowledgeReviewsInput, type KnowledgePreviewReviewInput } from "./contract.js";
 import type { PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
 import type { PluginNativeRuntimeFactory } from "@gyoungwe/plugin-api/native";
 import { parseKnowledgeBinding, projectIdentity, type KnowledgeBinding } from "../core/config.js";
@@ -73,9 +75,12 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 	});
 	const owner: KnowledgeReadOwner = { config, services: { getKnowledgeService }, ...lifecycle };
 	const reads = createKnowledgeReadModel(owner);
+ const reviews = createKnowledgeReviewReads(owner, context.capabilities, state);
 	const preferences = createKnowledgePreferences(owner, context.capabilities, state, states[0].access === "read-write");
 	return {
 		operations: {
+   reviews: {inputSchema:reviewsInputSchema,resultSchema:reviewsResultSchema,effect:"read",execute:async(input,call)=>reviews.reviews(input as KnowledgeReviewsInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory))},
+   previewReview: {inputSchema:previewReviewInputSchema,resultSchema:previewReviewResultSchema,effect:"read",execute:async(input,call)=>reviews.previewReview(input as KnowledgePreviewReviewInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory))},
 			preferences: { inputSchema: preferencesInputSchema, resultSchema: preferencesResultSchema, effect: "read",
 				execute: () => preferences.read() },
 			setReviewPolicy: { inputSchema: setReviewPolicyInputSchema, resultSchema: preferencesResultSchema, effect: "write",

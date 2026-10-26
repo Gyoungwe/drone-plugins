@@ -37,3 +37,5 @@ P2 后台依赖、通用能力、单写者和旧数据接管方案见 [知识 ru
 同 owner 的知识正文/双向链接/图谱/分类/jobs 阅读闭包与 CLI transport 抽取见 [阅读闭包候选](docs/native-knowledge-reading-2026-10-26.md)；这仍不代表完整 Desktop 迁移或正式发布。
 
 审核策略的异步状态端口、独立授权设置写入和剩余 owner 边界见 [状态与设置候选](docs/native-knowledge-state-2026-10-26.md)。
+
+候选审阅列表、精确只读预览、真实 coordinator 范围与剩余审核写入见 [审阅阅读候选](docs/native-knowledge-review-2026-10-26.md)。

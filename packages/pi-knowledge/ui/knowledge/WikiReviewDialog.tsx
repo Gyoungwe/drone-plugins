@@ -1,12 +1,12 @@
 import type { WikiReviewPreview } from "@gyoungwe/plugin-api/ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getKnowledgeApi } from "../api";
 import { useKnowledgeStore } from "../api";
 import { ActionSurface } from "../api";
 import { Button } from "../api";
 import { useKnowledgeText } from "./copy";
-import { knowledgeLineDiff } from "./line-diff";
+import { WikiReviewContent } from "./WikiReviewContent";
 import { WikiModelReview } from "./WikiModelReview";
 
 /** Focused Wiki apply/reject popup. Esc / 稍后 closes without rejecting. */
@@ -28,7 +28,6 @@ export function WikiReviewDialog({
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
 	const [tick, setTick] = useState(0);
-	const [view, setView] = useState<"diff" | "both" | "protected">("diff");
 	const [reviewing, setReviewing] = useState(false);
 	const [verdict, setVerdict] = useState<string | null>(null);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reload when the binding invalidates or the user retries
@@ -36,7 +35,6 @@ export function WikiReviewDialog({
 		let live = true;
 		setPreview(null);
 		setError(null);
-		setView("diff");
 		setReviewing(false);
 		setVerdict(null);
 		setPending(true);
@@ -76,8 +74,6 @@ export function WikiReviewDialog({
 		node?.focus();
 	}, [preview, error]);
 	// Escape defers only when nothing is in flight: deferring mid-load or mid-decision raced the IPC result.
-	const lines = useMemo(() => knowledgeLineDiff(preview?.before || "", preview?.after || ""), [preview]);
-	const visible = lines.slice(0, 200);
 	async function decide(decision: "apply" | "reject") {
 		if (!preview || pending) return;
 		setPending(true);
@@ -142,78 +138,7 @@ export function WikiReviewDialog({
 						<p className="rounded-lg bg-hover px-3 py-2 text-xs leading-relaxed text-ink-dim">
 							{t("preserve")}
 						</p>
-						<div className="flex flex-wrap gap-1" role="tablist" aria-label={t("reviewTitle")}>
-							{(["diff", "both", "protected"] as const).map((tab) => (
-								<button
-									key={tab}
-									type="button"
-									role="tab"
-									aria-selected={view === tab}
-									onClick={() => setView(tab)}
-									className={`rounded-lg px-3 py-2 text-xs ${view === tab ? "bg-ink text-on-ink" : "text-ink-dim hover:bg-hover"}`}
-								>
-									{t(tab)}
-								</button>
-							))}
-						</div>
-						{view === "diff" && (
-							<section
-								className="max-h-[32vh] overflow-auto rounded-lg border border-border font-mono text-[11px]"
-								aria-label={t("diff")}
-							>
-								{visible.map((row) => (
-									<div
-										key={`${row.kind}:${row.oldLine}:${row.newLine}:${row.text}`}
-										className={`flex gap-2 px-2 leading-6 ${row.kind === "add" ? "bg-ok/10" : row.kind === "remove" ? "bg-err/8" : "text-ink-dim"}`}
-									>
-										<span className="w-12 shrink-0 select-none text-right text-ink-faint">
-											{row.oldLine || ""} {row.newLine || ""}
-										</span>
-										<span title={row.kind} className="w-3 shrink-0">
-											{row.kind === "add" ? "+" : row.kind === "remove" ? "−" : " "}
-										</span>
-										<span className="min-w-0 whitespace-pre-wrap break-words">{row.text || " "}</span>
-									</div>
-								))}
-								{lines.length > 200 && (
-									<p className="px-2 py-2 text-[11px] text-ink-faint">{t("truncated")}</p>
-								)}
-							</section>
-						)}
-						{view === "both" && (
-							<div className="grid gap-2">
-								{(["before", "after"] as const).map((side) => (
-									<div key={side} className="min-w-0">
-										<p className="mb-1 text-xs font-medium">{t(side)}</p>
-										<pre className="max-h-[22vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-hover p-3 text-xs leading-relaxed">
-											{preview[side] || "—"}
-										</pre>
-									</div>
-								))}
-							</div>
-						)}
-						{view === "protected" && (
-							<pre className="max-h-[32vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-hover p-3 text-xs leading-relaxed">
-								{preview.protectedText || "—"}
-							</pre>
-						)}
-						<div>
-							<h4 className="mb-2 text-xs font-semibold">
-								{t("sources")} · {preview.sources.length}
-							</h4>
-							<div className="max-h-28 space-y-1 overflow-auto">
-								{preview.sources.map((source) => (
-									<div key={source.path} className="rounded-lg border border-border px-2 py-2">
-										<p className="break-all text-xs">{source.path}</p>
-										<p className="font-mono text-[11px] text-ink-faint">
-											L{source.startLine}–{source.endLine}
-											{source.hash ? ` · ${source.hash.slice(0, 12)}` : ""}
-										</p>
-										{source.changed && <p className="text-xs text-warn">{t("sourceChanged")}</p>}
-									</div>
-								))}
-							</div>
-						</div>
+						<WikiReviewContent key={preview.reviewToken} preview={preview} />
 						{(preview.expired || preview.targetChanged) && (
 							<p role="alert" className="text-xs text-warn">
 								{preview.targetChanged ? t("targetChanged") : t("expired")}{" "}

@@ -135,7 +135,7 @@ CLI 默认 export 保持官方同步注册形状，但由 wrapper 创建自己�
 
 `core/service-transport.ts` 定义领域请求、ready、close 和生命周期状态合同，不暴露 Worker、ref/unref 或文件目录创建。`core/worker-transport.ts` 是实际 CLI adapter，承接原有消息队列、请求超时、进程 liveness、SQLite 目录及 writer lease；close 仍等待已接受请求和真实 exit，异常关闭不能报告 drained。`core/service.ts` 保留单份 prepare/read/search/check/citation/evidence 算法，整个领域方法块与抽取前逐字一致。
 
-未发布的 pool factory 第六参数收敛为 transport factory，不保留废弃 lease 参数的兼容层。`knowledge-runtime.ts` 的组合根显式把现有 owner resource group 的 `acquireWorker` 交给真实 CLI adapter，worker 故障时 owner reservation 仍等领域操作结束；默认 CLI 与旧 0.2 compatibility 各自沿用原有租约策略，没有伪造 Worker 或给新 owner 注入空租约。
+未发布的 pool factory 最后一个参数收敛为显式 transport factory，不保留废弃 lease 参数的兼容层。`knowledge-runtime.ts` 的组合根显式把现有 owner resource group 的 `acquireWorker` 交给真实 CLI adapter，worker 故障时 owner reservation 仍等领域操作结束；默认 CLI 与旧 0.2 compatibility 各自沿用原有租约策略，没有伪造 Worker 或给新 owner 注入空租约。
 
 聚焦验证：包内 TypeScript 检查及 7 文件、16 项回归通过；涵盖真实 SQLite、默认及显式注入 transport、ready 前接受请求后关闭、内容改变使读证据失效、替换与失败关闭、实际 SDK 会话票据/publication 隔离、owner 写入未结束时保留 reservation。回执日志保存在本机 `/tmp/knowledge-transport-focused.log`。全仓构建/check 由统一集成步骤运行，本文不将聚焦回归当作正式安装包完成。
 
@@ -153,6 +153,15 @@ CLI 默认 export 保持官方同步注册形状，但由 wrapper 创建自己�
 
 `preferences(null)` 返回绑定展示信息、实际 `canWriteState` 和带原始字节版本的策略快照；`setReviewPolicy` 是写 operation，携带 bindingRevision 与 expectedVersion，不接受 cwd/root/project。新候选声明 `filesystem: application-state-write`，旧 application-state 保持只读；授权由宿主逐项处理。写入保留 `{version:1,mode}` 格式，版本冲突拒绝，写后回读核对。损坏 JSON 返回严格模式与明确 diagnostic，禁止覆盖；权限或其他 I/O 错误向上传递，不降级为成功。正式绑定初始化、其他偏好、完整 Home 和原生 hooks 尚未迁移。
 
-完整服务仍有单独迁移闭包：pool 以 `knowledgeDirectory`/OS 路径构建资源键，需要改为 adapter 提供的真实资源身份；CLI transport.close 等实际 worker exit，而 Desktop activation 的资源关闭由宿主在 domain.dispose 之后执行，不能在无 caller 的 domain dispose 新调 resource.dispose 或互相等待。后续必须区分活跃替换的资源关闭和 activation drain，保留真实关闭回执。semantic settings 与 UI metrics 的直接文件读写也尚待端口化，不能以本片设置成功宣称完整 owner 已迁完。
+完整服务仍有单独迁移闭包：pool 的资源键已由真实 adapter 提供（77c2d93），不再依赖宿主目录；CLI transport.close 等实际 worker exit，而 Desktop activation 的资源关闭由宿主在 domain.dispose 之后执行，不能在无 caller 的 domain dispose 新调 resource.dispose 或互相等待。后续必须区分活跃替换的资源关闭和 activation drain，保留真实关闭回执。semantic settings 与 UI metrics 的直接文件读写也尚待端口化，不能以本片设置成功宣称完整 owner 已迁完。
 
-本片完整门禁、同 tarball 真实 coordinator 授权/CAS/重载，以及默认 CLI 严格预检与退出证据见 [状态与设置候选](native-knowledge-state-2026-10-26.md)；正式设置 GUI 尚未验收。
+本片完整门禁、同 tarball 真实 coordinator 授权/CAS/重载，以及默认 CLI 严格预检与退出证据见 [状态与设置候选](native-knowledge-state-2026-10-26.md)；正式设置 GUI 已由宿主证据提交 8dced88c 单独验收，后续包不能复用该 GUI 结论。
+
+
+## 13. 审阅阅读切片（候选已验，完整审核未完成）
+
+`core/wiki-review-reader.ts` 提取共享候选加载、列表与预览，旧 CLI 和新 Desktop 都消费该实现；纯目标与托管区规则复用 `wiki-policy.ts`。Desktop `reviews`/`previewReview` 只经批准状态根读取 pending/reviewed JSON，以当前真实项目、binding revision 和 proposalHash 校验。没有项目时列表明确 project:null；跨项目预览拒绝。真实 SQLite 只提供当前来源 hash，UI 不进入模型阅读票据账本。坏 JSON/内容校验是可见诊断，权限撤销直接失败。
+
+新页面复用纯差异视图，保留来源行号/hash导航、分页与刷新；apply/reject、模型审核和写入票据尚未提供。`canApply` 仅保留旧内容条件判断，不是写授权。完整 pool 的 Desktop resource adapter、semantic 设置及 metrics 端口仍在下一片，当前不宣称 full owner 或完整审核完成。历史 68012bd 设置与 f26ce487 阅读 tarball 不变，新包门禁/正式 GUI 记录独立更新。
+
+本片固定候选、实际 SDK/coordinator 回执与未完成 GUI 范围见 [审阅阅读证据](native-knowledge-review-2026-10-26.md)。

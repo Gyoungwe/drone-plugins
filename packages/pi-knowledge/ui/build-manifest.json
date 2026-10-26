@@ -4,9 +4,10 @@
     "package.json": "651a63dc2c8340da1d1fbb851c52521b7ec9b1c547ef0bee60b71ad0d643c2ae",
     "plugin.manifest.json": "71a26e56380af11a1ee38b267ffe47f1f23850a1cd8446a03fb7c6d6e92ef7a8",
     "scripts/build-ui.mjs": "28fc76e64c9189d077436720c98faefcade07ea4c5290471918ad310e0b5f3cb",
-    "ui/NativeKnowledgePage.tsx": "a049a6a25d443ad4c4e06a7e9b2b0cf62476acdfc1a7f64e4de47cc468d6adc8",
+    "ui/NativeKnowledgePage.tsx": "45dc9a51edd0dcb9f9febe6bfdc435aaa435354b9b2af046039867679f2a373a",
     "ui/NativeKnowledgePreferences.tsx": "de3abd8f814c611d1869f44ab9fdad4c9e1be8e14d9cd15834ce2608e5e97d13",
     "ui/NativeKnowledgeReading.tsx": "7b47d1958837f0001b26759d5bc31756e18709350c31b3bd9e02aa534c66871b",
+    "ui/NativeKnowledgeReviews.tsx": "16355473cb1cf2df18d59856654c7c2310f189196cec34de1da66fdfea80e13e",
     "ui/api.ts": "5cc5ec14a7aafd7135cb7ef96265c74288d1b28ca0ac690aa6e4eedb18117a8f",
     "ui/entry.tsx": "39254cbb55957f16c6aea20f8d12b8196a09e26e17ec3eff6eeab1433a894344",
     "ui/knowledge/DailyIdeas.tsx": "c19632cca5b203482c9f30342036c46901204f191f41f38f1d37df23a2d8795c",
@@ -33,7 +34,8 @@
     "ui/knowledge/SemanticManagement.tsx": "70ff597afb64e965a828ad9869268892825b92e0b0c7ea58ba49676e0e440ad0",
     "ui/knowledge/TopicManagement.tsx": "e4a1cf35e964c8f4844bcd0e2910b9605793fa4617ae1996fc3be59f3c450376",
     "ui/knowledge/WikiModelReview.tsx": "35763bab7a93a0f96c8e57b24872794f5c457f1108e59bb24f4b4bb617946337",
-    "ui/knowledge/WikiReviewDialog.tsx": "65d0eba6d703c21b836ef9902a92f1cf2d07ad41cc18a9d108743680ffe73656",
+    "ui/knowledge/WikiReviewContent.tsx": "590c3b4fdf56194e2cae544dbdfb9d77081142326b1dd8fa1ee66bfcf3e98546",
+    "ui/knowledge/WikiReviewDialog.tsx": "c9b38c9cbbf84082268f67ed7883d25dba49cea778df20608be5c5176f652b4b",
     "ui/knowledge/WikiReviewPanel.tsx": "c4596b9a530a979384cb19371018717f88c902ba589482a7507a8b55486d6a92",
     "ui/knowledge/ZoteroLocalWriteSection.tsx": "f386f2c67b781a6a326c433d05daf642992c77df000ef10f044e336a7e5e084b",
     "ui/knowledge/ZoteroPanel.tsx": "c907036221edc1370e5fb10a7b2f1928eb1aa0934cb8cd2fd61d5911103b45fd",
@@ -48,16 +50,16 @@
     "ui/knowledge/nebula-model.ts": "44e63f088ffa3bad4fd9a93c238165b07853fc149448358f1ca9a2a60ec746b4",
     "ui/knowledge/note-display.ts": "22c6b1f6375acb7cd3269641b53f8182460e5c5c57cf5b2adfa8ed981ebf862a",
     "ui/knowledge/zotero-copy.ts": "26fcff152004dfcfefc6ca0fe3f9dec81cbd33affe4653a785527a94705786c7",
-    "ui/native-copy.ts": "6522a251e730949b34b5fed64fe1868d38f60b36bf47d78556dd5f6e5b8d5720",
+    "ui/native-copy.ts": "41cfa72126a76f5997eacb34356499f252717381601bbbe0d47d012a8d9d0507",
     "ui/plugin.json": "f741e57bd2ba9fb6cdf8ab4bd3c49401724e617fe65e3dfbed18a92c2e58b168",
     "ui/runtime-api.ts": "f7cd4ca798fbc617a0036a1c1e71448ed21f28e1bd3ce38771f595fe8493b69a",
-    "ui/runtime-store.ts": "0ba2b4c82bedc3ba0e4ce61ba09568bc4fe930a2ceb1e948f0c26509b09c2b1c",
+    "ui/runtime-store.ts": "87ac12b2b0715122f952ce4e09fef185f078e68bf886da3aaa6f7a58d9abc3cf",
     "ui/src/index.ts": "5e3d83468eb7c8473c9b7e2b2d16d265e6321886cad9933f234c0ab9b0eab8ee",
     "ui/styles/knowledge.css": "1178e545f62e9c12dfdfc05db6c0f634321fa3e25c52365c7ee14329f910ba7d",
     "ui/styles/utilities.css": "2002c87dd3d05601d0c91c97afc7d11e0fecec5a3ddc1cdef9279842eb1cefd0"
   },
   "outputs": {
     "ui/styles/generated.ts": "dc95990487f72d53b9a217f185467e6df76ec919a0ef10c909bf59e7f74b81dd",
-    "ui/bundle.js": "8221b088e4c619914c2bf11a288514d8fec7a47fdf667b2de2a2b9b1245d3261"
+    "ui/bundle.js": "fd42386fb58054e08e9aa677d630e4768a01d06c9fdfb6b4649bfa6e2183deb8"
   }
 }

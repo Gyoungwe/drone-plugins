@@ -4,6 +4,672 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// src/core/wiki-review-reader.ts
+import { createHash as createHash3 } from "node:crypto";
+
+// src/core/files.ts
+import { createHash } from "node:crypto";
+import { constants } from "node:fs";
+import { lstat, open, realpath } from "node:fs/promises";
+import { isAbsolute, join, relative, sep } from "node:path";
+var MAX_NOTE_BYTES = 1024 * 1024;
+var OMIT = /* @__PURE__ */ new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "coverage",
+  "vendor",
+  "venv",
+  "__pycache__",
+  "Attachments",
+  "Templates",
+  "_template"
+]);
+var RESERVED = ["Projects", "Library", "Wiki", "Attachments", "Templates", "Indexes", "Inbox"];
+function allowedSegment(name) {
+  return !!name && !name.startsWith(".") && !OMIT.has(name) && !/^(?:secrets?|credentials?|id_rsa|id_ed25519)(?:[.\-_]|$)/i.test(name);
+}
+function validateNote(path) {
+  if (typeof path !== "string" || isAbsolute(path) || path.includes("\\") || !path.endsWith(".md") || !path.split("/").every(allowedSegment))
+    throw new Error("Expected an allowed Vault-relative Markdown path");
+  const first = path.split("/")[0] ?? "";
+  if (RESERVED.some((name) => name.toLowerCase() === first.toLowerCase() && name !== first))
+    throw new Error("Reserved Vault directories require canonical casing");
+  return path;
+}
+function noteScope(path) {
+  const parts = path.split("/");
+  return path.startsWith("Projects/") && parts.length > 2 ? parts[1] ?? "shared" : "shared";
+}
+function canRead(path, project) {
+  const scope = noteScope(path);
+  return scope === "shared" || scope === project;
+}
+
+// src/core/wiki-policy.ts
+import { createHash as createHash2 } from "node:crypto";
+var MANAGED_START = "<!-- pi-agent:managed:start -->";
+var MANAGED_END = "<!-- pi-agent:managed:end -->";
+function targetWikiPath(path, project) {
+  if (typeof path !== "string")
+    throw new Error("Target must be a shared or current-project Wiki page, not navigation");
+  const parts = path.split("/");
+  if (!path.endsWith(".md") || path.includes("\\") || parts.some((part) => !part || part === "." || part === ".." || part.startsWith(".")))
+    throw new Error("Target must be a shared or current-project Wiki page, not navigation");
+  const prefix = `Projects/${project}/Wiki/`;
+  const tail = path.startsWith("Wiki/") ? path.slice(5) : path.startsWith(prefix) ? path.slice(prefix.length) : null;
+  if (!tail || tail.includes("/") || /^Index\.md$/i.test(tail) || /[[\]#|\r\n]/.test(tail))
+    throw new Error("Target must be a shared or current-project Wiki page, not navigation");
+  return path;
+}
+function immutableWikiProposalHash(proposal) {
+  return createHash2("sha256").update(
+    JSON.stringify({
+      id: proposal.id,
+      vaultId: proposal.vaultId,
+      bindingRevision: proposal.bindingRevision,
+      project: proposal.project,
+      path: proposal.path,
+      title: proposal.title,
+      rationale: proposal.rationale,
+      createdAt: proposal.createdAt,
+      before: proposal.before,
+      after: proposal.after,
+      sources: proposal.sources
+    })
+  ).digest("hex");
+}
+function managedParts(text) {
+  const start = text.indexOf(MANAGED_START);
+  const end = text.indexOf(MANAGED_END);
+  if (start < 0 !== end < 0 || end < start || start >= 0 && (text.indexOf(MANAGED_START, start + 1) >= 0 || text.indexOf(MANAGED_END, end + 1) >= 0))
+    throw new Error("Invalid managed block markers");
+  return { start, end, body: start < 0 ? "" : text.slice(start + MANAGED_START.length, end).trim() };
+}
+
+// src/core/wiki-review-reader.ts
+var MAX_PENDING = 100;
+var MAX_AGE = 24 * 60 * 60 * 1e3;
+var digest = (text) => createHash3("sha256").update(text).digest("hex");
+function createWikiReviewReader(storage, currentNote) {
+  async function loadProposal(service, id, project) {
+    if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id))
+      throw new Error("Invalid Wiki proposal id");
+    const base = `${service.binding.vaultId}/wiki-review`;
+    const pending = await storage.read(`${base}/pending/${id}.json`);
+    const p = pending === void 0 ? await storage.read(`${base}/reviewed/${id}.json`) : pending;
+    if (p === void 0) throw new Error("Wiki proposal does not exist");
+    if (!p || typeof p !== "object" || Array.isArray(p))
+      throw new Error("Invalid Wiki proposal document");
+    if (p.id !== id || p.project !== project || p.vaultId !== service.binding.vaultId || p.bindingRevision !== service.binding.revision)
+      throw new Error("Proposal belongs to a different project or binding");
+    targetWikiPath(p.path, project);
+    if (immutableWikiProposalHash(p) !== p.proposalHash || digest(p.after) !== p.afterHash || (p.before === null ? p.beforeHash !== null : digest(p.before) !== p.beforeHash))
+      throw new Error("Wiki proposal content changed");
+    return p;
+  }
+  async function previewWikiProposal(service, id, project) {
+    const p = await loadProposal(service, id, project);
+    const now = Date.now(), target = await currentNote(service, p.path);
+    const sources = [];
+    for (const source of p.sources) {
+      validateNote(source.path);
+      if (!canRead(source.path, project))
+        throw new Error("Proposal source is outside the current project");
+      const current = await currentNote(service, source.path);
+      sources.push({
+        ...source,
+        currentHash: current?.hash || null,
+        changed: !current || current.hash !== source.hash,
+        error: null
+      });
+    }
+    const expired = now > p.createdAt + MAX_AGE, targetChanged = (target?.hash ?? null) !== p.beforeHash;
+    const protectedText = p.before === null ? "" : p.before.replace(
+      /<!-- pi-agent:managed:start -->[\s\S]*?<!-- pi-agent:managed:end -->/,
+      "\uFF08\u6B64\u5904\u4E3A\u667A\u80FD\u4F53\u6258\u7BA1\u533A\uFF09"
+    );
+    return {
+      id: p.id,
+      path: p.path,
+      project,
+      status: p.status,
+      proposalHash: p.proposalHash,
+      title: p.title,
+      rationale: p.rationale,
+      before: managedParts(p.before || "").body,
+      after: managedParts(p.after).body,
+      sources,
+      protectedText,
+      expired,
+      targetChanged,
+      canApply: p.status === "pending" && !expired && !targetChanged && !sources.some((s) => s.changed),
+      expiresAt: p.createdAt + MAX_AGE,
+      scientificallyVerified: false
+    };
+  }
+  async function listWikiProposals(service, project) {
+    let names;
+    try {
+      names = await storage.list(
+        `${service.binding.vaultId}/wiki-review/pending`
+      );
+    } catch (error) {
+      if (error.code === "ENOENT") return { items: [], problems: [] };
+      throw error;
+    }
+    const items = [], problems = [];
+    for (const name of names.filter((name2) => /^[0-9a-f-]{36}\.json$/.test(name2)).sort().slice(0, MAX_PENDING)) {
+      let p;
+      try {
+        p = await storage.read(
+          `${service.binding.vaultId}/wiki-review/pending/${name}`
+        );
+      } catch (error) {
+        if (!(error instanceof SyntaxError) && error.code !== "ESTATECORRUPTED")
+          throw error;
+        problems.push({
+          id: name.slice(0, -5),
+          error: "Wiki proposal JSON is corrupt"
+        });
+        continue;
+      }
+      try {
+        if (p === void 0)
+          throw new Error("Wiki proposal disappeared; refresh the list");
+        if (!p || typeof p !== "object" || Array.isArray(p))
+          throw new Error("Invalid Wiki proposal document");
+        if (p.project !== project) continue;
+        if (p.vaultId !== service.binding.vaultId || p.id !== name.slice(0, -5))
+          throw new Error(
+            "Proposal belongs to a different binding or filename"
+          );
+        targetWikiPath(p.path, project);
+        if (immutableWikiProposalHash(p) !== p.proposalHash)
+          throw new Error("Wiki proposal content changed");
+        items.push({
+          id: p.id,
+          path: p.path,
+          title: p.title,
+          proposalHash: p.proposalHash,
+          status: p.status,
+          expiresAt: p.createdAt + MAX_AGE,
+          expired: Date.now() > p.createdAt + MAX_AGE,
+          bindingChanged: p.bindingRevision !== service.binding.revision
+        });
+      } catch (error) {
+        problems.push({ id: name.slice(0, -5), error: error.message });
+      }
+    }
+    return { items, problems };
+  }
+  return { loadProposal, previewWikiProposal, listWikiProposals };
+}
+
+// src/desktop/reviews.ts
+function createKnowledgeReviewReads(owner, capabilities, root) {
+  const storage = {
+    async read(path) {
+      const result2 = await capabilities.call("state.readJson", {
+        root,
+        path
+      });
+      if (result2.kind === "missing") return void 0;
+      if (Buffer.byteLength(JSON.stringify(result2.value)) > 256 * 1024)
+        throw new Error("Wiki proposal exceeds its storage budget");
+      return result2.value;
+    },
+    async list(path) {
+      const entries = await capabilities.call("state.list", {
+        root,
+        path
+      });
+      return entries.filter((entry) => entry.kind === "file").map((entry) => entry.name);
+    }
+  };
+  const reader = createWikiReviewReader(storage, async (service, path) => {
+    const note = await service.request("read", {
+      path,
+      project: service.project,
+      maxChars: 1,
+      reviewMaxChars: 1
+    });
+    return note.missing ? null : { hash: note.hash };
+  });
+  async function bound(revision, read) {
+    return owner.run(async () => {
+      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+      if (!binding) throw new Error("No application knowledge Vault is bound");
+      if (binding.revision !== revision)
+        throw new Error(
+          "Knowledge binding changed; refresh before reading reviews"
+        );
+      const result2 = await read(binding);
+      return owner.config.withKnowledgeBinding(binding, () => result2);
+    });
+  }
+  return {
+    reviews(input, project) {
+      return bound(input.revision, async (binding) => {
+        const offset = input.offset ?? 0, limit = input.limit ?? 12;
+        if (project === null)
+          return {
+            bindingRevision: binding.revision,
+            project,
+            items: [],
+            problems: [],
+            total: 0,
+            offset,
+            nextOffset: null
+          };
+        const { items, problems } = await reader.listWikiProposals(
+          { binding },
+          project
+        );
+        return {
+          bindingRevision: binding.revision,
+          project,
+          items: items.slice(offset, offset + limit),
+          problems,
+          total: items.length,
+          offset,
+          nextOffset: offset + limit < items.length ? offset + limit : null
+        };
+      });
+    },
+    previewReview(input, project) {
+      return bound(input.revision, async (binding) => {
+        if (project === null)
+          throw new Error(
+            "Select a project session to preview a Wiki proposal"
+          );
+        const service = await owner.services.getKnowledgeService(binding);
+        await service.request("reconcile");
+        const preview = await reader.previewWikiProposal(
+          { binding, project, request: service.request.bind(service) },
+          input.id,
+          project
+        );
+        if (preview.proposalHash !== input.expectedProposalHash)
+          throw new Error("Wiki proposal changed; refresh before previewing");
+        return { ...preview, bindingRevision: binding.revision };
+      });
+    }
+  };
+}
+
+// src/desktop/contract.ts
+var string = { type: "string" };
+var integer = { type: "integer", minimum: 0 };
+var coverage = { enum: ["uninitialized", "indexing", "partial", "ready"] };
+var nullable = (schema) => ({ anyOf: [schema, { type: "null" }] });
+var object = (properties, required = Object.keys(properties)) => ({
+  type: "object",
+  properties,
+  required,
+  additionalProperties: false
+});
+var overviewInputSchema = { type: "null" };
+var overviewResultSchema = object({
+  state: { enum: ["unconfigured", "bound"] },
+  binding: nullable(
+    object({
+      vaultId: string,
+      revision: { type: "integer", minimum: 1 },
+      label: string
+    })
+  ),
+  project: nullable(string),
+  index: nullable(
+    object({
+      revision: integer,
+      coverage,
+      noteCount: integer,
+      pendingChanges: integer,
+      lastReconciledAt: nullable(string)
+    })
+  ),
+  recentNotes: {
+    type: "array",
+    items: object({
+      path: string,
+      title: string,
+      kind: string,
+      updatedAt: { type: "number" }
+    })
+  }
+});
+var searchInputSchema = object(
+  {
+    query: { type: "string", minLength: 1, maxLength: 2e3 },
+    revision: { type: "integer", minimum: 1 },
+    limit: { type: "integer", minimum: 1, maximum: 12 }
+  },
+  ["query", "revision"]
+);
+var searchResultSchema = object({
+  query: string,
+  revision: integer,
+  bindingRevision: { type: "integer", minimum: 1 },
+  coverage,
+  complete: { type: "boolean" },
+  hits: {
+    type: "array",
+    items: object({
+      path: string,
+      title: string,
+      kind: string,
+      hash: string,
+      text: string,
+      startLine: { type: "integer", minimum: 1 },
+      endLine: integer
+    })
+  }
+});
+var boolean = { type: "boolean" };
+var array = (items) => ({ type: "array", items });
+var record = (additionalProperties) => ({
+  type: "object",
+  additionalProperties
+});
+var bindingRevision = { type: "integer", minimum: 1 };
+var readScope = {
+  revision: integer,
+  bindingRevision,
+  project: nullable(string)
+};
+var notePath = { type: "string", minLength: 1, maxLength: 1e3 };
+var snippetProperties = {
+  text: string,
+  startLine: bindingRevision,
+  endLine: integer,
+  totalLines: integer,
+  truncated: boolean
+};
+var snippetSchema = object(snippetProperties);
+var recentNoteSchema = object({
+  path: string,
+  title: string,
+  kind: string,
+  updatedAt: { type: "number" }
+});
+var readNoteInputSchema = object(
+  {
+    path: notePath,
+    revision: bindingRevision,
+    startLine: bindingRevision,
+    expectedHash: { type: "string", pattern: "^[a-f0-9]{64}$" }
+  },
+  ["path", "revision"]
+);
+var readNoteResultSchema = {
+  anyOf: [
+    object({ ...readScope, path: string, missing: { const: true } }),
+    object({
+      ...readScope,
+      path: string,
+      missing: { const: false },
+      title: string,
+      kind: string,
+      category: { enum: ["paper", "software", "method", "idea", "other"] },
+      hash: string,
+      ...snippetProperties,
+      humanReview: nullable(snippetSchema),
+      pending: array(object({ kind: string, revision: integer }))
+    })
+  ]
+};
+var linksInputSchema = object({
+  path: notePath,
+  revision: bindingRevision
+});
+var linksResultSchema = object({
+  ...readScope,
+  path: string,
+  title: string,
+  outgoing: array(object({ path: string, title: string, exists: boolean })),
+  incoming: array(object({ path: string, title: string, exists: boolean }))
+});
+var graphInputSchema = object(
+  {
+    revision: bindingRevision,
+    limit: { type: "integer", minimum: 10, maximum: 500 },
+    view: { enum: ["semantic", "all"] },
+    mergeMirrors: boolean
+  },
+  ["revision"]
+);
+var edgeSchema = object({ source: string, target: string });
+var graphNodeProperties = {
+  path: string,
+  title: string,
+  kind: string,
+  degree: integer,
+  warnings: array(string)
+};
+var semanticNodeSchema = object(
+  {
+    ...graphNodeProperties,
+    nodeType: {
+      enum: [
+        "note",
+        "wiki",
+        "navigation",
+        "mirror",
+        "infrastructure",
+        "memory"
+      ]
+    },
+    isInfrastructure: boolean,
+    community: { type: "integer", minimum: -1 },
+    x: { type: "number" },
+    y: { type: "number" },
+    mirrors: array(string),
+    contentType: string,
+    isMain: boolean,
+    sharedWith: array(string)
+  },
+  [
+    "path",
+    "title",
+    "kind",
+    "degree",
+    "nodeType",
+    "isInfrastructure",
+    "community",
+    "x",
+    "y"
+  ]
+);
+var graphResultSchema = object({
+  ...readScope,
+  nodes: array(
+    object(graphNodeProperties, ["path", "title", "kind", "degree"])
+  ),
+  edges: array(edgeSchema),
+  totalNotes: integer,
+  semantic: object({
+    nodes: array(semanticNodeSchema),
+    edges: array(edgeSchema),
+    totalNotes: integer,
+    view: { enum: ["semantic", "all"] },
+    mergeMirrors: boolean,
+    relations: array(
+      object({
+        source: string,
+        target: string,
+        type: { enum: ["link", "directory", "duplicate"] }
+      })
+    ),
+    duplicates: array(object({ canonical: string, duplicate: string })),
+    communities: record({ type: "integer", minimum: -1 }),
+    layout: record(object({ x: { type: "number" }, y: { type: "number" } })),
+    health: object({
+      isolated: integer,
+      duplicates: integer,
+      infrastructure: integer,
+      truncated: boolean,
+      candidateNodes: integer,
+      candidateLimit: integer
+    })
+  })
+});
+var jobsInputSchema = object(
+  {
+    revision: bindingRevision,
+    offset: { type: "integer", minimum: 0, maximum: 1e5 },
+    limit: { type: "integer", minimum: 1, maximum: 50 }
+  },
+  ["revision"]
+);
+var jobsResultSchema = object({
+  ...readScope,
+  items: array(
+    object({
+      key: string,
+      kind: string,
+      path: string,
+      scope: string,
+      revision: integer,
+      updated: string
+    })
+  ),
+  total: integer,
+  offset: integer,
+  nextOffset: nullable(integer)
+});
+var recentByCategoryInputSchema = object(
+  {
+    revision: bindingRevision,
+    limit: { type: "integer", minimum: 1, maximum: 24 }
+  },
+  ["revision"]
+);
+var recentByCategoryResultSchema = object({
+  ...readScope,
+  groups: object({
+    paper: array(recentNoteSchema),
+    software: array(recentNoteSchema),
+    method: array(recentNoteSchema),
+    idea: array(recentNoteSchema)
+  }),
+  counts: object({
+    paper: integer,
+    software: integer,
+    method: integer,
+    idea: integer,
+    other: integer
+  })
+});
+var reviewModeSchema = { enum: ["automatic", "strict"] };
+var preferencesInputSchema = { type: "null" };
+var preferencesResultSchema = object({
+  binding: nullable(
+    object({
+      vaultId: string,
+      revision: bindingRevision,
+      label: string,
+      vault: string,
+      profile: { enum: ["project", "literature", "hybrid"] },
+      depositMode: { enum: ["run-only", "verified", "rich"] },
+      subagentPolicy: { enum: ["none", "read-local"] },
+      updatedAt: string
+    })
+  ),
+  canWriteState: boolean,
+  reviewPolicy: object({
+    mode: reviewModeSchema,
+    persistedMode: nullable(reviewModeSchema),
+    version: nullable(string),
+    override: nullable({ const: "environment" }),
+    diagnostic: nullable({ enum: ["invalid-json", "invalid-policy"] })
+  })
+});
+var setReviewPolicyInputSchema = object({
+  bindingRevision,
+  expectedVersion: nullable(string),
+  mode: reviewModeSchema
+});
+var proposalId = { type: "string", pattern: "^[0-9a-f-]{36}$" };
+var proposalHash = { type: "string", pattern: "^[a-f0-9]{64}$" };
+var reviewsInputSchema = object(
+  {
+    revision: bindingRevision,
+    offset: { type: "integer", minimum: 0, maximum: 100 },
+    limit: { type: "integer", minimum: 1, maximum: 25 }
+  },
+  ["revision"]
+);
+var reviewsResultSchema = object({
+  bindingRevision,
+  project: nullable(string),
+  items: array(
+    object({
+      id: proposalId,
+      path: string,
+      title: string,
+      status: string,
+      proposalHash,
+      expiresAt: integer,
+      expired: boolean,
+      bindingChanged: boolean
+    })
+  ),
+  problems: array(object({ id: string, error: string })),
+  total: integer,
+  offset: integer,
+  nextOffset: nullable(integer)
+});
+var previewReviewInputSchema = object({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedProposalHash: proposalHash
+});
+var previewReviewResultSchema = object({
+  bindingRevision,
+  id: proposalId,
+  path: string,
+  project: string,
+  status: string,
+  proposalHash,
+  title: string,
+  rationale: string,
+  before: string,
+  after: string,
+  protectedText: string,
+  sources: array(
+    object(
+      {
+        path: string,
+        hash: nullable(string),
+        startLine: bindingRevision,
+        endLine: bindingRevision,
+        excerptHash: string,
+        paperDois: array(string),
+        currentHash: nullable(string),
+        changed: boolean,
+        error: nullable(string)
+      },
+      [
+        "path",
+        "hash",
+        "startLine",
+        "endLine",
+        "excerptHash",
+        "currentHash",
+        "changed",
+        "error"
+      ]
+    )
+  ),
+  expired: boolean,
+  targetChanged: boolean,
+  canApply: boolean,
+  expiresAt: integer,
+  scientificallyVerified: { const: false }
+});
+
 // src/core/config.ts
 var config_exports = {};
 __export(config_exports, {
@@ -17,9 +683,9 @@ __export(config_exports, {
   withKnowledgeBinding: () => withKnowledgeBinding
 });
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { createHash as createHash4, randomUUID } from "node:crypto";
+import { mkdir, readFile, realpath as realpath2, rename, writeFile } from "node:fs/promises";
+import { basename, isAbsolute as isAbsolute2, join as join2, resolve } from "node:path";
 function createKnowledgeConfigState() {
   return { local: new AsyncLocalStorage(), queues: /* @__PURE__ */ new Map() };
 }
@@ -29,17 +695,17 @@ function errorCode(error) {
 function knowledgeDirectory() {
   const value = process.env.DRONE_KNOWLEDGE_DIR;
   if (!value) return null;
-  if (!isAbsolute(value)) throw new Error("DRONE_KNOWLEDGE_DIR must be absolute");
+  if (!isAbsolute2(value)) throw new Error("DRONE_KNOWLEDGE_DIR must be absolute");
   return resolve(value);
 }
 function projectIdentity(cwd, configured) {
   if (typeof configured === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(configured)) return configured;
   const path = resolve(cwd);
   const stem = basename(path).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "project";
-  return `${stem}-${createHash("sha256").update(path).digest("hex").slice(0, 10)}`;
+  return `${stem}-${createHash4("sha256").update(path).digest("hex").slice(0, 10)}`;
 }
 function validateBinding(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1 || !isAbsolute(String(value.vault || "")) || !/^[a-f0-9]{24}$/.test(String(value.vaultId || "")) || !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !["project", "literature", "hybrid"].includes(String(value.profile)) || !["run-only", "verified", "rich"].includes(String(value.depositMode)) || !["none", "read-local"].includes(String(value.subagentPolicy)) || typeof value.updatedAt !== "string")
+  if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1 || !isAbsolute2(String(value.vault || "")) || !/^[a-f0-9]{24}$/.test(String(value.vaultId || "")) || !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !["project", "literature", "hybrid"].includes(String(value.profile)) || !["run-only", "verified", "rich"].includes(String(value.depositMode)) || !["none", "read-local"].includes(String(value.subagentPolicy)) || typeof value.updatedAt !== "string")
     throw new Error("Invalid application knowledge binding; no project fallback was used");
 }
 function parseKnowledgeBinding(value) {
@@ -51,7 +717,7 @@ async function readKnowledgeBindingWithState(state, directory, { fresh = false }
   if (!directory) return null;
   let value;
   try {
-    value = JSON.parse((await readFile(join(directory, "binding.json"), "utf8")).replace(/^\uFEFF/, ""));
+    value = JSON.parse((await readFile(join2(directory, "binding.json"), "utf8")).replace(/^\uFEFF/, ""));
   } catch (error) {
     if (errorCode(error) === "ENOENT") return null;
     throw new Error(
@@ -71,11 +737,11 @@ async function saveKnowledgeBindingWithState(state, directory, input, expectedRe
     const current = await readKnowledgeBindingWithState(state, directory, { fresh: true });
     if (expectedRevision !== null && (current?.revision || 0) !== expectedRevision)
       throw new Error("Knowledge binding changed while confirming; review the new binding");
-    const vault = await realpath(input.vault);
+    const vault = await realpath2(input.vault);
     const value = {
       version: 1,
       vault,
-      vaultId: createHash("sha256").update(vault).digest("hex").slice(0, 24),
+      vaultId: createHash4("sha256").update(vault).digest("hex").slice(0, 24),
       revision: (current?.revision || 0) + 1,
       profile: input.profile,
       depositMode: input.depositMode,
@@ -84,10 +750,10 @@ async function saveKnowledgeBindingWithState(state, directory, input, expectedRe
     };
     validateBinding(value);
     await mkdir(directory, { recursive: true, mode: 448 });
-    const temporary = join(directory, `binding.${randomUUID()}.tmp`);
+    const temporary = join2(directory, `binding.${randomUUID()}.tmp`);
     await writeFile(temporary, `${JSON.stringify(value, null, 2)}
 `, { mode: 384, flag: "wx" });
-    await rename(temporary, join(directory, "binding.json"));
+    await rename(temporary, join2(directory, "binding.json"));
     return value;
   });
   state.queues.set(directory, operation);
@@ -110,7 +776,7 @@ async function withKnowledgeBinding(binding, operation) {
   return withKnowledgeBindingWithState(defaultState, knowledgeDirectory(), binding, operation);
 }
 function createKnowledgeConfigApi(state = createKnowledgeConfigState(), directory = knowledgeDirectory()) {
-  if (directory !== null && !isAbsolute(directory)) throw new Error("Knowledge directory must be absolute");
+  if (directory !== null && !isAbsolute2(directory)) throw new Error("Knowledge directory must be absolute");
   const fixedDirectory = directory === null ? null : resolve(directory);
   return {
     knowledgeDirectory: () => fixedDirectory,
@@ -236,9 +902,9 @@ function createKnowledgeReadModel(owner) {
 import { basename as basename3 } from "node:path";
 
 // src/core/review-policy-storage.ts
-import { createHash as createHash2, randomUUID as randomUUID2 } from "node:crypto";
+import { createHash as createHash5, randomUUID as randomUUID2 } from "node:crypto";
 import { mkdir as mkdir2, readFile as readFile2, rename as rename2, unlink, writeFile as writeFile2 } from "node:fs/promises";
-import { join as join2 } from "node:path";
+import { join as join3 } from "node:path";
 function createLocalReviewPolicyStorage(config) {
   let queue = Promise.resolve();
   async function read() {
@@ -246,7 +912,7 @@ function createLocalReviewPolicyStorage(config) {
     if (!directory) return { kind: "missing", version: null };
     let bytes;
     try {
-      bytes = await readFile2(join2(directory, "review-policy.json"));
+      bytes = await readFile2(join3(directory, "review-policy.json"));
     } catch (error) {
       if (error.code === "ENOENT")
         return { kind: "missing", version: null };
@@ -265,7 +931,7 @@ function createLocalReviewPolicyStorage(config) {
     return {
       kind: "value",
       value,
-      version: createHash2("sha256").update(bytes).digest("hex")
+      version: createHash5("sha256").update(bytes).digest("hex")
     };
   }
   return {
@@ -285,7 +951,7 @@ function createLocalReviewPolicyStorage(config) {
             { code: "ESTATECONFLICT" }
           );
         await mkdir2(directory, { recursive: true, mode: 448 });
-        const temporary = join2(
+        const temporary = join3(
           directory,
           `review-policy.${randomUUID2()}.tmp`
         );
@@ -294,7 +960,7 @@ function createLocalReviewPolicyStorage(config) {
           mode: 384
         });
         try {
-          await rename2(temporary, join2(directory, "review-policy.json"));
+          await rename2(temporary, join3(directory, "review-policy.json"));
         } catch (error) {
           await unlink(temporary);
           throw error;
@@ -442,160 +1108,10 @@ function createKnowledgePreferences(owner, capabilities, state, canWriteState) {
   };
 }
 
-// src/desktop/contract.ts
-var string = { type: "string" };
-var integer = { type: "integer", minimum: 0 };
-var coverage = { enum: ["uninitialized", "indexing", "partial", "ready"] };
-var nullable = (schema) => ({ anyOf: [schema, { type: "null" }] });
-var object = (properties, required = Object.keys(properties)) => ({
-  type: "object",
-  properties,
-  required,
-  additionalProperties: false
-});
-var overviewInputSchema = { type: "null" };
-var overviewResultSchema = object({
-  state: { enum: ["unconfigured", "bound"] },
-  binding: nullable(object({ vaultId: string, revision: { type: "integer", minimum: 1 }, label: string })),
-  project: nullable(string),
-  index: nullable(object({ revision: integer, coverage, noteCount: integer, pendingChanges: integer, lastReconciledAt: nullable(string) })),
-  recentNotes: { type: "array", items: object({ path: string, title: string, kind: string, updatedAt: { type: "number" } }) }
-});
-var searchInputSchema = object({
-  query: { type: "string", minLength: 1, maxLength: 2e3 },
-  revision: { type: "integer", minimum: 1 },
-  limit: { type: "integer", minimum: 1, maximum: 12 }
-}, ["query", "revision"]);
-var searchResultSchema = object({
-  query: string,
-  revision: integer,
-  bindingRevision: { type: "integer", minimum: 1 },
-  coverage,
-  complete: { type: "boolean" },
-  hits: { type: "array", items: object({ path: string, title: string, kind: string, hash: string, text: string, startLine: { type: "integer", minimum: 1 }, endLine: integer }) }
-});
-var boolean = { type: "boolean" };
-var array = (items) => ({ type: "array", items });
-var record = (additionalProperties) => ({ type: "object", additionalProperties });
-var bindingRevision = { type: "integer", minimum: 1 };
-var readScope = { revision: integer, bindingRevision, project: nullable(string) };
-var notePath = { type: "string", minLength: 1, maxLength: 1e3 };
-var snippetProperties = { text: string, startLine: bindingRevision, endLine: integer, totalLines: integer, truncated: boolean };
-var snippetSchema = object(snippetProperties);
-var recentNoteSchema = object({ path: string, title: string, kind: string, updatedAt: { type: "number" } });
-var readNoteInputSchema = object({
-  path: notePath,
-  revision: bindingRevision,
-  startLine: bindingRevision,
-  expectedHash: { type: "string", pattern: "^[a-f0-9]{64}$" }
-}, ["path", "revision"]);
-var readNoteResultSchema = { anyOf: [
-  object({ ...readScope, path: string, missing: { const: true } }),
-  object({
-    ...readScope,
-    path: string,
-    missing: { const: false },
-    title: string,
-    kind: string,
-    category: { enum: ["paper", "software", "method", "idea", "other"] },
-    hash: string,
-    ...snippetProperties,
-    humanReview: nullable(snippetSchema),
-    pending: array(object({ kind: string, revision: integer }))
-  })
-] };
-var linksInputSchema = object({ path: notePath, revision: bindingRevision });
-var linksResultSchema = object({
-  ...readScope,
-  path: string,
-  title: string,
-  outgoing: array(object({ path: string, title: string, exists: boolean })),
-  incoming: array(object({ path: string, title: string, exists: boolean }))
-});
-var graphInputSchema = object({
-  revision: bindingRevision,
-  limit: { type: "integer", minimum: 10, maximum: 500 },
-  view: { enum: ["semantic", "all"] },
-  mergeMirrors: boolean
-}, ["revision"]);
-var edgeSchema = object({ source: string, target: string });
-var graphNodeProperties = { path: string, title: string, kind: string, degree: integer, warnings: array(string) };
-var semanticNodeSchema = object({
-  ...graphNodeProperties,
-  nodeType: { enum: ["note", "wiki", "navigation", "mirror", "infrastructure", "memory"] },
-  isInfrastructure: boolean,
-  community: { type: "integer", minimum: -1 },
-  x: { type: "number" },
-  y: { type: "number" },
-  mirrors: array(string),
-  contentType: string,
-  isMain: boolean,
-  sharedWith: array(string)
-}, ["path", "title", "kind", "degree", "nodeType", "isInfrastructure", "community", "x", "y"]);
-var graphResultSchema = object({
-  ...readScope,
-  nodes: array(object(graphNodeProperties, ["path", "title", "kind", "degree"])),
-  edges: array(edgeSchema),
-  totalNotes: integer,
-  semantic: object({
-    nodes: array(semanticNodeSchema),
-    edges: array(edgeSchema),
-    totalNotes: integer,
-    view: { enum: ["semantic", "all"] },
-    mergeMirrors: boolean,
-    relations: array(object({ source: string, target: string, type: { enum: ["link", "directory", "duplicate"] } })),
-    duplicates: array(object({ canonical: string, duplicate: string })),
-    communities: record({ type: "integer", minimum: -1 }),
-    layout: record(object({ x: { type: "number" }, y: { type: "number" } })),
-    health: object({ isolated: integer, duplicates: integer, infrastructure: integer, truncated: boolean, candidateNodes: integer, candidateLimit: integer })
-  })
-});
-var jobsInputSchema = object({
-  revision: bindingRevision,
-  offset: { type: "integer", minimum: 0, maximum: 1e5 },
-  limit: { type: "integer", minimum: 1, maximum: 50 }
-}, ["revision"]);
-var jobsResultSchema = object({
-  ...readScope,
-  items: array(object({ key: string, kind: string, path: string, scope: string, revision: integer, updated: string })),
-  total: integer,
-  offset: integer,
-  nextOffset: nullable(integer)
-});
-var recentByCategoryInputSchema = object({ revision: bindingRevision, limit: { type: "integer", minimum: 1, maximum: 24 } }, ["revision"]);
-var recentByCategoryResultSchema = object({
-  ...readScope,
-  groups: object({ paper: array(recentNoteSchema), software: array(recentNoteSchema), method: array(recentNoteSchema), idea: array(recentNoteSchema) }),
-  counts: object({ paper: integer, software: integer, method: integer, idea: integer, other: integer })
-});
-var reviewModeSchema = { enum: ["automatic", "strict"] };
-var preferencesInputSchema = { type: "null" };
-var preferencesResultSchema = object({
-  binding: nullable(object({
-    vaultId: string,
-    revision: bindingRevision,
-    label: string,
-    vault: string,
-    profile: { enum: ["project", "literature", "hybrid"] },
-    depositMode: { enum: ["run-only", "verified", "rich"] },
-    subagentPolicy: { enum: ["none", "read-local"] },
-    updatedAt: string
-  })),
-  canWriteState: boolean,
-  reviewPolicy: object({
-    mode: reviewModeSchema,
-    persistedMode: nullable(reviewModeSchema),
-    version: nullable(string),
-    override: nullable({ const: "environment" }),
-    diagnostic: nullable({ enum: ["invalid-json", "invalid-policy"] })
-  })
-});
-var setReviewPolicyInputSchema = object({ bindingRevision, expectedVersion: nullable(string), mode: reviewModeSchema });
-
 // src/core/project-identity.ts
 import { readFile as readFile3 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join as join3, resolve as resolve2 } from "node:path";
+import { join as join4, resolve as resolve2 } from "node:path";
 
 // src/core/extension-helpers.ts
 function result(data) {
@@ -780,9 +1296,12 @@ var createDesktopRuntime = async (context) => {
   });
   const owner = { config, services: { getKnowledgeService }, ...lifecycle };
   const reads = createKnowledgeReadModel(owner);
+  const reviews = createKnowledgeReviewReads(owner, context.capabilities, state);
   const preferences = createKnowledgePreferences(owner, context.capabilities, state, states[0].access === "read-write");
   return {
     operations: {
+      reviews: { inputSchema: reviewsInputSchema, resultSchema: reviewsResultSchema, effect: "read", execute: async (input, call) => reviews.reviews(input, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
+      previewReview: { inputSchema: previewReviewInputSchema, resultSchema: previewReviewResultSchema, effect: "read", execute: async (input, call) => reviews.previewReview(input, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
       preferences: {
         inputSchema: preferencesInputSchema,
         resultSchema: preferencesResultSchema,
