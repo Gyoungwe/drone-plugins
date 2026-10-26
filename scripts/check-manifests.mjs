@@ -18,7 +18,9 @@ function failure(failures, packageName, message) { failures.push(`${packageName}
 function entrypointPaths(entrypoints) {
 	if (!entrypoints || typeof entrypoints !== "object") return [];
 	return Object.entries(entrypoints).flatMap(([kind, value]) =>
-		(Array.isArray(value) ? value : [value]).map((path) => ({ kind, path })),
+		kind === "resources" && value && typeof value === "object" && !Array.isArray(value)
+			? Object.entries(value).map(([id, path]) => ({ kind: `resources.${id}`, path }))
+			: (Array.isArray(value) ? value : [value]).map((path) => ({ kind, path })),
 	);
 }
 
@@ -89,6 +91,12 @@ export function validatePackageManifest(packageJson, manifest, packageRoot) {
 		if (typeof path !== "string" || path.length === 0 || path.includes("..")) { failure(failures, packageName, `entrypoints.${kind} has an invalid path`); continue; }
 		if (!existsSync(join(packageRoot, path))) failure(failures, packageName, `entrypoint does not exist: ${path}`);
 		if (!entrypointCovered(path, packageJson)) failure(failures, packageName, `entrypoint is not covered by files: ${path}`);
+	}
+	if (manifest.entrypoints?.resources !== undefined) {
+		const resources = manifest.entrypoints.resources;
+		if (!resources || typeof resources !== "object" || Array.isArray(resources) || Object.keys(resources).some(id => !id.trim()))
+			failure(failures, packageName, "entrypoints.resources must map nonempty resource IDs to relative entries");
+		if (!manifest.entrypoints.desktopRuntime) failure(failures, packageName, "resources require desktopRuntime ownership");
 	}
 	if (!isUiOnly(manifest)) {
 		if (!Array.isArray(manifest.tools)) failure(failures, packageName, "L1 manifest must declare tools");

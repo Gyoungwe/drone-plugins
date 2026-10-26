@@ -1,1 +1,1 @@
-export { KnowledgePage, KnowledgeOverlay, KnowledgeSurface } from "../entry";
+export { KnowledgePage, KnowledgeSurface } from "../entry";

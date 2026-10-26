@@ -84,7 +84,7 @@ const knowledgeManifest = JSON.parse(await readFile(join(packageAt("@gyoungwe/pi
 if (knowledgeManifest.entrypoints.ui !== "./ui/plugin.json") fail("knowledge package is missing its co-packaged UI entrypoint");
 const knowledgeUi = JSON.parse(await readFile(join(packageAt("@gyoungwe/pi-knowledge"), knowledgeManifest.entrypoints.ui), "utf8"));
 await readFile(join(packageAt("@gyoungwe/pi-knowledge"), "ui", knowledgeUi.main));
-if (JSON.stringify(knowledgeUi.contributions.map(entry => entry.region)) !== JSON.stringify(["knowledge.page", "knowledge.surface", "app.overlay"])) fail("knowledge UI ownership is incorrect");
+if (JSON.stringify(knowledgeUi.contributions.map(entry => entry.region)) !== JSON.stringify(["knowledge.page", "knowledge.surface"])) fail("knowledge UI ownership is incorrect");
 
 const knowledgeSkills = await readdir(join(packageAt("@gyoungwe/pi-knowledge"), "skills"), { withFileTypes: true });
 const researchSkills = await readdir(join(packageAt("@gyoungwe/pi-research"), "skills"), { withFileTypes: true });

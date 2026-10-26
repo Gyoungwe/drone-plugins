@@ -101,6 +101,12 @@ function validateBinding(value: unknown): asserts value is KnowledgeBinding {
 		throw new Error("Invalid application knowledge binding; no project fallback was used");
 }
 
+/** Decode persisted binding data shared by local and broker-backed adapters. */
+export function parseKnowledgeBinding(value: unknown): KnowledgeBinding {
+	validateBinding(value);
+	return value;
+}
+
 /** Read the current app binding, or null when the desktop binding directory is not configured. */
 async function readKnowledgeBindingWithState(
 	state: KnowledgeConfigState,

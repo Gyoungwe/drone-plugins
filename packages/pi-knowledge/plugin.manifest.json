@@ -19,7 +19,11 @@
     "worker": "./lib/knowledge/runtime/worker.mjs",
     "host": "./dist/host.mjs",
     "skills": "./skills",
-    "ui": "./ui/plugin.json"
+    "ui": "./ui/plugin.json",
+    "desktopRuntime": "./dist/desktop-runtime.mjs",
+    "resources": {
+      "index": "./lib/knowledge/runtime/desktop-index.mjs"
+    }
   },
   "capabilities": [
     "knowledge",

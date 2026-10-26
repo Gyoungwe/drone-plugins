@@ -32,4 +32,4 @@ Knowledge category precedence and the 0.2.1 / suite 0.1.10 source candidates are
 
 2026-10-26 原生 Pi 同包知识 UI 迁移子项、旧 UI 停用顺序与尚未完成的后端边界见 [迁移记录](docs/knowledge-ui-co-package-2026-10-26.md)。这不是新版本发布或整个 P2 完成声明。
 
-P2 后台依赖、通用能力、单写者和旧数据接管方案见 [知识 runtime 迁移计划](docs/native-knowledge-runtime-plan.md)。其中基础修复、显式 owner 与完整原生组合已有真实 SDK 回归；旧 Desktop 桥、同 owner UI/broker 与宿主后台退出仍未完成。
+P2 后台依赖、通用能力、单写者和旧数据接管方案见 [知识 runtime 迁移计划](docs/native-knowledge-runtime-plan.md)。其中基础修复、显式 owner 与完整原生组合已有真实 SDK 回归；Desktop 只读概览/搜索与两原生工具已通过同 owner、授权 broker、双受限进程和实际 SDK 派发；完整 Desktop 业务、旧桥与宿主后台退出仍未完成。

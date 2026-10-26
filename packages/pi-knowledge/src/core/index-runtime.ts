@@ -27,7 +27,7 @@ import type { KnowledgeIndexFiles, KnowledgeIndexTransport } from "./index-runti
 
 /** One algorithm shared by the native worker and the Desktop resource process. */
 export async function createKnowledgeIndexRuntime(
- options: { database: string; reconcileMs?: number },
+ options: { database: string; reconcileMs?: number; backgroundReconcile?: boolean },
  files: KnowledgeIndexFiles,
  transport: KnowledgeIndexTransport,
 ) {
@@ -303,6 +303,8 @@ export async function createKnowledgeIndexRuntime(
 	function beginReconcile(force = false) {
 		if (_closed) return Promise.resolve();
 		if (scan) return scan;
+		const priorRevision = revision;
+		const priorCoverage = coverage;
 		coverage = "indexing";
 		stats.reconciliations++;
 		scan = (async () => {
@@ -337,7 +339,8 @@ export async function createKnowledgeIndexRuntime(
 				lastReconciledAt = new Date().toISOString();
 			}
 			coverage = interrupted ? "partial" : "ready";
-			signalUiChange();
+			// A read-triggered reconciliation must not cause an endless UI refresh loop.
+			if (revision !== priorRevision || coverage !== priorCoverage) signalUiChange();
 		})().finally(() => {
 			scan = null;
 		});
@@ -380,7 +383,7 @@ export async function createKnowledgeIndexRuntime(
 		timer.unref();
 	}
 	let watcher;
-	try {
+	if (files.watch) try {
 		watcher = await files.watch((name) => {
 			if (_closed) return;
 			const path = name?.toString().replaceAll("\\", "/");
@@ -402,16 +405,16 @@ export async function createKnowledgeIndexRuntime(
 	} catch (error) {
 		statements.problem.run("<watcher>", String(error.message));
 	}
-	const reconcileTimer = setInterval(() => {
+	const reconcileTimer = options.backgroundReconcile === false ? null : setInterval(() => {
 		if (!scan) void beginReconcile();
 	}, options.reconcileMs || 120000);
-	reconcileTimer.unref();
+	reconcileTimer?.unref();
 	function closeWorker() {
 		if (closePromise) return closePromise;
 		_closed = true;
 		if (timer) clearTimeout(timer);
 		if (uiTimer) clearTimeout(uiTimer);
-		clearInterval(reconcileTimer);
+		if (reconcileTimer) clearInterval(reconcileTimer);
 		watcher?.close();
 		watching = false;
 		fullScanRequested = false;
@@ -517,7 +520,8 @@ export async function createKnowledgeIndexRuntime(
 	}
 	async function search(args) {
 		stats.searches++;
-		if (coverage === "uninitialized") void beginReconcile();
+		if (options.backgroundReconcile === false) await beginReconcile();
+		else if (coverage === "uninitialized") void beginReconcile();
 		await flushDirty();
 		const expression = buildKnowledgeSearchExpression(args.query);
 		const limit = Math.max(1, Math.min(12, Math.floor(args.limit || 5)));
@@ -1082,7 +1086,8 @@ export async function createKnowledgeIndexRuntime(
 		if (op === "semanticStore") return semanticStore(args);
 		if (op === "semanticCandidates") return semanticCandidates(args);
 		if (op === "warm") {
-			void beginReconcile();
+			if (options.backgroundReconcile === false) await beginReconcile();
+			else void beginReconcile();
 			return status();
 		}
 		if (op === "reconcile") {

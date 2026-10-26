@@ -11,7 +11,7 @@ const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const manifest = JSON.parse(readFileSync(join(root, "plugin.manifest.json"), "utf8"));
 const ui = JSON.parse(readFileSync(join(root, "ui/plugin.json"), "utf8"));
 if (pkg.version !== manifest.version || pkg.version !== ui.version) throw new Error("Package and manifests must share one version");
-if (manifest.drone.pluginApi !== 1 || ui.droneUi !== 1 || ui.main !== "bundle.js") throw new Error("Unsupported UI contract");
+if (manifest.drone.pluginApi !== 1 || ui.droneUi !== 2 || ui.main !== "bundle.js") throw new Error("Unsupported UI contract");
 
 function walk(dir) {
 	return readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(dir,e.name)) : [join(dir,e.name)]);

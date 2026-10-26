@@ -2,10 +2,11 @@
   "artifactSource": "ui/src/index.ts",
   "inputs": {
     "package.json": "651a63dc2c8340da1d1fbb851c52521b7ec9b1c547ef0bee60b71ad0d643c2ae",
-    "plugin.manifest.json": "6e0a75eb9fb3a04797fab0e54d223e5962e2473e132188679093b39956018bc2",
-    "scripts/build-ui.mjs": "3b1d4898e1d9bad9ea4fe8ed5446d89e077ada985ca800ca1ceb632f667afed1",
+    "plugin.manifest.json": "56b68613765c1dc7219fb33e5f04acc176db90b5095b8c9fb50e18906c8cd141",
+    "scripts/build-ui.mjs": "28fc76e64c9189d077436720c98faefcade07ea4c5290471918ad310e0b5f3cb",
+    "ui/NativeKnowledgePage.tsx": "44e146b9d498a43006fc0f01ba469a6589dfac0cf770741013af3772ba069863",
     "ui/api.ts": "5cc5ec14a7aafd7135cb7ef96265c74288d1b28ca0ac690aa6e4eedb18117a8f",
-    "ui/entry.tsx": "d71ee2212d5170dd6f217062dc26f13e9f2a02bec5644b9f90323ecc325663e6",
+    "ui/entry.tsx": "39254cbb55957f16c6aea20f8d12b8196a09e26e17ec3eff6eeab1433a894344",
     "ui/knowledge/DailyIdeas.tsx": "c19632cca5b203482c9f30342036c46901204f191f41f38f1d37df23a2d8795c",
     "ui/knowledge/InstitutionalAccessSection.tsx": "b404d86b3c602fb45855c546bfbba8fb5b219db32d1e129734b524de7ae20cef",
     "ui/knowledge/KnowledgeCloudSection.tsx": "f243a8009e2dea2f681fcf23f6de5b18d291b5de7cad491b76ab82b81fd1f672",
@@ -41,13 +42,16 @@
     "ui/knowledge/nebula-model.ts": "44e63f088ffa3bad4fd9a93c238165b07853fc149448358f1ca9a2a60ec746b4",
     "ui/knowledge/note-display.ts": "22c6b1f6375acb7cd3269641b53f8182460e5c5c57cf5b2adfa8ed981ebf862a",
     "ui/knowledge/zotero-copy.ts": "26fcff152004dfcfefc6ca0fe3f9dec81cbd33affe4653a785527a94705786c7",
-    "ui/plugin.json": "5bc51b579f108ab97e093aa8eeb3a6eebab9cc103e8a8d10405ab2bc6ad0e832",
-    "ui/src/index.ts": "857c3d1193d50daa17b5467b35eea4839298f7022dd36d546538d1add51a2355",
+    "ui/native-copy.ts": "44f7e3f22ebf550dda1d56095b6392b543a09b09a10ffeb1b60b4500646961bd",
+    "ui/plugin.json": "f741e57bd2ba9fb6cdf8ab4bd3c49401724e617fe65e3dfbed18a92c2e58b168",
+    "ui/runtime-api.ts": "9d58f960c7db7f80c906ba642eb176fb6dc28469406f418e3d430bc18fc54341",
+    "ui/runtime-store.ts": "3fa4b7eb790fe9d7e49846678504f1a4ea96b33e611e57feaa958db598debd3f",
+    "ui/src/index.ts": "5e3d83468eb7c8473c9b7e2b2d16d265e6321886cad9933f234c0ab9b0eab8ee",
     "ui/styles/knowledge.css": "1178e545f62e9c12dfdfc05db6c0f634321fa3e25c52365c7ee14329f910ba7d",
     "ui/styles/utilities.css": "2002c87dd3d05601d0c91c97afc7d11e0fecec5a3ddc1cdef9279842eb1cefd0"
   },
   "outputs": {
     "ui/styles/generated.ts": "dc95990487f72d53b9a217f185467e6df76ec919a0ef10c909bf59e7f74b81dd",
-    "ui/bundle.js": "ba64a2bcfafc118c9efb9e8e105159467363077407ee95daba13d0199ffca381"
+    "ui/bundle.js": "25af66e03537a0f2fd911f9044dc5854354dc61ca01cbe8186d56b6b7c5431f1"
   }
 }

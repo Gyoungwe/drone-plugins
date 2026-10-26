@@ -26,7 +26,7 @@
 
 唯一写者标识至少包括规范化的 **Vault 实路径 + 实际 index.sqlite 路径 + 持久化 owner**。同一索引的线程启动、schema 更新、reconcile 和关闭均在这个租约内。替换顺序为资源验证 → 停止旧请求 → drain/确认旧 worker 退出 → 新 worker 启动/验证 → 发布新实例；失败返回错误，不能把已关闭旧 worker 当可用回退。跨目录指向同一 Vault 的配置还必须防止文件级双写，不能只锁 SQLite 文件。
 
-应用内由通用 resource owner 维护租约；CLI 与 Desktop 同时运行则需要双方遵守同一个跨进程写者协议。第一版可以明确拒绝第二个 writer，不能静默允许各自落盘，也不必先建复杂跨进程共享服务。若采用独占租约文件，崩溃残留不能凭 PID 猜测后自动删除；恢复须验证旧进程已退出及所有权，无法证明就报占用。本轮已为显式 owner 实现租约基础能力：同一 OS 用户固定使用 `~/.drone/runtime-leases/knowledge-writers`，按 canonical Vault 和 index 路径分别独占，冲突直接拒绝。不会在 Vault 写锁文件，也不会凭 PID 自动清理残留；当前仅覆盖本机同用户，多 OS 用户/多机共享 Vault 仍未覆盖。**候选默认 CLI 已启用租约且接入 owner.dispose**：真实打包 SDK 会话关闭后释放并可重新启动。旧 Desktop compatibility pool 尚未启用租约；不能宣称旧宿主已受保护。租约当前保护 SQLite worker；独立 Wiki/topic/delivery API 和 worker 崩溃期间的领域文件事务尚不具备全程资源引用，不能宣称所有 Vault 文件写均跨进程互斥。
+应用内由通用 resource owner 维护租约；CLI 与 Desktop 同时运行则需要双方遵守同一个跨进程写者协议。第一版可以明确拒绝第二个 writer，不能静默允许各自落盘，也不必先建复杂跨进程共享服务。若采用独占租约文件，崩溃残留不能凭 PID 猜测后自动删除；恢复须验证旧进程已退出及所有权，无法证明就报占用。本轮已为显式 owner 实现租约基础能力：同一 OS 用户固定使用 `~/.drone/runtime-leases/knowledge-writers`，按 canonical Vault 和 index 路径分别独占，冲突直接拒绝。不会在 Vault 写锁文件，也不会凭 PID 自动清理残留；当前仅覆盖本机同用户，多 OS 用户/多机共享 Vault 仍未覆盖。**候选默认 CLI 已启用租约且接入 owner.dispose**：真实打包 SDK 会话关闭后释放并可重新启动。旧 Desktop compatibility pool 尚未启用租约；不能宣称旧宿主已受保护。owner resource group 现保持租约到已接受领域操作排空，即使 worker 崩溃也不提前释放；独立 Wiki/topic/delivery compatibility API 仍不属于该 owner，不能宣称所有旧 Vault 文件写均受保护。
 
 原生入口保持官方 `(pi) => void` 格式。插件内拆出 `createNativeExtension(runtime)`，默认 CLI 组合自己的 runtime；Drone 的受信任 loader/adapter 将原生工具/hooks 和 Desktop operations 绑定到同一受管领域实例。隔离进程时通过通用调用桥复用实例，不能把函数/Worker/service 对象经 process 全局事件发送。若 native 与 UI 仍各自创建一个 runtime，迁移不能验收通过。
 
@@ -85,7 +85,7 @@
 
 已按下节依赖图处理真实原生入口：`knowledge-extension` 的 status/search 与 `internal-knowledge-extension` 的工具/会话 hooks → 同一 config/service/UI/specialists；publication、wiki-review、topic-memory、specialist tools/delivery 和 extensionHost 已注入；wiki-model-review、UI service 的 preview/jobs 与宿主领域服务仍待实例化并接入同 owner。证据票据与 proof 不能跨会话共享或放宽成同形 JSON。
 
-本轮临时目录回归覆盖两独立 owner 的 callbacks/slots/锁、相同 sessionId 的 UI 与专家队列隔离，以及真实 SQLite worker 的不同绑定、固定设置目录、替换与关闭。测试属于实例行为回归；尚未运行正式安装包 native/UI 同 owner、完整知识原生闭环或零领域插件宿主验收。关闭 barrier 在 binding I/O 前登记已接受的 get，关闭等待这些 get 及所有 worker 退出，并聚合全部失败；关闭中拒绝新 get，关闭完成后兼容 API 允许再次使用，永久 dispose 则拒绝重开。真实 worker 启动失败会释放已取租约；关闭协议失败或超时强制 terminate 后不报告 drained，关闭错误向上传递。worker 即使先回传成功 close 回执，随后非零退出或发出 error，也必须拒绝 close 并保留首个原因及退出码，不能报告 drained。租约仅在真实 worker exit 后释放；ownership 改变则保留锁并报告失败。
+本轮临时目录回归覆盖两独立 owner 的 callbacks/slots/锁、相同 sessionId 的 UI 与专家队列隔离，以及真实 SQLite worker 的不同绑定、固定设置目录、替换与关闭。测试属于实例行为回归；尚未运行正式安装包 native/UI 同 owner、完整知识原生闭环或零领域插件宿主验收。关闭 barrier 在 binding I/O 前登记已接受的 get，关闭等待这些 get 及所有 worker 退出，并聚合全部失败；关闭中拒绝新 get，关闭完成后兼容 API 允许再次使用，永久 dispose 则拒绝重开。真实 worker 启动失败会释放已取租约；关闭协议失败或超时强制 terminate 后不报告 drained，关闭错误向上传递。worker 即使先回传成功 close 回执，随后非零退出或发出 error，也必须拒绝 close 并保留首个原因及退出码，不能报告 drained。worker 引用仅在真实 exit 后释放，owner reservation 还要等所有已接受领域操作排空；ownership 改变则保留锁并报告失败。
 
 前一检查点 `32cd3a3` 的 `npm run check` 退出 0；knowledge 60 文件、411 测试，包含两 owner/真实 SQLite、worker 失败关闭/并发 get-close，以及 4 项租约回归。重建候选 tarball 与 gate 日志指纹已更新到机器回执；历史基础修复结果见 [机器回执](knowledge-ui-co-package-2026-10-26.json)。未发布 npm，未修改正式 Vault。
 
@@ -114,4 +114,19 @@ CLI 默认 export 保持官方同步注册形状，但由 wrapper 创建自己�
 - 每会话 service view 共用真实 worker，但使用独立 ticket Map；关闭撤销本会话票据，不能清共享 worker 的另一会话状态。内部 service 调用完成真实清理，外部入口和回执受撤销检查。publication 保留 WeakSet 对象身份，关闭后的旧 projector 及 late agent_end 拒绝签发/接受证明。
 - 真实 SDK 1.1.0 两会话回归证明 native/internal 两入口使用一个 worker、同 cwd 跨会话 ticket/proof 不通用、A 退出不影响 B。打包默认 CLI 在临时 Vault 配置态运行两次；每次 native/internal status 调度成功、固定路径租约存在、shutdown 后释放且下一次可重新获取。
 - 源码导入仍安装三个 **0.2 compatibility listeners**；新 owner 不发送 service/function 对象事件，不使用旧 runtime event handshake。只有旧 host consumers 全部迁完才能删除这些桥。
-- **未完成**：Desktop UI 与原生同 owner、generic broker files/state/worker/model/event 授权接入；UI service/model review 与宿主知识 facade 删除；两个 SDK 的完整科研写入闭环；正式安装包 GUI 与零领域插件验收。SQLite lease 尚不覆盖 worker 崩溃期间独立 topic/wiki 文件事务。四项已暂缓外部验收保持原状态。
+- **未完成**：Desktop 完整知识业务接入同 owner（只读概览/搜索与两工具见下节）、model/写入 broker 授权接入；UI service/model review 与宿主知识 facade 删除；两个 SDK 的完整科研写入闭环；正式安装包 GUI 与零领域插件验收。独立旧 topic/wiki facade 仍不在 owner reservation 内。四项已暂缓外部验收保持原状态。
+
+## 9. Desktop 只读运行时切片（候选已验，完整 P2 未完成）
+
+- 候选新增 `desktopRuntime → dist/desktop-runtime.mjs` 和 `resources.index → lib/knowledge/runtime/desktop-index.mjs`。索引算法从 `worker.ts` 结构提取到 `index-runtime.ts`：CLI 的 worker_threads/local files adapter 与 Desktop 的 resource/capability adapter 使用同一算法、SQLite schema 与搜索实现。
+- Desktop owner 使用真实 resource-backed read service；UI `overview(null)`、`search({query,revision,limit?})` 与 `knowledge_status` / `knowledge_search` 两个原生工具共用它。owner/native 会话关闭屏障与 CLI 共用生命周期实现。**Desktop 尚未提供完整研究工具、publication hooks、Wiki/topic 写入、审核或旧知识 surface**；不伪造完整 KnowledgeService、Worker 或旧宿主 facade。
+- UI 入口已换成插件持有的只读页面/store：概览、搜索、刷新可用，其余明确未迁；不调用 `window.DroneUI.knowledge`。旧 UI 源码暂保留历史实现，但候选入口不导入。候选贡献为 `knowledge.page` 和 `knowledge.surface`（后者显示未迁状态），不注册未迁的 `app.overlay`。
+- 工作区身份与目录分开：`workspaceId` 是宿主 opaque identity，不能当 OS 路径；UI 的项目解析只使用可信 `scope.workspaceDirectory`，原生继续使用可信 `ctx.cwd`。不从 UI 入参取得 cwd，不把未知目录自动授权。
+- 原 binding schema 保留。`state.readJson` 只读已授权 state root；`roots.resolve` 仅匹配现有批准的 canonical root，不由 binding 路径自动授权。Vault 内容经父 broker 的稳定 snapshot read/list/stat；资源进程只获独立派生 SQLite cache 的读写许可，不能直接读写 Vault。Desktop cache 是可重建派生数据，不覆盖原绑定、笔记或 CLI SQLite。
+- Desktop watch 明确不可用；不启动后台 reconcile。首次资源构建和每次 search/reconcile 均在真实活跃 caller 下等待完成；刷新不会返回永久旧索引。无 revision/coverage 变化的 reconcile 不发 changed，避免事件 → 刷新 → 事件循环。
+- CLI owner 的租约已提升到 owner resource group：worker 崩溃不能提前释放仍有已接受领域操作的 reservation。Desktop lease 由宿主 resource manager 持有，与 CLI 共用 canonical Vault 锁键；插件 dispose 只 drain/清引用，宿主随后等待真实子进程退出再释放租约。关闭阶段不新增 caller 授权。
+- 已有包内真实 SQLite/双入口/刷新/拒绝旧 revision 回归，以及打包候选经真实宿主 FileCapabilities/ResourceManager/ProcessRuntime 的双受限进程回执。初轮工具为直接 execute，后续同 tarball 已运行官方 Pi SDK 1.1.0 离线模型真实 AgentSession 调度 status/search；UI 和原生前后 domain/index PID 相同，关闭后实际退出并释放租约。公共 NativeSession 明确声明两工具 effect=read，不依赖领域自定义 metadata。**这不是正式 DMG GUI 或完整知识工作流 PASS**；真实宿主 coordinator 的 readonly caller 和正式安装包由宿主门禁继续核对。
+
+### 发布前兼容门禁
+
+本候选知识 UI 使用 `droneUi: 2`；旧宿主仅支持 v1 时应在加载前明确拒绝，不运行到缺失 hook。新宿主仍支持既有 v1，v2 必须来自经过验证的 installed desktopRuntime。新候选使用 subscribe/native/resource 合同，正式 API 最低依赖须为 `@gyoungwe/plugin-api >=1.3.0`；当前 API 1.3 未公开发布，源码依赖范围仍为过渡状态，不能宣称公开 registry 干净安装完成。私有验收只能用记录了指纹的同一 API 1.3 tarball override；不提交 file: 或本机路径作为正式依赖。发布顺序为 API 1.3 发布及公开回读 → 更新知识候选真实最低 semver/锁 → 知识包与 suite 发布/公开干净安装与宿主复验。该发布门禁未完成。

@@ -108,6 +108,10 @@ packages/<name>/
 
 `application-state` 只声明宿主明确指定的插件状态目录及已登记的本机资源协调目录，不能推导出整个 HOME 的权限。0.3 knowledge 候选把既有配置/SQLite 状态和 `~/.drone/runtime-leases/knowledge-writers` 的本机同用户租约列入此范围；host/broker 必须另行验证具体 root 与操作。新增词表不代表旧宿主已经支持或自动授予该能力，尚未接通时只能保留候选/未验收状态。
 
+候选 API 1.3 的受管运行时使用 `entrypoints.desktopRuntime`；`entrypoints.resources` 为 `{resourceId: relativeEntry}` 映射，ID 非空、每个入口必须是包内实际文件且随 npm 包发布，声明资源时必须声明其 Desktop owner。资源在独立进程中运行，SQLite 等写目录由宿主选定；manifest 不赋予 Vault 或任意路径权限。
+
+同包 UI 的 `droneUi: 2` 需要宿主已验证 installed desktopRuntime 来源；v1-only 宿主应在加载前拒绝。原生 `PluginNativeSession.toolEffects` 明确声明每个工具的 read/write 效果，未声明时宿主按写操作处理，不能依赖插件自定义 metadata 推断。可信 scope 的 `workspaceId` 是身份标识，`workspaceDirectory` 才是实际目录；两者都来自宿主，目录值本身不赋予文件访问权。API 1.3 尚未发布时只允许记录指纹的私有验收，正式最低依赖及公开 clean install 仍是发布门禁。
+
 manifest 是声明，不是安全边界：外部写入、远程执行、删除和发布仍由宿主授权。宿主会在安装确认和插件详情中展示 `permissions` 与 `tools`。
 
 宿主加载能力插件时，应把 manifest 的 `permissions` 传给

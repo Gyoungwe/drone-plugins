@@ -28,6 +28,8 @@ const pack = JSON.parse(output.stdout.trim());
 const files = new Set(pack[0]?.files?.map((file) => file.path) || []);
 for (const required of [
 	"dist/index.mjs",
+	"dist/desktop-runtime.mjs",
+	"lib/knowledge/runtime/desktop-index.mjs",
 	"ui/plugin.json",
 	"ui/bundle.js",
 	"ui/build-manifest.json",

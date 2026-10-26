@@ -1,9 +1,13 @@
+import type { PluginUiRuntimeClient } from "@gyoungwe/plugin-api/ui";
 import React, { useEffect, useSyncExternalStore } from "react";
 import * as ReactDOM from "react-dom";
 import { beforeEach } from "vitest";
 
 /** Test-only host implementing the public UI contract, with no private host imports. */
 export const pluginEntries: Array<{id:string;title:string;pluginName:string}> = [];
+let pluginRuntime: PluginUiRuntimeClient | undefined;
+export function setPluginRuntime(runtime: PluginUiRuntimeClient | undefined) { pluginRuntime = runtime; }
+
 export const services: Record<string, (...args: unknown[]) => unknown> = {};
 export function fixtureStore(initial: Record<string, unknown>) {
 	let state = initial;
@@ -26,8 +30,8 @@ function Button({children, variant:_variant, size:_size, ...props}: React.Button
 Object.assign(window, { DroneUI: {
 	React, ReactDOM, knowledge: services,
 	components: { Button, ActionSurface, PluginEntryHost: ({entry}: {entry:{title:string}})=><div>Plugin {entry.title}</div>, PageHeader: ({title,tabs}: {title:string;tabs:React.ReactNode})=><header>{title}{tabs}</header>, StatePanel: ({children}:React.PropsWithChildren)=><div>{children}</div> },
-	hooks: { useLanguage:()=>"zh", useT:()=> (key:string)=>key, usePluginEntries:()=>pluginEntries },
+	hooks: { usePluginRuntime: () => { if (!pluginRuntime) throw new Error("Plugin runtime is unavailable for this UI module"); return pluginRuntime; }, useLanguage:()=>"zh", useT:()=> (key:string)=>key, usePluginEntries:()=>pluginEntries },
 	helpers: { isDraftSessionId: (id: string | null) => id?.startsWith("draft:") ?? false, taskArtifactLinks: (task:{milestones:Array<{state:string;evidence?:{kind:string;path:string}}>})=>task.milestones.filter(m=>m.state==="completed" && m.evidence?.kind==="file-observed").map(m=>({path:m.evidence!.path,state:"observed"})), pushToast:()=>undefined },
 	stores: { useKnowledgeStore: knowledge, useSessionsStore:sessions, useSettingsStore:settings, useUiStore:ui },
 } });
-beforeEach(()=>{pluginEntries.splice(0);for(const key of Object.keys(services)) delete services[key];});
+beforeEach(()=>{pluginRuntime = undefined;pluginEntries.splice(0);for(const key of Object.keys(services)) delete services[key];});

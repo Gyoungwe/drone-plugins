@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { candidatePluginApi } from "./candidate-plugin-api.mjs";
 
 // Install every currently publishable package from real npm tarballs into a
 // clean prefix. The probe intentionally uses the native registration surface
@@ -18,6 +19,7 @@ const packageNames = ["pi-knowledge", "pi-research", "pi-analysis", "pi-evidence
 const smokeRoot = await mkdtemp(join(tmpdir(), "drone-plugin-install-smoke-"));
 const tarballRoot = join(smokeRoot, "tarballs");
 const installRoot = join(smokeRoot, "install");
+const candidateApi = await candidatePluginApi();
 await mkdir(tarballRoot, { recursive: true });
 await mkdir(installRoot, { recursive: true });
 
@@ -44,7 +46,7 @@ try {
 			...Object.fromEntries(
 				packageNames.map((name) => [tarballs[name].packageJson.name, `file:${tarballs[name].path}`]),
 			),
-			"@gyoungwe/plugin-api": `file:${join(root, "vendor", "gyoungwe-plugin-api-1.2.0.tgz")}`,
+			"@gyoungwe/plugin-api": `file:${candidateApi.path}`,
 		},
 	};
 	await writeFile(join(installRoot, "package.json"), `${JSON.stringify(installPackage, null, 2)}\n`);
@@ -87,7 +89,7 @@ try {
 	const knowledgeUi = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/pi-knowledge/ui/plugin.json"), "utf8"));
 	const desktopUi = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/desktop-ui-pack/ui/plugin.json"), "utf8"));
 	assert.notEqual(knowledgeUi.name, desktopUi.name);
-	assert.deepEqual(knowledgeUi.contributions.map(entry => entry.region), ["knowledge.page", "knowledge.surface", "app.overlay"]);
+	assert.deepEqual(knowledgeUi.contributions.map(entry => entry.region), ["knowledge.page", "knowledge.surface"]);
 	assert.deepEqual(desktopUi.contributions.map(entry => entry.region), ["panel.tab"]);
 	assert(!desktopUi.contributions.some(entry => knowledgeUi.contributions.some(knowledge => knowledge.id === entry.id)), "installed candidates duplicate knowledge contributions");
 
@@ -210,6 +212,8 @@ try {
 			JSON.stringify({
 				packages: packageNames.map((name) => tarballs[name].packageJson.name),
 				installed: true,
+				publicRegistryInstall: false,
+				candidateApi: { version: candidateApi.version, sha256: candidateApi.sha256 },
 				piKnowledgeTools: tools.size,
 				piAnalysisTools: [...piAnalysis.tools.keys()],
 				piEvidenceTools: [...piEvidence.tools.keys()],

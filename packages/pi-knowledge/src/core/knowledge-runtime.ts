@@ -12,6 +12,7 @@ import { createTopicMemoryApi } from "./topic-memory.js";
 import { createSpecialistDelivery } from "./specialist-delivery.js";
 import { acquireKnowledgeWriterLease } from "./writer-lease.js";
 import { createKnowledgeWriterLeaseGroup } from "./writer-lease-group.js";
+import { createKnowledgeOwnerLifecycle } from "./owner-lifecycle.js";
 
 /** Plugin-owned application resources. Publication identities live in session adapters. */
 export function createKnowledgeRuntime(
@@ -30,43 +31,19 @@ export function createKnowledgeRuntime(
 	const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui);
 	const topics = createTopicMemoryApi(host, config);
 	const delivery = createSpecialistDelivery(host, config);
-	const operations = new Set<Promise<unknown>>();
-	const sessions = new Set<() => Promise<void>>();
-	let disposed = false;
-	let disposal: Promise<void> | null = null;
-	function assertActive() {
-		if (disposed) throw new Error("Knowledge runtime has been disposed");
-	}
-	function run<T>(work: () => T | Promise<T>): Promise<T> {
-		assertActive();
-		const operation = Promise.resolve().then(work);
-		operations.add(operation);
-		return operation.finally(() => operations.delete(operation));
-	}
-	function attachSession(close: () => Promise<void>) {
-		assertActive();
-		sessions.add(close);
-		return () => { sessions.delete(close); };
-	}
-	function dispose(): Promise<void> {
-		if (disposal) return disposal;
-		disposed = true;
-		disposal = (async () => {
-			const sessionResults = await Promise.allSettled([...sessions].map((close) => close()));
-			sessions.clear();
-			specialists.dispose();
-			const operationResults = await Promise.allSettled([...operations]);
+	const lifecycle = createKnowledgeOwnerLifecycle({
+		beforeDrain: () => specialists.dispose(),
+		async dispose() {
 			const serviceResults = await Promise.allSettled([services.dispose()]);
 			const reservationResults = await Promise.allSettled([Promise.resolve().then(() => writerReservations.dispose())]);
 			ui.dispose();
-			const failures = [...sessionResults, ...operationResults, ...serviceResults, ...reservationResults]
+			const failures = [...serviceResults, ...reservationResults]
 				.filter((result): result is PromiseRejectedResult => result.status === "rejected");
-			if (failures.length) throw new AggregateError(failures.map((result) => result.reason), "Knowledge runtime disposal failed");
-		})();
-		return disposal;
-	}
+			if (failures.length) throw new AggregateError(failures.map(result => result.reason), "Knowledge resources could not be disposed");
+		},
+	});
 	return { config, host, extensionHost, ui, semantic, reviewPolicy, services, specialists, specialistTools, wiki, topics, delivery,
-		assertActive, run, attachSession, dispose };
+		...lifecycle };
 }
 
 export type KnowledgeRuntime = ReturnType<typeof createKnowledgeRuntime>;

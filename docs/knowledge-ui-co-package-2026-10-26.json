@@ -1,16 +1,16 @@
 {
   "date": "2026-10-26",
   "status": "PARTIAL",
-  "scope": "P2 co-packaging and complete native-owner composition with session isolation; Desktop/UI owner, broker and host migration incomplete",
+  "scope": "P2 co-packaging, full CLI owner, and Desktop read-only UI/native shared owner via real broker/resource subprocess; full Desktop domain and host removal incomplete",
   "published": false,
   "basePluginCommit": "d2f76a0",
   "candidates": [
     {
       "name": "@gyoungwe/pi-knowledge",
       "version": "0.3.0",
-      "sha256": "be5817bcb59048e1260b13917142671c623a891a9d19bc91d361a297eacda06d",
-      "integrity": "sha512-1ya95JcHoCl3Agz9002qHXbkKTmyexgyZ3VDwfDBXApusc+09Cd91qzcy1uWMHWyoifHINBMiWysnUoLqutT+w==",
-      "files": 195
+      "sha256": "352444917a449186596af586664d2e00c2acb317126171e7ffa7c0183e020005",
+      "integrity": "sha512-tePY9B9HbT4WD2fzEyrCwANOjFysKgyF576xDtBZ8ZOvBKZ+yr2tcEbZypOmyMDi/EFsSyEJBvs08vX4rc/d2g==",
+      "files": 225
     },
     {
       "name": "@gyoungwe/desktop-ui-pack",
@@ -22,16 +22,17 @@
     {
       "name": "@gyoungwe/research-suite",
       "version": "0.2.0",
-      "sha256": "f0a0bfcc15a11ece469180cf8b654c9409309554f1581f70eefa27b05d119f97",
-      "integrity": "sha512-/01ATSfvXRSFP5pFDk32hp06lwCSSgsyhQEfwoau34o1feIcyz5FBvh1RTfPxJDhUv+kR+Ruw8HEJgiAi15t8g==",
-      "files": 1246
+      "sha256": "8aec32de50debacc976a65c0c768d3f59c69f3f53dfc0d5720e2336e27f30d2a",
+      "integrity": "sha512-MBtMJkbRznpOhUADWz6+YYs1C90qcwoxxMz50gtfBPLg5kOpMmxrhNxTZrDO7Ax2opYz9J/vL3JbfH9GvzIonA==",
+      "files": 1288
     }
   ],
   "checks": [
     {
-      "command": "npm run check",
+      "command": "DRONE_PLUGIN_API_TARBALL=<verified-private-api-1.3-tarball> npm run check",
       "exitCode": 0,
-      "logSha256": "36deedb764bd78cc23fc11061a06550779c9bb61c6a5a25b55a8395b264cdf64"
+      "logSha256": "ea0f31133d656f9a21975fd239f53a60ad816f70c0d15f4b76a5f5cd47797999",
+      "publicRegistryInstall": false
     },
     {
       "command": "npm run test:styles -w @gyoungwe/pi-knowledge",
@@ -40,8 +41,8 @@
     }
   ],
   "knowledgeTests": {
-    "files": 64,
-    "tests": 426
+    "files": 69,
+    "tests": 439
   },
   "desktopTests": {
     "files": 1,
@@ -66,14 +67,20 @@
     "knowledgeUiName": "drone-knowledge-ui",
     "knowledgeContributions": [
       "knowledge.page",
-      "knowledge.surface",
-      "app.overlay"
+      "knowledge.surface"
     ],
     "desktopContributions": [
       "panel.tab"
     ],
     "distinctContributions": true,
-    "gui": "NOT_RUN"
+    "gui": "NOT_RUN",
+    "uiContract": 2,
+    "publicRegistryInstall": false,
+    "candidateApi": {
+      "version": "1.3.0",
+      "sha256": "da1ce7c766ae62045ed757f9d0120428a7385e599452d9919cceb7ee014b76a0"
+    },
+    "formalMinimumDependencyUpdate": "PENDING_API_1_3_PUBLIC_RELEASE"
   },
   "suite": {
     "version": "0.2.0",
@@ -98,11 +105,13 @@
     "dispatchCountPerVersion": 14
   },
   "remaining": [
-    "Desktop UI/native must share one managed owner with granted files/state/worker/model/event broker; complete scientific workflow and resource-group lease for domain file transactions remain",
+    "Desktop full hooks, publication, wiki/topic/ingest/write/review/model capabilities and full scientific workflow remain; readonly UI/native share one real resource owner",
     "Host knowledge services, named IPC and process event bridge extraction",
     "Formal installed-app discovery, disable/re-enable, uninstall/reinstall and old-UI rollback",
     "Zero-domain-plugin host build/start/chat",
-    "Previously deferred four external acceptance items unchanged"
+    "Previously deferred four external acceptance items unchanged",
+    "Publish API 1.3 first, update candidate minimum dependency/lock and prove public-registry clean installation",
+    "Existing host obsidian/0.2 compatibility hook can still create a legacy unleased owner for existing DRONE_KNOWLEDGE_DIR; isolated candidate acceptance is not an existing-binding upgrade proof"
   ],
   "runtimeFoundation": {
     "fixedFactoryDirectory": true,
@@ -165,8 +174,39 @@
     "crashResidueAutomaticallyRemoved": false,
     "multiUserOrMultiMachine": "NOT_COVERED",
     "permissionsDeclaration": "application-state",
-    "sandboxBrokerGrant": "NOT_CONNECTED",
-    "allVaultFileTransactions": "NOT_COVERED_ACROSS_WORKER_CRASH"
+    "sandboxBrokerGrant": "READONLY_DESKTOP_FILES_STATE_INDEX_RESOURCE_CONNECTED",
+    "allVaultFileTransactions": "OWNER_GROUP_RETAINS_LEASE_ACROSS_WORKER_CRASH_TESTED; LEGACY_STANDALONE_FACADES_NOT_COVERED",
+    "releasedAfterOwnerOperationsAndActualWorkerExit": true
   },
-  "knowledgeSourceSha256": "b334300fdb0ebe12014cce20842a8eddddff622d9d6de9af969d8734e714b9e2"
+  "knowledgeSourceSha256": "970acb57cf2d5313175be8a8d84c725e45f9cacc5e9d480a9fea81c15b79b601",
+  "desktopReadOnlyRuntime": {
+    "status": "REAL_PACKED_SDK_AND_SUBPROCESS_VERIFIED",
+    "officialSdk": "1.1.0",
+    "actualOfflineModelDispatch": true,
+    "tools": [
+      "knowledge_status",
+      "knowledge_search"
+    ],
+    "toolEffects": {
+      "knowledge_status": "read",
+      "knowledge_search": "read"
+    },
+    "operations": [
+      "overview",
+      "search"
+    ],
+    "sameDomainAndIndexProcessBeforeAfterNative": true,
+    "externalNoteRefreshVisible": true,
+    "backgroundVaultAccess": false,
+    "watchAvailable": false,
+    "childrenExited": true,
+    "leasesReleased": true,
+    "workspaceAndVault": "temporary test fixtures; no formal Vault",
+    "coordinatorReadOnlyCaller": "WORKSPACE_DIRECTORY_FIXED; FINAL_HOST_GATE_PENDING",
+    "formalInstalledGui": "NOT_RUN",
+    "scriptSha256": "e92a8ffd26d24641dbc3b3788e1ecf30b432a73c248e85e3fdf661818cf04a30",
+    "logSha256": "b7d6f392160af7fbf7163ac9680db827b535785e4045f10787d9b6961c4075af",
+    "delayedIndexEventPreservesCurrentSearch": "REAL_SQLITE_RESOURCE_AND_UI_STORE_REGRESSION",
+    "scopeHarness": "Real file/resource/process runtime with explicit capability scope; true host coordinator gate tracked separately"
+  }
 }

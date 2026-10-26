@@ -114,6 +114,7 @@ __export(config_exports, {
   createKnowledgeConfigApi: () => createKnowledgeConfigApi,
   createKnowledgeConfigState: () => createKnowledgeConfigState,
   knowledgeDirectory: () => knowledgeDirectory,
+  parseKnowledgeBinding: () => parseKnowledgeBinding,
   projectIdentity: () => projectIdentity,
   readKnowledgeBinding: () => readKnowledgeBinding,
   saveKnowledgeBinding: () => saveKnowledgeBinding,
@@ -144,6 +145,10 @@ function projectIdentity(cwd, configured) {
 function validateBinding(value) {
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1 || !isAbsolute(String(value.vault || "")) || !/^[a-f0-9]{24}$/.test(String(value.vaultId || "")) || !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !["project", "literature", "hybrid"].includes(String(value.profile)) || !["run-only", "verified", "rich"].includes(String(value.depositMode)) || !["none", "read-local"].includes(String(value.subagentPolicy)) || typeof value.updatedAt !== "string")
     throw new Error("Invalid application knowledge binding; no project fallback was used");
+}
+function parseKnowledgeBinding(value) {
+  validateBinding(value);
+  return value;
 }
 async function readKnowledgeBindingWithState(state2, directory, { fresh = false } = {}) {
   if (!fresh && state2.local.getStore()) return state2.local.getStore() ?? null;
@@ -2669,6 +2674,79 @@ var init_wiki_model_review = __esm({
 
 // src/extension/knowledge-extension.ts
 import { Worker } from "node:worker_threads";
+
+// src/core/native-session-lifecycle.ts
+function createKnowledgeNativeAdapter(owner, controller, register, cleanup) {
+  const operations = /* @__PURE__ */ new Set();
+  let registered = false;
+  let closed = false;
+  let disposal = null;
+  function run(work, signal = controller.signal) {
+    if (closed) throw new Error("Knowledge session has been disposed");
+    const operation = owner.run(async () => {
+      signal.throwIfAborted();
+      const result2 = await work();
+      signal.throwIfAborted();
+      return result2;
+    });
+    operations.add(operation);
+    return operation.finally(() => operations.delete(operation));
+  }
+  function dispose() {
+    if (disposal) return disposal;
+    closed = true;
+    controller.abort(new Error("Knowledge session has been disposed"));
+    const sessionCleanup = cleanup?.();
+    disposal = (async () => {
+      const cleanupResult = await Promise.allSettled([sessionCleanup]);
+      await Promise.allSettled([...operations]);
+      detach();
+      if (cleanupResult[0].status === "rejected") throw cleanupResult[0].reason;
+    })();
+    return disposal;
+  }
+  const detach = owner.attachSession(dispose);
+  function extension(pi) {
+    owner.assertActive();
+    if (closed || registered) throw new Error("A native knowledge session can only be registered once");
+    registered = true;
+    const scopedContext = (context, signal) => new Proxy(context, {
+      get(target, property) {
+        return property === "signal" ? signal : Reflect.get(target, property, target);
+      }
+    });
+    const scopedSignal = (signal) => signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
+    const ownedPi = new Proxy(pi, {
+      get(target, property) {
+        if (property === "registerTool") return (definition) => target.registerTool({
+          ...definition,
+          execute: (id, input, signal, update, context) => {
+            const combined = scopedSignal(signal);
+            return run(() => definition.execute(id, input, combined, update, scopedContext(context, combined)), combined);
+          }
+        });
+        if (property === "registerCommand") return (name, definition) => target.registerCommand(name, {
+          ...definition,
+          handler: (args, context) => {
+            const signal = scopedSignal(context.signal);
+            return run(() => definition.handler(args, scopedContext(context, signal)), signal);
+          }
+        });
+        if (property === "on") return (event, handler) => target.on(
+          event,
+          event === "session_shutdown" ? handler : (value, context) => {
+            const signal = scopedSignal(context.signal);
+            return run(() => handler(value, scopedContext(context, signal)), signal);
+          }
+        );
+        return Reflect.get(target, property, target);
+      }
+    });
+    register(ownedPi);
+    pi.on("session_shutdown", dispose);
+  }
+  return { extension, signal: controller.signal, dispose };
+}
 
 // src/core/index.ts
 init_claim_conflicts();
@@ -6817,16 +6895,51 @@ init_review_policy();
 init_specialist_host();
 init_wiki_review();
 init_topic_memory();
-function createKnowledgeRuntime(config, host, extensionHost = {}, acquireWriterLease = acquireKnowledgeWriterLease) {
-  const ui = createKnowledgeUi(host, config);
-  const semantic = createSemanticSettingsApi(void 0, config.knowledgeDirectory());
-  const reviewPolicy = createKnowledgeReviewPolicy(config);
-  const services = createKnowledgeServicePool(host, config, ui, semantic, reviewPolicy, acquireWriterLease);
-  const specialists = createKnowledgeSpecialistHost(host, config, ui);
-  const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
-  const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui);
-  const topics = createTopicMemoryApi(host, config);
-  const delivery = createSpecialistDelivery(host, config);
+
+// src/core/writer-lease-group.ts
+function createKnowledgeWriterLeaseGroup(acquire) {
+  const reservations = /* @__PURE__ */ new Map();
+  let disposed = false;
+  function acquireWorker(input) {
+    if (disposed) throw new Error("Knowledge writer resource group has been disposed");
+    const key = JSON.stringify([input.vault, input.indexPath]);
+    let reservation = reservations.get(key);
+    if (!reservation) {
+      reservation = { lease: acquire(input), workers: 0 };
+      reservations.set(key, reservation);
+    }
+    reservation.workers++;
+    let released = false;
+    return {
+      release() {
+        if (released) return;
+        released = true;
+        reservation.workers--;
+      }
+    };
+  }
+  function dispose() {
+    disposed = true;
+    const failures = [];
+    for (const [key, reservation] of reservations) {
+      if (reservation.workers !== 0) {
+        failures.push(new Error("Knowledge writer still has a live worker; reservation retained"));
+        continue;
+      }
+      try {
+        reservation.lease.release();
+        reservations.delete(key);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length) throw new AggregateError(failures, "Knowledge writer reservations could not be released");
+  }
+  return { acquireWorker, dispose };
+}
+
+// src/core/owner-lifecycle.ts
+function createKnowledgeOwnerLifecycle(resources) {
   const operations = /* @__PURE__ */ new Set();
   const sessions = /* @__PURE__ */ new Set();
   let disposed = false;
@@ -6853,15 +6966,39 @@ function createKnowledgeRuntime(config, host, extensionHost = {}, acquireWriterL
     disposal = (async () => {
       const sessionResults = await Promise.allSettled([...sessions].map((close) => close()));
       sessions.clear();
-      specialists.dispose();
+      resources.beforeDrain?.();
       const operationResults = await Promise.allSettled([...operations]);
-      const serviceResults = await Promise.allSettled([services.dispose()]);
-      ui.dispose();
-      const failures = [...sessionResults, ...operationResults, ...serviceResults].filter((result2) => result2.status === "rejected");
+      const resourceResults = await Promise.allSettled([resources.dispose()]);
+      const failures = [...sessionResults, ...operationResults, ...resourceResults].filter((result2) => result2.status === "rejected");
       if (failures.length) throw new AggregateError(failures.map((result2) => result2.reason), "Knowledge runtime disposal failed");
     })();
     return disposal;
   }
+  return { assertActive, run, attachSession, dispose };
+}
+
+// src/core/knowledge-runtime.ts
+function createKnowledgeRuntime(config, host, extensionHost = {}, acquireWriterLease = acquireKnowledgeWriterLease) {
+  const ui = createKnowledgeUi(host, config);
+  const semantic = createSemanticSettingsApi(void 0, config.knowledgeDirectory());
+  const reviewPolicy = createKnowledgeReviewPolicy(config);
+  const writerReservations = createKnowledgeWriterLeaseGroup(acquireWriterLease);
+  const services = createKnowledgeServicePool(host, config, ui, semantic, reviewPolicy, writerReservations.acquireWorker);
+  const specialists = createKnowledgeSpecialistHost(host, config, ui);
+  const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
+  const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui);
+  const topics = createTopicMemoryApi(host, config);
+  const delivery = createSpecialistDelivery(host, config);
+  const lifecycle = createKnowledgeOwnerLifecycle({
+    beforeDrain: () => specialists.dispose(),
+    async dispose() {
+      const serviceResults = await Promise.allSettled([services.dispose()]);
+      const reservationResults = await Promise.allSettled([Promise.resolve().then(() => writerReservations.dispose())]);
+      ui.dispose();
+      const failures = [...serviceResults, ...reservationResults].filter((result2) => result2.status === "rejected");
+      if (failures.length) throw new AggregateError(failures.map((result2) => result2.reason), "Knowledge resources could not be disposed");
+    }
+  });
   return {
     config,
     host,
@@ -6875,10 +7012,7 @@ function createKnowledgeRuntime(config, host, extensionHost = {}, acquireWriterL
     wiki,
     topics,
     delivery,
-    assertActive,
-    run,
-    attachSession,
-    dispose
+    ...lifecycle
   };
 }
 
@@ -8448,77 +8582,16 @@ function createNativeSession(owner) {
     ui: owner.ui,
     wiki: owner.wiki
   }, owner.extensionHost);
-  const operations = /* @__PURE__ */ new Set();
-  let registered = false;
-  let closed = false;
   let cleanup = null;
-  let disposal = null;
-  function run(work, signal = controller.signal) {
-    if (closed) throw new Error("Knowledge session has been disposed");
-    const operation = owner.run(async () => {
-      signal.throwIfAborted();
-      const result2 = await work();
-      signal.throwIfAborted();
-      return result2;
-    });
-    operations.add(operation);
-    return operation.finally(() => operations.delete(operation));
-  }
-  function dispose() {
-    if (disposal) return disposal;
-    closed = true;
-    controller.abort(new Error("Knowledge session has been disposed"));
-    const serviceDrain = services.dispose();
-    disposal = (async () => {
-      const cleanupResult = await Promise.allSettled([cleanup?.()]);
-      await Promise.allSettled([...operations, serviceDrain]);
-      detach();
-      if (cleanupResult[0].status === "rejected") throw cleanupResult[0].reason;
-    })();
-    return disposal;
-  }
-  const detach = owner.attachSession(dispose);
-  function extension(pi) {
-    owner.assertActive();
-    if (closed || registered) throw new Error("A native knowledge session can only be registered once");
-    registered = true;
-    const scopedContext = (context, signal) => new Proxy(context, {
-      get(target, property) {
-        return property === "signal" ? signal : Reflect.get(target, property, target);
-      }
-    });
-    const scopedSignal = (signal) => signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
-    const ownedPi = new Proxy(pi, {
-      get(target, property) {
-        if (property === "registerTool") return (definition) => target.registerTool({
-          ...definition,
-          execute: (id, input, signal, update, context) => {
-            const combined = scopedSignal(signal);
-            return run(() => definition.execute(id, input, combined, update, scopedContext(context, combined)), combined);
-          }
-        });
-        if (property === "registerCommand") return (name, definition) => target.registerCommand(name, {
-          ...definition,
-          handler: (args, context) => {
-            const signal = scopedSignal(context.signal);
-            return run(() => definition.handler(args, scopedContext(context, signal)), signal);
-          }
-        });
-        if (property === "on") return (event, handler) => target.on(
-          event,
-          event === "session_shutdown" ? handler : (value, context) => {
-            const signal = scopedSignal(context.signal);
-            return run(() => handler(value, scopedContext(context, signal)), signal);
-          }
-        );
-        return Reflect.get(target, property, target);
-      }
-    });
-    registerNativeStatusTools(ownedPi, { ...owner, services });
-    cleanup = knowledge.registerKnowledgeInterface(ownedPi).dispose;
-    pi.on("session_shutdown", dispose);
-  }
-  return { extension, publication, services, signal: controller.signal, dispose };
+  const adapter = createKnowledgeNativeAdapter(owner, controller, (pi) => {
+    registerNativeStatusTools(pi, { ...owner, services });
+    cleanup = knowledge.registerKnowledgeInterface(pi).dispose;
+  }, async () => {
+    const results = await Promise.allSettled([services.dispose(), cleanup?.()]);
+    const failures = results.filter((result2) => result2.status === "rejected");
+    if (failures.length) throw new AggregateError(failures.map((result2) => result2.reason), "Knowledge session cleanup failed");
+  });
+  return { ...adapter, publication, services };
 }
 function createNativeExtension(owner) {
   return (pi) => createNativeSession(owner).extension(pi);

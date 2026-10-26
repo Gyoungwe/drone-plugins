@@ -17,6 +17,8 @@ const artifactOutputs = [
 	"dist/index.mjs",
 	"dist/host.mjs",
 	"dist/host.d.ts",
+	"dist/desktop-runtime.mjs",
+	"lib/knowledge/runtime/desktop-index.mjs",
 	"lib/knowledge/runtime/worker.mjs",
 ];
 const outputs = [...artifactOutputs, "lib/knowledge/runtime/.knowledge-worker-manifest.json", "ui/bundle.js", "ui/build-manifest.json"];
@@ -87,6 +89,10 @@ if (!checkOnly) {
 		sourcemap: false,
 		external: ["node:*"],
 	});
+	for (const [entry, output] of [["src/desktop/runtime.ts", "dist/desktop-runtime.mjs"], ["src/desktop/index-resource.ts", "lib/knowledge/runtime/desktop-index.mjs"]]) {
+		await build({ entryPoints: [join(packageRoot, entry)], bundle: true, format: "esm", platform: "node", target: "node20",
+			outfile: join(packageRoot, output), sourcemap: false, external: ["node:*"] });
+	}
 	const tsc = join(workspaceRoot, "node_modules/.bin/tsc");
 	execFileSync(tsc, ["-p", join(packageRoot, "tsconfig.build.json")], { cwd: packageRoot, stdio: "inherit" });
 }
