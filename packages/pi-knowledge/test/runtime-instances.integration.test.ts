@@ -8,6 +8,7 @@ import { createKnowledgeConfigApi } from "../src/core/config.js";
 import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
 import { createKnowledgeUi } from "../src/core/ui-state.js";
 import { createKnowledgeServicePool } from "../src/core/service.js";
+import { createKnowledgeWorkerTransportFactory } from "../src/core/worker-transport.js";
 import { createSemanticSettingsApi } from "../src/core/semantic-settings.js";
 import { createKnowledgeReviewPolicy } from "../src/core/review-policy.js";
 import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
@@ -36,7 +37,8 @@ it("keeps real SQLite workers, binding checks and persisted policies on their in
 		const semantic = createSemanticSettingsApi(undefined, directory);
 		const review = createKnowledgeReviewPolicy(config);
 		const services = createKnowledgeServicePool(runtime, config, ui, semantic, review,
-			(input) => acquireKnowledgeWriterLease(input, join(root, "leases")));
+			createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi,
+				(input) => acquireKnowledgeWriterLease(input, join(root, "leases"))));
 		const specialists = createKnowledgeSpecialistHost(runtime, config, ui);
 		return { directory, binding, live, services, review, semantic, specialists, replace: () => { version = `${name}-replacement`; } };
 	}

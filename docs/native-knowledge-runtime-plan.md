@@ -78,7 +78,7 @@
 | `createKnowledgeRuntimeHost()` | callbacks、worker factory/metadata、slots、exclusive locks | 顶层 configure 与 helper exports 委托同一个 compatibility instance |
 | `createKnowledgeUi(runtime, config)` | listeners、flows、sequence、metrics；目录来自 config | 旧 process UI listener 仅调用 compatibility instance |
 | `createKnowledgeSpecialistHost(runtime, config, ui)` | 专家注册、并发队列、设置写队列；使用对应 binding 和 UI | 旧 process specialist listener 仅调用 compatibility instance |
-| `createKnowledgeServicePool(runtime, config, ui, semantic, reviewPolicy, acquireWriterLease?)` | worker pool、替换队列、同一实例的 worker/evidence callback、binding 检查与 UI 更新 | 旧 process service listener 仅调用 compatibility instance；没有把原生部分工具先切成第二个 pool |
+| `createKnowledgeServicePool(runtime, config, ui, semantic, reviewPolicy, transportFactory?)` | worker pool、替换队列、同一实例的 worker/evidence callback、binding 检查与 UI 更新 | 旧 process service listener 仅调用 compatibility instance；没有把原生部分工具先切成第二个 pool |
 | `createSemanticSettingsApi(state, directory)` / `createKnowledgeReviewPolicy(config)` | 固定目录的语义设置与 review policy | 0.2 顶层 facade 保留原动态环境目录；review policy 的部署级 `DRONE_REVIEW_MODE=strict` 优先级保持不变 |
 
 上述兼容入口的删除条件一致：0.3 候选的完整 native adapter 与 Desktop adapter 已共用一个领域 owner，且全部旧 host consumers 已切换。不能因为 factory 存在便删旧桥，导致当前两个 bundle 各自产生 writer。新 factory 不安装全局 process listener，也未新增 Symbol/process 账本。publication proof 的 WeakSet 身份、schema 与数据路径没有改动。
@@ -130,3 +130,13 @@ CLI 默认 export 保持官方同步注册形状，但由 wrapper 创建自己�
 ### 发布前兼容门禁
 
 本候选知识 UI 使用 `droneUi: 2`；旧宿主仅支持 v1 时应在加载前明确拒绝，不运行到缺失 hook。新宿主仍支持既有 v1，v2 必须来自经过验证的 installed desktopRuntime。新候选使用 subscribe/native/resource 合同，正式 API 最低依赖须为 `@gyoungwe/plugin-api >=1.3.0`；当前 API 1.3 未公开发布，源码依赖范围仍为过渡状态，不能宣称公开 registry 干净安装完成。私有验收只能用记录了指纹的同一 API 1.3 tarball override；不提交 file: 或本机路径作为正式依赖。发布顺序为 API 1.3 发布及公开回读 → 更新知识候选真实最低 semver/锁 → 知识包与 suite 发布/公开干净安装与宿主复验。该发布门禁未完成。
+
+## 10. 完整知识服务的 transport seam（CLI 已接入，Desktop 完整服务未接入）
+
+`core/service-transport.ts` 定义领域请求、ready、close 和生命周期状态合同，不暴露 Worker、ref/unref 或文件目录创建。`core/worker-transport.ts` 是实际 CLI adapter，承接原有消息队列、请求超时、进程 liveness、SQLite 目录及 writer lease；close 仍等待已接受请求和真实 exit，异常关闭不能报告 drained。`core/service.ts` 保留单份 prepare/read/search/check/citation/evidence 算法，整个领域方法块与抽取前逐字一致。
+
+未发布的 pool factory 第六参数收敛为 transport factory，不保留废弃 lease 参数的兼容层。`knowledge-runtime.ts` 的组合根显式把现有 owner resource group 的 `acquireWorker` 交给真实 CLI adapter，worker 故障时 owner reservation 仍等领域操作结束；默认 CLI 与旧 0.2 compatibility 各自沿用原有租约策略，没有伪造 Worker 或给新 owner 注入空租约。
+
+聚焦验证：包内 TypeScript 检查及 7 文件、16 项回归通过；涵盖真实 SQLite、默认及显式注入 transport、ready 前接受请求后关闭、内容改变使读证据失效、替换与失败关闭、实际 SDK 会话票据/publication 隔离、owner 写入未结束时保留 reservation。回执日志保存在本机 `/tmp/knowledge-transport-focused.log`。全仓构建/check 由统一集成步骤运行，本文不将聚焦回归当作正式安装包完成。
+
+这一步未把完整 owner 接到 Desktop resource，也未增加 state/model/write 权限。后续 resource invoke adapter 可以实现同一 transport 合同，但必须先具备相应授权、取消和真实退出回执；不能用当前只读 index adapter 假装支持完整写工作流。

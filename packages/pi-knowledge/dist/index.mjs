@@ -1411,8 +1411,8 @@ __export(ui_state_exports, {
   updateKnowledgeFlow: () => updateKnowledgeFlow
 });
 import { randomUUID as randomUUID8 } from "node:crypto";
-import { mkdirSync as mkdirSync2, readFileSync as readFileSync3, renameSync, writeFileSync as writeFileSync2 } from "node:fs";
-import { join as join10 } from "node:path";
+import { mkdirSync as mkdirSync3, readFileSync as readFileSync3, renameSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { join as join11 } from "node:path";
 function createKnowledgeUi(runtime, config) {
   const { runtimeSlot: runtimeSlot2, emitProcessEvent: emitProcessEvent2, flowCardBuilder: flowCardBuilder2, toolMeta: toolMeta2 } = runtime;
   const { knowledgeDirectory: knowledgeDirectory2 } = config;
@@ -1460,7 +1460,7 @@ function createKnowledgeUi(runtime, config) {
   const metricsFile = () => {
     try {
       const dir = knowledgeDirectory2();
-      return dir ? join10(dir, "answer-metrics.json") : null;
+      return dir ? join11(dir, "answer-metrics.json") : null;
     } catch {
       return null;
     }
@@ -1487,7 +1487,7 @@ function createKnowledgeUi(runtime, config) {
     const file = metricsFile();
     if (!file) return;
     try {
-      mkdirSync2(join10(file, ".."), { recursive: true });
+      mkdirSync3(join11(file, ".."), { recursive: true });
       const tmp = `${file}.${process.pid}.tmp`;
       writeFileSync2(tmp, JSON.stringify(state2.localAnswerStats));
       renameSync(tmp, file);
@@ -1788,7 +1788,7 @@ __export(wiki_review_exports, {
 });
 import { createHash as createHash13, randomUUID as randomUUID11 } from "node:crypto";
 import { link as link2, lstat as lstat6, mkdir as mkdir7, readdir as readdir3, readFile as readFile6, rename as rename7, unlink as unlink4, writeFile as writeFile7 } from "node:fs/promises";
-import { basename as basename4, dirname as dirname7, join as join12 } from "node:path";
+import { basename as basename4, dirname as dirname7, join as join13 } from "node:path";
 function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui) {
   const { runRuntimeExclusive: runRuntimeExclusive2 } = runtime;
   const { knowledgeDirectory: knowledgeDirectory2, withKnowledgeBinding: withKnowledgeBinding2 } = config;
@@ -1802,7 +1802,7 @@ function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui) {
     return runRuntimeExclusive2("wiki-review", key, operation);
   }
   function rootFor(service) {
-    return join12(knowledgeDirectory2(), service.binding.vaultId, "wiki-review");
+    return join13(knowledgeDirectory2(), service.binding.vaultId, "wiki-review");
   }
   function checkId(id) {
     if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id)) throw new Error("Invalid Wiki proposal id");
@@ -1835,7 +1835,7 @@ function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui) {
   }
   async function atomicJson(path, value) {
     await mkdir7(dirname7(path), { recursive: true, mode: 448 });
-    const temp = join12(dirname7(path), `.${randomUUID11()}.tmp`);
+    const temp = join13(dirname7(path), `.${randomUUID11()}.tmp`);
     try {
       await writeFile7(temp, `${JSON.stringify(value, null, 2)}
 `, { flag: "wx", mode: 384 });
@@ -1889,10 +1889,10 @@ ${block}
     const root = rootFor(service);
     let text2;
     try {
-      text2 = await readFile6(join12(root, "pending", `${id}.json`), "utf8");
+      text2 = await readFile6(join13(root, "pending", `${id}.json`), "utf8");
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
-      text2 = await readFile6(join12(root, "reviewed", `${id}.json`), "utf8");
+      text2 = await readFile6(join13(root, "reviewed", `${id}.json`), "utf8");
     }
     if (Buffer.byteLength(text2) > 256 * 1024) throw new Error("Wiki proposal exceeds its storage budget");
     const p = JSON.parse(text2);
@@ -1980,11 +1980,11 @@ ${refs}`
         throw new Error("Wiki proposal exceeds the bounded review storage size");
       const root = rootFor(service);
       await exclusive(root, async () => {
-        const directory = join12(root, "pending");
+        const directory = join13(root, "pending");
         await mkdir7(directory, { recursive: true, mode: 448 });
         if ((await readdir3(directory)).filter((name) => name.endsWith(".json")).length >= MAX_PENDING)
           throw new Error("Pending Wiki review limit reached; review existing candidates first");
-        await atomicJson(join12(directory, `${proposal.id}.json`), proposal);
+        await atomicJson(join13(directory, `${proposal.id}.json`), proposal);
       });
       invalidateKnowledgeUi2();
       return {
@@ -2057,7 +2057,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
           throw new Error("Merged Wiki proposal exceeds the bounded review storage size");
         await exclusive(
           rootFor(service),
-          () => atomicJson(join12(rootFor(service), "pending", `${p.id}.json`), updated)
+          () => atomicJson(join13(rootFor(service), "pending", `${p.id}.json`), updated)
         );
         invalidateKnowledgeUi2();
         return {
@@ -2124,7 +2124,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
     return withKnowledgeBinding2(service.binding, async () => {
       let names;
       try {
-        names = await readdir3(join12(rootFor(service), "pending"));
+        names = await readdir3(join13(rootFor(service), "pending"));
       } catch (error) {
         if (error.code === "ENOENT") return { items: [], problems: [] };
         throw error;
@@ -2132,7 +2132,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
       const items = [], problems = [];
       for (const name of names.filter((name2) => /^[0-9a-f-]{36}\.json$/.test(name2)).sort().slice(0, MAX_PENDING)) {
         try {
-          const p = JSON.parse(await readFile6(join12(rootFor(service), "pending", name), "utf8"));
+          const p = JSON.parse(await readFile6(join13(rootFor(service), "pending", name), "utf8"));
           if (p.project !== project) continue;
           if (immutableHash(p) !== p.proposalHash) throw new Error("Wiki proposal content changed");
           items.push({
@@ -2154,7 +2154,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
   async function ensureParent(vault, path) {
     let full = vault;
     for (const part of path.split("/").slice(0, -1)) {
-      full = join12(full, part);
+      full = join13(full, part);
       try {
         await mkdir7(full);
       } catch (error) {
@@ -2184,8 +2184,8 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
       humanReviewed: review.actor === "human",
       scientificallyVerified: false
     };
-    await atomicJson(join12(rootFor(service), "reviewed", `${p.id}.json`), updated);
-    await unlink4(join12(rootFor(service), "pending", `${p.id}.json`)).catch((error) => {
+    await atomicJson(join13(rootFor(service), "reviewed", `${p.id}.json`), updated);
+    await unlink4(join13(rootFor(service), "pending", `${p.id}.json`)).catch((error) => {
       if (error.code !== "ENOENT") throw error;
     });
     invalidateKnowledgeUi2();
@@ -2225,7 +2225,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
               throw new Error("Wiki changed after preview; no user edits were overwritten");
             await verifySources(service, p);
             await ensureParent(service.binding.vault, p.path);
-            const full = join12(service.binding.vault, p.path), temp = join12(dirname7(full), `.${basename4(full)}.${randomUUID11()}.tmp`);
+            const full = join13(service.binding.vault, p.path), temp = join13(dirname7(full), `.${basename4(full)}.${randomUUID11()}.tmp`);
             const mode = current ? (await lstat6(full)).mode & 511 : 384;
             try {
               await writeFile7(temp, p.after, { flag: "wx", mode });
@@ -2290,7 +2290,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
     return withKnowledgeBinding2(service.binding, async () => {
       let names;
       try {
-        names = await readdir3(join12(rootFor(service), "reviewed"));
+        names = await readdir3(join13(rootFor(service), "reviewed"));
       } catch (error) {
         if (error.code === "ENOENT") return [];
         throw error;
@@ -2330,10 +2330,10 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
           const current = await currentNote(service, p.path);
           if (current?.hash !== p.afterHash)
             throw new Error("Wiki changed since saving; undo would overwrite edits");
-          const full = join12(service.binding.vault, p.path);
+          const full = join13(service.binding.vault, p.path);
           if (p.before === null) await unlink4(full);
           else {
-            const temp = join12(dirname7(full), `.${randomUUID11()}.tmp`);
+            const temp = join13(dirname7(full), `.${randomUUID11()}.tmp`);
             try {
               await writeFile7(temp, p.before, { flag: "wx", mode: (await lstat6(full)).mode & 511 });
               if ((await currentNote(service, p.path))?.hash !== p.afterHash)
@@ -2400,7 +2400,7 @@ __export(specialist_host_exports, {
 });
 import { randomUUID as randomUUID12 } from "node:crypto";
 import { mkdir as mkdir8, readFile as readFile7, rename as rename8, unlink as unlink5, writeFile as writeFile8 } from "node:fs/promises";
-import { join as join13 } from "node:path";
+import { join as join14 } from "node:path";
 function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEvent) {
   const { runtimeSlot: runtimeSlot2 } = runtime;
   const { knowledgeDirectory: knowledgeDirectory2, readKnowledgeBinding: readKnowledgeBinding2, withKnowledgeBinding: withKnowledgeBinding2 } = config;
@@ -2461,7 +2461,7 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
     if (!dir) return { mode: "off", revision: 0, ...SPECIALIST_LIMITS2 };
     let data = { mode: "automatic", revision: 0 };
     try {
-      data = JSON.parse(await readFile7(join13(dir, "specialists.json"), "utf8"));
+      data = JSON.parse(await readFile7(join14(dir, "specialists.json"), "utf8"));
     } catch (e) {
       if (e.code !== "ENOENT") throw new Error("Knowledge specialist settings cannot be read");
     }
@@ -2554,12 +2554,12 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
           data[key] = Math.min(data[key] ?? SPECIALIST_LIMITS2[key], SPECIALIST_LIMITS2[key]);
         data.mode = mode;
         data.revision = revision + 1;
-        const dir = knowledgeDirectory2(), temp = join13(dir, `specialists.${randomUUID12()}.tmp`);
+        const dir = knowledgeDirectory2(), temp = join14(dir, `specialists.${randomUUID12()}.tmp`);
         await mkdir8(dir, { recursive: true, mode: 448 });
         try {
           await writeFile8(temp, `${JSON.stringify(data)}
 `, { flag: "wx", mode: 384 });
-          await rename8(temp, join13(dir, "specialists.json"));
+          await rename8(temp, join14(dir, "specialists.json"));
         } finally {
           await unlink5(temp).catch((e) => {
             if (e.code !== "ENOENT") throw e;
@@ -2657,7 +2657,7 @@ var init_specialist_host = __esm({
 // src/core/wiki-model-review.ts
 import { randomUUID as randomUUID15 } from "node:crypto";
 import { mkdir as mkdir10, readFile as readFile9, rename as rename9, unlink as unlink6, writeFile as writeFile10 } from "node:fs/promises";
-import { dirname as dirname8, join as join15 } from "node:path";
+import { dirname as dirname8, join as join16 } from "node:path";
 var state;
 var init_wiki_model_review = __esm({
   "src/core/wiki-model-review.ts"() {
@@ -4346,8 +4346,7 @@ function expandWithGraph(hits, neighbors, options) {
 
 // src/core/service.ts
 import { createHash as createHash11, randomUUID as randomUUID9 } from "node:crypto";
-import { dirname as dirname6, join as join11, relative as relative7, resolve as resolve7, sep as sep7 } from "node:path";
-import { mkdirSync as mkdirSync3 } from "node:fs";
+import { join as join12, relative as relative7, resolve as resolve7, sep as sep7 } from "node:path";
 
 // src/core/writer-lease.ts
 import { createHash as createHash10, randomUUID as randomUUID7 } from "node:crypto";
@@ -4449,24 +4448,283 @@ function acquireKnowledgeWriterLease(input, leaseDirectory = join9(
   return { release };
 }
 
+// src/core/worker-transport.ts
+import { mkdirSync as mkdirSync2 } from "node:fs";
+import { dirname as dirname6, join as join10 } from "node:path";
+function createKnowledgeWorkerTransportFactory(runtime, invalidateKnowledgeUi2, acquireWriterLease) {
+  const {
+    createKnowledgeWorker: createKnowledgeWorker2,
+    knowledgeWorkerMetadata: knowledgeWorkerMetadata2,
+    emitKnowledgeWorkerLifecycle: emitKnowledgeWorkerLifecycle2
+  } = runtime;
+  class KnowledgeWorkerTransport {
+    pending;
+    inFlightRequests;
+    next;
+    closed;
+    closing;
+    closePromise;
+    metadata;
+    version;
+    lifecycle;
+    readyPromise;
+    ready;
+    writerLease;
+    leaseReleaseError;
+    workerFailure;
+    worker;
+    constructor(binding, directory, options) {
+      this.pending = /* @__PURE__ */ new Map();
+      this.inFlightRequests = 0;
+      this.next = 0;
+      this.closed = false;
+      this.closing = false;
+      this.closePromise = null;
+      this.metadata = knowledgeWorkerMetadata2();
+      this.version = typeof options.workerVersion === "string" && options.workerVersion ? options.workerVersion.slice(0, 200) : this.metadata.version;
+      this.lifecycle = "staged";
+      let readyResolve;
+      let readyReject;
+      this.readyPromise = new Promise((resolve13, reject) => {
+        readyResolve = resolve13;
+        readyReject = reject;
+      });
+      this.readyPromise.catch(() => void 0);
+      this.ready = false;
+      const workerOptions = {
+        workerData: {
+          vault: binding.vault,
+          database: join10(directory, binding.vaultId, "index.sqlite"),
+          workerVersion: this.version
+        },
+        execArgv: process.execArgv.filter(
+          (arg) => !arg.startsWith("--input-type") && !arg.startsWith("--test")
+        )
+      };
+      mkdirSync2(dirname6(workerOptions.workerData.database), {
+        recursive: true
+      });
+      this.writerLease = acquireWriterLease?.({
+        vault: binding.vault,
+        indexPath: workerOptions.workerData.database
+      });
+      this.leaseReleaseError = null;
+      this.workerFailure = null;
+      try {
+        this.worker = createKnowledgeWorker2(
+          new URL("./worker.mjs", import.meta.url),
+          workerOptions
+        );
+      } catch (error) {
+        this.writerLease?.release();
+        this.closed = true;
+        this.lifecycle = "disabled";
+        readyReject(error);
+        emitKnowledgeWorkerLifecycle2("disabled", {
+          version: this.version,
+          source: this.metadata.source,
+          integrity: this.metadata.integrity,
+          reason: String(error instanceof Error ? error.message : error).slice(
+            0,
+            400
+          )
+        });
+        throw error;
+      }
+      const fail = (error) => {
+        this.workerFailure ??= error;
+        if (!this.ready) readyReject(error);
+        this.closed = true;
+        this.lifecycle = "disabled";
+        for (const item of this.pending.values()) {
+          clearTimeout(item.timer);
+          item.reject(error);
+        }
+        this.pending.clear();
+        this.worker.unref();
+        emitKnowledgeWorkerLifecycle2("disabled", {
+          version: this.version,
+          source: this.metadata.source,
+          integrity: this.metadata.integrity,
+          reason: String(error instanceof Error ? error.message : error).slice(
+            0,
+            400
+          )
+        });
+      };
+      this.worker.on("message", (message) => {
+        if (message.ready) {
+          this.ready = true;
+          this.lifecycle = "verified";
+          readyResolve({ version: this.version });
+          emitKnowledgeWorkerLifecycle2("verified", {
+            version: this.version,
+            source: this.metadata.source,
+            integrity: this.metadata.integrity
+          });
+          if (!this.pending.size) this.worker.unref();
+          return;
+        }
+        if (message.uiChanged) {
+          invalidateKnowledgeUi2();
+          return;
+        }
+        const item = this.pending.get(message.id);
+        if (!item) return;
+        clearTimeout(item.timer);
+        this.pending.delete(message.id);
+        if (!this.pending.size) this.worker.unref();
+        if (message.error) item.reject(new Error(message.error));
+        else item.resolve(message.result);
+      });
+      this.worker.on("error", fail);
+      this.worker.on("exit", (code) => {
+        try {
+          this.writerLease?.release();
+        } catch (error) {
+          this.leaseReleaseError = error;
+          fail(error);
+        }
+        if (code !== 0 || !this.closed && !this.closing)
+          fail(new Error(`Knowledge worker exited (${code})`));
+      });
+      emitKnowledgeWorkerLifecycle2("staged", {
+        version: this.version,
+        source: this.metadata.source,
+        integrity: this.metadata.integrity
+      });
+    }
+    async waitUntilReady() {
+      if (this.ready) return { version: this.version };
+      if (this.closed) throw new Error("Knowledge worker failed to initialize");
+      return this.readyPromise;
+    }
+    request(op, args = {}) {
+      if (this.closed || this.closing && op !== "close")
+        return Promise.reject(new Error("Knowledge service is closed"));
+      const post = () => {
+        if (this.closed)
+          return Promise.reject(new Error("Knowledge service is closed"));
+        const id = ++this.next;
+        this.worker.ref();
+        return new Promise((resolvePromise, reject) => {
+          const timer = setTimeout(
+            () => {
+              this.pending.delete(id);
+              if (!this.pending.size) this.worker.unref();
+              reject(
+                new Error(
+                  `Knowledge ${op} timed out; it was not reported as a successful empty result`
+                )
+              );
+            },
+            op === "reconcile" ? 12e4 : 2e4
+          );
+          this.pending.set(id, { resolve: resolvePromise, reject, timer });
+          this.worker.postMessage({ id, op, args });
+        });
+      };
+      if (op === "close") return post();
+      this.inFlightRequests += 1;
+      return this.waitUntilReady().then(post).finally(() => {
+        this.inFlightRequests = Math.max(0, this.inFlightRequests - 1);
+      });
+    }
+    close() {
+      if (this.closePromise) return this.closePromise;
+      this.closing = true;
+      this.lifecycle = "disabled";
+      emitKnowledgeWorkerLifecycle2("disabled", {
+        version: this.version,
+        previousVersion: this.version,
+        source: this.metadata.source,
+        integrity: this.metadata.integrity,
+        pendingRequests: this.pending.size
+      });
+      this.closePromise = (async () => {
+        let drainFailure = null;
+        const exited = new Promise((resolve13) => {
+          if (this.worker.threadId === -1) resolve13();
+          else this.worker.once("exit", resolve13);
+        });
+        try {
+          if (!this.closed) await this.waitUntilReady();
+          while (!this.closed && (this.pending.size || this.inFlightRequests))
+            await new Promise((resolve13) => setTimeout(resolve13, 10));
+          if (!this.closed) await this.request("close");
+        } catch (error) {
+          drainFailure = error;
+          await this.worker.terminate();
+        } finally {
+          this.closed = true;
+          for (const item of this.pending.values()) {
+            clearTimeout(item.timer);
+            item.reject(new Error("Knowledge service closed"));
+          }
+          this.pending.clear();
+          this.worker.ref();
+          const fallback = setTimeout(() => {
+            drainFailure = new Error(
+              "Knowledge worker required forced termination; drain did not complete"
+            );
+            void this.worker.terminate();
+          }, 5e3);
+          try {
+            await exited;
+          } finally {
+            clearTimeout(fallback);
+          }
+          if (this.leaseReleaseError) throw this.leaseReleaseError;
+          if (drainFailure) {
+            emitKnowledgeWorkerLifecycle2("disabled", {
+              version: this.version,
+              reason: String(
+                drainFailure instanceof Error ? drainFailure.message : drainFailure
+              ).slice(0, 400)
+            });
+            throw drainFailure;
+          }
+          if (this.workerFailure) throw this.workerFailure;
+          emitKnowledgeWorkerLifecycle2("drained", {
+            version: this.version,
+            source: this.metadata.source,
+            integrity: this.metadata.integrity
+          });
+        }
+      })();
+      return this.closePromise;
+    }
+    prepareUnload() {
+      if (this.closing || this.closed)
+        return { pendingRequests: this.pending.size, version: this.version };
+      this.closing = true;
+      return { pendingRequests: this.pending.size, version: this.version };
+    }
+    get pendingRequestCount() {
+      return this.pending.size;
+    }
+  }
+  return {
+    metadata: knowledgeWorkerMetadata2,
+    create: ({ binding, directory, workerVersion }) => new KnowledgeWorkerTransport(binding, directory, { workerVersion })
+  };
+}
+
 // src/core/service.ts
 init_runtime_host();
 init_config();
 init_files();
 init_review_policy();
 init_ui_state();
-function createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPolicy, acquireWriterLease, emitLegacyPeerEvent) {
+function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, transportFactory, emitLegacyPeerEvent) {
   const {
-    createKnowledgeWorker: createKnowledgeWorker2,
     emitKnowledgeWorkerLifecycle: emitKnowledgeWorkerLifecycle2,
-    knowledgeWorkerMetadata: knowledgeWorkerMetadata2,
     runRuntimeExclusive: runRuntimeExclusive2,
     runtimeSlot: runtimeSlot2,
     hasPaperCitation: hasPaperCitation2,
     requiresPaperEvidence: requiresPaperEvidence2
   } = runtime;
   const { knowledgeDirectory: knowledgeDirectory2, readKnowledgeBinding: readKnowledgeBinding2, withKnowledgeBinding: withKnowledgeBinding2 } = config;
-  const { invalidateKnowledgeUi: invalidateKnowledgeUi2 } = ui;
   const { readSemanticSettings: readSemanticSettings2, saveSemanticSettings: saveSemanticSettings2 } = semantic;
   const { readReviewMode: readReviewMode2 } = reviewPolicy;
   const pool = runtimeSlot2("knowledge", "workerPool", () => {
@@ -4542,147 +4800,39 @@ function createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPoli
       this.binding = binding;
       this.semanticCandidateProvider = typeof options.semanticCandidateProvider === "function" ? options.semanticCandidateProvider : null;
       this.tickets = /* @__PURE__ */ new Map();
-      this.pending = /* @__PURE__ */ new Map();
-      this.inFlightRequests = 0;
-      this.next = 0;
-      this.closed = false;
-      this.closing = false;
+      this.transport = transportFactory.create({ binding, directory, workerVersion: options.workerVersion });
       this.closePromise = null;
-      this.workerMetadata = knowledgeWorkerMetadata2();
-      this.workerVersion = typeof options.workerVersion === "string" && options.workerVersion ? options.workerVersion.slice(0, 200) : this.workerMetadata.version;
-      this.lifecycle = "staged";
-      let readyResolve;
-      let readyReject;
-      this.readyPromise = new Promise((resolve13, reject) => {
-        readyResolve = resolve13;
-        readyReject = reject;
-      });
-      this.readyPromise.catch(() => void 0);
-      this.ready = false;
-      const workerOptions = {
-        workerData: {
-          vault: binding.vault,
-          database: join11(directory, binding.vaultId, "index.sqlite"),
-          workerVersion: this.workerVersion
-        },
-        execArgv: process.execArgv.filter(
-          (arg) => !arg.startsWith("--input-type") && !arg.startsWith("--test")
-        )
-      };
-      mkdirSync3(dirname6(workerOptions.workerData.database), { recursive: true });
-      this.writerLease = acquireWriterLease?.({ vault: binding.vault, indexPath: workerOptions.workerData.database });
-      this.leaseReleaseError = null;
-      this.workerFailure = null;
-      this.workerExitCode = null;
-      try {
-        this.worker = createKnowledgeWorker2(new URL("./worker.mjs", import.meta.url), workerOptions);
-      } catch (error) {
-        this.writerLease?.release();
-        this.closed = true;
-        this.lifecycle = "disabled";
-        readyReject(error);
-        emitKnowledgeWorkerLifecycle2("disabled", {
-          version: this.workerVersion,
-          source: this.workerMetadata.source,
-          integrity: this.workerMetadata.integrity,
-          reason: String(error?.message || error).slice(0, 400)
-        });
-        throw error;
-      }
-      const fail = (error) => {
-        this.workerFailure ??= error;
-        if (!this.ready) readyReject(error);
-        this.closed = true;
-        this.lifecycle = "disabled";
-        for (const item of this.pending.values()) {
-          clearTimeout(item.timer);
-          item.reject(error);
-        }
-        this.pending.clear();
-        this.worker.unref();
-        emitKnowledgeWorkerLifecycle2("disabled", {
-          version: this.workerVersion,
-          source: this.workerMetadata.source,
-          integrity: this.workerMetadata.integrity,
-          reason: String(error?.message || error).slice(0, 400)
-        });
-      };
-      this.worker.on("message", (message) => {
-        if (message.ready) {
-          this.ready = true;
-          this.lifecycle = "verified";
-          readyResolve({ version: this.workerVersion });
-          emitKnowledgeWorkerLifecycle2("verified", {
-            version: this.workerVersion,
-            source: this.workerMetadata.source,
-            integrity: this.workerMetadata.integrity
-          });
-          if (!this.pending.size) this.worker.unref();
-          return;
-        }
-        if (message.uiChanged) {
-          invalidateKnowledgeUi2();
-          return;
-        }
-        const item = this.pending.get(message.id);
-        if (!item) return;
-        clearTimeout(item.timer);
-        this.pending.delete(message.id);
-        if (!this.pending.size) this.worker.unref();
-        if (message.error) item.reject(new Error(message.error));
-        else item.resolve(message.result);
-      });
-      this.worker.on("error", fail);
-      this.worker.on("exit", (code) => {
-        this.workerExitCode = code;
-        try {
-          this.writerLease?.release();
-        } catch (error) {
-          this.leaseReleaseError = error;
-          fail(error);
-        }
-        if (code !== 0 || !this.closed && !this.closing) fail(new Error(`Knowledge worker exited (${code})`));
-      });
-      emitKnowledgeWorkerLifecycle2("staged", {
-        version: this.workerVersion,
-        source: this.workerMetadata.source,
-        integrity: this.workerMetadata.integrity
-      });
     }
-    async waitUntilReady() {
-      if (this.ready) return { version: this.workerVersion };
-      if (this.closed) throw new Error("Knowledge worker failed to initialize");
-      return this.readyPromise;
+    get closed() {
+      return this.transport.closed;
+    }
+    get closing() {
+      return this.transport.closing;
+    }
+    get lifecycle() {
+      return this.transport.lifecycle;
+    }
+    set lifecycle(value) {
+      this.transport.lifecycle = value;
+    }
+    get workerVersion() {
+      return this.transport.version;
+    }
+    get workerMetadata() {
+      return this.transport.metadata;
+    }
+    get pendingRequestCount() {
+      return this.transport.pendingRequestCount;
+    }
+    waitUntilReady() {
+      return this.transport.waitUntilReady();
     }
     async healthCheck() {
       await this.waitUntilReady();
       return this.request("status");
     }
     request(op, args = {}) {
-      if (this.closed || this.closing && op !== "close")
-        return Promise.reject(new Error("Knowledge service is closed"));
-      const post = () => {
-        if (this.closed) return Promise.reject(new Error("Knowledge service is closed"));
-        const id = ++this.next;
-        this.worker.ref();
-        return new Promise((resolvePromise, reject) => {
-          const timer = setTimeout(
-            () => {
-              this.pending.delete(id);
-              if (!this.pending.size) this.worker.unref();
-              reject(new Error(`Knowledge ${op} timed out; it was not reported as a successful empty result`));
-            },
-            op === "reconcile" ? 12e4 : 2e4
-          );
-          this.pending.set(id, { resolve: resolvePromise, reject, timer });
-          this.worker.postMessage({ id, op, args });
-        });
-      };
-      if (op === "close") return post();
-      this.inFlightRequests += 1;
-      return this.waitUntilReady().then(post).finally(() => {
-        this.inFlightRequests = Math.max(0, this.inFlightRequests - 1);
-      });
+      return this.transport.request(op, args);
     }
     async prepare({ cwd, project, query = "" }) {
       return withKnowledgeBinding2(this.binding, async () => {
@@ -5382,70 +5532,11 @@ function createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPoli
       };
     }
     close() {
-      if (this.closePromise) return this.closePromise;
-      this.closing = true;
-      this.lifecycle = "disabled";
-      emitKnowledgeWorkerLifecycle2("disabled", {
-        version: this.workerVersion,
-        previousVersion: this.workerVersion,
-        source: this.workerMetadata.source,
-        integrity: this.workerMetadata.integrity,
-        pendingRequests: this.pending.size
-      });
-      this.closePromise = (async () => {
-        let drainFailure = null;
-        const exited = new Promise((resolve13) => {
-          if (this.worker.threadId === -1) resolve13();
-          else this.worker.once("exit", resolve13);
-        });
-        try {
-          if (!this.closed) await this.waitUntilReady();
-          while (!this.closed && (this.pending.size || this.inFlightRequests))
-            await new Promise((resolve13) => setTimeout(resolve13, 10));
-          if (!this.closed) await this.request("close");
-        } catch (error) {
-          drainFailure = error;
-          await this.worker.terminate();
-        } finally {
-          this.closed = true;
-          for (const item of this.pending.values()) {
-            clearTimeout(item.timer);
-            item.reject(new Error("Knowledge service closed"));
-          }
-          this.pending.clear();
-          this.tickets.clear();
-          this.worker.ref();
-          const fallback = setTimeout(() => {
-            drainFailure = new Error("Knowledge worker required forced termination; drain did not complete");
-            void this.worker.terminate();
-          }, 5e3);
-          try {
-            await exited;
-          } finally {
-            clearTimeout(fallback);
-          }
-          if (this.leaseReleaseError) throw this.leaseReleaseError;
-          if (drainFailure) {
-            emitKnowledgeWorkerLifecycle2("disabled", {
-              version: this.workerVersion,
-              reason: String(drainFailure.message).slice(0, 400)
-            });
-            throw drainFailure;
-          }
-          if (this.workerFailure) throw this.workerFailure;
-          emitKnowledgeWorkerLifecycle2("drained", {
-            version: this.workerVersion,
-            source: this.workerMetadata.source,
-            integrity: this.workerMetadata.integrity
-          });
-        }
-      })();
+      if (!this.closePromise) this.closePromise = this.transport.close().finally(() => this.tickets.clear());
       return this.closePromise;
     }
     prepareUnload() {
-      if (this.closing || this.closed) return { pendingRequests: this.pending.size, version: this.workerVersion };
-      this.closing = true;
-      return { pendingRequests: this.pending.size, version: this.workerVersion };
+      return this.transport.prepareUnload();
     }
     drain() {
       return this.close();
@@ -5465,7 +5556,7 @@ function createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPoli
     binding ||= await readKnowledgeBinding2();
     const directory = knowledgeDirectory2();
     if (!binding || !directory) throw new Error("No application knowledge Vault is bound");
-    const key = join11(directory, binding.vaultId, "index.sqlite");
+    const key = join12(directory, binding.vaultId, "index.sqlite");
     const transitions = pool.transitions || /* @__PURE__ */ new Map();
     pool.transitions = transitions;
     const transition = transitions.get(key) || (async () => {
@@ -5475,7 +5566,7 @@ function createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPoli
         service = pool.get(key);
       }
       const needsReplacement = !service || service.closed || service.closing || service.binding?.revision !== binding.revision || (() => {
-        const hostVersion = knowledgeWorkerMetadata2().version;
+        const hostVersion = transportFactory.metadata().version;
         return hostVersion !== "unknown" && service?.workerVersion !== "unknown" && service?.workerVersion !== hostVersion;
       })();
       if (!needsReplacement) return service;
@@ -5504,7 +5595,7 @@ function createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPoli
             integrity: candidate.workerMetadata.integrity
           });
         }
-        const idle = [...pool].filter(([other, value]) => other !== key && value.pending.size === 0);
+        const idle = [...pool].filter(([other, value]) => other !== key && value.pendingRequestCount === 0);
         while (pool.size > 3 && idle.length) {
           const [other, value] = idle.shift();
           pool.delete(other);
@@ -5514,7 +5605,7 @@ function createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPoli
       } catch (error) {
         if (candidate) await candidate.close();
         emitKnowledgeWorkerLifecycle2("disabled", {
-          version: candidate?.workerVersion || knowledgeWorkerMetadata2().version,
+          version: candidate?.workerVersion || transportFactory.metadata().version,
           previousVersion: service?.workerVersion,
           source: candidate?.workerMetadata?.source,
           integrity: candidate?.workerMetadata?.integrity,
@@ -5564,17 +5655,16 @@ function createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPoli
   }
   return { dispose: () => pool.dispose(), KnowledgeService: KnowledgeService2, getKnowledgeService: getKnowledgeService2, notifyKnowledgeChange: notifyKnowledgeChange2, closeKnowledgeServices: closeKnowledgeServices2, receiveCompatibilityEvent };
 }
-function createKnowledgeServicePool(runtime, config, ui, semantic, reviewPolicy, acquireWriterLease = acquireKnowledgeWriterLease) {
-  return createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPolicy, acquireWriterLease, null);
+function createKnowledgeServicePool(runtime, config, ui, semantic, reviewPolicy, transportFactory = createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi, acquireKnowledgeWriterLease)) {
+  return createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, transportFactory, null);
 }
 var compatibilityKnowledgeServices = createKnowledgeServicePoolApi(
   compatibilityKnowledgeRuntimeHost,
   config_exports,
-  ui_state_exports,
   semantic_settings_exports,
   review_policy_exports,
   // Remove with the 0.2 compatibility facade after complete owner disposal is wired.
-  null,
+  createKnowledgeWorkerTransportFactory(compatibilityKnowledgeRuntimeHost, invalidateKnowledgeUi, null),
   compatibilityKnowledgeRuntimeHost.emitProcessEvent
 );
 process.on("drone:knowledge-service/v1", compatibilityKnowledgeServices.receiveCompatibilityEvent);
@@ -6777,7 +6867,7 @@ init_runtime_host();
 init_config();
 import { randomUUID as randomUUID14 } from "node:crypto";
 import { lstat as lstat8, mkdir as mkdir9, realpath as realpath7, writeFile as writeFile9 } from "node:fs/promises";
-import { isAbsolute as isAbsolute7, join as join14, relative as relative8, resolve as resolve9, sep as sep8 } from "node:path";
+import { isAbsolute as isAbsolute7, join as join15, relative as relative8, resolve as resolve9, sep as sep8 } from "node:path";
 var contained = (root, path) => {
   const rel = relative8(root, path);
   return !isAbsolute7(rel) && rel !== ".." && !rel.startsWith(`..${sep8}`);
@@ -6798,10 +6888,10 @@ function createSpecialistDelivery(runtime, bindings) {
     if (answer.status !== "completed") return answer;
     const html = validateSpecialistHtml(answer.data.html), config = await runtime.loadWorkspaceConfig(ctx.cwd);
     const root = await realpath7(config.resultsRoot), run = await realpath7(resolve9(ctx.cwd, runDir || ""));
-    if (!contained(root, run) || relative8(root, run).split(sep8).length !== 2 || !run.split(sep8).at(-1).startsWith("run-") || !(await lstat8(join14(run, "metadata.json"))).isFile())
+    if (!contained(root, run) || relative8(root, run).split(sep8).length !== 2 || !run.split(sep8).at(-1).startsWith("run-") || !(await lstat8(join15(run, "metadata.json"))).isFile())
       throw new Error("Explainer destination must be an existing research run");
     return bindings.withKnowledgeBinding(c.binding, async () => {
-      const artifactPath = join14(run, `show-me-${randomUUID14()}.html`);
+      const artifactPath = join15(run, `show-me-${randomUUID14()}.html`);
       const sources = await c.service.evidenceReceipts(c.ticket, ctx.cwd, answer.data.source_paths);
       await mkdir9(run, { recursive: true });
       await writeFile9(artifactPath, html, { flag: "wx", mode: 384 });
@@ -6841,7 +6931,7 @@ init_runtime_host();
 init_config();
 import { createHash as createHash14, randomUUID as randomUUID16 } from "node:crypto";
 import { lstat as lstat9, mkdir as mkdir11, readFile as readFile10, realpath as realpath8, stat as stat3, writeFile as writeFile11 } from "node:fs/promises";
-import { dirname as dirname9, isAbsolute as isAbsolute8, join as join16, relative as relative9, resolve as resolve10 } from "node:path";
+import { dirname as dirname9, isAbsolute as isAbsolute8, join as join17, relative as relative9, resolve as resolve10 } from "node:path";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
 init_files();
 init_review_policy();
@@ -6864,7 +6954,7 @@ init_config();
 init_runtime_host();
 import { createHash as createHash15, randomUUID as randomUUID17 } from "node:crypto";
 import { lstat as lstat10, mkdir as mkdir12, readFile as readFile11, rename as rename10, unlink as unlink7, writeFile as writeFile12 } from "node:fs/promises";
-import { isAbsolute as isAbsolute9, join as join17, relative as relative10, resolve as resolve11, sep as sep9 } from "node:path";
+import { isAbsolute as isAbsolute9, join as join18, relative as relative10, resolve as resolve11, sep as sep9 } from "node:path";
 var EXPERIENCE_LIMITS = Object.freeze({
   maxRecords: 128,
   maxFileBytes: 512 * 1024,
@@ -6983,7 +7073,14 @@ function createKnowledgeRuntime(config, host, extensionHost = {}, acquireWriterL
   const semantic = createSemanticSettingsApi(void 0, config.knowledgeDirectory());
   const reviewPolicy = createKnowledgeReviewPolicy(config);
   const writerReservations = createKnowledgeWriterLeaseGroup(acquireWriterLease);
-  const services = createKnowledgeServicePool(host, config, ui, semantic, reviewPolicy, writerReservations.acquireWorker);
+  const services = createKnowledgeServicePool(
+    host,
+    config,
+    ui,
+    semantic,
+    reviewPolicy,
+    createKnowledgeWorkerTransportFactory(host, ui.invalidateKnowledgeUi, writerReservations.acquireWorker)
+  );
   const specialists = createKnowledgeSpecialistHost(host, config, ui);
   const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
   const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui);
@@ -7075,7 +7172,7 @@ function createKnowledgeSessionServices(pool, signal) {
 // src/extension/internal-knowledge-extension.ts
 init_runtime_host();
 init_config();
-import { join as join18, resolve as resolve12 } from "node:path";
+import { join as join19, resolve as resolve12 } from "node:path";
 init_flow_cards();
 init_topic_memory();
 init_topic_memory();
@@ -7401,7 +7498,7 @@ Topic memory receipt: ${JSON.stringify({ classification: memoryReceipt.classific
           });
           if (answer.status === "completed") {
             try {
-              const runDir = join18(event.result.details.run, "..");
+              const runDir = join19(event.result.details.run, "..");
               const archived = await saveSpecialistExplainer2(current, ctx, {
                 runDir,
                 topicId: explainerTopicId(

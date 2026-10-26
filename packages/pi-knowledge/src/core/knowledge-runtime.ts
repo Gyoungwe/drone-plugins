@@ -5,6 +5,7 @@ import { createKnowledgeUi } from "./ui-state.js";
 import { createSemanticSettingsApi } from "./semantic-settings.js";
 import { createKnowledgeReviewPolicy } from "./review-policy.js";
 import { createKnowledgeServicePool } from "./service.js";
+import { createKnowledgeWorkerTransportFactory } from "./worker-transport.js";
 import { createKnowledgeSpecialistHost } from "./specialist-host.js";
 import { createKnowledgeSpecialistTools } from "./specialists.js";
 import { createKnowledgeWikiReview } from "./wiki-review.js";
@@ -25,7 +26,8 @@ export function createKnowledgeRuntime(
 	const semantic = createSemanticSettingsApi(undefined, config.knowledgeDirectory());
 	const reviewPolicy = createKnowledgeReviewPolicy(config);
 	const writerReservations = createKnowledgeWriterLeaseGroup(acquireWriterLease);
-	const services = createKnowledgeServicePool(host, config, ui, semantic, reviewPolicy, writerReservations.acquireWorker);
+	const services = createKnowledgeServicePool(host, config, ui, semantic, reviewPolicy,
+		createKnowledgeWorkerTransportFactory(host, ui.invalidateKnowledgeUi, writerReservations.acquireWorker));
 	const specialists = createKnowledgeSpecialistHost(host, config, ui);
 	const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
 	const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui);

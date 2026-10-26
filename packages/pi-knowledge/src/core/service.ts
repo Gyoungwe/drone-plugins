@@ -2,9 +2,10 @@
 import { mentionedWikiTitle } from "./topic-probe.js";
 import { expandWithGraph, GRAPH_RETRIEVAL_DEFAULTS } from "./graph-retrieval.js";
 import { createHash, randomUUID } from "node:crypto";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { mkdirSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 import { acquireKnowledgeWriterLease } from "./writer-lease.js";
+import { createKnowledgeWorkerTransportFactory } from "./worker-transport.js";
+import type { KnowledgeServiceTransportFactory } from "./service-transport.js";
 import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost, type ProcessEventEmitter } from "./runtime-host.js";
 import * as compatibilityConfig from "./config.js";
 import type { KnowledgeBinding, KnowledgeConfigApi } from "./config.js";
@@ -20,18 +21,15 @@ import type { createKnowledgeUi } from "./ui-state.js";
 function createKnowledgeServicePoolApi(
 	runtime: KnowledgeRuntimeHost,
 	config: KnowledgeConfigApi,
-	ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">,
 	semantic: SemanticSettingsApi,
 	reviewPolicy: Pick<typeof compatibilityReviewPolicy, "readReviewMode">,
-	acquireWriterLease: typeof acquireKnowledgeWriterLease | null,
+	transportFactory: KnowledgeServiceTransportFactory,
 	emitLegacyPeerEvent: ProcessEventEmitter | null,
 ) {
 	const {
-		createKnowledgeWorker, emitKnowledgeWorkerLifecycle,
-		knowledgeWorkerMetadata, runRuntimeExclusive, runtimeSlot, hasPaperCitation, requiresPaperEvidence,
+		emitKnowledgeWorkerLifecycle, runRuntimeExclusive, runtimeSlot, hasPaperCitation, requiresPaperEvidence,
 	} = runtime;
 	const { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } = config;
-	const { invalidateKnowledgeUi } = ui;
 	const { readSemanticSettings, saveSemanticSettings } = semantic;
 	const { readReviewMode } = reviewPolicy;
 	const pool = runtimeSlot("knowledge", "workerPool", () => {
@@ -115,163 +113,22 @@ function createKnowledgeServicePoolApi(
 			this.semanticCandidateProvider =
 				typeof options.semanticCandidateProvider === "function" ? options.semanticCandidateProvider : null;
 			this.tickets = new Map();
-			this.pending = new Map();
-			this.inFlightRequests = 0;
-			this.next = 0;
-			this.closed = false;
-			this.closing = false;
+			this.transport = transportFactory.create({ binding, directory, workerVersion: options.workerVersion });
 			this.closePromise = null;
-			this.workerMetadata = knowledgeWorkerMetadata();
-			this.workerVersion =
-				typeof options.workerVersion === "string" && options.workerVersion
-					? options.workerVersion.slice(0, 200)
-					: this.workerMetadata.version;
-			this.lifecycle = "staged";
-			let readyResolve;
-			let readyReject;
-			this.readyPromise = new Promise((resolve, reject) => {
-				readyResolve = resolve;
-				readyReject = reject;
-			});
-			// A service may be staged by a host health-check and then discarded. Keep
-			// the rejected handshake observed so a failed candidate cannot surface as
-			// an unhandled rejection in a caller that only inspects lifecycle events.
-			this.readyPromise.catch(() => undefined);
-			this.ready = false;
-			const workerOptions = {
-				workerData: {
-					vault: binding.vault,
-					database: join(directory, binding.vaultId, "index.sqlite"),
-					workerVersion: this.workerVersion,
-				},
-				execArgv: process.execArgv.filter(
-					(arg) => !arg.startsWith("--input-type") && !arg.startsWith("--test"),
-				),
-			};
-			mkdirSync(dirname(workerOptions.workerData.database), { recursive: true });
-			// The 0.2 compatibility pool opts out until native/Desktop lifetimes
-			// share an owner; otherwise normal CLI unref exit would leave a lease.
-			this.writerLease = acquireWriterLease?.({ vault: binding.vault, indexPath: workerOptions.workerData.database });
-			this.leaseReleaseError = null;
-			this.workerFailure = null;
-			this.workerExitCode = null;
-			try {
-				this.worker = createKnowledgeWorker(new URL("./worker.mjs", import.meta.url), workerOptions);
-			} catch (error) {
-				this.writerLease?.release();
-				this.closed = true;
-				this.lifecycle = "disabled";
-				readyReject(error);
-				emitKnowledgeWorkerLifecycle("disabled", {
-					version: this.workerVersion,
-					source: this.workerMetadata.source,
-					integrity: this.workerMetadata.integrity,
-					reason: String(error?.message || error).slice(0, 400),
-				});
-				throw error;
-			}
-			const fail = (error) => {
-				this.workerFailure ??= error;
-				if (!this.ready) readyReject(error);
-				this.closed = true;
-				this.lifecycle = "disabled";
-				for (const item of this.pending.values()) {
-					clearTimeout(item.timer);
-					item.reject(error);
-				}
-				this.pending.clear();
-				this.worker.unref();
-				emitKnowledgeWorkerLifecycle("disabled", {
-					version: this.workerVersion,
-					source: this.workerMetadata.source,
-					integrity: this.workerMetadata.integrity,
-					reason: String(error?.message || error).slice(0, 400),
-				});
-			};
-			this.worker.on("message", (message) => {
-				if (message.ready) {
-					this.ready = true;
-					this.lifecycle = "verified";
-					readyResolve({ version: this.workerVersion });
-					emitKnowledgeWorkerLifecycle("verified", {
-						version: this.workerVersion,
-						source: this.workerMetadata.source,
-						integrity: this.workerMetadata.integrity,
-					});
-					if (!this.pending.size) this.worker.unref();
-					return;
-				}
-				if (message.uiChanged) {
-					invalidateKnowledgeUi();
-					return;
-				}
-				const item = this.pending.get(message.id);
-				if (!item) return;
-				clearTimeout(item.timer);
-				this.pending.delete(message.id);
-				if (!this.pending.size) this.worker.unref();
-				if (message.error) item.reject(new Error(message.error));
-				else item.resolve(message.result);
-			});
-			this.worker.on("error", fail);
-			this.worker.on("exit", (code) => {
-				this.workerExitCode = code;
-				// The exit event is the first point at which SQLite handles are gone.
-				try {
-					this.writerLease?.release();
-				} catch (error) {
-					// An event callback cannot reject close() directly. Keep the failure
-					// for close(), report disabled, and leave the changed lease untouched.
-					this.leaseReleaseError = error;
-					fail(error);
-				}
-				if (code !== 0 || (!this.closed && !this.closing)) fail(new Error(`Knowledge worker exited (${code})`));
-			});
-			emitKnowledgeWorkerLifecycle("staged", {
-				version: this.workerVersion,
-				source: this.workerMetadata.source,
-				integrity: this.workerMetadata.integrity,
-			});
-			// Keep the worker referenced until its ready handshake. Once verified,
-			// idle workers are unref'ed and only active requests keep the process alive.
 		}
-		async waitUntilReady() {
-			if (this.ready) return { version: this.workerVersion };
-			if (this.closed) throw new Error("Knowledge worker failed to initialize");
-			return this.readyPromise;
-		}
+		get closed() { return this.transport.closed; }
+		get closing() { return this.transport.closing; }
+		get lifecycle() { return this.transport.lifecycle; }
+		set lifecycle(value) { this.transport.lifecycle = value; }
+		get workerVersion() { return this.transport.version; }
+		get workerMetadata() { return this.transport.metadata; }
+		get pendingRequestCount() { return this.transport.pendingRequestCount; }
+		waitUntilReady() { return this.transport.waitUntilReady(); }
 		async healthCheck() {
 			await this.waitUntilReady();
 			return this.request("status");
 		}
-		request(op, args = {}) {
-			if (this.closed || (this.closing && op !== "close"))
-				return Promise.reject(new Error("Knowledge service is closed"));
-			const post = () => {
-				if (this.closed) return Promise.reject(new Error("Knowledge service is closed"));
-				const id = ++this.next;
-				this.worker.ref();
-				return new Promise((resolvePromise, reject) => {
-					const timer = setTimeout(
-						() => {
-							this.pending.delete(id);
-							if (!this.pending.size) this.worker.unref();
-							reject(new Error(`Knowledge ${op} timed out; it was not reported as a successful empty result`));
-						},
-						op === "reconcile" ? 120000 : 20000,
-					);
-					this.pending.set(id, { resolve: resolvePromise, reject, timer });
-					this.worker.postMessage({ id, op, args });
-				});
-			};
-			// Count requests before waiting for the ready handshake so close() cannot
-			// overtake an accepted operation that has not posted its worker message yet.
-			if (op === "close") return post();
-			this.inFlightRequests += 1;
-			return this.waitUntilReady().then(post).finally(() => {
-				this.inFlightRequests = Math.max(0, this.inFlightRequests - 1);
-			});
-		}
+		request(op, args = {}) { return this.transport.request(op, args); }
 		async prepare({ cwd, project, query = "" }) {
 			return withKnowledgeBinding(this.binding, async () => {
 				const paths = ["Home.md", "Wiki/Index.md"];
@@ -1060,83 +917,12 @@ function createKnowledgeServicePoolApi(
 			};
 		}
 		close() {
-			if (this.closePromise) return this.closePromise;
-			this.closing = true;
-			this.lifecycle = "disabled";
-			emitKnowledgeWorkerLifecycle("disabled", {
-				version: this.workerVersion,
-				previousVersion: this.workerVersion,
-				source: this.workerMetadata.source,
-				integrity: this.workerMetadata.integrity,
-				pendingRequests: this.pending.size,
-			});
-			this.closePromise = (async () => {
-				let drainFailure = null;
-				const exited = new Promise((resolve) => {
-					if (this.worker.threadId === -1) resolve();
-					else this.worker.once("exit", resolve);
-				});
-				try {
-					// Let requests accepted just before close() finish their ready
-					// handshake and enqueue before we begin waiting for the queue to drain.
-					if (!this.closed) await this.waitUntilReady();
-					// Drain requests already accepted before close() was called. A close
-					// message sent ahead of them lets the worker exit first and turns an
-					// in-flight reconcile into a misleading "worker is closing" error.
-					while (!this.closed && (this.pending.size || this.inFlightRequests))
-						await new Promise((resolve) => setTimeout(resolve, 10));
-					if (!this.closed) await this.request("close");
-				} catch (error) {
-					// Cleanup still joins failed workers, but cannot claim graceful drain.
-					drainFailure = error;
-					await this.worker.terminate();
-				} finally {
-					this.closed = true;
-					for (const item of this.pending.values()) {
-						clearTimeout(item.timer);
-						item.reject(new Error("Knowledge service closed"));
-					}
-					this.pending.clear();
-					this.tickets.clear();
-					this.worker.ref();
-					const fallback = setTimeout(() => {
-						drainFailure = new Error("Knowledge worker required forced termination; drain did not complete");
-						void this.worker.terminate();
-					}, 5000);
-					try {
-						await exited;
-					} finally {
-						clearTimeout(fallback);
-					}
-					if (this.leaseReleaseError) throw this.leaseReleaseError;
-					if (drainFailure) {
-						emitKnowledgeWorkerLifecycle("disabled", {
-							version: this.workerVersion,
-							reason: String(drainFailure.message).slice(0, 400),
-						});
-						throw drainFailure;
-					}
-					if (this.workerFailure) throw this.workerFailure;
-					emitKnowledgeWorkerLifecycle("drained", {
-						version: this.workerVersion,
-						source: this.workerMetadata.source,
-						integrity: this.workerMetadata.integrity,
-					});
-				}
-			})();
+			if (!this.closePromise) this.closePromise = this.transport.close().finally(() => this.tickets.clear());
 			return this.closePromise;
 		}
-		prepareUnload() {
-			if (this.closing || this.closed) return { pendingRequests: this.pending.size, version: this.workerVersion };
-			this.closing = true;
-			return { pendingRequests: this.pending.size, version: this.workerVersion };
-		}
-		drain() {
-			return this.close();
-		}
-		dispose() {
-			return this.close();
-		}
+		prepareUnload() { return this.transport.prepareUnload(); }
+		drain() { return this.close(); }
+		dispose() { return this.close(); }
 	}
 	function getKnowledgeService(binding: KnowledgeBinding | null = null) {
 		if (pool.disposed) return Promise.reject(new Error("Knowledge service pool has been disposed"));
@@ -1169,7 +955,7 @@ function createKnowledgeServicePoolApi(
 				service.closing ||
 				service.binding?.revision !== binding.revision ||
 				(() => {
-					const hostVersion = knowledgeWorkerMetadata().version;
+					const hostVersion = transportFactory.metadata().version;
 					return hostVersion !== "unknown" && service?.workerVersion !== "unknown" && service?.workerVersion !== hostVersion;
 				})();
 			if (!needsReplacement) return service;
@@ -1199,7 +985,7 @@ function createKnowledgeServicePoolApi(
 					});
 				}
 				// Old in-flight writers keep their pinned Vault; never redirect them into a newly bound Vault.
-				const idle = [...pool].filter(([other, value]) => other !== key && value.pending.size === 0);
+				const idle = [...pool].filter(([other, value]) => other !== key && value.pendingRequestCount === 0);
 				while (pool.size > 3 && idle.length) {
 					const [other, value] = idle.shift();
 					pool.delete(other);
@@ -1209,7 +995,7 @@ function createKnowledgeServicePoolApi(
 			} catch (error) {
 				if (candidate) await candidate.close();
 				emitKnowledgeWorkerLifecycle("disabled", {
-					version: candidate?.workerVersion || knowledgeWorkerMetadata().version,
+					version: candidate?.workerVersion || transportFactory.metadata().version,
 					previousVersion: service?.workerVersion,
 					source: candidate?.workerMetadata?.source,
 					integrity: candidate?.workerMetadata?.integrity,
@@ -1269,18 +1055,18 @@ export function createKnowledgeServicePool(
 	ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">,
 	semantic: SemanticSettingsApi,
 	reviewPolicy: Pick<typeof compatibilityReviewPolicy, "readReviewMode">,
-	acquireWriterLease: typeof acquireKnowledgeWriterLease = acquireKnowledgeWriterLease,
+	transportFactory: KnowledgeServiceTransportFactory = createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi, acquireKnowledgeWriterLease),
 ) {
-	return createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPolicy, acquireWriterLease, null);
+	return createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, transportFactory, null);
 }
 
 // pi-knowledge 0.2 compatibility only. Delete when native/Desktop composition
 // shares one explicit 0.3 owner and no host consumer imports these facades.
 const compatibilityKnowledgeServices = createKnowledgeServicePoolApi(
-	compatibilityKnowledgeRuntimeHost, compatibilityConfig, compatibilityUi,
+	compatibilityKnowledgeRuntimeHost, compatibilityConfig,
 	compatibilitySemanticSettings, compatibilityReviewPolicy,
 	// Remove with the 0.2 compatibility facade after complete owner disposal is wired.
-	null,
+	createKnowledgeWorkerTransportFactory(compatibilityKnowledgeRuntimeHost, compatibilityUi.invalidateKnowledgeUi, null),
 	compatibilityKnowledgeRuntimeHost.emitProcessEvent,
 );
 process.on("drone:knowledge-service/v1", compatibilityKnowledgeServices.receiveCompatibilityEvent);

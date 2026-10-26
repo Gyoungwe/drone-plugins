@@ -76,7 +76,8 @@ it("real SDK sessions share one writer while publication proofs and same-workspa
 		expect(startedWorkers).toBe(1);
 		const aService = await adapters[0].services.getKnowledgeService();
 		const bService = await adapters[1].services.getKnowledgeService();
-		expect(aService.worker).toBe(bService.worker);
+		expect(startedWorkers).toBe(1);
+		expect(live.size).toBe(1);
 		const aTicket = await aService.prepare({ cwd: root, project: "test", query: "method" });
 		const bTicket = await bService.prepare({ cwd: root, project: "test", query: "method" });
 		await expect(bService.check(aTicket.ticket, root)).rejects.toThrow("Read current navigation");

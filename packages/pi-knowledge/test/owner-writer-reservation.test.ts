@@ -20,9 +20,14 @@ it("retains the owner's writer reservation across worker failure until accepted 
 	await mkdir(vault);
 	const config = createKnowledgeConfigApi(undefined, join(root, "state"));
 	await config.saveKnowledgeBinding({ vault, profile: "hybrid", depositMode: "verified", subagentPolicy: "none" });
+	const workers: Worker[] = [];
 	function owner() {
 		const host = createKnowledgeRuntimeHost();
-		host.configureKnowledgeWorker((_url, options) => new Worker(new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url), options));
+		host.configureKnowledgeWorker((_url, options) => {
+   const worker = new Worker(new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url), options);
+   workers.push(worker);
+   return worker;
+  });
 		return createKnowledgeRuntime(config, host, {}, input => acquireKnowledgeWriterLease(input, join(root, "leases")));
 	}
 	const first = owner();
@@ -32,7 +37,7 @@ it("retains the owner's writer reservation across worker failure until accepted 
 	const note = join(vault, "transaction.md");
 	let closing: Promise<void> | null = null;
 	try {
-		const service = await first.services.getKnowledgeService();
+		await first.services.getKnowledgeService();
 		const operation = first.run(async () => {
 			await writeFile(note, "accepted\n");
 			started.release();
@@ -40,7 +45,7 @@ it("retains the owner's writer reservation across worker failure until accepted 
 			await appendFile(note, "settled\n");
 		});
 		await started.promise;
-		await service.worker.terminate();
+		await workers[0].terminate();
 		await expect(second.services.getKnowledgeService()).rejects.toThrow("already reserved");
 		closing = first.dispose();
 		const failedClose = expect(closing).rejects.toThrow("Knowledge runtime disposal failed");

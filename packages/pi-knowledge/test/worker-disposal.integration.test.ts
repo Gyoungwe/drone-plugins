@@ -7,6 +7,7 @@ import { createKnowledgeConfigApi } from "../src/core/config.js";
 import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
 import { createKnowledgeUi } from "../src/core/ui-state.js";
 import { createKnowledgeServicePool } from "../src/core/service.js";
+import { createKnowledgeWorkerTransportFactory } from "../src/core/worker-transport.js";
 import { createSemanticSettingsApi } from "../src/core/semantic-settings.js";
 import { createKnowledgeReviewPolicy } from "../src/core/review-policy.js";
 import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
@@ -23,24 +24,26 @@ it("reports failed drain and pool disposal while releasing the lease only after 
 	runtime.configureKnowledgeRuntime({ emitProcessEvent: (event, payload) => {
 		if (event === "drone:knowledge-worker-lifecycle/v1") receipts.push(payload);
 	} });
-	let exited = false;
+	let exitCode: number | null = null;
 	// A real worker responds to health-check but fails its graceful shutdown protocol.
 	runtime.configureKnowledgeWorker(() => {
 		const worker = new Worker(`const {parentPort}=require("node:worker_threads");
 		parentPort.on("message", ({id,op}) => parentPort.postMessage(op === "close"
 		 ? {id,error:"shutdown protocol failed"} : {id,result:{}}));
 		parentPort.postMessage({ready:true});`, { eval: true });
-		worker.once("exit", () => { exited = true; });
+		worker.once("exit", (code) => { exitCode = code; });
 		return worker;
 	});
 	const acquire = (input: Parameters<typeof acquireKnowledgeWriterLease>[0]) =>
 		acquireKnowledgeWriterLease(input, join(root, "leases"));
-	const services = createKnowledgeServicePool(runtime, config, createKnowledgeUi(runtime, config),
-		createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config), acquire);
+	const ui = createKnowledgeUi(runtime, config);
+	const services = createKnowledgeServicePool(runtime, config, ui,
+		createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config),
+		createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi, acquire));
 	const service = await services.getKnowledgeService();
 	try {
 		await expect(service.close()).rejects.toThrow("shutdown protocol failed");
-		expect(exited).toBe(true);
+		expect(exitCode).not.toBeNull();
 		expect(receipts).not.toEqual(expect.arrayContaining([expect.objectContaining({ stage: "drained" })]));
 		expect(receipts.at(-1)).toMatchObject({ stage: "disabled", reason: "shutdown protocol failed" });
 		const lease = acquire({ vault, indexPath: join(directory, binding.vaultId, "index.sqlite") });
@@ -63,8 +66,10 @@ it("releases a constructor's acquired lease when the actual worker resource cann
 	runtime.configureKnowledgeWorker(() => { throw new Error("worker resource missing"); });
 	const acquire = (input: Parameters<typeof acquireKnowledgeWriterLease>[0]) =>
 		acquireKnowledgeWriterLease(input, join(root, "leases"));
-	const services = createKnowledgeServicePool(runtime, config, createKnowledgeUi(runtime, config),
-		createSemanticSettingsApi(undefined, config.knowledgeDirectory()), createKnowledgeReviewPolicy(config), acquire);
+	const ui = createKnowledgeUi(runtime, config);
+	const services = createKnowledgeServicePool(runtime, config, ui,
+		createSemanticSettingsApi(undefined, config.knowledgeDirectory()), createKnowledgeReviewPolicy(config),
+		createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi, acquire));
 	try {
 		await expect(services.getKnowledgeService()).rejects.toThrow("worker resource missing");
 		const lease = acquire({ vault, indexPath: join(root, "state", binding.vaultId, "index.sqlite") });
@@ -96,9 +101,11 @@ it("closes accepted requests still reading their binding, then permits a later c
 		worker.once("exit", () => live.delete(worker));
 		return worker;
 	});
-	const services = createKnowledgeServicePool(runtime, delayedConfig, createKnowledgeUi(runtime, config),
+	const ui = createKnowledgeUi(runtime, config);
+	const services = createKnowledgeServicePool(runtime, delayedConfig, ui,
 		createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config),
-		(input) => acquireKnowledgeWriterLease(input, join(root, "leases")));
+		createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi,
+			(input) => acquireKnowledgeWriterLease(input, join(root, "leases"))));
 	try {
 		const accepted = services.getKnowledgeService();
 		let closeReturned = false;
@@ -134,25 +141,26 @@ for (const failure of ["exit", "error"] as const) {
 		runtime.configureKnowledgeRuntime({ emitProcessEvent: (event, payload) => {
 			if (event === "drone:knowledge-worker-lifecycle/v1") receipts.push(payload);
 		} });
-		let exited = false;
+		let exitCode: number | null = null;
 		runtime.configureKnowledgeWorker(() => {
 			const worker = new Worker(`const {parentPort}=require("node:worker_threads");
 			parentPort.on("message", ({id,op}) => {
 			 parentPort.postMessage({id,result:{}});
 			 if(op === "close") setImmediate(() => { ${failure === "exit" ? "process.exit(7);" : 'throw new Error("shutdown crashed");'} });
 			}); parentPort.postMessage({ready:true});`, { eval: true });
-			worker.once("exit", () => { exited = true; });
+			worker.once("exit", (code) => { exitCode = code; });
 			return worker;
 		});
 		const acquire = (input: Parameters<typeof acquireKnowledgeWriterLease>[0]) =>
 			acquireKnowledgeWriterLease(input, join(root, "leases"));
-		const services = createKnowledgeServicePool(runtime, config, createKnowledgeUi(runtime, config),
-			createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config), acquire);
+		const ui = createKnowledgeUi(runtime, config);
+		const services = createKnowledgeServicePool(runtime, config, ui,
+			createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config),
+			createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi, acquire));
 		try {
 			const service = await services.getKnowledgeService();
 			await expect(service.close()).rejects.toThrow(failure === "exit" ? "exited (7)" : "shutdown crashed");
-			expect(exited).toBe(true);
-			expect(service.workerExitCode).toBe(failure === "exit" ? 7 : 1);
+			expect(exitCode).toBe(failure === "exit" ? 7 : 1);
 			expect(receipts).not.toEqual(expect.arrayContaining([expect.objectContaining({ stage: "drained" })]));
 			expect(receipts.at(-1)).toMatchObject({ stage: "disabled" });
 			const lease = acquire({ vault, indexPath: join(directory, binding.vaultId, "index.sqlite") });
