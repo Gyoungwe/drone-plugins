@@ -5509,6 +5509,25 @@ var researchHostLoader = {
   contractVersion: 1,
   load: createResearchHost
 };
+
+// src/zotero-host.ts
+function createZoteroHost(port, context = {}) {
+  return {
+    contractVersion: 1,
+    operations: {
+      lookup: (input) => lookupZoteroByDoi(port.read, input, context)
+    }
+  };
+}
+function registerZoteroHost(registry, port, context) {
+  const adapter = createZoteroHost(port, context);
+  registry.register("lookup", adapter.operations.lookup);
+  return adapter;
+}
+var zoteroHostLoader = {
+  contractVersion: 1,
+  load: createZoteroHost
+};
 export {
   CLAIM_BINDING_SCHEMA,
   CORE_RESEARCH_RECEIPT_TOOLS,
@@ -5550,6 +5569,7 @@ export {
   createResearchHost,
   createResearchLoop,
   createResearchReceiptJournal,
+  createZoteroHost,
   createZoteroReconciler,
   deliveryContract,
   describeZoteroSavePlan,
@@ -5611,6 +5631,7 @@ export {
   recordRunProvenance,
   registerResearchExtension,
   registerResearchHost,
+  registerZoteroHost,
   registerZoteroMcp,
   remainingZoteroSetupSteps,
   requiresPaperEvidence,
@@ -5642,6 +5663,7 @@ export {
   webCreateItems,
   webKeyAccess,
   webSearchByDoi,
+  zoteroHostLoader,
   zotero_identity_exports as zoteroIdentity,
   zoteroItemDoi,
   zotero_library_exports as zoteroLibrary,

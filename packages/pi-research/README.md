@@ -34,6 +34,14 @@ operations without giving the plugin direct filesystem, network, Electron, or Pi
 runtime access. Desktop's `desktopRuntime` uses this same adapter, so host and UI
 reads share one run projection.
 
+The `/host` entry additionally exports the versioned, read-only `zoteroHostLoader`
+and `registerZoteroHost` seams. A composition root injects a `ZoteroHostPort.read`
+transport and optional library/verifier context; the adapter delegates exact DOI
+identity and attachment metadata projection to the existing reconciliation policy.
+Credentials, network access, response limits and authorization remain host-owned.
+This seam is covered by package tests and does not claim a real Zotero account or
+desktop connection.
+
 Pi is a peer dependency and is never bundled. There are no `@drone/*`, Electron,
 plugin-to-plugin, or source-checkout dependencies. `migration-sources.json` records
 original paths and reachable Git ancestry. Build with `npm run build`; `npm run
@@ -49,3 +57,9 @@ the Desktop host supplies the selected workspace scope and `roots.resolve` /
 path traversal before any capability call. The adapter does not start a model,
 subprocess, network request or write; the public API 1.3 release and full Desktop
 GUI acceptance remain separate release gates.
+
+The optional Desktop UI package still exposes only the research status panel. No
+Zotero page is registered here because the current public `window.DroneUI` contract
+has no Zotero runtime binding; adding a page without that host port would fabricate
+state. Real Zotero local/Web API setup, account credentials, external writes and GUI
+lifecycle remain `NOT_RUN` in this package-only slice.

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 const root = new URL("..", import.meta.url).pathname;
 const { default: register } = await import(pathToFileURL(join(root, "dist/index.mjs")));
-const { researchHostLoader, registerResearchHost } = await import(pathToFileURL(join(root, "dist/host.mjs")));
+const { researchHostLoader, registerResearchHost, zoteroHostLoader, registerZoteroHost } = await import(pathToFileURL(join(root, "dist/host.mjs")));
 const { default: createDesktopRuntime } = await import(pathToFileURL(join(root, "dist/desktop-runtime.mjs")));
 const hostFiles = new Map([
   ["workspace:.pi/research-workspace.json", JSON.stringify({ resultsRoot: "results" })],
@@ -31,6 +31,17 @@ assert.equal(researchHostLoader.contractVersion, 1);
 assert.equal(hostAdapter.contractVersion, 1);
 assert.deepEqual([...registeredHostOperations.keys()], ["status", "listRuns"]);
 assert.equal((await registeredHostOperations.get("listRuns")({ workspace: "/workspace" })).total, 1);
+const zoteroOperations = new Map();
+const zoteroAdapter = registerZoteroHost({ register(name, operation) { zoteroOperations.set(name, operation); } }, {
+	async read(path) {
+		if (path.startsWith("items?")) return { data: [{ key: "ABCD1234", data: { DOI: "10.1234/smoke" } }], total: 1 };
+		return { data: [], total: 0 };
+	},
+}, { libraryType: "users", libraryId: "0", verifier: "smoke" });
+assert.equal(zoteroHostLoader.contractVersion, 1);
+assert.equal(zoteroAdapter.contractVersion, 1);
+assert.deepEqual([...zoteroOperations.keys()], ["lookup"]);
+assert.equal((await zoteroOperations.get("lookup")({ doi: "10.1234/smoke" })).state, "found");
 const desktopRuntime = await createDesktopRuntime({ applicationId: "smoke", signal: new AbortController().signal, resources: [], capabilities: { call: async () => { throw new Error("desktop capability was not expected during load"); } }, events: { changed() {} } });
 assert.equal(desktopRuntime.operations.status.effect, "read");
 assert.equal(desktopRuntime.operations.listRuns.effect, "read");
@@ -45,4 +56,4 @@ assert.equal(search.details.count, 1);
 const run = await tools.get("research_loop").execute("smoke", {action: "start", query: "source"}, new AbortController().signal, () => undefined, ctx);
 assert.equal(run.details.evidence_gate.stage, "created");
 await rm(workspace, {recursive: true, force: true});
-console.log(JSON.stringify({registered: [...tools.keys()], hostOperations: [...registeredHostOperations.keys()], searchCount: search.details.count, lifecycleStage: run.details.evidence_gate.stage}));
+console.log(JSON.stringify({registered: [...tools.keys()], hostOperations: [...registeredHostOperations.keys()], zoteroHostOperations: [...zoteroOperations.keys()], zoteroLookup: "found", searchCount: search.details.count, lifecycleStage: run.details.evidence_gate.stage}));

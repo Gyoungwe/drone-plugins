@@ -258,3 +258,13 @@ export {
 	type ResearchRunStatusInput,
 	type ResearchRunSummary,
 } from "./research-host.js";
+export {
+	createZoteroHost,
+	registerZoteroHost,
+	zoteroHostLoader,
+	type ZoteroHostAdapter,
+	type ZoteroHostLoader,
+	type ZoteroHostOperations,
+	type ZoteroHostPort,
+	type ZoteroHostRegistry,
+} from "./zotero-host.js";
