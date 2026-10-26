@@ -21,7 +21,16 @@ try {
 	assert.equal(tools.size, 4);
 	const plan = (await tools.get("workbench_plan").execute("smoke", { items: ["Smoke task"] })).details;
 	assert.equal(plan.tasks.length, 1);
-	console.log(JSON.stringify({ package: pkg.name, version: pkg.version, tools: [...tools.keys()], installed: true, scoped: true }));
+	const { DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+	const extensionPath = join(install, "node_modules/@gyoungwe/pi-workbench", pkg.pi.extensions[0]);
+	const loader = new DefaultResourceLoader({ cwd: install, agentDir: join(install, "agent"), settingsManager: SettingsManager.inMemory(), noExtensions: true, noSkills: true, additionalExtensionPaths: [extensionPath] });
+	await loader.reload();
+	const loaded = loader.getExtensions();
+	assert.deepEqual(loaded.errors, [], JSON.stringify(loaded.errors));
+	const extension = loaded.extensions.find((item) => item.path === extensionPath);
+	assert(extension, "installed pi-workbench extension was not discovered by the Pi SDK");
+	assert.deepEqual([...extension.tools.keys()], [...tools.keys()]);
+	console.log(JSON.stringify({ package: pkg.name, version: pkg.version, tools: [...tools.keys()], installed: true, scoped: true, sdkLoader: true }));
 } finally {
 	await rm(temp, { recursive: true, force: true });
 }
