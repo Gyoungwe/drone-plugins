@@ -15,8 +15,8 @@
 		"extension": "./dist/index.mjs",
 		"host": "./dist/host.mjs"
 	},
-	"capabilities": ["analysis", "planning", "files"],
-	"tools": ["analysis_list_adapters", "analysis_assess_readiness"],
+	"capabilities": ["analysis", "planning", "evidence-context", "files"],
+	"tools": ["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"],
 	"hosts": ["native-pi", "drone-desktop"],
 	"permissions": {
 		"filesystem": ["workspace-read"],

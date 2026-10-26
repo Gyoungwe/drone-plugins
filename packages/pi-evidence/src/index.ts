@@ -1,4 +1,5 @@
 export * from "./artifacts.js";
+export * from "./analysis-plan.js";
 export * from "./capsule.js";
 export * from "./checkpoints.js";
 export * from "./digest.js";
@@ -6,6 +7,7 @@ export * from "./provenance.js";
 export * from "./replay.js";
 
 import { validateArtifactManifest } from "./artifacts.js";
+import { validateAnalysisEvidencePlan } from "./analysis-plan.js";
 import { validateCapsuleImport } from "./capsule.js";
 import { verifyReplay } from "./replay.js";
 
@@ -21,6 +23,18 @@ function readObject(value: unknown, label: string): Record<string, unknown> {
 
 /** Read-only native Pi registration. Hosts own bytes, persistence and execution. */
 export function registerPiEvidence(pi: any) {
+	pi.registerTool({
+		name: "evidence_validate_analysis_plan",
+		label: "Evidence · validate analysis plan",
+		description:
+			"Validate a read-only analysis handoff before the host records outputs or provenance; no execution or persistence occurs.",
+		drone: { readOnly: true, recoverySafe: true, capabilities: ["evidence", "evidence-context"] },
+		parameters: { type: "object", properties: { plan: { type: "object" } }, required: ["plan"] },
+		async execute(_id: string, params: unknown) {
+			const input = readObject(params, "params");
+			return result({ valid: true, plan: validateAnalysisEvidencePlan(input.plan) });
+		},
+	});
 	pi.registerTool({
 		name: "evidence_validate_manifest",
 		label: "Evidence · validate manifest",
@@ -77,7 +91,12 @@ export function registerPiEvidence(pi: any) {
 		},
 	});
 	return {
-		tools: ["evidence_validate_manifest", "evidence_validate_capsule", "evidence_verify_replay"],
+		tools: [
+			"evidence_validate_analysis_plan",
+			"evidence_validate_manifest",
+			"evidence_validate_capsule",
+			"evidence_verify_replay",
+		],
 	} as const;
 }
 

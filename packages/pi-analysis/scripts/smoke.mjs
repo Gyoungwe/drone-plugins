@@ -64,7 +64,11 @@ try {
 	assert.deepEqual(errors, [], JSON.stringify(errors));
 	const extension = extensions.find((item) => item.path === extensionPath);
 	assert(extension, "installed pi-analysis extension was not discovered");
-	assert.deepEqual([...extension.tools.keys()], ["analysis_list_adapters", "analysis_assess_readiness"]);
+	assert.deepEqual([...extension.tools.keys()], [
+		"analysis_list_adapters",
+		"analysis_assess_readiness",
+		"analysis_prepare_evidence",
+	]);
 	console.log(
 		JSON.stringify({
 			package: packageJson.name,

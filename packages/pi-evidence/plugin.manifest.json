@@ -14,6 +14,7 @@
 	"entrypoints": { "extension": "./dist/index.mjs" },
 	"capabilities": ["evidence", "provenance", "replay", "files"],
 	"tools": [
+		"evidence_validate_analysis_plan",
 		"evidence_validate_manifest",
 		"evidence_validate_capsule",
 		"evidence_verify_replay"

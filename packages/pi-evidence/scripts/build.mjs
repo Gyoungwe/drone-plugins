@@ -28,6 +28,7 @@ async function checkOutput() {
 		if (pattern.test(output)) throw new Error(`pi-evidence bundle contains forbidden import: ${pattern}`);
 	}
 	for (const name of [
+		"evidence_validate_analysis_plan",
 		"evidence_validate_manifest",
 		"evidence_validate_capsule",
 		"evidence_verify_replay",

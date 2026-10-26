@@ -1,8 +1,8 @@
 {
 	"version": 1,
 	"generator": "packages/pi-evidence/scripts/build.mjs",
-	"inputsSha256": "d789c68b05f48ae651bfcd4a717b044ef0cdb6cb03a9cb60be0d83c80e52781e",
+	"inputsSha256": "674681871f8480a33e7fcc65411d3b6f0e6eba04de9527776dec2e37d1640711",
 	"outputs": {
-		"dist/index.mjs": "0e8bc22875efda4e4a2ff4641c4e04424089c37cef60c99ac5a5049a2b56e85e"
+		"dist/index.mjs": "4768e13b87af00c2387c1c21991a5f3d59ddd99488162fa5139e6019783bac1c"
 	}
 }
