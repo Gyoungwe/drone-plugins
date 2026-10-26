@@ -601,7 +601,7 @@ var init_review_policy = __esm({
 });
 
 // src/core/wiki-policy.ts
-import { createHash as createHash7 } from "node:crypto";
+import { createHash as createHash8 } from "node:crypto";
 function targetWikiPath(path, project) {
   if (typeof path !== "string")
     throw new Error("Target must be a shared or current-project Wiki page, not navigation");
@@ -615,7 +615,7 @@ function targetWikiPath(path, project) {
   return path;
 }
 function immutableWikiProposalHash(proposal) {
-  return createHash7("sha256").update(
+  return createHash8("sha256").update(
     JSON.stringify({
       id: proposal.id,
       vaultId: proposal.vaultId,
@@ -937,7 +937,7 @@ __export(topic_memory_exports, {
   topicRunHash: () => topicRunHash,
   updateTopic: () => updateTopic
 });
-import { createHash as createHash8, randomUUID as randomUUID5 } from "node:crypto";
+import { createHash as createHash9, randomUUID as randomUUID5 } from "node:crypto";
 import { lstat as lstat5, mkdir as mkdir5, readFile as readFile5, realpath as realpath6, rename as rename5, unlink as unlink4, writeFile as writeFile5 } from "node:fs/promises";
 import { dirname as dirname3, isAbsolute as isAbsolute5, join as join7, relative as relative5, resolve as resolve6, sep as sep5 } from "node:path";
 function projectKey(project) {
@@ -1533,7 +1533,7 @@ var init_topic_memory = __esm({
       maxConflicts: 32,
       maxFileBytes: 512 * 1024
     });
-    digest2 = (value) => createHash8("sha256").update(String(value)).digest("hex");
+    digest2 = (value) => createHash9("sha256").update(String(value)).digest("hex");
     text = (value, limit) => String(value ?? "").normalize("NFKC").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, limit);
     slug = (value) => text(value, 160).toLowerCase().replace(/[^a-z0-9\u0080-\uffff]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 96) || "topic";
     ({ createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic } = createTopicMemoryApi(compatibilityKnowledgeRuntimeHost, { knowledgeDirectory }));
@@ -1923,7 +1923,7 @@ var init_ui_state = __esm({
 });
 
 // src/core/wiki-review-reader.ts
-import { createHash as createHash13 } from "node:crypto";
+import { createHash as createHash14 } from "node:crypto";
 function createWikiReviewReader(storage, currentNote) {
   async function loadProposal(service, id, project) {
     if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id))
@@ -2047,7 +2047,7 @@ var init_wiki_review_reader = __esm({
     init_wiki_policy();
     MAX_PENDING = 100;
     MAX_AGE = 24 * 60 * 60 * 1e3;
-    digest3 = (text2) => createHash13("sha256").update(text2).digest("hex");
+    digest3 = (text2) => createHash14("sha256").update(text2).digest("hex");
   }
 });
 
@@ -2066,12 +2066,12 @@ __export(wiki_review_exports, {
   validateWikiSourcePaths: () => validateWikiSourcePaths,
   wikiHistory: () => wikiHistory
 });
-import { createHash as createHash14, randomUUID as randomUUID10 } from "node:crypto";
+import { createHash as createHash15, randomUUID as randomUUID10 } from "node:crypto";
 import {
   link as link2,
   lstat as lstat6,
   mkdir as mkdir7,
-  readdir as readdir3,
+  readdir as readdir2,
   readFile as readFile7,
   rename as rename7,
   unlink as unlink5,
@@ -2085,7 +2085,7 @@ function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui) {
   const { invalidateKnowledgeUi: invalidateKnowledgeUi2 } = ui;
   const AUTOMATIC_AUTHORITY = Symbol("host-automatic-wiki");
   const START2 = "<!-- pi-agent:managed:start -->", END2 = "<!-- pi-agent:managed:end -->";
-  const digest4 = (text2) => createHash14("sha256").update(text2).digest("hex");
+  const digest4 = (text2) => createHash15("sha256").update(text2).digest("hex");
   const MAX_PENDING2 = 100, MAX_AGE2 = 24 * 60 * 60 * 1e3;
   async function exclusive(key, operation) {
     return runRuntimeExclusive2("wiki-review", key, operation);
@@ -2177,7 +2177,7 @@ ${block}
           throw new Error("Wiki proposal exceeds its storage budget");
         return JSON.parse(text2);
       },
-      list: (path) => readdir3(join11(knowledgeDirectory2(), path))
+      list: (path) => readdir2(join11(knowledgeDirectory2(), path))
     },
     currentNote
   );
@@ -2281,7 +2281,7 @@ ${refs}`
       await exclusive(root, async () => {
         const directory = join11(root, "pending");
         await mkdir7(directory, { recursive: true, mode: 448 });
-        if ((await readdir3(directory)).filter((name) => name.endsWith(".json")).length >= MAX_PENDING2)
+        if ((await readdir2(directory)).filter((name) => name.endsWith(".json")).length >= MAX_PENDING2)
           throw new Error(
             "Pending Wiki review limit reached; review existing candidates first"
           );
@@ -2588,7 +2588,7 @@ Accumulated research round: ${rationale.trim()}`.slice(
     return withKnowledgeBinding2(service.binding, async () => {
       let names;
       try {
-        names = await readdir3(join11(rootFor(service), "reviewed"));
+        names = await readdir2(join11(rootFor(service), "reviewed"));
       } catch (error) {
         if (error.code === "ENOENT") return [];
         throw error;
@@ -4012,13 +4012,14 @@ var semantic_settings_exports = {};
 __export(semantic_settings_exports, {
   createSemanticSettingsApi: () => createSemanticSettingsApi,
   createSemanticSettingsState: () => createSemanticSettingsState,
+  createStoredSemanticSettingsApi: () => createStoredSemanticSettingsApi,
   readSemanticSettings: () => readSemanticSettings,
   saveSemanticSettings: () => saveSemanticSettings,
   validateSemanticConfig: () => validateSemanticConfig2
 });
 init_config();
-import { randomUUID as randomUUID4 } from "node:crypto";
-import { lstat as lstat3, mkdir as mkdir4, readdir, readFile as readFile4, rename as rename4, unlink as unlink3, writeFile as writeFile4 } from "node:fs/promises";
+import { createHash as createHash7, randomUUID as randomUUID4 } from "node:crypto";
+import { lstat as lstat3, mkdir as mkdir4, readFile as readFile4, rename as rename4, unlink as unlink3, writeFile as writeFile4 } from "node:fs/promises";
 import { dirname as dirname2, join as join6 } from "node:path";
 var MAX_FILE_BYTES = 256 * 1024;
 var ENV_NAME2 = /^[A-Z_][A-Z0-9_]{0,127}$/;
@@ -4141,15 +4142,17 @@ function pathFor(vaultId, directory) {
   if (!directory) throw new Error("Application knowledge directory is not configured");
   return join6(directory, vaultId, "semantic.json");
 }
-async function assertDirectory(path) {
+async function assertDirectory(path, create) {
   try {
     const stat4 = await lstat3(path);
     if (!stat4.isDirectory() || stat4.isSymbolicLink()) throw new Error("Semantic settings path is unsafe");
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
-    await mkdir4(path, { recursive: true, mode: 448 });
-    const stat4 = await lstat3(path);
-    if (!stat4.isDirectory() || stat4.isSymbolicLink()) throw new Error("Semantic settings path is unsafe");
+    if (create) {
+      await mkdir4(path, { recursive: true, mode: 448 });
+      const stat4 = await lstat3(path);
+      if (!stat4.isDirectory() || stat4.isSymbolicLink()) throw new Error("Semantic settings path is unsafe");
+    }
   }
   let ancestor = path;
   for (let depth = 0; depth < 8 && ancestor !== dirname2(ancestor); depth++) {
@@ -4203,51 +4206,74 @@ function defaultSettings(state2, path) {
   state2.defaultUpdatedAt.set(path, updatedAt);
   return { version: 1, revision: 0, ...validateSemanticConfig2({}), updatedAt };
 }
-async function readUnlocked(state2, path) {
-  await assertDirectory(dirname2(path));
-  await assertFile(path);
-  try {
-    const raw = await readFile4(path, { encoding: "utf8", flag: "r" });
-    if (Buffer.byteLength(raw) > MAX_FILE_BYTES) throw new Error("Semantic settings file is too large");
-    const value = JSON.parse(raw);
-    return normalize2(value, value.revision, value.updatedAt);
-  } catch (error) {
-    if (error.code === "ENOENT") return defaultSettings(state2, path);
-    if (error instanceof SyntaxError) throw new Error("Semantic settings cannot be read: invalid JSON");
-    throw new Error(
-      `Semantic settings cannot be read: ${error instanceof Error ? error.message : String(error)}`
-    );
+function createStoredSemanticSettingsApi(storage, state2 = createSemanticSettingsState()) {
+  function unpack(vaultId, document) {
+    if (document.kind === "missing") return defaultSettings(state2, vaultId);
+    const value = document.value;
+    return normalize2(value, value?.revision, value?.updatedAt);
   }
+  return {
+    readSemanticSettings: async (vaultId) => unpack(vaultId, await storage.read(vaultId)),
+    async saveSemanticSettings(vaultId, input, expectedRevision) {
+      const document = await storage.read(vaultId), current = unpack(vaultId, document);
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision !== current.revision) throw new Error("Semantic settings revision is stale");
+      const value = normalize2({ version: 1, ...input }, current.revision + 1);
+      await storage.write(vaultId, value, document.version);
+      const saved = unpack(vaultId, await storage.read(vaultId));
+      if (JSON.stringify(saved) !== JSON.stringify(value)) throw new Error("Semantic settings write readback did not match");
+      return saved;
+    }
+  };
+}
+function localSemanticStorage(directory) {
+  async function read(vaultId) {
+    const path = pathFor(vaultId, directory());
+    await assertDirectory(dirname2(path), false);
+    await assertFile(path);
+    let raw;
+    try {
+      raw = await readFile4(path, "utf8");
+    } catch (error) {
+      if (error.code === "ENOENT") return { kind: "missing", version: null };
+      throw error;
+    }
+    if (Buffer.byteLength(raw) > MAX_FILE_BYTES) throw new Error("Semantic settings file is too large");
+    return { kind: "value", value: JSON.parse(raw), version: createHash7("sha256").update(raw).digest("hex") };
+  }
+  const queues = /* @__PURE__ */ new Map();
+  return {
+    read,
+    write(vaultId, value, expectedVersion) {
+      const prior = queues.get(vaultId) ?? Promise.resolve();
+      const operation = prior.catch(() => void 0).then(async () => {
+        const path = pathFor(vaultId, directory());
+        if ((await read(vaultId)).version !== expectedVersion) throw new Error("Semantic settings revision is stale");
+        await assertDirectory(dirname2(path), true);
+        const temp = join6(dirname2(path), `semantic.${randomUUID4()}.tmp`);
+        try {
+          await writeFile4(temp, `${JSON.stringify(value, null, 2)}
+`, { mode: 384, flag: "wx" });
+          await rename4(temp, path);
+        } finally {
+          try {
+            await unlink3(temp);
+          } catch (error) {
+            if (error.code !== "ENOENT") throw error;
+          }
+        }
+      });
+      queues.set(vaultId, operation);
+      return operation.finally(() => {
+        if (queues.get(vaultId) === operation) queues.delete(vaultId);
+      });
+    }
+  };
 }
 function createSemanticSettingsApi(state2 = createSemanticSettingsState(), directory = knowledgeDirectory()) {
   return semanticSettingsApiForDirectory(state2, () => directory);
 }
 function semanticSettingsApiForDirectory(state2, directory) {
-  return {
-    readSemanticSettings: async (vaultId) => readUnlocked(state2, pathFor(vaultId, directory())),
-    saveSemanticSettings: async (vaultId, input, expectedRevision) => {
-      const path = pathFor(vaultId, directory());
-      const current = await readUnlocked(state2, path);
-      if (!Number.isSafeInteger(expectedRevision) || expectedRevision !== current.revision)
-        throw new Error("Semantic settings revision is stale");
-      const value = normalize2({ version: 1, ...input }, current.revision + 1);
-      const dir = dirname2(path);
-      await assertDirectory(dir);
-      for (const entry of await readdir(dir))
-        if (/^semantic\.[a-f0-9-]+\.tmp$/.test(entry)) await unlink3(join6(dir, entry)).catch(() => {
-        });
-      const temp = join6(dir, `semantic.${randomUUID4()}.tmp`);
-      try {
-        await writeFile4(temp, `${JSON.stringify(value, null, 2)}
-`, { mode: 384, flag: "wx" });
-        await rename4(temp, path);
-      } finally {
-        await unlink3(temp).catch(() => {
-        });
-      }
-      return value;
-    }
-  };
+  return createStoredSemanticSettingsApi(localSemanticStorage(directory), state2);
 }
 var defaultApi = semanticSettingsApiForDirectory(createSemanticSettingsState(), knowledgeDirectory);
 var readSemanticSettings = (vaultId) => defaultApi.readSemanticSettings(vaultId);
@@ -4471,13 +4497,13 @@ init_wiki_policy();
 init_topic_memory();
 
 // src/core/maintenance.ts
-import { createHash as createHash9, randomUUID as randomUUID6 } from "node:crypto";
+import { createHash as createHash10, randomUUID as randomUUID6 } from "node:crypto";
 import { mkdir as mkdir6, rename as rename6, writeFile as writeFile6 } from "node:fs/promises";
 import { dirname as dirname4 } from "node:path";
 init_files();
 var START = "<!-- pi-agent:managed:start -->";
 var END = "<!-- pi-agent:managed:end -->";
-var hash = (text2) => createHash9("sha256").update(text2).digest("hex");
+var hash = (text2) => createHash10("sha256").update(text2).digest("hex");
 async function updateNavigation(vault, path, heading, body) {
   if (!["Home.md", "Wiki/Index.md", "Library/Index.md"].includes(path) && !/^Projects\/[a-z0-9-]+\/Index\.md$/.test(path))
     throw new Error("Not an allowed navigation target");
@@ -4547,7 +4573,7 @@ async function runNavigationMaintenance(service, project, limit = 3) {
 }
 
 // src/core/ingest-identity.ts
-import { createHash as createHash10 } from "node:crypto";
+import { createHash as createHash11 } from "node:crypto";
 
 // src/core/ingest-frontmatter.ts
 var KNOWLEDGE_TYPES = [
@@ -4569,7 +4595,7 @@ var NOTE_TYPES = [...KNOWLEDGE_TYPES, ...RUN_RESULT_TYPES];
 var MAX_FRONTMATTER_CHARS = 64 * 1024;
 
 // src/core/daily-discovery.ts
-import { readdir as readdir2, readFile as readFile6, stat as stat2 } from "node:fs/promises";
+import { readdir, readFile as readFile6, stat as stat2 } from "node:fs/promises";
 import { join as join8, relative as relative6, sep as sep6 } from "node:path";
 var DAILY_DISCOVERY_LIMITS = {
   maxScannedFiles: 4e3,
@@ -4682,7 +4708,7 @@ function expandWithGraph(hits, neighbors, options) {
 }
 
 // src/core/service.ts
-import { createHash as createHash11, randomUUID as randomUUID8 } from "node:crypto";
+import { createHash as createHash12, randomUUID as randomUUID8 } from "node:crypto";
 import { relative as relative7, resolve as resolve7, sep as sep7 } from "node:path";
 
 // src/core/worker-transport.ts
@@ -5021,7 +5047,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
     };
   }
   function fingerprintFor(settings) {
-    return createHash11("sha256").update(`${settings.provider}\0${settings.baseUrl}\0${settings.model}\0${settings.chunkChars || 1200}`).digest("hex");
+    return createHash12("sha256").update(`${settings.provider}\0${settings.baseUrl}\0${settings.model}\0${settings.chunkChars || 1200}`).digest("hex");
   }
   function awaitSemanticDeadline(operation, controller) {
     let onAbort;
@@ -5111,7 +5137,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
         this.tickets.set(ticket, {
           cwd: resolve7(cwd),
           project,
-          queryHash: createHash11("sha256").update(query).digest("hex"),
+          queryHash: createHash12("sha256").update(query).digest("hex"),
           query,
           navigation,
           linkedWiki: [...linkedWiki],
@@ -5184,7 +5210,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
           hash: page.hash,
           startLine: page.startLine,
           endLine: page.endLine,
-          excerptHash: createHash11("sha256").update(page.text).digest("hex")
+          excerptHash: createHash12("sha256").update(page.text).digest("hex")
         };
         state2.reads.delete(path);
         state2.reads.set(path, receipt);
@@ -5775,7 +5801,10 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
       };
     }
     close() {
-      if (!this.closePromise) this.closePromise = this.transport.close().finally(() => this.tickets.clear());
+      if (!this.closePromise) this.closePromise = this.transport.close().catch((error) => {
+        this.closePromise = null;
+        throw error;
+      }).finally(() => this.tickets.clear());
       return this.closePromise;
     }
     prepareUnload() {
@@ -5951,7 +5980,7 @@ __export(publication_exports, {
 init_config();
 init_runtime_host();
 init_runtime_host();
-import { createHash as createHash12, randomUUID as randomUUID9 } from "node:crypto";
+import { createHash as createHash13, randomUUID as randomUUID9 } from "node:crypto";
 init_review_policy();
 init_review_policy();
 init_ui_state();
@@ -5968,7 +5997,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
     })
   );
   const FIELD = "knowledgePublication";
-  const hash2 = (content) => createHash12("sha256").update(JSON.stringify(content ?? [])).digest("hex");
+  const hash2 = (content) => createHash13("sha256").update(JSON.stringify(content ?? [])).digest("hex");
   function sanitizeError(text2) {
     return diagnosticText(text2, 4096).trim();
   }
@@ -7171,7 +7200,7 @@ init_runtime_host();
 init_runtime_host();
 init_runtime_host();
 init_config();
-import { createHash as createHash15, randomUUID as randomUUID15 } from "node:crypto";
+import { createHash as createHash16, randomUUID as randomUUID15 } from "node:crypto";
 import { lstat as lstat9, mkdir as mkdir11, readFile as readFile11, realpath as realpath8, stat as stat3, writeFile as writeFile11 } from "node:fs/promises";
 import { dirname as dirname8, isAbsolute as isAbsolute8, join as join15, relative as relative9, resolve as resolve10 } from "node:path";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
@@ -7194,7 +7223,7 @@ var runtimeState = runtimeSlot("knowledge", "uiService", () => ({
 // src/core/experience-store.ts
 init_config();
 init_runtime_host();
-import { createHash as createHash16, randomUUID as randomUUID16 } from "node:crypto";
+import { createHash as createHash17, randomUUID as randomUUID16 } from "node:crypto";
 import { lstat as lstat10, mkdir as mkdir12, readFile as readFile12, rename as rename10, unlink as unlink8, writeFile as writeFile12 } from "node:fs/promises";
 import { isAbsolute as isAbsolute9, join as join16, relative as relative10, resolve as resolve11, sep as sep9 } from "node:path";
 var EXPERIENCE_LIMITS = Object.freeze({
@@ -7229,7 +7258,7 @@ init_wiki_review();
 init_topic_memory();
 
 // src/core/writer-lease.ts
-import { createHash as createHash17, randomUUID as randomUUID17 } from "node:crypto";
+import { createHash as createHash18, randomUUID as randomUUID17 } from "node:crypto";
 import {
   closeSync,
   fstatSync,
@@ -7318,7 +7347,7 @@ function acquireKnowledgeWriterLease(input, leaseDirectory = join17(
   };
   try {
     for (const resource of resources) {
-      const key = createHash17("sha256").update(resource).digest("hex");
+      const key = createHash18("sha256").update(resource).digest("hex");
       locks.push(acquireFile(join17(leaseDirectory, `${key}.lock`)));
     }
   } catch (error) {
@@ -7511,9 +7540,153 @@ function createKnowledgeSessionServices(pool, signal) {
 }
 
 // src/extension/internal-knowledge-extension.ts
+import { join as join18, resolve as resolve12 } from "node:path";
+
+// src/extension/read-tools.ts
+function createKnowledgePrepareTool({ prepare }) {
+  return {
+    name: "research_prepare_knowledge",
+    drone: {
+      readOnly: true,
+      recoverySafe: true,
+      capabilities: ["research", "knowledge"],
+      activity: { text: "\u6B63\u5728\u8BFB\u53D6\u77E5\u8BC6\u5E93\u5BFC\u822A\u4E0E\u9879\u76EE\u80CC\u666F\u2026", phase: "knowledge-search" }
+    },
+    label: "Obsidian \xB7 \u8BFB\u53D6\u5BFC\u822A\u4E0E\u9879\u76EE\u80CC\u666F",
+    description: "Read the current application Vault navigation before search. Refresh after a Vault/navigation change. Does not rewrite notes.",
+    parameters: { type: "object", properties: {} },
+    execute: async (_id, _params, _signal, _update, ctx) => result(await prepare(ctx))
+  };
+}
+function createKnowledgeReadTool({ ensureTurn, toolBudget, observer }) {
+  return {
+    name: "research_read_knowledge",
+    drone: {
+      readOnly: true,
+      recoverySafe: true,
+      journal: true,
+      capabilities: ["research", "knowledge"],
+      activity: { text: "\u6B63\u5728\u9605\u8BFB Wiki \u4E0E\u77E5\u8BC6\u8BC1\u636E\u2026", phase: "reading" }
+    },
+    label: "Obsidian \xB7 \u9605\u8BFB Wiki / \u8BC1\u636E\u7247\u6BB5",
+    description: "Read a bounded Markdown range, version and human review from shared/current-project knowledge. The first chunk also returns outgoing links and backlinks (related notes) so you can navigate without extra searches. Does not follow symlinks.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        start_line: { type: "integer", minimum: 1 },
+        max_chars: { type: "integer", minimum: 200, maximum: 8e3 }
+      },
+      required: ["path"]
+    },
+    execute: async (_id, p, _s, _u, ctx) => {
+      const c = await ensureTurn(ctx);
+      const blocked = toolBudget.consume(
+        "read",
+        JSON.stringify([p.path, p.start_line ?? 1, p.max_chars ?? 5e3])
+      );
+      if (blocked) return result(blocked);
+      try {
+        observer?.updateFlow?.(ctx, {
+          phase: /(?:^|\/)Wiki\//.test(p.path) ? "reading-wiki" : "reading-evidence"
+        });
+        const page = await c.service.read(c.ticket, ctx.cwd, {
+          path: p.path,
+          startLine: p.start_line,
+          maxChars: p.max_chars
+        });
+        observer?.noteRead?.(ctx, page);
+        observer?.recordRead?.(_id, ctx, c, page, p);
+        let links;
+        if (page.hash && !page.missing && (p.start_line ?? 1) === 1) {
+          const nl = await c.service.request("noteLinks", {
+            path: page.path || p.path,
+            project: c.project
+          });
+          const slim = (xs) => (xs || []).filter((x) => x.exists !== false).slice(0, 12).map((x) => ({ path: x.path, title: x.title }));
+          links = { outgoing: slim(nl.outgoing), backlinks: slim(nl.incoming) };
+        }
+        return result({
+          ...page,
+          ...links ? { links } : {},
+          ...page.hash && !page.missing ? {
+            citation: `[[${page.path || p.path}]]`,
+            citationGuidance: "Use this exact citation only beside claims supported by the returned text. Reuse this receipt; do not reread via generic read."
+          } : {}
+        });
+      } catch (error) {
+        observer?.updateFlow?.(ctx, { phase: "blocked", error: String(error.message).slice(0, 400) });
+        throw error;
+      }
+    }
+  };
+}
+function createKnowledgeSearchTool({ ensureTurn, toolBudget, observer, searchContext }) {
+  return {
+    name: "research_search_knowledge",
+    drone: {
+      readOnly: true,
+      recoverySafe: true,
+      journal: true,
+      capabilities: ["research", "knowledge"],
+      activity: { text: "\u6B63\u5728\u68C0\u7D22\u77E5\u8BC6\u5E93\u7D22\u5F15\u2026", phase: "knowledge-search" }
+    },
+    label: "Obsidian \xB7 \u589E\u91CF\u7D22\u5F15\u68C0\u7D22",
+    description: "Search application-wide shared knowledge plus the current project. Requires current navigation; read linked Wiki before evidence search. Incomplete indexes never mean no knowledge.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        wiki_only: { type: "boolean" },
+        limit: { type: "integer", minimum: 1, maximum: 12 }
+      },
+      required: ["query"]
+    },
+    execute: async (_id, p, _s, _u, ctx) => {
+      const c = await ensureTurn(ctx, p.query);
+      const blocked = toolBudget.consume("search", p.query);
+      if (blocked) return result(blocked);
+      observer?.updateFlow?.(ctx, { phase: "searching", error: null });
+      try {
+        const found = await c.service.search(c.ticket, ctx.cwd, {
+          query: p.query,
+          wikiOnly: p.wiki_only,
+          limit: p.limit,
+          context: await searchContext?.(ctx, c)
+        });
+        observer?.noteSearch?.(ctx, found, !!p.wiki_only);
+        const slimHits = Array.isArray(found?.hits) ? found.hits.map(
+          ({ rank: _r, fusionScore: _f, ...hit }) => typeof hit.text === "string" && hit.text.length > 700 ? { ...hit, text: hit.text.slice(0, 700), truncated: true } : hit
+        ) : found?.hits;
+        return result(slimHits ? { ...found, hits: slimHits } : found);
+      } catch (error) {
+        observer?.updateFlow?.(ctx, { phase: "blocked", error: String(error.message).slice(0, 400) });
+        throw error;
+      }
+    }
+  };
+}
+function createKnowledgeAnswerCheckTool({ ensureTurn, preflight }) {
+  return {
+    name: "research_check_answer",
+    drone: { readOnly: true, recoverySafe: true, capabilities: ["research", "knowledge"] },
+    label: "Obsidian \xB7 \u56DE\u7B54\u9884\u68C0\u4E0E\u5177\u4F53\u539F\u56E0",
+    description: "Preflight the exact final draft using the same host checks as publication. Returns actual missing paths and observed task outcomes. Does not publish, create read receipts, call a model or bypass the final check.",
+    parameters: {
+      type: "object",
+      properties: { draft: { type: "string", maxLength: 1e5 } },
+      required: ["draft"]
+    },
+    execute: async (_id, p, _s, _u, ctx) => {
+      await ensureTurn(ctx);
+      return result(await preflight(ctx, p.draft));
+    }
+  };
+}
+
+// src/extension/internal-knowledge-extension.ts
 init_runtime_host();
 init_config();
-import { join as join18, resolve as resolve12 } from "node:path";
 init_flow_cards();
 init_topic_memory();
 init_topic_memory();
@@ -8074,19 +8247,7 @@ ${JSON.stringify(visible)}`
         throw new Error("Knowledge binding changed; topic memory is no longer valid");
       return c;
     }
-    registerTool(pi, {
-      name: "research_prepare_knowledge",
-      drone: {
-        readOnly: true,
-        recoverySafe: true,
-        capabilities: ["research", "knowledge"],
-        activity: { text: "\u6B63\u5728\u8BFB\u53D6\u77E5\u8BC6\u5E93\u5BFC\u822A\u4E0E\u9879\u76EE\u80CC\u666F\u2026", phase: "knowledge-search" }
-      },
-      label: "Obsidian \xB7 \u8BFB\u53D6\u5BFC\u822A\u4E0E\u9879\u76EE\u80CC\u666F",
-      description: "Read the current application Vault navigation before search. Refresh after a Vault/navigation change. Does not rewrite notes.",
-      parameters: { type: "object", properties: {} },
-      execute: async (_id, _params, _signal, _update, ctx) => result(await prepare(ctx))
-    });
+    registerTool(pi, createKnowledgePrepareTool({ prepare }));
     registerTool(pi, {
       name: "research_topics",
       drone: { readOnly: true, capabilities: ["research", "knowledge"] },
@@ -8140,43 +8301,13 @@ ${JSON.stringify(visible)}`
         });
       }
     });
-    registerTool(pi, {
-      name: "research_read_knowledge",
-      drone: {
-        readOnly: true,
-        recoverySafe: true,
-        journal: true,
-        capabilities: ["research", "knowledge"],
-        activity: { text: "\u6B63\u5728\u9605\u8BFB Wiki \u4E0E\u77E5\u8BC6\u8BC1\u636E\u2026", phase: "reading" }
-      },
-      label: "Obsidian \xB7 \u9605\u8BFB Wiki / \u8BC1\u636E\u7247\u6BB5",
-      description: "Read a bounded Markdown range, version and human review from shared/current-project knowledge. The first chunk also returns outgoing links and backlinks (related notes) so you can navigate without extra searches. Does not follow symlinks.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: { type: "string" },
-          start_line: { type: "integer", minimum: 1 },
-          max_chars: { type: "integer", minimum: 200, maximum: 8e3 }
-        },
-        required: ["path"]
-      },
-      execute: async (_id, p, _s, _u, ctx) => {
-        const c = await ensureTurn(ctx);
-        const blocked = toolBudget.consume(
-          "read",
-          JSON.stringify([p.path, p.start_line ?? 1, p.max_chars ?? 5e3])
-        );
-        if (blocked) return result(blocked);
-        try {
-          updateKnowledgeFlow2(ctx, {
-            phase: /(?:^|\/)Wiki\//.test(p.path) ? "reading-wiki" : "reading-evidence"
-          });
-          const page = await c.service.read(c.ticket, ctx.cwd, {
-            path: p.path,
-            startLine: p.start_line,
-            maxChars: p.max_chars
-          });
-          noteKnowledgeRead2(ctx, page);
+    registerTool(pi, createKnowledgeReadTool({
+      ensureTurn,
+      toolBudget,
+      observer: {
+        updateFlow: updateKnowledgeFlow2,
+        noteRead: noteKnowledgeRead2,
+        recordRead: (_id, ctx, c, page, p) => {
           attachRecovery(ctx);
           if (page.hash && page.text) {
             recovery.set(_id, {
@@ -8195,30 +8326,9 @@ ${JSON.stringify(visible)}`
             while (recovery.size > 8) recovery.delete(recovery.keys().next().value);
             saveRecovery();
           }
-          let links;
-          if (page.hash && !page.missing && (p.start_line ?? 1) === 1 && typeof c.service.request === "function") {
-            try {
-              const nl = await c.service.request("noteLinks", { path: page.path || p.path });
-              const slim = (xs) => (xs || []).filter((x) => x.exists !== false).slice(0, 12).map((x) => ({ path: x.path, title: x.title }));
-              links = { outgoing: slim(nl.outgoing), backlinks: slim(nl.incoming) };
-            } catch {
-              links = void 0;
-            }
-          }
-          return result({
-            ...page,
-            ...links ? { links } : {},
-            ...page.hash && !page.missing ? {
-              citation: `[[${page.path || p.path}]]`,
-              citationGuidance: "Use this exact citation only beside claims supported by the returned text. Reuse this receipt; do not reread via generic read."
-            } : {}
-          });
-        } catch (error) {
-          updateKnowledgeFlow2(ctx, { phase: "blocked", error: String(error.message).slice(0, 400) });
-          throw error;
         }
       }
-    });
+    }));
     registerTool(pi, {
       name: "research_restore_evidence",
       drone: { readOnly: true, capabilities: ["research"] },
@@ -8254,68 +8364,16 @@ ${JSON.stringify(visible)}`
         return result(page);
       }
     });
-    registerTool(pi, {
-      name: "research_search_knowledge",
-      drone: {
-        readOnly: true,
-        recoverySafe: true,
-        journal: true,
-        capabilities: ["research", "knowledge"],
-        activity: { text: "\u6B63\u5728\u68C0\u7D22\u77E5\u8BC6\u5E93\u7D22\u5F15\u2026", phase: "knowledge-search" }
-      },
-      label: "Obsidian \xB7 \u589E\u91CF\u7D22\u5F15\u68C0\u7D22",
-      description: "Search application-wide shared knowledge plus the current project. Requires current navigation; read linked Wiki before evidence search. Incomplete indexes never mean no knowledge.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string" },
-          wiki_only: { type: "boolean" },
-          limit: { type: "integer", minimum: 1, maximum: 12 }
-        },
-        required: ["query"]
-      },
-      execute: async (_id, p, _s, _u, ctx) => {
-        const c = await ensureTurn(ctx, p.query);
-        const blocked = toolBudget.consume("search", p.query);
-        if (blocked) return result(blocked);
-        updateKnowledgeFlow2(ctx, { phase: "searching", error: null });
-        try {
-          const found = await c.service.search(c.ticket, ctx.cwd, {
-            query: p.query,
-            wikiOnly: p.wiki_only,
-            limit: p.limit,
-            context: activeTopic ? JSON.parse(
-              await (topicMemory || createTopicMemory2({ binding: c.binding, project: c.project })).context(
-                activeTopic.id
-              )
-            ) : void 0
-          });
-          noteKnowledgeSearch2(ctx, found, !!p.wiki_only);
-          const slimHits = Array.isArray(found?.hits) ? found.hits.map(
-            ({ rank: _r, fusionScore: _f, ...hit }) => typeof hit.text === "string" && hit.text.length > 700 ? { ...hit, text: hit.text.slice(0, 700), truncated: true } : hit
-          ) : found?.hits;
-          return result(slimHits ? { ...found, hits: slimHits } : found);
-        } catch (error) {
-          updateKnowledgeFlow2(ctx, { phase: "blocked", error: String(error.message).slice(0, 400) });
-          throw error;
-        }
-      }
-    });
-    registerTool(pi, {
-      name: "research_check_answer",
-      drone: { readOnly: true, recoverySafe: true, capabilities: ["research", "knowledge"] },
-      label: "Obsidian \xB7 \u56DE\u7B54\u9884\u68C0\u4E0E\u5177\u4F53\u539F\u56E0",
-      description: "Preflight the exact final draft using the same host checks as publication. Returns actual missing paths and observed task outcomes. Does not publish, create read receipts, call a model or bypass the final check.",
-      parameters: {
-        type: "object",
-        properties: { draft: { type: "string", maxLength: 1e5 } },
-        required: ["draft"]
-      },
-      execute: async (_id, p, _s, _u, ctx) => {
-        await ensureTurn(ctx);
-        return result(await publication.preflight(ctx, p.draft));
-      }
-    });
+    registerTool(pi, createKnowledgeSearchTool({
+      ensureTurn,
+      toolBudget,
+      observer: { updateFlow: updateKnowledgeFlow2, noteSearch: noteKnowledgeSearch2 },
+      searchContext: async (_ctx, c) => activeTopic ? JSON.parse(await (topicMemory || createTopicMemory2({ binding: c.binding, project: c.project })).context(activeTopic.id)) : void 0
+    }));
+    registerTool(pi, createKnowledgeAnswerCheckTool({
+      ensureTurn,
+      preflight: (ctx, draft) => publication.preflight(ctx, draft)
+    }));
     registerTool(pi, {
       name: "research_task_status",
       drone: { readOnly: true, recoverySafe: true, capabilities: ["research", "knowledge"] },
