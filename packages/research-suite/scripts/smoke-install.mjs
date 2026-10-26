@@ -15,6 +15,7 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 const packageRoot = new URL("..", import.meta.url).pathname;
+const sdkFamily = ["chord", "pi-agent-core", "pi-ai", "pi-codemode", "pi-coding-agent", "pi-mcp", "pi-telemetry", "pi-tui"];
 const root = await mkdtemp(join(tmpdir(), "drone-research-suite-install-"));
 const tarballRoot = join(root, "tarballs");
 const installRoot = join(root, "install");
@@ -45,7 +46,7 @@ try {
 			type: "module",
 			dependencies: {
 				[packageJson.name]: `file:${tarball}`,
-				"@earendil-works/pi-coding-agent": "1.1.0",
+				...Object.fromEntries(sdkFamily.map((name) => [`@earendil-works/${name}`, "1.1.0"])),
 			},
 		}, null, 2)}\n`,
 		"utf8",
@@ -59,7 +60,10 @@ try {
 	const installed = JSON.parse(await readFile(join(suiteRoot, "package.json"), "utf8"));
 	assert.equal(installed.version, packageJson.version);
 	const extensions = installed.pi.extensions.map((entry) => join(suiteRoot, entry));
-	const { DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+	const sdkEntry = pathToFileURL(
+		join(installRoot, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "index.js"),
+	).href;
+	const { DefaultResourceLoader, SettingsManager } = await import(sdkEntry);
 	const loader = new DefaultResourceLoader({
 		cwd: installRoot,
 		agentDir: join(installRoot, "agent"),
