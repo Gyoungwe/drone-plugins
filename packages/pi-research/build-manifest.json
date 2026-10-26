@@ -1,8 +1,9 @@
 {
   "version": 1,
   "generator": "packages/pi-research/scripts/build.mjs",
-  "inputsSha256": "883c7a5cd167f3bd2a2d1bfd53d28a836108aee85c73e84fc06fa46a39e799fd",
+  "inputsSha256": "a0e37276c7026e5fbecde9d84dde2f7e6248249e42a78b41169864d025eecec7",
   "outputs": {
+    "dist/desktop-runtime.mjs": "b9e6f66731ca7b8242580df9fa10c743a7bc800ab8aae002dfc06dbec43c2cc6",
     "dist/host.mjs": "9a1f65402f1d687e388d8ac744872003f3e2bfd83c6dd186fcde881bf87c4bbf",
     "dist/index.mjs": "d25fd0e64f1bbbdfc45bc4f6bcc3d39ba0344a131b9e0d079e99d589ddabeaaf",
     "dist/types/core/claim-bindings.d.ts": "876229bb74474e71943fd1843cef98b38325daf5dc163cc28f2caabc5348e533",
@@ -28,6 +29,7 @@
     "dist/types/core/zotero-setup.d.ts": "2963c92ef2ca4ad896e6ae94e1ebd68bdcfe3b7cee225b18167729b98bb2672c",
     "dist/types/core/zotero-write-runtime.d.ts": "ac01ab7215139c1715e93478304e3c2e76424ae077fba3d0304889a4157d576a",
     "dist/types/core/zotero-write.d.ts": "c6c0e5e940571d6f0a4b7f176aa8d2fc10bf6c7542c383250f98ea592a629446",
+    "dist/types/desktop/runtime.d.ts": "db463335d94e1cb8d7490343b48248ce2dd2fc75adecff021373c9e576972473",
     "dist/types/evidence-gate.d.ts": "4f01bdeb41824004cf332e009f79dffea3f0f377e0e49895ac01db913ea01eea",
     "dist/types/evidence-loop.d.ts": "f8a7724620e7202c0b028729cbeff7e2afb5d9efe606c2bac8f163ee939d28f7",
     "dist/types/extension.d.ts": "fa43776cd14beb0b43d0b2742cf31306c1ea1086eb3db9d0a4f1a5adc71f57ef",

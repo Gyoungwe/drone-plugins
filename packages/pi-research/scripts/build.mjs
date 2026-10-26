@@ -17,10 +17,11 @@ if (packageJson.name !== "@gyoungwe/pi-research") fail("unexpected package name"
 if (manifest.version !== packageJson.version) fail("manifest version must match package version");
 if (manifest.entrypoints?.extension !== "./dist/index.mjs") fail("extension entrypoint is incorrect");
 if (manifest.entrypoints?.host !== "./dist/host.mjs") fail("host entrypoint is incorrect");
+if (manifest.entrypoints?.desktopRuntime !== "./dist/desktop-runtime.mjs") fail("desktop runtime entrypoint is incorrect");
 
 const compiled = await build({
   absWorkingDir: packageRoot,
-  entryPoints: {index: "src/index.ts", host: "src/host.ts"},
+  entryPoints: {index: "src/index.ts", host: "src/host.ts", "desktop-runtime": "src/desktop/runtime.ts"},
   bundle: true, format: "esm", platform: "node", target: "node20",
   outdir: "dist", outExtension: {".js": ".mjs"},
   sourcemap: false, preserveSymlinks: true, external: ["node:*"], metafile: true, write: false,

@@ -33,3 +33,12 @@ original paths and reachable Git ancestry. Build with `npm run build`; `npm run
 check` runs reproducible artifact checks, unit tests, package smoke, and real SDK
 sessions on pinned Pi 1.1.0 and npm latest using isolated HOME and an offline faux
 provider. These sessions exercise actual SDK tool dispatch without user credentials.
+
+The package also ships the API 1.3 candidate `entrypoints.desktopRuntime` at
+`dist/desktop-runtime.mjs`. Its `status` and `listRuns` operations are read-only:
+the Desktop host supplies the selected workspace scope and `roots.resolve` /
+`files.list` /
+`files.readText` capabilities, while the adapter rejects application scope and
+path traversal before any capability call. The adapter does not start a model,
+subprocess, network request or write; the public API 1.3 release and full Desktop
+GUI acceptance remain separate release gates.
