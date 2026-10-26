@@ -1,0 +1,28 @@
+{
+  "name": "drone-research-ui",
+  "version": "0.3.0",
+  "displayName": "Research",
+  "description": "Research entry, citation summary and connector status for Drone Desktop.",
+  "droneUi": 1,
+  "main": "bundle.js",
+  "contributions": [
+    {
+      "id": "research-home",
+      "region": "home.section",
+      "export": "ResearchHome",
+      "title": "Research"
+    },
+    {
+      "id": "research-citations",
+      "region": "panel.tab",
+      "export": "ResearchCitations",
+      "title": "Citations"
+    },
+    {
+      "id": "research-connectors",
+      "region": "skills.section",
+      "export": "ResearchConnectors",
+      "title": "Research connectors"
+    }
+  ]
+}

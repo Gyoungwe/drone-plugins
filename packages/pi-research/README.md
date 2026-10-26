@@ -1,7 +1,7 @@
 # @gyoungwe/pi-research
 
 Self-contained research evidence tools for native Pi and Drone's public host
-composition. Version 0.2.0 is a release candidate in this repository; this change
+composition. Version 0.3.0 is an unpublished release candidate in this repository; this change
 does not publish it to npm.
 
 The native entry registers `research_search_sources`, `research_read_source`,

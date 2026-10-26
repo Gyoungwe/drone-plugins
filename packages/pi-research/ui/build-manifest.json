@@ -1,0 +1,13 @@
+{
+  "artifactSource": "ui/src/index.tsx",
+  "inputs": {
+    "ui/src/index.tsx": "fa8b8831aa8c475b4ae483d83c27e8c1b451a312a3d89b5614295010132ee7cb",
+    "scripts/build-ui.mjs": "3e89c13cd4878cefa605390b7e6d199eb99b77933d88e4ac79afafecf3fb36ab",
+    "package.json": "db893cac8506c630fc4f2c463ad62afa0b6aa03053944489e6aa2b85dd13c26f",
+    "plugin.manifest.json": "4bed4e12f9170622f1b374e369a9ba98218349ecaff38f4e10513f91cb7bacf5",
+    "ui/plugin.json": "c856e094b3b775a74f764617fd948c91b2f2e7029813fc5837bf34b9920938d8"
+  },
+  "outputs": {
+    "ui/bundle.js": "dc6c9b4f7097d0451550da56a2e5108fa0821afd46d0845d6c1351a109bdf699"
+  }
+}

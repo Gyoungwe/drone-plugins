@@ -18,6 +18,7 @@ if (manifest.version !== packageJson.version) fail("manifest version must match 
 if (manifest.entrypoints?.extension !== "./dist/index.mjs") fail("extension entrypoint is incorrect");
 if (manifest.entrypoints?.host !== "./dist/host.mjs") fail("host entrypoint is incorrect");
 if (manifest.entrypoints?.desktopRuntime !== "./dist/desktop-runtime.mjs") fail("desktop runtime entrypoint is incorrect");
+if (manifest.entrypoints?.ui !== "./ui/plugin.json") fail("UI entrypoint is incorrect");
 
 const compiled = await build({
   absWorkingDir: packageRoot,
@@ -81,4 +82,5 @@ if (checkOnly) {
   }
   await writeFile(manifestPath, `${JSON.stringify(buildManifest, null, 2)}\n`);
 }
+execFileSync(process.execPath, [join(packageRoot, "scripts/build-ui.mjs"), ...(checkOnly ? ["--check"] : [])], { cwd: packageRoot, stdio: "inherit" });
 console.log(`pi-research source artifacts ${checkOnly ? "match a clean rebuild" : "built"}`);

@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 const root = new URL("..", import.meta.url).pathname;
+const uiManifest = JSON.parse(await readFile(join(root, "ui/plugin.json"), "utf8"));
+const uiBundle = await readFile(join(root, "ui/bundle.js"), "utf8");
+assert.deepEqual(uiManifest.contributions.map((entry) => entry.region), ["home.section", "panel.tab", "skills.section"]);
+for (const exportName of ["ResearchHome", "ResearchCitations", "ResearchConnectors"]) assert.ok(uiBundle.includes(exportName));
 const { default: register } = await import(pathToFileURL(join(root, "dist/index.mjs")));
 const { researchHostLoader, registerResearchHost, zoteroHostLoader, registerZoteroHost } = await import(pathToFileURL(join(root, "dist/host.mjs")));
 const { default: createDesktopRuntime } = await import(pathToFileURL(join(root, "dist/desktop-runtime.mjs")));
@@ -56,4 +60,4 @@ assert.equal(search.details.count, 1);
 const run = await tools.get("research_loop").execute("smoke", {action: "start", query: "source"}, new AbortController().signal, () => undefined, ctx);
 assert.equal(run.details.evidence_gate.stage, "created");
 await rm(workspace, {recursive: true, force: true});
-console.log(JSON.stringify({registered: [...tools.keys()], hostOperations: [...registeredHostOperations.keys()], zoteroHostOperations: [...zoteroOperations.keys()], zoteroLookup: "found", searchCount: search.details.count, lifecycleStage: run.details.evidence_gate.stage}));
+console.log(JSON.stringify({uiContributions: uiManifest.contributions.map((entry) => entry.id), registered: [...tools.keys()], hostOperations: [...registeredHostOperations.keys()], zoteroHostOperations: [...zoteroOperations.keys()], zoteroLookup: "found", searchCount: search.details.count, lifecycleStage: run.details.evidence_gate.stage}));
