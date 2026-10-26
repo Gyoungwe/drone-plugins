@@ -29,7 +29,8 @@
     "build:check": "node scripts/build.mjs --check",
     "typecheck": "node -e \"process.exit(0)\"",
     "test": "node --test test/manifest-tools.test.mjs",
-    "test:pdf": "node scripts/check-pdf.mjs"
+    "test:pdf": "node scripts/check-pdf.mjs",
+    "smoke:install": "node scripts/smoke-install.mjs"
   },
   "pi": {
     "extensions": [
