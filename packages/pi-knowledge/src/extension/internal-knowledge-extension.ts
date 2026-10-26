@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { join, resolve } from "node:path";
+import { createKnowledgePrepareTool, createKnowledgeReadTool, createKnowledgeSearchTool, createKnowledgeAnswerCheckTool } from "./read-tools.js";
 import * as compatibilityHost from "../core/runtime-host.js";
 import type { KnowledgeExtensionHost } from "@gyoungwe/plugin-api/knowledge";
 import * as compatibilityConfig from "../core/config.js";
@@ -692,20 +693,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				throw new Error("Knowledge binding changed; topic memory is no longer valid");
 			return c;
 		}
-		registerTool(pi, {
-			name: "research_prepare_knowledge",
-			drone: {
-				readOnly: true,
-				recoverySafe: true,
-				capabilities: ["research", "knowledge"],
-				activity: { text: "正在读取知识库导航与项目背景…", phase: "knowledge-search" },
-			},
-			label: "Obsidian · 读取导航与项目背景",
-			description:
-				"Read the current application Vault navigation before search. Refresh after a Vault/navigation change. Does not rewrite notes.",
-			parameters: { type: "object", properties: {} },
-			execute: async (_id, _params, _signal, _update, ctx) => result(await prepare(ctx)),
-		});
+		registerTool(pi, createKnowledgePrepareTool({ prepare }));
 		registerTool(pi, {
 			name: "research_topics",
 			drone: { readOnly: true, capabilities: ["research", "knowledge"] },
@@ -765,44 +753,12 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				});
 			},
 		});
-		registerTool(pi, {
-			name: "research_read_knowledge",
-			drone: {
-				readOnly: true,
-				recoverySafe: true,
-				journal: true,
-				capabilities: ["research", "knowledge"],
-				activity: { text: "正在阅读 Wiki 与知识证据…", phase: "reading" },
-			},
-			label: "Obsidian · 阅读 Wiki / 证据片段",
-			description:
-				"Read a bounded Markdown range, version and human review from shared/current-project knowledge. The first chunk also returns outgoing links and backlinks (related notes) so you can navigate without extra searches. Does not follow symlinks.",
-			parameters: {
-				type: "object",
-				properties: {
-					path: { type: "string" },
-					start_line: { type: "integer", minimum: 1 },
-					max_chars: { type: "integer", minimum: 200, maximum: 8000 },
-				},
-				required: ["path"],
-			},
-			execute: async (_id, p, _s, _u, ctx) => {
-				const c = await ensureTurn(ctx);
-				const blocked = toolBudget.consume(
-					"read",
-					JSON.stringify([p.path, p.start_line ?? 1, p.max_chars ?? 5000]),
-				);
-				if (blocked) return result(blocked);
-				try {
-					updateKnowledgeFlow(ctx, {
-						phase: /(?:^|\/)Wiki\//.test(p.path) ? "reading-wiki" : "reading-evidence",
-					});
-					const page = await c.service.read(c.ticket, ctx.cwd, {
-						path: p.path,
-						startLine: p.start_line,
-						maxChars: p.max_chars,
-					});
-					noteKnowledgeRead(ctx, page);
+		registerTool(pi, createKnowledgeReadTool({
+			ensureTurn, toolBudget,
+			observer: {
+				updateFlow: updateKnowledgeFlow,
+				noteRead: noteKnowledgeRead,
+				recordRead: (_id, ctx, c, page, p) => {
 					attachRecovery(ctx);
 					if (page.hash && page.text) {
 						recovery.set(_id, {
@@ -821,38 +777,9 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 						while (recovery.size > 8) recovery.delete(recovery.keys().next().value);
 						saveRecovery();
 					}
-					// 双向链接：把出链/反链一并返回，省去 agent 再去搜索邻居笔记的往返
-					let links;
-					if (page.hash && !page.missing && (p.start_line ?? 1) === 1 && typeof c.service.request === "function") {
-						try {
-							const nl = await c.service.request("noteLinks", { path: page.path || p.path });
-							const slim = (xs) =>
-								(xs || [])
-									.filter((x) => x.exists !== false)
-									.slice(0, 12)
-									.map((x) => ({ path: x.path, title: x.title }));
-							links = { outgoing: slim(nl.outgoing), backlinks: slim(nl.incoming) };
-						} catch {
-							links = undefined;
-						}
-					}
-					return result({
-						...page,
-						...(links ? { links } : {}),
-						...(page.hash && !page.missing
-							? {
-									citation: `[[${page.path || p.path}]]`,
-									citationGuidance:
-										"Use this exact citation only beside claims supported by the returned text. Reuse this receipt; do not reread via generic read.",
-								}
-							: {}),
-					});
-				} catch (error) {
-					updateKnowledgeFlow(ctx, { phase: "blocked", error: String(error.message).slice(0, 400) });
-					throw error;
-				}
+				},
 			},
-		});
+		}));
 		registerTool(pi, {
 			name: "research_restore_evidence",
 			drone: { readOnly: true, capabilities: ["research"] },
@@ -896,77 +823,16 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				return result(page);
 			},
 		});
-		registerTool(pi, {
-			name: "research_search_knowledge",
-			drone: {
-				readOnly: true,
-				recoverySafe: true,
-				journal: true,
-				capabilities: ["research", "knowledge"],
-				activity: { text: "正在检索知识库索引…", phase: "knowledge-search" },
-			},
-			label: "Obsidian · 增量索引检索",
-			description:
-				"Search application-wide shared knowledge plus the current project. Requires current navigation; read linked Wiki before evidence search. Incomplete indexes never mean no knowledge.",
-			parameters: {
-				type: "object",
-				properties: {
-					query: { type: "string" },
-					wiki_only: { type: "boolean" },
-					limit: { type: "integer", minimum: 1, maximum: 12 },
-				},
-				required: ["query"],
-			},
-			execute: async (_id, p, _s, _u, ctx) => {
-				const c = await ensureTurn(ctx, p.query);
-				const blocked = toolBudget.consume("search", p.query);
-				if (blocked) return result(blocked);
-				updateKnowledgeFlow(ctx, { phase: "searching", error: null });
-				try {
-					const found = await c.service.search(c.ticket, ctx.cwd, {
-						query: p.query,
-						wikiOnly: p.wiki_only,
-						limit: p.limit,
-						context: activeTopic
-							? JSON.parse(
-									await (topicMemory || createTopicMemory({ binding: c.binding, project: c.project })).context(
-										activeTopic.id,
-									),
-								)
-							: undefined,
-					});
-					noteKnowledgeSearch(ctx, found, !!p.wiki_only);
-					// 只把定位所需的字段交给模型：片段 ≤700 字，去掉排序内部分数；全文用 research_read_knowledge 读
-					const slimHits = Array.isArray(found?.hits)
-						? found.hits.map(({ rank: _r, fusionScore: _f, ...hit }) =>
-							typeof hit.text === "string" && hit.text.length > 700
-								? { ...hit, text: hit.text.slice(0, 700), truncated: true }
-								: hit,
-						)
-						: found?.hits;
-					return result(slimHits ? { ...found, hits: slimHits } : found);
-				} catch (error) {
-					updateKnowledgeFlow(ctx, { phase: "blocked", error: String(error.message).slice(0, 400) });
-					throw error;
-				}
-			},
-		});
-		registerTool(pi, {
-			name: "research_check_answer",
-			drone: { readOnly: true, recoverySafe: true, capabilities: ["research", "knowledge"] },
-			label: "Obsidian · 回答预检与具体原因",
-			description:
-				"Preflight the exact final draft using the same host checks as publication. Returns actual missing paths and observed task outcomes. Does not publish, create read receipts, call a model or bypass the final check.",
-			parameters: {
-				type: "object",
-				properties: { draft: { type: "string", maxLength: 100000 } },
-				required: ["draft"],
-			},
-			execute: async (_id, p, _s, _u, ctx) => {
-				await ensureTurn(ctx);
-				return result(await publication.preflight(ctx, p.draft));
-			},
-		});
+		registerTool(pi, createKnowledgeSearchTool({
+			ensureTurn, toolBudget,
+			observer: { updateFlow: updateKnowledgeFlow, noteSearch: noteKnowledgeSearch },
+			searchContext: async (_ctx, c) => activeTopic
+				? JSON.parse(await (topicMemory || createTopicMemory({ binding: c.binding, project: c.project })).context(activeTopic.id))
+				: undefined,
+		}));
+		registerTool(pi, createKnowledgeAnswerCheckTool({
+			ensureTurn, preflight: (ctx, draft) => publication.preflight(ctx, draft),
+		}));
 		registerTool(pi, {
 			name: "research_task_status",
 			drone: { readOnly: true, recoverySafe: true, capabilities: ["research", "knowledge"] },
