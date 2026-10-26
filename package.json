@@ -12,7 +12,7 @@
     "check:manifests": "node scripts/check-manifests.mjs",
     "check:pi-knowledge": "npm run --workspace @gyoungwe/pi-knowledge check",
     "check:pi-research": "npm run --workspace @gyoungwe/pi-research check",
-    "check:research-suite": "npm run --workspace @gyoungwe/research-suite build:check",
+    "check:research-suite": "npm run --workspace @gyoungwe/research-suite build:check && npm run --workspace @gyoungwe/research-suite smoke:install",
     "check:desktop-ui-pack": "npm run --workspace @gyoungwe/desktop-ui-pack build:check && npm run --workspace @gyoungwe/desktop-ui-pack typecheck && npm run --workspace @gyoungwe/desktop-ui-pack test",
     "smoke:pi-knowledge": "npm run --workspace @gyoungwe/pi-knowledge smoke",
     "smoke:pi-research": "npm run --workspace @gyoungwe/pi-research smoke",
