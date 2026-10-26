@@ -4,7 +4,7 @@ The suite composes the standalone pi-core, pi-knowledge and pi-research packages
 
 ## Unpublished 0.2.0 candidate
 
-This candidate pins `pi-core@0.1.9`, `pi-knowledge@0.3.0` and `pi-research@0.2.0`. The previously published suite 0.1.11 remains immutable. Knowledge's package now contains its own optional Desktop UI manifest, browser bundle, worker and native extension. The three `pi.extensions` entries are unchanged: no browser entry is loaded by native Pi.
+This candidate pins `pi-core@0.1.9`, `pi-knowledge@0.3.0` and `pi-research@0.3.0`. The previously published suite 0.1.11 remains immutable. Knowledge and research packages contain their own optional Desktop UI manifests and browser bundles; the suite's native Pi extensions remain separate from those UI entries.
 
 The existing suite did not depend on desktop-ui-pack, so this candidate does not introduce that dependency. desktop-ui-pack 0.3.0 remains a separately installable research-status panel; knowledge contributions live only in pi-knowledge 0.3.0. The suite carries the nested knowledge UI resource, but this package change does not assert that every Desktop host discovers nested UI automatically. Host package discovery and formal GUI acceptance remain separate P2 work.
 

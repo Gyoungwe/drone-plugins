@@ -57,7 +57,7 @@ test("bundled versions and public research host resources match the suite pins",
 	}
 	const researchRoot = join(root, "node_modules/@gyoungwe/pi-research");
 	const research = JSON.parse(await readFile(join(researchRoot, "package.json"), "utf8"));
-	assert.equal(research.version, "0.2.0");
+	assert.equal(research.version, "0.3.0");
 	const host = await import(pathToFileURL(join(researchRoot, research.exports["./host"].import)).href);
 	assert.equal(typeof host.createResearchLoop, "function");
 	assert.equal(typeof host.registerResearchExtension, "function");

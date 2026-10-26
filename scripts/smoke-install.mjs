@@ -116,7 +116,7 @@ try {
 	assert.deepEqual(loaded.errors, [], JSON.stringify(loaded.errors));
 	const piAnalysis = loaded.extensions.find((item) => item.path === piAnalysisExtensionPath);
 	assert(piAnalysis, "installed pi-analysis extension was not discovered by Pi loader");
-	assert.deepEqual([...piAnalysis.tools.keys()], ["analysis_list_adapters", "analysis_assess_readiness"]);
+	assert.deepEqual([...piAnalysis.tools.keys()], ["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"]);
 
 	async function discoverInstalled(name, expectedTools) {
 		const packageRoot = join(installRoot, "node_modules", "@gyoungwe", name);
@@ -139,6 +139,7 @@ try {
 		return extension;
 	}
 	const piEvidence = await discoverInstalled("pi-evidence", [
+		"evidence_validate_analysis_plan",
 		"evidence_validate_manifest",
 		"evidence_validate_capsule",
 		"evidence_verify_replay",
