@@ -54,8 +54,8 @@ it("keeps real SQLite workers, binding checks and persisted policies on their in
 		await Promise.all([firstA.request("reconcile", { force: true }), firstB.request("reconcile", { force: true })]);
 		await a.review.saveReviewMode("strict");
 		await b.review.saveReviewMode("automatic");
-		expect(a.review.readReviewMode()).toBe("strict");
-		expect(b.review.readReviewMode()).toBe("automatic");
+		expect(await a.review.readReviewMode()).toBe("strict");
+		expect(await b.review.readReviewMode()).toBe("automatic");
 		await a.specialists.setSpecialistSettings({ mode: "manual", revision: 0, bindingRevision: a.binding.revision });
 		expect((await a.specialists.specialistSettings()).mode).toBe("manual");
 		expect((await b.specialists.specialistSettings()).mode).toBe("automatic");

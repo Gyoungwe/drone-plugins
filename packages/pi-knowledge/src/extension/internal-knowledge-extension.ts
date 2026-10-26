@@ -1588,7 +1588,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 							details: { vaultId: binding.vaultId, revision: binding.revision },
 						},
 						guidance:
-							publication.guidance +
+							(await publication.guidance()) +
 							"\n" +
 							(delivery?.guidance || "") +
 							` ${LOCAL_FIRST_GUIDANCE}` +

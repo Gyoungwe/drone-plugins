@@ -20,7 +20,7 @@ export interface KnowledgeRuntimeState {
 		startLine: number;
 		expectedHash?: string;
 	} | null;
-	view: "reading" | "graph" | "jobs";
+	view: "reading" | "graph" | "jobs" | "settings";
 	observationRevision: number;
 	overview: KnowledgeOverview | null;
 	overviewLoading: boolean;
@@ -84,7 +84,7 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 					searchError: null,
 					searchLoading: false,
 					selectedNote: null,
-					view: "reading",
+					view: state.view === "settings" ? "settings" : "reading",
 					query: "",
 				});
 			}

@@ -157,3 +157,38 @@ export const recentByCategoryResultSchema = object({ ...readScope,
 	groups: object({ paper: array(recentNoteSchema), software: array(recentNoteSchema), method: array(recentNoteSchema), idea: array(recentNoteSchema) }),
 	counts: object({ paper: integer, software: integer, method: integer, idea: integer, other: integer }),
 });
+
+export interface KnowledgePreferences {
+ binding: (KnowledgeBindingSummary & {
+  /** Display only; never a caller-supplied authorization root. */
+  vault: string;
+  profile: "project" | "literature" | "hybrid";
+  depositMode: "run-only" | "verified" | "rich";
+  subagentPolicy: "none" | "read-local";
+  updatedAt: string;
+ }) | null;
+ canWriteState: boolean;
+ reviewPolicy: {
+  mode: "automatic" | "strict";
+  persistedMode: "automatic" | "strict" | null;
+  version: string | null;
+  override: "environment" | null;
+  diagnostic: "invalid-json" | "invalid-policy" | null;
+ };
+}
+export interface KnowledgeSetReviewPolicyInput {
+ bindingRevision: number;
+ expectedVersion: string | null;
+ mode: "automatic" | "strict";
+}
+const reviewModeSchema = { enum: ["automatic", "strict"] };
+export const preferencesInputSchema = { type: "null" };
+export const preferencesResultSchema = object({
+ binding: nullable(object({ vaultId: string, revision: bindingRevision, label: string, vault: string,
+  profile: { enum: ["project", "literature", "hybrid"] }, depositMode: { enum: ["run-only", "verified", "rich"] },
+  subagentPolicy: { enum: ["none", "read-local"] }, updatedAt: string })),
+ canWriteState: boolean,
+ reviewPolicy: object({ mode: reviewModeSchema, persistedMode: nullable(reviewModeSchema), version: nullable(string),
+  override: nullable({ const: "environment" }), diagnostic: nullable({ enum: ["invalid-json", "invalid-policy"] }) }),
+});
+export const setReviewPolicyInputSchema = object({ bindingRevision, expectedVersion: nullable(string), mode: reviewModeSchema });

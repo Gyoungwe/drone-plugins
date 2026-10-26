@@ -3,6 +3,8 @@ import type { PluginNativeRuntimeFactory } from "@gyoungwe/plugin-api/native";
 import { parseKnowledgeBinding, projectIdentity, type KnowledgeBinding } from "../core/config.js";
 import { createKnowledgeOwnerLifecycle } from "../core/owner-lifecycle.js";
 import { createKnowledgeReadModel, type KnowledgeReadOwner } from "./read-model.js";
+import { createKnowledgePreferences } from "./preferences.js";
+import { preferencesInputSchema, preferencesResultSchema, setReviewPolicyInputSchema, type KnowledgeSetReviewPolicyInput } from "./contract.js";
 import { createDesktopKnowledgeNativeSession } from "./native.js";
 import { overviewInputSchema, overviewResultSchema, searchInputSchema, searchResultSchema, type KnowledgeSearchInput, readNoteInputSchema, readNoteResultSchema, linksInputSchema, linksResultSchema, graphInputSchema, graphResultSchema, jobsInputSchema, jobsResultSchema, recentByCategoryInputSchema, recentByCategoryResultSchema, type KnowledgeReadNoteInput, type KnowledgeLinksInput, type KnowledgeGraphInput, type KnowledgeJobsInput, type KnowledgeRecentByCategoryInput } from "./contract.js";
 
@@ -71,8 +73,13 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 	});
 	const owner: KnowledgeReadOwner = { config, services: { getKnowledgeService }, ...lifecycle };
 	const reads = createKnowledgeReadModel(owner);
+	const preferences = createKnowledgePreferences(owner, context.capabilities, state, states[0].access === "read-write");
 	return {
 		operations: {
+			preferences: { inputSchema: preferencesInputSchema, resultSchema: preferencesResultSchema, effect: "read",
+				execute: () => preferences.read() },
+			setReviewPolicy: { inputSchema: setReviewPolicyInputSchema, resultSchema: preferencesResultSchema, effect: "write",
+				execute: async input => { const saved = await preferences.write(input as KnowledgeSetReviewPolicyInput); context.events.changed(); return saved; } },
 			overview: { inputSchema: overviewInputSchema, resultSchema: overviewResultSchema, effect: "read",
 				execute: async (_input, call) => reads.overview(await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
 			search: { inputSchema: searchInputSchema, resultSchema: searchResultSchema, effect: "read",

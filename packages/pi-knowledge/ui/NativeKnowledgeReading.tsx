@@ -92,21 +92,6 @@ export function NativeKnowledgeReading({
 			: (recent?.groups[category] ?? []);
 	return (
 		<>
-			<nav className="flex gap-2" aria-label={t.readingNavigation}>
-				{(["reading", "graph", "jobs"] as const).map((view) => (
-					<Button
-						key={view}
-						size="sm"
-						aria-pressed={state.view === view}
-						onClick={() => {
-							setOffset(0);
-							store.setView(view);
-						}}
-					>
-						{t[view]}
-					</Button>
-				))}
-			</nav>
 			{error && (
 				<p role="alert" className="text-sm text-err">
 					{error}

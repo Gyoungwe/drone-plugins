@@ -2,6 +2,43 @@ import { useLanguage } from "./runtime-api";
 
 const zh = {
 	title: "知识库",
+	settings: "设置",
+	bindingDetails: "当前知识库绑定",
+	vaultPath: "目录",
+	profile: "资料组织",
+	depositMode: "写入策略",
+	subagentPolicy: "专员权限",
+	bindingRevision: "绑定版本",
+	updatedAt: "更新时间",
+	profile_project: "项目资料",
+	profile_literature: "文献资料",
+	profile_hybrid: "混合资料",
+	"run-only": "仅运行记录",
+	verified: "已核对内容",
+	rich: "详细记录",
+	none: "不启用",
+	"read-local": "读取本地资料",
+	bindingEditingUnavailable:
+		"切换目录和初始化尚在迁移，需要单独选择目录、确认写入并等待当前任务关闭。",
+	reviewPolicy: "审核策略",
+	effectiveMode: "当前生效",
+	persistedMode: "已保存",
+	notPersisted: "尚未保存，沿用默认策略",
+	automatic: "自动",
+	strict: "严格",
+	reviewPolicyHint:
+		"此设置控制知识发布检查。自动模式仍保留授权、来源和写入检查；人工 Wiki 内容不因此获得自动修改权限。",
+	policyOverride: "环境策略强制严格审核；此处不能覆盖。",
+	"invalid-json":
+		"审核策略 JSON 已损坏；当前执行严格模式。请修复文件后刷新，界面不会覆盖损坏数据。",
+	"invalid-policy":
+		"审核策略内容无效；当前执行严格模式。请修复文件后刷新，界面不会覆盖无效数据。",
+	stateWriteRequired:
+		"当前仅授权读取状态。若需修改，请停用后重新启用插件，并在宿主目录授权中明确选择允许状态写入。",
+	savePolicy: "保存审核策略",
+	saving: "正在保存…",
+	policySaved: "策略已保存并回读核对。",
+
 	inlineLinkUnavailable:
 		"此链接暂不能打开。库内笔记请使用下方的双向链接；外部链接需等待受控打开能力。",
 	readingNavigation: "知识阅读视图",
@@ -36,11 +73,49 @@ const zh = {
 	lines: "行",
 	unsupportedTitle: "其他知识功能暂不可用",
 	unsupported:
-		"当前支持总览、搜索、笔记阅读、链接、图谱和索引任务查询。审核、设置、自动发现、云同步及 Zotero 功能仍在迁移中。",
+		"当前支持总览、搜索、笔记阅读、链接、图谱和索引任务查询。候选审核、其他设置、绑定编辑、自动发现、云同步及 Zotero 功能仍在迁移中。",
 	readOnly: "搜索片段仅供浏览，不代表当前会话已读取原文或完成证据核验。",
 };
 const en: Record<keyof typeof zh, string> = {
 	title: "Knowledge",
+	settings: "Settings",
+	bindingDetails: "Current library binding",
+	vaultPath: "Directory",
+	profile: "Organization",
+	depositMode: "Deposit policy",
+	subagentPolicy: "Specialist access",
+	bindingRevision: "Binding revision",
+	updatedAt: "Updated",
+	profile_project: "Project",
+	profile_literature: "Literature",
+	profile_hybrid: "Hybrid",
+	"run-only": "Run records only",
+	verified: "Verified material",
+	rich: "Detailed records",
+	none: "Disabled",
+	"read-local": "Read local material",
+	bindingEditingUnavailable:
+		"Switching directories and initialization are still being migrated. They require a separate directory selection, write confirmation and draining current work.",
+	reviewPolicy: "Review policy",
+	effectiveMode: "Effective",
+	persistedMode: "Saved",
+	notPersisted: "Not saved; using the default policy",
+	automatic: "Automatic",
+	strict: "Strict",
+	reviewPolicyHint:
+		"This setting controls knowledge publication checks. Automatic mode retains permission, source and write checks; it does not authorize automatic changes to human-authored Wiki content.",
+	policyOverride:
+		"The environment enforces strict review and cannot be overridden here.",
+	"invalid-json":
+		"The review policy JSON is corrupt. Strict mode is active; repair the file and refresh. This page will not overwrite corrupt data.",
+	"invalid-policy":
+		"The review policy is invalid. Strict mode is active; repair the file and refresh. This page will not overwrite invalid data.",
+	stateWriteRequired:
+		"State access is read-only. To change settings, disable and re-enable the plugin and explicitly grant state writes in the host directory dialog.",
+	savePolicy: "Save review policy",
+	saving: "Saving…",
+	policySaved: "The policy was saved and read back successfully.",
+
 	inlineLinkUnavailable:
 		"This link cannot be opened yet. Use the note links below; external links need the controlled opening capability.",
 	readingNavigation: "Knowledge reading views",
@@ -78,7 +153,7 @@ const en: Record<keyof typeof zh, string> = {
 	lines: "Lines",
 	unsupportedTitle: "Other knowledge features are temporarily unavailable",
 	unsupported:
-		"Overview, search, note reading, links, graphs and index jobs are available. Reviews, settings, discovery, cloud sync and Zotero are still being migrated.",
+		"Overview, search, note reading, links, graphs and index jobs are available. Candidate reviews, other settings, binding changes, discovery, cloud sync and Zotero are still being migrated.",
 	readOnly:
 		"Search excerpts are for browsing. They do not establish that this session read the source or verified its evidence.",
 };

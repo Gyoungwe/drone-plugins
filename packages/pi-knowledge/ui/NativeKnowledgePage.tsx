@@ -2,6 +2,7 @@ import type { PluginUiRuntimeClient } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { Button, usePluginRuntime, useSessionsStore } from "./runtime-api";
 import { useNativeKnowledgeText } from "./native-copy";
+import { NativeKnowledgePreferences } from "./NativeKnowledgePreferences";
 import { NativeKnowledgeReading } from "./NativeKnowledgeReading";
 import { createKnowledgeRuntimeStore } from "./runtime-store";
 
@@ -54,6 +55,26 @@ function CallerKnowledgePage({ client }: { client: PluginUiRuntimeClient }) {
 							{state.overviewLoading ? t.loading : t.refresh}
 						</Button>
 					</header>
+					<nav className="flex gap-2" aria-label={t.readingNavigation}>
+						{(["reading", "graph", "jobs", "settings"] as const).map((view) => (
+							<Button
+								key={view}
+								size="sm"
+								aria-pressed={state.view === view}
+								disabled={view !== "settings" && !overview?.binding}
+								onClick={() => store.setView(view)}
+							>
+								{t[view]}
+							</Button>
+						))}
+					</nav>
+					{state.view === "settings" && (
+						<NativeKnowledgePreferences
+							client={client}
+							observationRevision={state.observationRevision}
+							refreshing={state.overviewLoading}
+						/>
+					)}
 					{state.overviewError && (
 						<p
 							role="alert"
@@ -67,13 +88,13 @@ function CallerKnowledgePage({ client }: { client: PluginUiRuntimeClient }) {
 							{t.loading}
 						</p>
 					)}
-					{overview?.state === "unconfigured" && (
+					{state.view !== "settings" && overview?.state === "unconfigured" && (
 						<div className="rounded-xl border border-dashed border-border p-5">
 							<h2 className="font-medium">{t.unconfigured}</h2>
 							<p className="mt-2 text-sm text-ink-dim">{t.unconfiguredHint}</p>
 						</div>
 					)}
-					{overview?.state === "bound" && (
+					{state.view !== "settings" && overview?.state === "bound" && (
 						<>
 							<p className="text-sm text-ink-dim">
 								{overview.index
@@ -81,7 +102,11 @@ function CallerKnowledgePage({ client }: { client: PluginUiRuntimeClient }) {
 									: t.indexMissing}
 							</p>
 							{!state.overviewLoading && (
-								<NativeKnowledgeReading store={store} state={state} />
+								<NativeKnowledgeReading
+									key={state.view}
+									store={store}
+									state={state}
+								/>
 							)}
 						</>
 					)}

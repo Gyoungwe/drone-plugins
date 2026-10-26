@@ -60,7 +60,8 @@
     "filesystem": [
       "workspace",
       "configured-vault",
-      "application-state"
+      "application-state",
+      "application-state-write"
     ],
     "network": [
       "configured-services"

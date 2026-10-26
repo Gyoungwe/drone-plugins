@@ -146,3 +146,13 @@ CLI 默认 export 保持官方同步注册形状，但由 wrapper 创建自己�
 `src/desktop/{contract,read-model,runtime}.ts` 在同一个真实 index resource 上提供 readNote/links/graph/jobs/recentByCategory。行号、hash、分类与 binding/index revision 保留；UI 阅读不进入模型票据账本。`core/index-runtime.ts` 的显式 project 模式只返回共享/当前项目，图谱缓存包含 scope。旧 0.2 未传 project 的全 Vault 调用仅保留到旧宿主消费者移除，不能成为新 UI 的回退。
 
 页面由插件本地 store 与纯展示组件组成；内部链接受控导航，外部打开和写操作仍不提供。CLI transport 抽取与新阅读候选的结果见 [阅读闭包证据](native-knowledge-reading-2026-10-26.md)，旧 352444917 候选的 GUI 证据保持独立，不能混用。
+
+## 12. 审核策略状态端口与设置切片（候选已验，完整 P2 未完成）
+
+`core/review-policy.ts` 统一异步策略算法；CLI 的真实文件适配位于 `review-policy-storage.ts`，Desktop 的 `desktop/state-policy.ts` 仅经授权 `state.readJson/writeJson`。`publication.guidance()` 与答案校验明确等待策略，不把 Promise 当同步模式比较。CLI 保留 `DRONE_REVIEW_MODE=strict` 优先级；受限 Desktop 不继承该环境变量，使用已批准的状态 JSON，`override:null`。已搜索宿主生产 packages/scripts/.pi 源码，没有该环境变量的组织策略入口；本片不新增环境读取能力。
+
+`preferences(null)` 返回绑定展示信息、实际 `canWriteState` 和带原始字节版本的策略快照；`setReviewPolicy` 是写 operation，携带 bindingRevision 与 expectedVersion，不接受 cwd/root/project。新候选声明 `filesystem: application-state-write`，旧 application-state 保持只读；授权由宿主逐项处理。写入保留 `{version:1,mode}` 格式，版本冲突拒绝，写后回读核对。损坏 JSON 返回严格模式与明确 diagnostic，禁止覆盖；权限或其他 I/O 错误向上传递，不降级为成功。正式绑定初始化、其他偏好、完整 Home 和原生 hooks 尚未迁移。
+
+完整服务仍有单独迁移闭包：pool 以 `knowledgeDirectory`/OS 路径构建资源键，需要改为 adapter 提供的真实资源身份；CLI transport.close 等实际 worker exit，而 Desktop activation 的资源关闭由宿主在 domain.dispose 之后执行，不能在无 caller 的 domain dispose 新调 resource.dispose 或互相等待。后续必须区分活跃替换的资源关闭和 activation drain，保留真实关闭回执。semantic settings 与 UI metrics 的直接文件读写也尚待端口化，不能以本片设置成功宣称完整 owner 已迁完。
+
+本片完整门禁、同 tarball 真实 coordinator 授权/CAS/重载，以及默认 CLI 严格预检与退出证据见 [状态与设置候选](native-knowledge-state-2026-10-26.md)；正式设置 GUI 尚未验收。

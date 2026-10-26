@@ -672,8 +672,8 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 				toolRounds = 0;
 				setupReceipt = null;
 			},
-			get guidance() {
-				return readReviewMode() === "automatic"
+			async guidance() {
+				return (await readReviewMode()) === "automatic"
 					? "Answer the user's question directly. For a planning request, first provide a concise provisional framework with explicit assumptions, then deepen only the evidence needed. Cite scientific claims inline using exact [[path]] citations from research_read_knowledge results read this turn; a saved report link is a deliverable, not an evidence citation. Reuse successful read receipts instead of reading the same source through both generic read and research_read_knowledge. Do not invent citations or cite a source merely to clear a warning. Label suggested sample sizes as design heuristics, not universal statistical thresholds. Acknowledge uncertainty and save useful knowledge. Evidence quality reminders are nonblocking: do not run repeated read/search/check just to clear them. Never claim scientific verification. Host permission, binding, abort and spending limits still apply; human Wiki edits require confirmation."
 					: "For execution progress in ANY task (analysis, code, environment, experiments, writing), use task_status; its host-generated report needs no research citations. Never add irrelevant sources to an operational report. Scientific host-checked answers need a current-turn search, reads of cited [[path]] sources, then research_check_answer. Public text must answer the user's question; do not lecture about Vault policy or evidence-gate stages. Use short set_status about the task, not product design. Show Me/run links are deliverables, not evidence.";
 			},

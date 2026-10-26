@@ -833,7 +833,7 @@ function createKnowledgeServicePoolApi(
 				recordFailure("search-required", "Complete a real evidence search this turn before answering");
 			else if (!searched.complete)
 				recordFailure("coverage-incomplete", "The last search did not have complete index coverage");
-			if (state.linkedWiki.length && readReviewMode() === "strict") {
+			if (state.linkedWiki.length && (await readReviewMode()) === "strict") {
 				let valid = false;
 				for (const [path, receipt] of state.readWiki) {
 					const latest = await this.request("read", { path, project: state.project, maxChars: 200 });
