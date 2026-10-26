@@ -13,7 +13,7 @@ research-suite 0.1.11 顶层声明可选 @napi-rs/canvas ^1.0.0，由消费者 n
 ## 候选及公开状态
 
 - plugin-api 1.2.0 已公开，下载字节与候选一致，干净 npm 安装、ESM/ui 导入与能力协商通过；SHA256 `056322c91ff96fb05bc0b9d1721d834450e6146f3969b819fc1d6267c33ad960`。
-- core 0.1.9 和 desktop-ui-pack 0.2.0 已上传 npm staging，尚不能视为公开。core 发布认证需要用户完成安全密钥流程。
+- core 0.1.9 已公开，公开 tarball 与候选逐字节一致；SHA256 `4ebf4bf82c2166f07a5312a1b2f6795ff88880bb79698c1f27cce4e26a6358fe`。按公开包名干净安装到 Pi 1.1.0 / 1.4.0 后，真实 AgentSession 各完成四次调用、一次批准、任务 completed 和交付文件独立回读。desktop-ui-pack 0.2.0 仍 staged。
 - suite 0.1.11 新候选 SHA256 `767c37940aa32741fe133dfc57b0a75d3597521b11fd5d32904ff3d563ef794e`，替换此前未发布的候选；其中 API 18 个文件与公开 API 字节一致。新候选在真实 Pi 1.1.0 / 1.4.0 AgentSession 分别完成 13 次实际工具调用、一次批准、双来源阅读、写后回读与 task_reconcile completed。使用确定性离线模型，不代表科学质量。
 - 另有 N=2 DeepSeek Flash 在线真实会话，在 Pi 1.4.0 和同一 suite 候选完成；两个交付文件的独立哈希与 completed 回执一致。手工来源复核支持有限质量结论，但两篇 503/502 词报告超出提示的 450 词限制；不改原输出来伪造通过。公开来源为 arXiv 1706.03762 与 1810.04805；不提交私有会话/报告正文。
 
@@ -21,6 +21,8 @@ research-suite 0.1.11 顶层声明可选 @napi-rs/canvas ^1.0.0，由消费者 n
 
 后续收紧回归：同时检查 stdout/stderr 的 Canvas 警告，重新运行 test:pdf 通过；日志 SHA256 `299f66c83b3fd884ab960aad42b04f128bbfb125125e6d87e9528864d9c4d6f1`。
 
-修复 b5addb1 已快进合入 main；合并后 npm run check 完整通过，日志 SHA256 `48db665150fe5093857f2d6d06c46556c8458e82e77e9bf0898e1f4905f727f3`。suite 0.1.11 已 staged（`bab97837-b274-4c5a-af54-a0334c396989`），staged 下载字节与新候选一致；与 core、UI 一起保持未公开状态，等待 npm 安全认证。
+修复 b5addb1 已快进合入 main；合并后 npm run check 完整通过，日志 SHA256 `48db665150fe5093857f2d6d06c46556c8458e82e77e9bf0898e1f4905f727f3`。suite 0.1.11 已 staged（`bab97837-b274-4c5a-af54-a0334c396989`），staged 下载字节与新候选一致；与 UI 保持未公开状态，等待 npm 安全认证。
 
-在线复核跟进：两个原始场景累计七次真实会话，最终方法/临床推断报告为 297/152 词，经过明确审阅反馈后有限范围通过。首次字数失败、中间范围/来源描述和指标概括问题全部保留；不能称首次自主科学质量通过。七次交付字节与 completed 回执一致，候选笔记另行回读；有些笔记引用格式与报告不同，不声称字节相同。详见 Drone 同名证据的 onlineFollowup。三个目标包在本次跟进仍 staged 且公开 registry 404，原 stage ID 保留；未完成账户/设备状态不变。
+在线复核跟进：两个原始场景累计七次真实会话，最终方法/临床推断报告为 297/152 词，经过明确审阅反馈后有限范围通过。首次字数失败、中间范围/来源描述和指标概括问题全部保留；不能称首次自主科学质量通过。七次交付字节与 completed 回执一致，候选笔记另行回读；有些笔记引用格式与报告不同，不声称字节相同。详见 Drone 同名证据的 onlineFollowup。上述在线复核时三个目标包仍 staged 且公开 registry 404，原 stage ID 保留；未完成账户/设备状态不变。
+
+发布跟进：用户完成 npm 重新登录及 core 安全认证后，core 0.1.9 已公开并通过上述验证；suite 原 stage 的认证回调返回 E404，公开版本复查仍 404，待重新认证；UI 原 stage 保留，未重复上传。账户自查没有找到 Drone 配置的 Zotero 云端及 Protocols.io 凭据；登记的远程桌面离线，本机 Parallels 服务不可达。账户写入与其他平台 GUI 继续未完成，详见宿主 JSON。
