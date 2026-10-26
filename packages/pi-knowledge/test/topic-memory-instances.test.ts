@@ -13,7 +13,11 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
 import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
-import { createTopicMemoryApi } from "../src/core/topic-memory.js";
+import {
+	createTopicMemoryApi,
+	readTopic,
+	updateTopic,
+} from "../src/core/topic-memory.js";
 
 let root: string;
 const scope = { binding: { vaultId: "a".repeat(24) }, project: "same-project" };
@@ -34,6 +38,69 @@ function owner(name: string) {
 }
 
 describe("topic memory owners", () => {
+	it("separates public update scope from metadata without weakening revision or field checks", async () => {
+		const { api, memory } = owner("a");
+		await api.updateTopic({
+			...scope,
+			expectedRevision: 0,
+			id: "topic",
+			title: "First",
+		});
+		await api.updateTopic({
+			...scope,
+			expectedRevision: 1,
+			id: "topic",
+			summary: "Updated",
+		});
+		expect(await api.readTopic({ ...scope, id: "topic" })).toMatchObject([
+			{ id: "topic", title: "First", summary: "Updated" },
+		]);
+		await expect(
+			api.updateTopic({
+				...scope,
+				expectedRevision: 1,
+				id: "topic",
+				title: "Stale",
+			}),
+		).rejects.toThrow("revision changed");
+		await expect(
+			api.updateTopic({
+				...scope,
+				expectedRevision: 2,
+				id: "topic",
+				status: "archived",
+			}),
+		).rejects.toThrow("Unsupported topic metadata field: status");
+		expect((await memory.read()).revision).toBe(2);
+	});
+
+	it("keeps the public compatibility update API's explicit state directory out of metadata", async () => {
+		const directory = join(root, "explicit-state");
+		vi.stubEnv("DRONE_KNOWLEDGE_DIR", join(root, "unrelated-state"));
+		await updateTopic({
+			...scope,
+			directory,
+			expectedRevision: 0,
+			id: "topic",
+			title: "Public API",
+		});
+		expect(await readTopic({ ...scope, directory, id: "topic" })).toMatchObject(
+			[{ title: "Public API" }],
+		);
+		const document = JSON.parse(
+			await readFile(
+				join(
+					directory,
+					scope.binding.vaultId,
+					"topic-memory/same-project.json",
+				),
+				"utf8",
+			),
+		);
+		expect(document.topics[0]).not.toHaveProperty("binding");
+		expect(document.topics[0]).not.toHaveProperty("directory");
+	});
+
 	it("keeps the same topic identity in separate fixed directories and preserves the existing schema/path", async () => {
 		const a = owner("a");
 		const b = owner("b");

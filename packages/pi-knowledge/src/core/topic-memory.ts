@@ -742,9 +742,9 @@ export function createTopicMemoryApi(
 	}
 
 	async function updateTopic(options = {}) {
-		const { expectedRevision, ...input } = options;
+		const { binding, project, directory, expectedRevision, ...input } = options;
 		if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
-		return createTopicMemory(options).update(input, expectedRevision);
+		return createTopicMemory({ binding, project, directory }).update(input, expectedRevision);
 	}
 
 	async function archiveTopic(options = {}) {
