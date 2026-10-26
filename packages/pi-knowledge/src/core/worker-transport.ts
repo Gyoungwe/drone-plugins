@@ -7,6 +7,7 @@ import type {
 	KnowledgeWorkerLifecycleStage,
 	KnowledgeWorkerMetadata,
 } from "./runtime-host.js";
+import type { KnowledgeConfigApi } from "./config.js";
 import type { acquireKnowledgeWriterLease } from "./writer-lease.js";
 import type {
 	KnowledgeServiceTransport,
@@ -16,6 +17,7 @@ import type {
 /** CLI adapter: all Worker protocol, process liveness and SQLite lease ownership live here. */
 export function createKnowledgeWorkerTransportFactory(
 	runtime: KnowledgeRuntimeHost,
+	config: Pick<KnowledgeConfigApi, "knowledgeDirectory">,
 	invalidateKnowledgeUi: () => void,
 	acquireWriterLease: typeof acquireKnowledgeWriterLease | null,
 ): KnowledgeServiceTransportFactory {
@@ -310,9 +312,15 @@ export function createKnowledgeWorkerTransportFactory(
 			return this.pending.size;
 		}
 	}
+	function directory() {
+		const value = config.knowledgeDirectory();
+		if (!value) throw new Error("No application knowledge directory");
+		return value;
+	}
 	return {
 		metadata: knowledgeWorkerMetadata,
-		create: ({ binding, directory, workerVersion }) =>
-			new KnowledgeWorkerTransport(binding, directory, { workerVersion }),
+		resourceKey: binding => join(directory(), binding.vaultId, "index.sqlite"),
+		create: ({ binding, workerVersion }) =>
+			new KnowledgeWorkerTransport(binding, directory(), { workerVersion }),
 	};
 }

@@ -84,11 +84,11 @@ it("real answer validation waits for strict policy and rejects an unread related
 	const services = createKnowledgeServicePool(
 		host,
 		config,
-		ui,
 		createSemanticSettingsApi(undefined, directory),
 		{ readReviewMode: () => policy },
 		createKnowledgeWorkerTransportFactory(
 			host,
+			config,
 			ui.invalidateKnowledgeUi,
 			(input) => acquireKnowledgeWriterLease(input, join(root, "leases")),
 		),

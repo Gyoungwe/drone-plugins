@@ -58,11 +58,11 @@ it("runs the existing ticket/read/evidence algorithm through an injected real tr
 	const services = createKnowledgeServicePool(
 		domain,
 		config,
-		ui,
 		createSemanticSettingsApi(undefined, directory),
 		createKnowledgeReviewPolicy(config),
 		createKnowledgeWorkerTransportFactory(
 			adapter,
+			config,
 			ui.invalidateKnowledgeUi,
 			acquire,
 		),
@@ -109,7 +109,7 @@ it("runs the existing ticket/read/evidence algorithm through an injected real tr
 		});
 		lease.release();
 		// Acceptance occurs synchronously, before the new worker can emit its ready handshake.
-		const early = new services.KnowledgeService(service.binding, directory);
+		const early = new services.KnowledgeService(service.binding);
 		const accepted = early.request("status");
 		const earlyClose = early.close();
 		await expect(accepted).resolves.toBeDefined();
@@ -118,9 +118,9 @@ it("runs the existing ticket/read/evidence algorithm through an injected real tr
 		const defaultServices = createKnowledgeServicePool(
 			adapter,
 			config,
-			ui,
 			createSemanticSettingsApi(undefined, directory),
 			createKnowledgeReviewPolicy(config),
+			createKnowledgeWorkerTransportFactory(adapter, config, ui.invalidateKnowledgeUi, acquire),
 		);
 		try {
 			await expect(

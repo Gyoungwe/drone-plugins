@@ -36,8 +36,8 @@ it("keeps real SQLite workers, binding checks and persisted policies on their in
 		const ui = createKnowledgeUi(runtime, config);
 		const semantic = createSemanticSettingsApi(undefined, directory);
 		const review = createKnowledgeReviewPolicy(config);
-		const services = createKnowledgeServicePool(runtime, config, ui, semantic, review,
-			createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi,
+		const services = createKnowledgeServicePool(runtime, config, semantic, review,
+			createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi,
 				(input) => acquireKnowledgeWriterLease(input, join(root, "leases"))));
 		const specialists = createKnowledgeSpecialistHost(runtime, config, ui);
 		return { directory, binding, live, services, review, semantic, specialists, replace: () => { version = `${name}-replacement`; } };

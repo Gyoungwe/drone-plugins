@@ -21,9 +21,10 @@ export interface KnowledgeServiceTransport {
 
 export interface KnowledgeServiceTransportFactory {
 	metadata(): KnowledgeWorkerMetadata;
+	/** Stable identity of the real execution resource, not a guessed filesystem path. */
+	resourceKey(binding: KnowledgeBinding): string;
 	create(input: {
 		binding: KnowledgeBinding;
-		directory: string;
 		workerVersion?: string;
 	}): KnowledgeServiceTransport;
 }

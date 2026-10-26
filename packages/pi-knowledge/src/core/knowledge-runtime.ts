@@ -26,8 +26,8 @@ export function createKnowledgeRuntime(
 	const semantic = createSemanticSettingsApi(undefined, config.knowledgeDirectory());
 	const reviewPolicy = createKnowledgeReviewPolicy(config);
 	const writerReservations = createKnowledgeWriterLeaseGroup(acquireWriterLease);
-	const services = createKnowledgeServicePool(host, config, ui, semantic, reviewPolicy,
-		createKnowledgeWorkerTransportFactory(host, ui.invalidateKnowledgeUi, writerReservations.acquireWorker));
+	const services = createKnowledgeServicePool(host, config, semantic, reviewPolicy,
+		createKnowledgeWorkerTransportFactory(host, config, ui.invalidateKnowledgeUi, writerReservations.acquireWorker));
 	const specialists = createKnowledgeSpecialistHost(host, config, ui);
 	const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
 	const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui);

@@ -1522,9 +1522,9 @@ __export(ui_state_exports, {
   subscribeKnowledgeUi: () => subscribeKnowledgeUi,
   updateKnowledgeFlow: () => updateKnowledgeFlow
 });
-import { randomUUID as randomUUID8 } from "node:crypto";
-import { mkdirSync as mkdirSync3, readFileSync as readFileSync2, renameSync, writeFileSync as writeFileSync2 } from "node:fs";
-import { join as join11 } from "node:path";
+import { randomUUID as randomUUID7 } from "node:crypto";
+import { mkdirSync as mkdirSync2, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { join as join10 } from "node:path";
 function createKnowledgeUi(runtime, config) {
   const { runtimeSlot: runtimeSlot2, emitProcessEvent: emitProcessEvent2, flowCardBuilder: flowCardBuilder2, toolMeta: toolMeta2 } = runtime;
   const { knowledgeDirectory: knowledgeDirectory2 } = config;
@@ -1572,7 +1572,7 @@ function createKnowledgeUi(runtime, config) {
   const metricsFile = () => {
     try {
       const dir = knowledgeDirectory2();
-      return dir ? join11(dir, "answer-metrics.json") : null;
+      return dir ? join10(dir, "answer-metrics.json") : null;
     } catch {
       return null;
     }
@@ -1583,7 +1583,7 @@ function createKnowledgeUi(runtime, config) {
     const file = metricsFile();
     if (!file) return;
     try {
-      const saved = JSON.parse(readFileSync2(file, "utf8"));
+      const saved = JSON.parse(readFileSync(file, "utf8"));
       const answered = Math.max(0, Math.floor(Number(saved?.answered) || 0));
       const total = Math.max(answered, Math.floor(Number(saved?.total) || 0));
       state2.localAnswerStats = {
@@ -1599,9 +1599,9 @@ function createKnowledgeUi(runtime, config) {
     const file = metricsFile();
     if (!file) return;
     try {
-      mkdirSync3(join11(file, ".."), { recursive: true });
+      mkdirSync2(join10(file, ".."), { recursive: true });
       const tmp = `${file}.${process.pid}.tmp`;
-      writeFileSync2(tmp, JSON.stringify(state2.localAnswerStats));
+      writeFileSync(tmp, JSON.stringify(state2.localAnswerStats));
       renameSync(tmp, file);
     } catch {
     }
@@ -1616,7 +1616,7 @@ function createKnowledgeUi(runtime, config) {
     if (!id) return;
     const flow = {
       sessionId: id,
-      turnId: randomUUID8(),
+      turnId: randomUUID7(),
       vaultId: binding?.vaultId || null,
       bindingRevision: binding?.revision || null,
       vault: binding?.vault || null,
@@ -1710,7 +1710,7 @@ function createKnowledgeUi(runtime, config) {
     if (typeof text2 !== "string" || !text2.trim()) return;
     emitKnowledgeUi2({
       kind: "notice",
-      id: randomUUID8(),
+      id: randomUUID7(),
       sessionId: id,
       severity: ["info", "warning", "error"].includes(severity) ? severity : "info",
       text: text2.slice(0, 2e3)
@@ -1898,9 +1898,9 @@ __export(wiki_review_exports, {
   validateWikiSourcePaths: () => validateWikiSourcePaths,
   wikiHistory: () => wikiHistory
 });
-import { createHash as createHash14, randomUUID as randomUUID11 } from "node:crypto";
+import { createHash as createHash13, randomUUID as randomUUID10 } from "node:crypto";
 import { link as link2, lstat as lstat6, mkdir as mkdir7, readdir as readdir3, readFile as readFile7, rename as rename7, unlink as unlink5, writeFile as writeFile7 } from "node:fs/promises";
-import { basename as basename4, dirname as dirname7, join as join13 } from "node:path";
+import { basename as basename3, dirname as dirname6, join as join11 } from "node:path";
 function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui) {
   const { runRuntimeExclusive: runRuntimeExclusive2 } = runtime;
   const { knowledgeDirectory: knowledgeDirectory2, withKnowledgeBinding: withKnowledgeBinding2 } = config;
@@ -1908,13 +1908,13 @@ function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui) {
   const { invalidateKnowledgeUi: invalidateKnowledgeUi2 } = ui;
   const AUTOMATIC_AUTHORITY = Symbol("host-automatic-wiki");
   const START2 = "<!-- pi-agent:managed:start -->", END2 = "<!-- pi-agent:managed:end -->";
-  const digest3 = (text2) => createHash14("sha256").update(text2).digest("hex");
+  const digest3 = (text2) => createHash13("sha256").update(text2).digest("hex");
   const MAX_PENDING = 100, MAX_AGE = 24 * 60 * 60 * 1e3;
   async function exclusive(key, operation) {
     return runRuntimeExclusive2("wiki-review", key, operation);
   }
   function rootFor(service) {
-    return join13(knowledgeDirectory2(), service.binding.vaultId, "wiki-review");
+    return join11(knowledgeDirectory2(), service.binding.vaultId, "wiki-review");
   }
   function checkId(id) {
     if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id)) throw new Error("Invalid Wiki proposal id");
@@ -1946,8 +1946,8 @@ function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui) {
     );
   }
   async function atomicJson(path, value) {
-    await mkdir7(dirname7(path), { recursive: true, mode: 448 });
-    const temp = join13(dirname7(path), `.${randomUUID11()}.tmp`);
+    await mkdir7(dirname6(path), { recursive: true, mode: 448 });
+    const temp = join11(dirname6(path), `.${randomUUID10()}.tmp`);
     try {
       await writeFile7(temp, `${JSON.stringify(value, null, 2)}
 `, { flag: "wx", mode: 384 });
@@ -2001,10 +2001,10 @@ ${block}
     const root = rootFor(service);
     let text2;
     try {
-      text2 = await readFile7(join13(root, "pending", `${id}.json`), "utf8");
+      text2 = await readFile7(join11(root, "pending", `${id}.json`), "utf8");
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
-      text2 = await readFile7(join13(root, "reviewed", `${id}.json`), "utf8");
+      text2 = await readFile7(join11(root, "reviewed", `${id}.json`), "utf8");
     }
     if (Buffer.byteLength(text2) > 256 * 1024) throw new Error("Wiki proposal exceeds its storage budget");
     const p = JSON.parse(text2);
@@ -2072,7 +2072,7 @@ ${block}
 ${refs}`
       );
       const proposal = {
-        id: randomUUID11(),
+        id: randomUUID10(),
         status: "pending",
         vaultId: service.binding.vaultId,
         bindingRevision: service.binding.revision,
@@ -2092,11 +2092,11 @@ ${refs}`
         throw new Error("Wiki proposal exceeds the bounded review storage size");
       const root = rootFor(service);
       await exclusive(root, async () => {
-        const directory = join13(root, "pending");
+        const directory = join11(root, "pending");
         await mkdir7(directory, { recursive: true, mode: 448 });
         if ((await readdir3(directory)).filter((name) => name.endsWith(".json")).length >= MAX_PENDING)
           throw new Error("Pending Wiki review limit reached; review existing candidates first");
-        await atomicJson(join13(directory, `${proposal.id}.json`), proposal);
+        await atomicJson(join11(directory, `${proposal.id}.json`), proposal);
       });
       invalidateKnowledgeUi2();
       return {
@@ -2169,7 +2169,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
           throw new Error("Merged Wiki proposal exceeds the bounded review storage size");
         await exclusive(
           rootFor(service),
-          () => atomicJson(join13(rootFor(service), "pending", `${p.id}.json`), updated)
+          () => atomicJson(join11(rootFor(service), "pending", `${p.id}.json`), updated)
         );
         invalidateKnowledgeUi2();
         return {
@@ -2236,7 +2236,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
     return withKnowledgeBinding2(service.binding, async () => {
       let names;
       try {
-        names = await readdir3(join13(rootFor(service), "pending"));
+        names = await readdir3(join11(rootFor(service), "pending"));
       } catch (error) {
         if (error.code === "ENOENT") return { items: [], problems: [] };
         throw error;
@@ -2244,7 +2244,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
       const items = [], problems = [];
       for (const name of names.filter((name2) => /^[0-9a-f-]{36}\.json$/.test(name2)).sort().slice(0, MAX_PENDING)) {
         try {
-          const p = JSON.parse(await readFile7(join13(rootFor(service), "pending", name), "utf8"));
+          const p = JSON.parse(await readFile7(join11(rootFor(service), "pending", name), "utf8"));
           if (p.project !== project) continue;
           if (immutableHash(p) !== p.proposalHash) throw new Error("Wiki proposal content changed");
           items.push({
@@ -2266,7 +2266,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
   async function ensureParent(vault, path) {
     let full = vault;
     for (const part of path.split("/").slice(0, -1)) {
-      full = join13(full, part);
+      full = join11(full, part);
       try {
         await mkdir7(full);
       } catch (error) {
@@ -2296,8 +2296,8 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
       humanReviewed: review.actor === "human",
       scientificallyVerified: false
     };
-    await atomicJson(join13(rootFor(service), "reviewed", `${p.id}.json`), updated);
-    await unlink5(join13(rootFor(service), "pending", `${p.id}.json`)).catch((error) => {
+    await atomicJson(join11(rootFor(service), "reviewed", `${p.id}.json`), updated);
+    await unlink5(join11(rootFor(service), "pending", `${p.id}.json`)).catch((error) => {
       if (error.code !== "ENOENT") throw error;
     });
     invalidateKnowledgeUi2();
@@ -2337,7 +2337,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
               throw new Error("Wiki changed after preview; no user edits were overwritten");
             await verifySources(service, p);
             await ensureParent(service.binding.vault, p.path);
-            const full = join13(service.binding.vault, p.path), temp = join13(dirname7(full), `.${basename4(full)}.${randomUUID11()}.tmp`);
+            const full = join11(service.binding.vault, p.path), temp = join11(dirname6(full), `.${basename3(full)}.${randomUUID10()}.tmp`);
             const mode = current ? (await lstat6(full)).mode & 511 : 384;
             try {
               await writeFile7(temp, p.after, { flag: "wx", mode });
@@ -2402,7 +2402,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
     return withKnowledgeBinding2(service.binding, async () => {
       let names;
       try {
-        names = await readdir3(join13(rootFor(service), "reviewed"));
+        names = await readdir3(join11(rootFor(service), "reviewed"));
       } catch (error) {
         if (error.code === "ENOENT") return [];
         throw error;
@@ -2442,10 +2442,10 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
           const current = await currentNote(service, p.path);
           if (current?.hash !== p.afterHash)
             throw new Error("Wiki changed since saving; undo would overwrite edits");
-          const full = join13(service.binding.vault, p.path);
+          const full = join11(service.binding.vault, p.path);
           if (p.before === null) await unlink5(full);
           else {
-            const temp = join13(dirname7(full), `.${randomUUID11()}.tmp`);
+            const temp = join11(dirname6(full), `.${randomUUID10()}.tmp`);
             try {
               await writeFile7(temp, p.before, { flag: "wx", mode: (await lstat6(full)).mode & 511 });
               if ((await currentNote(service, p.path))?.hash !== p.afterHash)
@@ -2510,9 +2510,9 @@ __export(specialist_host_exports, {
   specialistSettings: () => specialistSettings2,
   withSpecialistSlot: () => withSpecialistSlot
 });
-import { randomUUID as randomUUID12 } from "node:crypto";
+import { randomUUID as randomUUID11 } from "node:crypto";
 import { mkdir as mkdir8, readFile as readFile8, rename as rename8, unlink as unlink6, writeFile as writeFile8 } from "node:fs/promises";
-import { join as join14 } from "node:path";
+import { join as join12 } from "node:path";
 function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEvent) {
   const { runtimeSlot: runtimeSlot2 } = runtime;
   const { knowledgeDirectory: knowledgeDirectory2, readKnowledgeBinding: readKnowledgeBinding2, withKnowledgeBinding: withKnowledgeBinding2 } = config;
@@ -2573,7 +2573,7 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
     if (!dir) return { mode: "off", revision: 0, ...SPECIALIST_LIMITS2 };
     let data = { mode: "automatic", revision: 0 };
     try {
-      data = JSON.parse(await readFile8(join14(dir, "specialists.json"), "utf8"));
+      data = JSON.parse(await readFile8(join12(dir, "specialists.json"), "utf8"));
     } catch (e) {
       if (e.code !== "ENOENT") throw new Error("Knowledge specialist settings cannot be read");
     }
@@ -2666,12 +2666,12 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
           data[key] = Math.min(data[key] ?? SPECIALIST_LIMITS2[key], SPECIALIST_LIMITS2[key]);
         data.mode = mode;
         data.revision = revision + 1;
-        const dir = knowledgeDirectory2(), temp = join14(dir, `specialists.${randomUUID12()}.tmp`);
+        const dir = knowledgeDirectory2(), temp = join12(dir, `specialists.${randomUUID11()}.tmp`);
         await mkdir8(dir, { recursive: true, mode: 448 });
         try {
           await writeFile8(temp, `${JSON.stringify(data)}
 `, { flag: "wx", mode: 384 });
-          await rename8(temp, join14(dir, "specialists.json"));
+          await rename8(temp, join12(dir, "specialists.json"));
         } finally {
           await unlink6(temp).catch((e) => {
             if (e.code !== "ENOENT") throw e;
@@ -2767,9 +2767,9 @@ var init_specialist_host = __esm({
 });
 
 // src/core/wiki-model-review.ts
-import { randomUUID as randomUUID15 } from "node:crypto";
+import { randomUUID as randomUUID14 } from "node:crypto";
 import { mkdir as mkdir10, readFile as readFile10, rename as rename9, unlink as unlink7, writeFile as writeFile10 } from "node:fs/promises";
-import { dirname as dirname8, join as join16 } from "node:path";
+import { dirname as dirname7, join as join14 } from "node:path";
 var state;
 var init_wiki_model_review = __esm({
   "src/core/wiki-model-review.ts"() {
@@ -4457,113 +4457,13 @@ function expandWithGraph(hits, neighbors, options) {
 }
 
 // src/core/service.ts
-import { createHash as createHash12, randomUUID as randomUUID9 } from "node:crypto";
-import { join as join12, relative as relative7, resolve as resolve7, sep as sep7 } from "node:path";
-
-// src/core/writer-lease.ts
-import { createHash as createHash11, randomUUID as randomUUID7 } from "node:crypto";
-import {
-  closeSync,
-  fstatSync,
-  lstatSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  realpathSync,
-  unlinkSync,
-  writeFileSync
-} from "node:fs";
-import { homedir as homedir2 } from "node:os";
-import { basename as basename3, dirname as dirname5, join as join9 } from "node:path";
-function canonicalIndex(path) {
-  try {
-    return realpathSync(path);
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-    return join9(realpathSync(dirname5(path)), basename3(path));
-  }
-}
-function acquireFile(path) {
-  let fd;
-  try {
-    fd = openSync(path, "wx", 384);
-  } catch (error) {
-    if (error.code !== "EEXIST") throw error;
-    throw new Error(
-      `Knowledge writer is already reserved: ${path}. Stale leases require explicit recovery.`,
-      {
-        cause: error
-      }
-    );
-  }
-  const owner = `${randomUUID7()}
-${process.pid}
-`;
-  const identity = fstatSync(fd);
-  try {
-    writeFileSync(fd, owner, "utf8");
-  } catch (error) {
-    unlinkSync(path);
-    throw error;
-  } finally {
-    closeSync(fd);
-  }
-  let released = false;
-  return {
-    release() {
-      if (released) return;
-      const current = lstatSync(path);
-      if (!current.isFile() || current.dev !== identity.dev || current.ino !== identity.ino || readFileSync(path, "utf8") !== owner) {
-        throw new Error(`Knowledge writer lease ownership changed: ${path}`);
-      }
-      unlinkSync(path);
-      released = true;
-    }
-  };
-}
-function acquireKnowledgeWriterLease(input, leaseDirectory = join9(
-  homedir2(),
-  ".drone",
-  "runtime-leases",
-  "knowledge-writers"
-)) {
-  const resources = [
-    `vault:${realpathSync(input.vault)}`,
-    `index:${canonicalIndex(input.indexPath)}`
-  ];
-  mkdirSync(leaseDirectory, { recursive: true, mode: 448 });
-  const locks = [];
-  const release = () => {
-    const failures = [];
-    for (const lock of locks) {
-      try {
-        lock.release();
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-    if (failures.length)
-      throw new AggregateError(
-        failures,
-        "Knowledge writer lease release failed"
-      );
-  };
-  try {
-    for (const resource of resources) {
-      const key = createHash11("sha256").update(resource).digest("hex");
-      locks.push(acquireFile(join9(leaseDirectory, `${key}.lock`)));
-    }
-  } catch (error) {
-    release();
-    throw error;
-  }
-  return { release };
-}
+import { createHash as createHash11, randomUUID as randomUUID8 } from "node:crypto";
+import { relative as relative7, resolve as resolve7, sep as sep7 } from "node:path";
 
 // src/core/worker-transport.ts
-import { mkdirSync as mkdirSync2 } from "node:fs";
-import { dirname as dirname6, join as join10 } from "node:path";
-function createKnowledgeWorkerTransportFactory(runtime, invalidateKnowledgeUi2, acquireWriterLease) {
+import { mkdirSync } from "node:fs";
+import { dirname as dirname5, join as join9 } from "node:path";
+function createKnowledgeWorkerTransportFactory(runtime, config, invalidateKnowledgeUi2, acquireWriterLease) {
   const {
     createKnowledgeWorker: createKnowledgeWorker2,
     knowledgeWorkerMetadata: knowledgeWorkerMetadata2,
@@ -4585,7 +4485,7 @@ function createKnowledgeWorkerTransportFactory(runtime, invalidateKnowledgeUi2, 
     leaseReleaseError;
     workerFailure;
     worker;
-    constructor(binding, directory, options) {
+    constructor(binding, directory2, options) {
       this.pending = /* @__PURE__ */ new Map();
       this.inFlightRequests = 0;
       this.next = 0;
@@ -4606,14 +4506,14 @@ function createKnowledgeWorkerTransportFactory(runtime, invalidateKnowledgeUi2, 
       const workerOptions = {
         workerData: {
           vault: binding.vault,
-          database: join10(directory, binding.vaultId, "index.sqlite"),
+          database: join9(directory2, binding.vaultId, "index.sqlite"),
           workerVersion: this.version
         },
         execArgv: process.execArgv.filter(
           (arg) => !arg.startsWith("--input-type") && !arg.startsWith("--test")
         )
       };
-      mkdirSync2(dirname6(workerOptions.workerData.database), {
+      mkdirSync(dirname5(workerOptions.workerData.database), {
         recursive: true
       });
       this.writerLease = acquireWriterLease?.({
@@ -4816,9 +4716,15 @@ function createKnowledgeWorkerTransportFactory(runtime, invalidateKnowledgeUi2, 
       return this.pending.size;
     }
   }
+  function directory() {
+    const value = config.knowledgeDirectory();
+    if (!value) throw new Error("No application knowledge directory");
+    return value;
+  }
   return {
     metadata: knowledgeWorkerMetadata2,
-    create: ({ binding, directory, workerVersion }) => new KnowledgeWorkerTransport(binding, directory, { workerVersion })
+    resourceKey: (binding) => join9(directory(), binding.vaultId, "index.sqlite"),
+    create: ({ binding, workerVersion }) => new KnowledgeWorkerTransport(binding, directory(), { workerVersion })
   };
 }
 
@@ -4836,7 +4742,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
     hasPaperCitation: hasPaperCitation2,
     requiresPaperEvidence: requiresPaperEvidence2
   } = runtime;
-  const { knowledgeDirectory: knowledgeDirectory2, readKnowledgeBinding: readKnowledgeBinding2, withKnowledgeBinding: withKnowledgeBinding2 } = config;
+  const { readKnowledgeBinding: readKnowledgeBinding2, withKnowledgeBinding: withKnowledgeBinding2 } = config;
   const { readSemanticSettings: readSemanticSettings2, saveSemanticSettings: saveSemanticSettings2 } = semantic;
   const { readReviewMode: readReviewMode2 } = reviewPolicy;
   const pool = runtimeSlot2("knowledge", "workerPool", () => {
@@ -4890,7 +4796,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
     };
   }
   function fingerprintFor(settings) {
-    return createHash12("sha256").update(`${settings.provider}\0${settings.baseUrl}\0${settings.model}\0${settings.chunkChars || 1200}`).digest("hex");
+    return createHash11("sha256").update(`${settings.provider}\0${settings.baseUrl}\0${settings.model}\0${settings.chunkChars || 1200}`).digest("hex");
   }
   function awaitSemanticDeadline(operation, controller) {
     let onAbort;
@@ -4908,11 +4814,11 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
       throw new Error("Knowledge binding changed; start a new turn before reading or writing");
   }
   class KnowledgeService2 {
-    constructor(binding, directory = knowledgeDirectory2(), options = {}) {
+    constructor(binding, options = {}) {
       this.binding = binding;
       this.semanticCandidateProvider = typeof options.semanticCandidateProvider === "function" ? options.semanticCandidateProvider : null;
       this.tickets = /* @__PURE__ */ new Map();
-      this.transport = transportFactory.create({ binding, directory, workerVersion: options.workerVersion });
+      this.transport = transportFactory.create({ binding, workerVersion: options.workerVersion });
       this.closePromise = null;
     }
     get closed() {
@@ -4976,11 +4882,11 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
             ...(related?.hits || []).filter((hit) => hit.kind === "wiki").map((hit) => hit.path)
           ])
         ];
-        const ticket = randomUUID9();
+        const ticket = randomUUID8();
         this.tickets.set(ticket, {
           cwd: resolve7(cwd),
           project,
-          queryHash: createHash12("sha256").update(query).digest("hex"),
+          queryHash: createHash11("sha256").update(query).digest("hex"),
           query,
           navigation,
           linkedWiki: [...linkedWiki],
@@ -5053,7 +4959,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
           hash: page.hash,
           startLine: page.startLine,
           endLine: page.endLine,
-          excerptHash: createHash12("sha256").update(page.text).digest("hex")
+          excerptHash: createHash11("sha256").update(page.text).digest("hex")
         };
         state2.reads.delete(path);
         state2.reads.set(path, receipt);
@@ -5666,9 +5572,8 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
   }
   async function getKnowledgeServiceNow(binding) {
     binding ||= await readKnowledgeBinding2();
-    const directory = knowledgeDirectory2();
-    if (!binding || !directory) throw new Error("No application knowledge Vault is bound");
-    const key = join12(directory, binding.vaultId, "index.sqlite");
+    if (!binding) throw new Error("No application knowledge Vault is bound");
+    const key = transportFactory.resourceKey(binding);
     const transitions = pool.transitions || /* @__PURE__ */ new Map();
     pool.transitions = transitions;
     const transition = transitions.get(key) || (async () => {
@@ -5688,7 +5593,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
           await service.drain();
           pool.delete(key);
         }
-        candidate = new KnowledgeService2(binding, directory);
+        candidate = new KnowledgeService2(binding);
         await candidate.healthCheck();
         candidate.lifecycle = "enabled";
         emitKnowledgeWorkerLifecycle2("enabled", {
@@ -5735,7 +5640,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
   }
   async function notifyKnowledgeChange2(path) {
     const binding = await readKnowledgeBinding2();
-    if (!binding || !knowledgeDirectory2()) return { indexed: false, reason: "legacy-mode" };
+    if (!binding) return { indexed: false, reason: "legacy-mode" };
     const note = relative7(binding.vault, path).split(sep7).join("/");
     try {
       validateNote(note);
@@ -5767,7 +5672,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
   }
   return { dispose: () => pool.dispose(), KnowledgeService: KnowledgeService2, getKnowledgeService: getKnowledgeService2, notifyKnowledgeChange: notifyKnowledgeChange2, closeKnowledgeServices: closeKnowledgeServices2, receiveCompatibilityEvent };
 }
-function createKnowledgeServicePool(runtime, config, ui, semantic, reviewPolicy, transportFactory = createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi, acquireKnowledgeWriterLease)) {
+function createKnowledgeServicePool(runtime, config, semantic, reviewPolicy, transportFactory) {
   return createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, transportFactory, null);
 }
 var compatibilityKnowledgeServices = createKnowledgeServicePoolApi(
@@ -5776,7 +5681,7 @@ var compatibilityKnowledgeServices = createKnowledgeServicePoolApi(
   semantic_settings_exports,
   review_policy_exports,
   // Remove with the 0.2 compatibility facade after complete owner disposal is wired.
-  createKnowledgeWorkerTransportFactory(compatibilityKnowledgeRuntimeHost, invalidateKnowledgeUi, null),
+  createKnowledgeWorkerTransportFactory(compatibilityKnowledgeRuntimeHost, config_exports, invalidateKnowledgeUi, null),
   compatibilityKnowledgeRuntimeHost.emitProcessEvent
 );
 process.on("drone:knowledge-service/v1", compatibilityKnowledgeServices.receiveCompatibilityEvent);
@@ -5821,7 +5726,7 @@ __export(publication_exports, {
 init_config();
 init_runtime_host();
 init_runtime_host();
-import { createHash as createHash13, randomUUID as randomUUID10 } from "node:crypto";
+import { createHash as createHash12, randomUUID as randomUUID9 } from "node:crypto";
 init_review_policy();
 init_review_policy();
 init_ui_state();
@@ -5838,7 +5743,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
     })
   );
   const FIELD = "knowledgePublication";
-  const hash2 = (content) => createHash13("sha256").update(JSON.stringify(content ?? [])).digest("hex");
+  const hash2 = (content) => createHash12("sha256").update(JSON.stringify(content ?? [])).digest("hex");
   function sanitizeError(text2) {
     return diagnosticText(text2, 4096).trim();
   }
@@ -5862,7 +5767,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
   }
   function seal(message, content, detail) {
     signal?.throwIfAborted();
-    const proof = { version: 1, id: randomUUID10(), ...detail, contentHash: hash2(content) };
+    const proof = { version: 1, id: randomUUID9(), ...detail, contentHash: hash2(content) };
     state2.proofs.add(proof);
     return { ...base(message, content), [FIELD]: proof };
   }
@@ -6380,7 +6285,7 @@ ${String(footer).slice(0, 2e3)}` }] : published;
         started = true;
         required = isRequired;
         if (newTurn) {
-          turnId = randomUUID10();
+          turnId = randomUUID9();
           protocol.clear();
           deliveries.clear();
           protocolBytes = 0;
@@ -6430,7 +6335,7 @@ __export(specialists_exports, {
 init_runtime_host();
 init_config();
 init_files();
-import { randomUUID as randomUUID13 } from "node:crypto";
+import { randomUUID as randomUUID12 } from "node:crypto";
 import { lstat as lstat7, readFile as readFile9 } from "node:fs/promises";
 init_specialist_host();
 init_ui_state();
@@ -6573,7 +6478,7 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
       if (!host) return skip("host-unavailable");
       if (decision.decision !== "run") {
         remember({ decision: decision.decision, reasonCode: decision.reasonCode });
-        const id2 = randomUUID13();
+        const id2 = randomUUID12();
         noteKnowledgeSpecialist2(ctx, {
           id: id2,
           role,
@@ -6633,7 +6538,7 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
       if (parentSignal?.aborted) abort();
       else parentSignal?.addEventListener("abort", abort, { once: true });
       const deadline = setTimeout(abort, settings.timeoutMs);
-      const [name, label] = profiles[role], id = randomUUID13();
+      const [name, label] = profiles[role], id = randomUUID12();
       let progress = {
         id,
         role,
@@ -6977,9 +6882,9 @@ __export(specialist_delivery_exports, {
 });
 init_runtime_host();
 init_config();
-import { randomUUID as randomUUID14 } from "node:crypto";
+import { randomUUID as randomUUID13 } from "node:crypto";
 import { lstat as lstat8, mkdir as mkdir9, realpath as realpath7, writeFile as writeFile9 } from "node:fs/promises";
-import { isAbsolute as isAbsolute7, join as join15, relative as relative8, resolve as resolve9, sep as sep8 } from "node:path";
+import { isAbsolute as isAbsolute7, join as join13, relative as relative8, resolve as resolve9, sep as sep8 } from "node:path";
 var contained = (root, path) => {
   const rel = relative8(root, path);
   return !isAbsolute7(rel) && rel !== ".." && !rel.startsWith(`..${sep8}`);
@@ -7000,10 +6905,10 @@ function createSpecialistDelivery(runtime, bindings) {
     if (answer.status !== "completed") return answer;
     const html = validateSpecialistHtml(answer.data.html), config = await runtime.loadWorkspaceConfig(ctx.cwd);
     const root = await realpath7(config.resultsRoot), run = await realpath7(resolve9(ctx.cwd, runDir || ""));
-    if (!contained(root, run) || relative8(root, run).split(sep8).length !== 2 || !run.split(sep8).at(-1).startsWith("run-") || !(await lstat8(join15(run, "metadata.json"))).isFile())
+    if (!contained(root, run) || relative8(root, run).split(sep8).length !== 2 || !run.split(sep8).at(-1).startsWith("run-") || !(await lstat8(join13(run, "metadata.json"))).isFile())
       throw new Error("Explainer destination must be an existing research run");
     return bindings.withKnowledgeBinding(c.binding, async () => {
-      const artifactPath = join15(run, `show-me-${randomUUID14()}.html`);
+      const artifactPath = join13(run, `show-me-${randomUUID13()}.html`);
       const sources = await c.service.evidenceReceipts(c.ticket, ctx.cwd, answer.data.source_paths);
       await mkdir9(run, { recursive: true });
       await writeFile9(artifactPath, html, { flag: "wx", mode: 384 });
@@ -7041,9 +6946,9 @@ init_runtime_host();
 init_runtime_host();
 init_runtime_host();
 init_config();
-import { createHash as createHash15, randomUUID as randomUUID16 } from "node:crypto";
+import { createHash as createHash14, randomUUID as randomUUID15 } from "node:crypto";
 import { lstat as lstat9, mkdir as mkdir11, readFile as readFile11, realpath as realpath8, stat as stat3, writeFile as writeFile11 } from "node:fs/promises";
-import { dirname as dirname9, isAbsolute as isAbsolute8, join as join17, relative as relative9, resolve as resolve10 } from "node:path";
+import { dirname as dirname8, isAbsolute as isAbsolute8, join as join15, relative as relative9, resolve as resolve10 } from "node:path";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
 init_files();
 init_review_policy();
@@ -7064,9 +6969,9 @@ var runtimeState = runtimeSlot("knowledge", "uiService", () => ({
 // src/core/experience-store.ts
 init_config();
 init_runtime_host();
-import { createHash as createHash16, randomUUID as randomUUID17 } from "node:crypto";
+import { createHash as createHash15, randomUUID as randomUUID16 } from "node:crypto";
 import { lstat as lstat10, mkdir as mkdir12, readFile as readFile12, rename as rename10, unlink as unlink8, writeFile as writeFile12 } from "node:fs/promises";
-import { isAbsolute as isAbsolute9, join as join18, relative as relative10, resolve as resolve11, sep as sep9 } from "node:path";
+import { isAbsolute as isAbsolute9, join as join16, relative as relative10, resolve as resolve11, sep as sep9 } from "node:path";
 var EXPERIENCE_LIMITS = Object.freeze({
   maxRecords: 128,
   maxFileBytes: 512 * 1024,
@@ -7097,6 +7002,106 @@ init_review_policy();
 init_specialist_host();
 init_wiki_review();
 init_topic_memory();
+
+// src/core/writer-lease.ts
+import { createHash as createHash16, randomUUID as randomUUID17 } from "node:crypto";
+import {
+  closeSync,
+  fstatSync,
+  lstatSync,
+  mkdirSync as mkdirSync3,
+  openSync,
+  readFileSync as readFileSync2,
+  realpathSync,
+  unlinkSync,
+  writeFileSync as writeFileSync2
+} from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { basename as basename4, dirname as dirname10, join as join17 } from "node:path";
+function canonicalIndex(path) {
+  try {
+    return realpathSync(path);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    return join17(realpathSync(dirname10(path)), basename4(path));
+  }
+}
+function acquireFile(path) {
+  let fd;
+  try {
+    fd = openSync(path, "wx", 384);
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    throw new Error(
+      `Knowledge writer is already reserved: ${path}. Stale leases require explicit recovery.`,
+      {
+        cause: error
+      }
+    );
+  }
+  const owner = `${randomUUID17()}
+${process.pid}
+`;
+  const identity = fstatSync(fd);
+  try {
+    writeFileSync2(fd, owner, "utf8");
+  } catch (error) {
+    unlinkSync(path);
+    throw error;
+  } finally {
+    closeSync(fd);
+  }
+  let released = false;
+  return {
+    release() {
+      if (released) return;
+      const current = lstatSync(path);
+      if (!current.isFile() || current.dev !== identity.dev || current.ino !== identity.ino || readFileSync2(path, "utf8") !== owner) {
+        throw new Error(`Knowledge writer lease ownership changed: ${path}`);
+      }
+      unlinkSync(path);
+      released = true;
+    }
+  };
+}
+function acquireKnowledgeWriterLease(input, leaseDirectory = join17(
+  homedir2(),
+  ".drone",
+  "runtime-leases",
+  "knowledge-writers"
+)) {
+  const resources = [
+    `vault:${realpathSync(input.vault)}`,
+    `index:${canonicalIndex(input.indexPath)}`
+  ];
+  mkdirSync3(leaseDirectory, { recursive: true, mode: 448 });
+  const locks = [];
+  const release = () => {
+    const failures = [];
+    for (const lock of locks) {
+      try {
+        lock.release();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length)
+      throw new AggregateError(
+        failures,
+        "Knowledge writer lease release failed"
+      );
+  };
+  try {
+    for (const resource of resources) {
+      const key = createHash16("sha256").update(resource).digest("hex");
+      locks.push(acquireFile(join17(leaseDirectory, `${key}.lock`)));
+    }
+  } catch (error) {
+    release();
+    throw error;
+  }
+  return { release };
+}
 
 // src/core/writer-lease-group.ts
 function createKnowledgeWriterLeaseGroup(acquire) {
@@ -7188,10 +7193,9 @@ function createKnowledgeRuntime(config, host, extensionHost = {}, acquireWriterL
   const services = createKnowledgeServicePool(
     host,
     config,
-    ui,
     semantic,
     reviewPolicy,
-    createKnowledgeWorkerTransportFactory(host, ui.invalidateKnowledgeUi, writerReservations.acquireWorker)
+    createKnowledgeWorkerTransportFactory(host, config, ui.invalidateKnowledgeUi, writerReservations.acquireWorker)
   );
   const specialists = createKnowledgeSpecialistHost(host, config, ui);
   const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
@@ -7284,7 +7288,7 @@ function createKnowledgeSessionServices(pool, signal) {
 // src/extension/internal-knowledge-extension.ts
 init_runtime_host();
 init_config();
-import { join as join19, resolve as resolve12 } from "node:path";
+import { join as join18, resolve as resolve12 } from "node:path";
 init_flow_cards();
 init_topic_memory();
 init_topic_memory();
@@ -7610,7 +7614,7 @@ Topic memory receipt: ${JSON.stringify({ classification: memoryReceipt.classific
           });
           if (answer.status === "completed") {
             try {
-              const runDir = join19(event.result.details.run, "..");
+              const runDir = join18(event.result.details.run, "..");
               const archived = await saveSpecialistExplainer2(current, ctx, {
                 runDir,
                 topicId: explainerTopicId(

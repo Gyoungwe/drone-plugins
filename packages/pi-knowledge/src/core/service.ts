@@ -2,8 +2,7 @@
 import { mentionedWikiTitle } from "./topic-probe.js";
 import { expandWithGraph, GRAPH_RETRIEVAL_DEFAULTS } from "./graph-retrieval.js";
 import { createHash, randomUUID } from "node:crypto";
-import { join, relative, resolve, sep } from "node:path";
-import { acquireKnowledgeWriterLease } from "./writer-lease.js";
+import { relative, resolve, sep } from "node:path";
 import { createKnowledgeWorkerTransportFactory } from "./worker-transport.js";
 import type { KnowledgeServiceTransportFactory } from "./service-transport.js";
 import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost, type ProcessEventEmitter } from "./runtime-host.js";
@@ -15,12 +14,12 @@ import { embedTexts, validateSemanticConfig } from "./semantic-provider.js";
 import * as compatibilitySemanticSettings from "./semantic-settings.js";
 import type { SemanticSettingsApi } from "./semantic-settings.js";
 import * as compatibilityUi from "./ui-state.js";
-import type { createKnowledgeUi } from "./ui-state.js";
+export type KnowledgeServiceConfig = Pick<KnowledgeConfigApi, "readKnowledgeBinding" | "withKnowledgeBinding">;
 
 /** A pool and all worker callbacks belong to one explicitly supplied owner. */
 function createKnowledgeServicePoolApi(
 	runtime: KnowledgeRuntimeHost,
-	config: KnowledgeConfigApi,
+	config: KnowledgeServiceConfig,
 	semantic: SemanticSettingsApi,
 	reviewPolicy: Pick<typeof compatibilityReviewPolicy, "readReviewMode">,
 	transportFactory: KnowledgeServiceTransportFactory,
@@ -29,7 +28,7 @@ function createKnowledgeServicePoolApi(
 	const {
 		emitKnowledgeWorkerLifecycle, runRuntimeExclusive, runtimeSlot, hasPaperCitation, requiresPaperEvidence,
 	} = runtime;
-	const { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } = config;
+	const { readKnowledgeBinding, withKnowledgeBinding } = config;
 	const { readSemanticSettings, saveSemanticSettings } = semantic;
 	const { readReviewMode } = reviewPolicy;
 	const pool = runtimeSlot("knowledge", "workerPool", () => {
@@ -108,12 +107,12 @@ function createKnowledgeServicePoolApi(
 	}
 
 	class KnowledgeService {
-		constructor(binding, directory = knowledgeDirectory(), options = {}) {
+		constructor(binding, options = {}) {
 			this.binding = binding;
 			this.semanticCandidateProvider =
 				typeof options.semanticCandidateProvider === "function" ? options.semanticCandidateProvider : null;
 			this.tickets = new Map();
-			this.transport = transportFactory.create({ binding, directory, workerVersion: options.workerVersion });
+			this.transport = transportFactory.create({ binding, workerVersion: options.workerVersion });
 			this.closePromise = null;
 		}
 		get closed() { return this.transport.closed; }
@@ -935,10 +934,9 @@ function createKnowledgeServicePoolApi(
 	}
 	async function getKnowledgeServiceNow(binding: KnowledgeBinding | null) {
 		binding ||= await readKnowledgeBinding();
-		const directory = knowledgeDirectory();
-		if (!binding || !directory) throw new Error("No application knowledge Vault is bound");
+		if (!binding) throw new Error("No application knowledge Vault is bound");
 		// One worker per index database: two workers on the same SQLite file race on FTS rowids.
-		const key = join(directory, binding.vaultId, "index.sqlite");
+		const key = transportFactory.resourceKey(binding);
 		const transitions = pool.transitions || new Map();
 		pool.transitions = transitions;
 		const transition = transitions.get(key) || (async () => {
@@ -965,7 +963,7 @@ function createKnowledgeServicePoolApi(
 					await service.drain();
 					pool.delete(key);
 				}
-				candidate = new KnowledgeService(binding, directory);
+				candidate = new KnowledgeService(binding);
 				await candidate.healthCheck();
 				candidate.lifecycle = "enabled";
 				emitKnowledgeWorkerLifecycle("enabled", {
@@ -1015,7 +1013,7 @@ function createKnowledgeServicePoolApi(
 	}
 	async function notifyKnowledgeChange(path) {
 		const binding = await readKnowledgeBinding();
-		if (!binding || !knowledgeDirectory()) return { indexed: false, reason: "legacy-mode" };
+		if (!binding) return { indexed: false, reason: "legacy-mode" };
 		const note = relative(binding.vault, path).split(sep).join("/");
 		try {
 			validateNote(note);
@@ -1051,11 +1049,10 @@ function createKnowledgeServicePoolApi(
 /** New owners never exchange service objects through process-wide events. */
 export function createKnowledgeServicePool(
 	runtime: KnowledgeRuntimeHost,
-	config: KnowledgeConfigApi,
-	ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">,
+	config: KnowledgeServiceConfig,
 	semantic: SemanticSettingsApi,
 	reviewPolicy: Pick<typeof compatibilityReviewPolicy, "readReviewMode">,
-	transportFactory: KnowledgeServiceTransportFactory = createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi, acquireKnowledgeWriterLease),
+	transportFactory: KnowledgeServiceTransportFactory,
 ) {
 	return createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, transportFactory, null);
 }
@@ -1066,7 +1063,7 @@ const compatibilityKnowledgeServices = createKnowledgeServicePoolApi(
 	compatibilityKnowledgeRuntimeHost, compatibilityConfig,
 	compatibilitySemanticSettings, compatibilityReviewPolicy,
 	// Remove with the 0.2 compatibility facade after complete owner disposal is wired.
-	createKnowledgeWorkerTransportFactory(compatibilityKnowledgeRuntimeHost, compatibilityUi.invalidateKnowledgeUi, null),
+	createKnowledgeWorkerTransportFactory(compatibilityKnowledgeRuntimeHost, compatibilityConfig, compatibilityUi.invalidateKnowledgeUi, null),
 	compatibilityKnowledgeRuntimeHost.emitProcessEvent,
 );
 process.on("drone:knowledge-service/v1", compatibilityKnowledgeServices.receiveCompatibilityEvent);

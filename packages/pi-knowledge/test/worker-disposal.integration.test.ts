@@ -37,9 +37,9 @@ it("reports failed drain and pool disposal while releasing the lease only after 
 	const acquire = (input: Parameters<typeof acquireKnowledgeWriterLease>[0]) =>
 		acquireKnowledgeWriterLease(input, join(root, "leases"));
 	const ui = createKnowledgeUi(runtime, config);
-	const services = createKnowledgeServicePool(runtime, config, ui,
+	const services = createKnowledgeServicePool(runtime, config,
 		createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config),
-		createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi, acquire));
+		createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi, acquire));
 	const service = await services.getKnowledgeService();
 	try {
 		await expect(service.close()).rejects.toThrow("shutdown protocol failed");
@@ -67,9 +67,9 @@ it("releases a constructor's acquired lease when the actual worker resource cann
 	const acquire = (input: Parameters<typeof acquireKnowledgeWriterLease>[0]) =>
 		acquireKnowledgeWriterLease(input, join(root, "leases"));
 	const ui = createKnowledgeUi(runtime, config);
-	const services = createKnowledgeServicePool(runtime, config, ui,
+	const services = createKnowledgeServicePool(runtime, config,
 		createSemanticSettingsApi(undefined, config.knowledgeDirectory()), createKnowledgeReviewPolicy(config),
-		createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi, acquire));
+		createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi, acquire));
 	try {
 		await expect(services.getKnowledgeService()).rejects.toThrow("worker resource missing");
 		const lease = acquire({ vault, indexPath: join(root, "state", binding.vaultId, "index.sqlite") });
@@ -102,9 +102,9 @@ it("closes accepted requests still reading their binding, then permits a later c
 		return worker;
 	});
 	const ui = createKnowledgeUi(runtime, config);
-	const services = createKnowledgeServicePool(runtime, delayedConfig, ui,
+	const services = createKnowledgeServicePool(runtime, delayedConfig,
 		createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config),
-		createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi,
+		createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi,
 			(input) => acquireKnowledgeWriterLease(input, join(root, "leases"))));
 	try {
 		const accepted = services.getKnowledgeService();
@@ -154,9 +154,9 @@ for (const failure of ["exit", "error"] as const) {
 		const acquire = (input: Parameters<typeof acquireKnowledgeWriterLease>[0]) =>
 			acquireKnowledgeWriterLease(input, join(root, "leases"));
 		const ui = createKnowledgeUi(runtime, config);
-		const services = createKnowledgeServicePool(runtime, config, ui,
+		const services = createKnowledgeServicePool(runtime, config,
 			createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config),
-			createKnowledgeWorkerTransportFactory(runtime, ui.invalidateKnowledgeUi, acquire));
+			createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi, acquire));
 		try {
 			const service = await services.getKnowledgeService();
 			await expect(service.close()).rejects.toThrow(failure === "exit" ? "exited (7)" : "shutdown crashed");
