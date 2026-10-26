@@ -5,6 +5,7 @@ import { Worker } from "node:worker_threads";
 import { expect, it, vi } from "vitest";
 import { createEventBus } from "@earendil-works/pi-coding-agent";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
+import { createKnowledgeNativeAdapter } from "../src/core/native-session-lifecycle.js";
 import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
 import { createKnowledgeRuntime } from "../src/core/knowledge-runtime.js";
 import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
@@ -160,4 +161,40 @@ it("rejects a late service result after session revocation without closing anoth
  } finally {
   held.release(); spy.mockRestore(); await value.cleanup();
  }
+});
+
+it("scopes native append, messaging, events and branch reads to the owning session", async () => {
+	let ownedPi: any;
+	let command: any;
+	const eventBus = createEventBus();
+	const appended: unknown[] = [];
+	const messages: unknown[] = [];
+	const owner = {
+		assertActive: vi.fn(),
+		attachSession: (dispose: () => Promise<void>) => () => undefined,
+		run: async (work: () => Promise<unknown>) => work(),
+	};
+	const adapter = createKnowledgeNativeAdapter(owner as any, new AbortController(), (pi) => {
+		ownedPi = pi;
+		pi.registerCommand("branch-check", { handler: (_args: string, ctx: any) => ctx.sessionManager.getBranch() });
+	}, async () => undefined);
+	const branch = [{ type: "session", id: "native" }];
+	ownedPi = undefined;
+	const pi = {
+		events: eventBus,
+		appendEntry: (...args: unknown[]) => appended.push(args),
+		sendUserMessage: async (...args: unknown[]) => messages.push(args),
+		on: vi.fn(),
+		registerCommand: (_name: string, definition: any) => { command = definition; },
+	};
+	adapter.extension(pi);
+	ownedPi.appendEntry("entry", { value: 1 });
+	await ownedPi.sendUserMessage("/drone-init", { deliverAs: "followUp" });
+	expect(appended).toEqual([["entry", { value: 1 }]]);
+	expect(messages).toEqual([["/drone-init", { deliverAs: "followUp" }]]);
+	await expect(command.handler("", { signal: new AbortController().signal, sessionManager: { getBranch: () => branch } })).resolves.toEqual(branch);
+	await adapter.dispose();
+	expect(() => ownedPi.appendEntry("late", {})).toThrow("Knowledge session has been disposed");
+	expect(() => ownedPi.events.emit("late", {})).toThrow("Knowledge session has been disposed");
+	expect(() => command.handler("", { signal: new AbortController().signal, sessionManager: { getBranch: () => branch } })).toThrow("Knowledge session has been disposed");
 });

@@ -11,6 +11,11 @@ export function createKnowledgeNativeAdapter(
 	let registered = false;
 	let closed = false;
 	let disposal: Promise<void> | null = null;
+	const eventUnsubscribers = new Set<() => void>();
+	const assertOpen = () => {
+		if (closed) throw new Error("Knowledge session has been disposed");
+		owner.assertActive();
+	};
 	function run<T>(work: () => T | Promise<T>, signal = controller.signal): Promise<T> {
 		if (closed) throw new Error("Knowledge session has been disposed");
 		const operation = owner.run(async () => {
@@ -32,6 +37,8 @@ export function createKnowledgeNativeAdapter(
 			// Callers still receive their individual operation failures. Shutdown
 			// waits for settlement before releasing this session's owner reference.
 			await Promise.allSettled([...operations]);
+			for (const unsubscribe of eventUnsubscribers) unsubscribe();
+			eventUnsubscribers.clear();
 			detach();
 			if (cleanupResult[0].status === "rejected") throw cleanupResult[0].reason;
 		})();
@@ -39,16 +46,40 @@ export function createKnowledgeNativeAdapter(
 	}
 	const detach = owner.attachSession(dispose);
 	function extension(pi: any): void {
-		owner.assertActive();
+		assertOpen();
 		if (closed || registered) throw new Error("A native knowledge session can only be registered once");
 		registered = true;
 		const scopedContext = (context: any, signal: AbortSignal) => new Proxy(context, {
-			get(target, property) { return property === "signal" ? signal : Reflect.get(target, property, target); },
+			get(target, property) {
+				if (property === "signal") return signal;
+				if (property === "sessionManager" && target.sessionManager) {
+					return new Proxy(target.sessionManager, {
+						get(manager, key) {
+							const value = Reflect.get(manager, key, manager);
+							if (typeof value !== "function") return value;
+							return (...args: unknown[]) => { assertOpen(); return Reflect.apply(value, manager, args); };
+						},
+					});
+				}
+				return Reflect.get(target, property, target);
+			},
 		});
+		const scopedEvents = pi.events && typeof pi.events === "object" ? {
+			on: (channel: string, handler: (data: unknown) => void) => {
+				assertOpen();
+				const unsubscribe = pi.events.on(channel, (data: unknown) => { if (!closed) handler(data); });
+				eventUnsubscribers.add(unsubscribe);
+				return () => { eventUnsubscribers.delete(unsubscribe); unsubscribe(); };
+			},
+			emit: (channel: string, data: unknown) => { assertOpen(); return pi.events.emit(channel, data); },
+		} : pi.events;
 		const scopedSignal = (signal?: AbortSignal) => signal
 			? AbortSignal.any([controller.signal, signal]) : controller.signal;
 		const ownedPi = new Proxy(pi, {
 			get(target, property) {
+				if (property === "appendEntry") return (...args: unknown[]) => { assertOpen(); return target.appendEntry(...args); };
+				if (property === "sendUserMessage") return (...args: unknown[]) => run(() => target.sendUserMessage(...args));
+				if (property === "events") return scopedEvents;
 				if (property === "registerTool") return (definition: any) => target.registerTool({
 					...definition,
 					execute: (id: string, input: unknown, signal: AbortSignal | undefined, update: unknown, context: any) => {
