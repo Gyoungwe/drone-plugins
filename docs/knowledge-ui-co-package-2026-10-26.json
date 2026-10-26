@@ -1,16 +1,16 @@
 {
   "date": "2026-10-26",
   "status": "PARTIAL",
-  "scope": "P2 co-packaging, explicit runtime resources and candidate-owner writer lease; full native/UI composition, host migration and formal acceptance incomplete",
+  "scope": "P2 co-packaging and complete native-owner composition with session isolation; Desktop/UI owner, broker and host migration incomplete",
   "published": false,
   "basePluginCommit": "d2f76a0",
   "candidates": [
     {
       "name": "@gyoungwe/pi-knowledge",
       "version": "0.3.0",
-      "sha256": "3013407ee391a9919f37c982730766400a306738c31579466f7086f990988825",
-      "integrity": "sha512-C9lDlvr59X0jmlMNBw2d9YdTWn8fyb1u5nIXOGara+Yvn7cCYcpr/t/eH/ecyoj/b1OIYp9dJd8dx7Smy8dMGA==",
-      "files": 191
+      "sha256": "be5817bcb59048e1260b13917142671c623a891a9d19bc91d361a297eacda06d",
+      "integrity": "sha512-1ya95JcHoCl3Agz9002qHXbkKTmyexgyZ3VDwfDBXApusc+09Cd91qzcy1uWMHWyoifHINBMiWysnUoLqutT+w==",
+      "files": 195
     },
     {
       "name": "@gyoungwe/desktop-ui-pack",
@@ -22,16 +22,16 @@
     {
       "name": "@gyoungwe/research-suite",
       "version": "0.2.0",
-      "sha256": "ae4db1d5cc110472cb278a496b911a30bb7d0c6e5aba61fe0bc17db17267dde6",
-      "integrity": "sha512-bbuAe+/FzzthUWLJHGJACJ4C/h5ODiY88vQ7wSTC2lCM6D261pcWISElHWHXNPWeLMe7AcYY3iqu4kAh9Fw6vw==",
-      "files": 1242
+      "sha256": "f0a0bfcc15a11ece469180cf8b654c9409309554f1581f70eefa27b05d119f97",
+      "integrity": "sha512-/01ATSfvXRSFP5pFDk32hp06lwCSSgsyhQEfwoau34o1feIcyz5FBvh1RTfPxJDhUv+kR+Ruw8HEJgiAi15t8g==",
+      "files": 1246
     }
   ],
   "checks": [
     {
       "command": "npm run check",
       "exitCode": 0,
-      "logSha256": "efe266553a19e8244a7fda3d9c993015db4dc6e008fa8f8171b3987e544942d1"
+      "logSha256": "36deedb764bd78cc23fc11061a06550779c9bb61c6a5a25b55a8395b264cdf64"
     },
     {
       "command": "npm run test:styles -w @gyoungwe/pi-knowledge",
@@ -40,8 +40,8 @@
     }
   ],
   "knowledgeTests": {
-    "files": 60,
-    "tests": 411
+    "files": 64,
+    "tests": 426
   },
   "desktopTests": {
     "files": 1,
@@ -53,7 +53,14 @@
     "tool": "knowledge_status",
     "dispatchCount": 1,
     "result": "unconfigured",
-    "provider": "offline deterministic SDK faux provider"
+    "provider": "offline deterministic SDK faux provider",
+    "configuredSessions": 2,
+    "configuredTools": [
+      "knowledge_status",
+      "research_knowledge_status"
+    ],
+    "shutdownLeaseReleased": true,
+    "restart": true
   },
   "cleanCandidateInstall": {
     "knowledgeUiName": "drone-knowledge-ui",
@@ -91,7 +98,7 @@
     "dispatchCountPerVersion": 14
   },
   "remaining": [
-    "Complete native extension and Desktop UI must share one owner; enable lease only after correct owner disposal and session proof isolation",
+    "Desktop UI/native must share one managed owner with granted files/state/worker/model/event broker; complete scientific workflow and resource-group lease for domain file transactions remain",
     "Host knowledge services, named IPC and process event bridge extraction",
     "Formal installed-app discovery, disable/re-enable, uninstall/reinstall and old-UI rollback",
     "Zero-domain-plugin host build/start/chat",
@@ -112,7 +119,7 @@
       "failureReasonPresent": true,
       "falseRollbackReceiptAbsent": true
     },
-    "scope": "Explicit runtime resources isolated; candidate-owner local same-user writer lease tested; legacy native/Desktop owner does not enable lease until complete disposal is connected",
+    "scope": "Explicit runtime resources and default CLI owner isolated; local same-user SQLite writer lease enabled and released by real SDK shutdown; old Desktop compatibility pool remains without lease",
     "targetedFiles": 2,
     "targetedTests": 7,
     "queuedWriteFailureReturnedToCaller": true,
@@ -126,16 +133,26 @@
     "acceptedGetCloseBarrier": true,
     "closeAggregatesFailures": true,
     "failedOrForcedCloseDoesNotReportDrained": true,
-    "nativeFullOwnerComposition": "NOT_IMPLEMENTED",
+    "nativeFullOwnerComposition": "REAL_SDK_1_1_0_VERIFIED",
     "legacyProcessBridgesRetained": 3,
     "publicationProofIdentityUnchanged": true,
     "acknowledgedCloseThenNonzeroExitRejects": true,
     "acknowledgedCloseThenWorkerErrorRejects": true,
-    "firstWorkerErrorAndExitCodePreserved": true
+    "firstWorkerErrorAndExitCodePreserved": true,
+    "sharedWorkerAcrossSessions": true,
+    "readTicketsPerSession": true,
+    "publicationProofsPerSession": true,
+    "closedPublicationReferencesRevoked": true,
+    "registeredCommandsDrained": true,
+    "sessionCancellationBeforeDrain": true,
+    "lateServiceResultsRejected": true,
+    "internalRequestCleanupPreserved": true,
+    "newOwnerPeerObjectEvents": false,
+    "newOwnerLegacyRuntimeHandshake": false
   },
   "writerLease": {
     "candidateExplicitOwner": "LOCAL_SAME_USER_TESTED",
-    "legacyNativeDesktop": "NOT_ENABLED_PENDING_OWNER_DISPOSAL",
+    "legacyNativeDesktop": "DEFAULT_CLI_ENABLED_AND_TESTED; LEGACY_DESKTOP_NOT_ENABLED",
     "path": "~/.drone/runtime-leases/knowledge-writers",
     "resourceKeys": [
       "canonical-vault",
@@ -148,7 +165,8 @@
     "crashResidueAutomaticallyRemoved": false,
     "multiUserOrMultiMachine": "NOT_COVERED",
     "permissionsDeclaration": "application-state",
-    "sandboxBrokerGrant": "NOT_CONNECTED"
+    "sandboxBrokerGrant": "NOT_CONNECTED",
+    "allVaultFileTransactions": "NOT_COVERED_ACROSS_WORKER_CRASH"
   },
-  "knowledgeSourceSha256": "f7b96cc01ce6c4f034ae3cedbe92651e85744a57ecdf16a91427f2ae4ed153fe"
+  "knowledgeSourceSha256": "b334300fdb0ebe12014cce20842a8eddddff622d9d6de9af969d8734e714b9e2"
 }

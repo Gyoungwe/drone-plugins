@@ -207,6 +207,7 @@ export {
 	TOPIC_MEMORY_VERSION,
 	archiveTopic,
 	classifyTopic,
+	createTopicMemoryApi,
 	createTopicMemory,
 	listTopics,
 	readTopic,
@@ -280,6 +281,7 @@ export {
 	updateKnowledgeFlow,
 } from "./ui-state.js";
 export {
+	createKnowledgePublication,
 	projectKnowledgeEvent,
 	projectKnowledgeSnapshot,
 	registerAnswerPublication,
@@ -312,6 +314,7 @@ export {
 } from "./reuse.js";
 
 export {
+	createKnowledgeWikiReview,
 	autoApplyWikiProposal,
 	decideWikiProposal,
 	listWikiProposals,
@@ -335,9 +338,9 @@ export {
 	withSpecialistSlot,
 } from "./specialist-host.js";
 
-export { createKnowledgeSpecialists, knowledgeReadStart, shouldOrientKnowledge } from "./specialists.js";
+export { createKnowledgeSpecialistTools, createKnowledgeSpecialists, knowledgeReadStart, shouldOrientKnowledge } from "./specialists.js";
 
-export { saveSpecialistExplainer } from "./specialist-delivery.js";
+export { createSpecialistDelivery, saveSpecialistExplainer } from "./specialist-delivery.js";
 
 export { lastWikiModelReview, reviewWikiWithModel } from "./wiki-model-review.js";
 
@@ -374,3 +377,5 @@ export {
 	type WorkflowSpecDiffValue,
 } from "./experience-store.js";
 export { EvolutionIndex, type EvolutionIndexStore } from "./evolution.js";
+
+export { createKnowledgeRuntime, type KnowledgeRuntime } from "./knowledge-runtime.js";

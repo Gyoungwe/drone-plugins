@@ -5,7 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { mkdirSync } from "node:fs";
 import { acquireKnowledgeWriterLease } from "./writer-lease.js";
-import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
+import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost, type ProcessEventEmitter } from "./runtime-host.js";
 import * as compatibilityConfig from "./config.js";
 import type { KnowledgeBinding, KnowledgeConfigApi } from "./config.js";
 import { canRead, validateNote } from "./files.js";
@@ -17,16 +17,17 @@ import * as compatibilityUi from "./ui-state.js";
 import type { createKnowledgeUi } from "./ui-state.js";
 
 /** A pool and all worker callbacks belong to one explicitly supplied owner. */
-export function createKnowledgeServicePool(
+function createKnowledgeServicePoolApi(
 	runtime: KnowledgeRuntimeHost,
 	config: KnowledgeConfigApi,
 	ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">,
 	semantic: SemanticSettingsApi,
 	reviewPolicy: Pick<typeof compatibilityReviewPolicy, "readReviewMode">,
-	acquireWriterLease: typeof acquireKnowledgeWriterLease | null = acquireKnowledgeWriterLease,
+	acquireWriterLease: typeof acquireKnowledgeWriterLease | null,
+	emitLegacyPeerEvent: ProcessEventEmitter | null,
 ) {
 	const {
-		createKnowledgeWorker, emitKnowledgeWorkerLifecycle, emitProcessEvent,
+		createKnowledgeWorker, emitKnowledgeWorkerLifecycle,
 		knowledgeWorkerMetadata, runRuntimeExclusive, runtimeSlot, hasPaperCitation, requiresPaperEvidence,
 	} = runtime;
 	const { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } = config;
@@ -61,7 +62,7 @@ export function createKnowledgeServicePool(
 		if (payload.action === "request") {
 			const service = pool.get(payload.key);
 			if (service && !service.closed)
-				emitProcessEvent(SERVICE_EVENT, {
+				emitLegacyPeerEvent?.(SERVICE_EVENT, {
 					action: "response",
 					key: payload.key,
 					service,
@@ -1157,7 +1158,7 @@ export function createKnowledgeServicePool(
 		const transition = transitions.get(key) || (async () => {
 			let service = pool.get(key);
 			if (!service || service.closed) {
-				emitProcessEvent(SERVICE_EVENT, { action: "request", key, origin: serviceModule });
+				emitLegacyPeerEvent?.(SERVICE_EVENT, { action: "request", key, origin: serviceModule });
 				service = pool.get(key);
 			}
 			// A rebound Vault reuses the same database. Worker startup performs SQLite
@@ -1188,7 +1189,7 @@ export function createKnowledgeServicePool(
 					integrity: candidate.workerMetadata.integrity,
 				});
 				pool.set(key, candidate);
-				emitProcessEvent(SERVICE_EVENT, { action: "register", key, service: candidate, origin: serviceModule });
+				emitLegacyPeerEvent?.(SERVICE_EVENT, { action: "register", key, service: candidate, origin: serviceModule });
 				if (service) {
 					emitKnowledgeWorkerLifecycle("reloaded", {
 						version: candidate.workerVersion,
@@ -1258,16 +1259,29 @@ export function createKnowledgeServicePool(
 		pool.closing = closing;
 		return closing;
 	}
-	return { KnowledgeService, getKnowledgeService, notifyKnowledgeChange, closeKnowledgeServices, receiveCompatibilityEvent };
+	return { dispose: () => pool.dispose(), KnowledgeService, getKnowledgeService, notifyKnowledgeChange, closeKnowledgeServices, receiveCompatibilityEvent };
+}
+
+/** New owners never exchange service objects through process-wide events. */
+export function createKnowledgeServicePool(
+	runtime: KnowledgeRuntimeHost,
+	config: KnowledgeConfigApi,
+	ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">,
+	semantic: SemanticSettingsApi,
+	reviewPolicy: Pick<typeof compatibilityReviewPolicy, "readReviewMode">,
+	acquireWriterLease: typeof acquireKnowledgeWriterLease = acquireKnowledgeWriterLease,
+) {
+	return createKnowledgeServicePoolApi(runtime, config, ui, semantic, reviewPolicy, acquireWriterLease, null);
 }
 
 // pi-knowledge 0.2 compatibility only. Delete when native/Desktop composition
 // shares one explicit 0.3 owner and no host consumer imports these facades.
-const compatibilityKnowledgeServices = createKnowledgeServicePool(
+const compatibilityKnowledgeServices = createKnowledgeServicePoolApi(
 	compatibilityKnowledgeRuntimeHost, compatibilityConfig, compatibilityUi,
 	compatibilitySemanticSettings, compatibilityReviewPolicy,
 	// Remove with the 0.2 compatibility facade after complete owner disposal is wired.
 	null,
+	compatibilityKnowledgeRuntimeHost.emitProcessEvent,
 );
 process.on("drone:knowledge-service/v1", compatibilityKnowledgeServices.receiveCompatibilityEvent);
 export const { KnowledgeService, getKnowledgeService, notifyKnowledgeChange, closeKnowledgeServices } = compatibilityKnowledgeServices;

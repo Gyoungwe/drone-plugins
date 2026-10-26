@@ -406,7 +406,7 @@ export function createKnowledgeUi(runtime: KnowledgeRuntimeHost, config: Pick<Kn
 		else specialists[at] = safe;
 		updateKnowledgeFlow(ctx, { specialists: specialists.slice(-8) });
 	}
-	return { subscribeKnowledgeUi, emitKnowledgeUi, flowFor, knowledgeAnswerRate, beginKnowledgeFlow, updateKnowledgeFlow, noteKnowledgeRead, publicationKnowledgeFlow, requestWikiReviewUi, notifyKnowledgeUi, invalidateKnowledgeUi, clearKnowledgeFlow, knowledgeExcerpt, noteKnowledgeSearch, noteKnowledgeOperation, noteKnowledgeSpecialist, receiveCompatibilityEvent };
+	return { dispose: () => { state.listeners.clear(); state.flows.clear(); }, subscribeKnowledgeUi, emitKnowledgeUi, flowFor, knowledgeAnswerRate, beginKnowledgeFlow, updateKnowledgeFlow, noteKnowledgeRead, publicationKnowledgeFlow, requestWikiReviewUi, notifyKnowledgeUi, invalidateKnowledgeUi, clearKnowledgeFlow, knowledgeExcerpt, noteKnowledgeSearch, noteKnowledgeOperation, noteKnowledgeSpecialist, receiveCompatibilityEvent };
 }
 
 // pi-knowledge 0.2 compatibility only. Delete when native/Desktop composition

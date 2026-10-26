@@ -2,15 +2,15 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
+import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost, type ProcessEventEmitter } from "./runtime-host.js";
 import * as compatibilityConfig from "./config.js";
 import type { KnowledgeConfigApi } from "./config.js";
 import * as compatibilityUi from "./ui-state.js";
 import type { createKnowledgeUi } from "./ui-state.js";
 
 /** Explicit owner; constructing this API never installs a process listener. */
-export function createKnowledgeSpecialistHost(runtime: KnowledgeRuntimeHost, config: KnowledgeConfigApi, ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">) {
-	const { runtimeSlot, emitProcessEvent } = runtime;
+function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config: KnowledgeConfigApi, ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">, emitLegacyPeerEvent: ProcessEventEmitter | null) {
+	const { runtimeSlot } = runtime;
 	const { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } = config;
 	const { invalidateKnowledgeUi } = ui;
 	const state = runtimeSlot("knowledge", "specialists", () => ({
@@ -54,10 +54,10 @@ export function createKnowledgeSpecialistHost(runtime: KnowledgeRuntimeHost, con
 		if (!id || typeof run !== "function") throw new Error("A specialist host requires a session identity");
 		if (state.disposed) throw new Error("Knowledge specialist runtime has been disposed");
 		state.hosts.set(id, run);
-		emitProcessEvent(HOST_EVENT, { action: "register", id, run, origin: hostModule });
+		emitLegacyPeerEvent?.(HOST_EVENT, { action: "register", id, run, origin: hostModule });
 		return () => {
 			if (state.hosts.get(id) === run) state.hosts.delete(id);
-			emitProcessEvent(HOST_EVENT, { action: "unregister", id, run, origin: hostModule });
+			emitLegacyPeerEvent?.(HOST_EVENT, { action: "unregister", id, run, origin: hostModule });
 		};
 	}
 	function knowledgeSpecialistHost(ctx) {
@@ -260,11 +260,16 @@ export function createKnowledgeSpecialistHost(runtime: KnowledgeRuntimeHost, con
 			else state.active--;
 		}
 	}
-	return { SPECIALIST_LIMITS, contextSessionId, specialistQueueSnapshot, registerKnowledgeSpecialistHost, knowledgeSpecialistHost, specialistSettings, setSpecialistSettings, withSpecialistSlot, receiveCompatibilityEvent };
+	return { dispose: () => state.dispose(), SPECIALIST_LIMITS, contextSessionId, specialistQueueSnapshot, registerKnowledgeSpecialistHost, knowledgeSpecialistHost, specialistSettings, setSpecialistSettings, withSpecialistSlot, receiveCompatibilityEvent };
+}
+
+/** New owners keep function-valued specialist registrations inside their registry. */
+export function createKnowledgeSpecialistHost(runtime: KnowledgeRuntimeHost, config: KnowledgeConfigApi, ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">) {
+	return createKnowledgeSpecialistHostApi(runtime, config, ui, null);
 }
 
 // pi-knowledge 0.2 compatibility only. Delete when native/Desktop composition
 // shares one explicit 0.3 owner and no host consumer imports these facades.
-const compatibilityKnowledgeSpecialists = createKnowledgeSpecialistHost(compatibilityKnowledgeRuntimeHost, compatibilityConfig, compatibilityUi);
+const compatibilityKnowledgeSpecialists = createKnowledgeSpecialistHostApi(compatibilityKnowledgeRuntimeHost, compatibilityConfig, compatibilityUi, compatibilityKnowledgeRuntimeHost.emitProcessEvent);
 process.on("drone:knowledge-specialist-host/v1", compatibilityKnowledgeSpecialists.receiveCompatibilityEvent);
 export const { SPECIALIST_LIMITS, contextSessionId, specialistQueueSnapshot, registerKnowledgeSpecialistHost, knowledgeSpecialistHost, specialistSettings, setSpecialistSettings, withSpecialistSlot } = compatibilityKnowledgeSpecialists;
