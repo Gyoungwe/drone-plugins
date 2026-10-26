@@ -202,11 +202,29 @@
     "childrenExited": true,
     "leasesReleased": true,
     "workspaceAndVault": "temporary test fixtures; no formal Vault",
-    "coordinatorReadOnlyCaller": "WORKSPACE_DIRECTORY_FIXED; FINAL_HOST_GATE_PENDING",
+    "coordinatorReadOnlyCaller": "REAL_HOST_COORDINATOR_PASS",
     "formalInstalledGui": "NOT_RUN",
     "scriptSha256": "e92a8ffd26d24641dbc3b3788e1ecf30b432a73c248e85e3fdf661818cf04a30",
     "logSha256": "b7d6f392160af7fbf7163ac9680db827b535785e4045f10787d9b6961c4075af",
     "delayedIndexEventPreservesCurrentSearch": "REAL_SQLITE_RESOURCE_AND_UI_STORE_REGRESSION",
-    "scopeHarness": "Real file/resource/process runtime with explicit capability scope; true host coordinator gate tracked separately"
+    "scopeHarness": "Real file/resource/process runtime with explicit capability scope; true host coordinator gate tracked separately",
+    "coordinator": {
+      "status": "PASS",
+      "hostTest": "packages/backend/test/packed-knowledge-runtime-sdk.test.mjs",
+      "tarballSha256": "352444917a449186596af586664d2e00c2acb317126171e7ffa7c0183e020005",
+      "sdk": "1.1.0",
+      "actualSessionRegistry": true,
+      "actualReadOnlySession": true,
+      "actualOfflineModelDispatch": true,
+      "unknownAndWriteToolsExecuted": 0,
+      "scopedUiRefreshWithTrustedWorkspaceDirectory": true,
+      "sameDomainAndIndexProcesses": true,
+      "childrenExited": true,
+      "reservationsReleased": true,
+      "reportSha256": "6f149b289a5631c991d086742e4ad0dc299115c81c80d48606a67c2e9c92b5a8",
+      "logSha256": "686ae2f44c7c0871f0ff4c9ab1231ee074202adbacce9d3e5267989d3a6aaf7c",
+      "fullHooksAndPublication": "NOT_IMPLEMENTED",
+      "formalInstalledGui": "NOT_RUN"
+    }
   }
 }

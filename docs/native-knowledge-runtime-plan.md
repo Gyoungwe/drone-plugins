@@ -125,7 +125,7 @@ CLI 默认 export 保持官方同步注册形状，但由 wrapper 创建自己�
 - 原 binding schema 保留。`state.readJson` 只读已授权 state root；`roots.resolve` 仅匹配现有批准的 canonical root，不由 binding 路径自动授权。Vault 内容经父 broker 的稳定 snapshot read/list/stat；资源进程只获独立派生 SQLite cache 的读写许可，不能直接读写 Vault。Desktop cache 是可重建派生数据，不覆盖原绑定、笔记或 CLI SQLite。
 - Desktop watch 明确不可用；不启动后台 reconcile。首次资源构建和每次 search/reconcile 均在真实活跃 caller 下等待完成；刷新不会返回永久旧索引。无 revision/coverage 变化的 reconcile 不发 changed，避免事件 → 刷新 → 事件循环。
 - CLI owner 的租约已提升到 owner resource group：worker 崩溃不能提前释放仍有已接受领域操作的 reservation。Desktop lease 由宿主 resource manager 持有，与 CLI 共用 canonical Vault 锁键；插件 dispose 只 drain/清引用，宿主随后等待真实子进程退出再释放租约。关闭阶段不新增 caller 授权。
-- 已有包内真实 SQLite/双入口/刷新/拒绝旧 revision 回归，以及打包候选经真实宿主 FileCapabilities/ResourceManager/ProcessRuntime 的双受限进程回执。初轮工具为直接 execute，后续同 tarball 已运行官方 Pi SDK 1.1.0 离线模型真实 AgentSession 调度 status/search；UI 和原生前后 domain/index PID 相同，关闭后实际退出并释放租约。公共 NativeSession 明确声明两工具 effect=read，不依赖领域自定义 metadata。**这不是正式 DMG GUI 或完整知识工作流 PASS**；真实宿主 coordinator 的 readonly caller 和正式安装包由宿主门禁继续核对。
+- 已有包内真实 SQLite/双入口/刷新/拒绝旧 revision 回归，以及打包候选经真实宿主 FileCapabilities/ResourceManager/ProcessRuntime 的双受限进程回执。初轮工具为直接 execute，后续同 tarball 已运行官方 Pi SDK 1.1.0 离线模型真实 AgentSession 调度 status/search；UI 和原生前后 domain/index PID 相同，关闭后实际退出并释放租约。公共 NativeSession 明确声明两工具 effect=read，不依赖领域自定义 metadata。**这不是正式 DMG GUI 或完整知识工作流 PASS**；真实宿主 coordinator / SessionRegistry readonly caller 已通过：两读工具成功，unknown/write 控制工具执行为零，带可信 workspaceDirectory 的选中会话 UI 刷新正常。正式安装包继续验收。
 
 ### 发布前兼容门禁
 

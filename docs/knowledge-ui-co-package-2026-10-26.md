@@ -29,7 +29,7 @@
 | 双候选私有 API clean install / UI load | 使用显式 API 1.3.0 候选 tarball override，npm pack 后在临时 consumer 安装；不是公开 npm clean install。知识两个 UI export 存在，ResearchStatusPanel 不在知识 bundle 中，贡献互斥；输出明确 `gui: NOT_RUN`。 |
 | CSS isolation | 独立 headless Chromium、light/dark 合同 fixture；启停前后宿主 sibling 的颜色、边框和布局一致。不是正式安装包截图。 |
 | 插件仓库 npm run check（显式候选 API override） | 退出码 0；含全仓 build、manifest、类型、测试、官方 SDK 1.1.0/1.4.0 研究会话回归、suite PDF Canvas 回执、7 包 clean install 和 npm pack 检查。 |
-| Desktop 同 owner 实际 SDK / 进程 | 同一知识候选 tarball，官方 SDK 1.1.0 离线模型实际派发 status/search；UI 和工具前后同一 domain/index PID，外部新增笔记刷新可见，关闭后二子进程退出、租约释放。临时 Vault，非正式 GUI。 |
+| Desktop 同 owner 实际 SDK / coordinator / 进程 | 同一知识候选 tarball，经真实宿主 SessionRegistry 和 coordinator 创建 readonly 会话，官方 SDK 1.1.0 离线模型实际派发 status/search；未声明及显式 write 控制工具执行次数为 0。选中会话后的 UI 使用可信 workspaceDirectory 刷新成功，UI 和工具前后同一 domain/index PID，外部新增笔记可见，关闭后二子进程退出、租约释放。临时 Vault，非正式 GUI。 |
 | 新架构正式安装包 GUI / lifecycle | NOT_RUN。宿主新发现路径、停用/恢复/卸载、旧 UI 迁移与回滚需后续真实安装包。 |
 
 ## 未关闭的 P2 边界
@@ -49,3 +49,5 @@ Desktop 本片只迁移两个只读工具和概览/搜索页面；图谱、审�
 验收执行说明：只读工具 effect 声明修复后，重新构建并执行真实 SDK 回执。中间一次全仓运行在末尾 `pack:check` 与 suite 文档同步构建并发，npm 返回 tarball 读取失败；该次不计 PASS。最终只采用停止并行构建后的完整门禁，指纹见 JSON。私有 API override 是明确的候选输入，不写入正式依赖。
 
 旧宿主 obsidian/0.2 compatibility hook 在已有 `DRONE_KNOWLEDGE_DIR` 绑定时仍可能创建未参与新租约的 owner。正式候选的隔离 profile 只能证明本片，不能据此宣称已有绑定升级或完整 P2 完成；移除旧入口必须后续完成。
+
+真实 coordinator 最终回执通过后，证据已更新；对应 opt-in 宿主回归为 `packages/backend/test/packed-knowledge-runtime-sdk.test.mjs`。它覆盖真实 readonly 会话，不再以静态 scope harness 代替宿主身份解析。此证据更新不改包内容，继续使用 JSON 中的 `352444917…` 知识 tarball。
