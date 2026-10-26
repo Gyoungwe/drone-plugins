@@ -104,9 +104,11 @@ packages/<name>/
 | `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
 | `hosts` | `native-pi`、`drone-desktop` 的非空子集；只写 `drone-desktop` 时必须在 README 说明原因 |
 | `requires.hostCapabilities` | 依赖的宿主能力，由 `negotiateCapabilities` 协商；缺失时插件必须返回 `degraded` 或 `incompatible`，不能抛错 |
-| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`、`application-state`）、`network`（主机名列表）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
+| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`、`application-state`、`application-state-write`）、`network`（主机名列表）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
 
 `application-state` 只声明宿主明确指定的插件状态目录及已登记的本机资源协调目录，不能推导出整个 HOME 的权限。0.3 knowledge 候选把既有配置/SQLite 状态和 `~/.drone/runtime-leases/knowledge-writers` 的本机同用户租约列入此范围；host/broker 必须另行验证具体 root 与操作。新增词表不代表旧宿主已经支持或自动授予该能力，尚未接通时只能保留候选/未验收状态。
+
+候选受管 Desktop 的 `application-state` 只允许读取用户明确选择的状态根；`application-state-write` 是另一个显式声明，要求启用时展示状态 JSON 读写并取得独立写 grant。旧只读授权不能自动升级。状态写入仅经 `state.writeJson`：限定 `.json` 文件、版本比较、原子写和写后回读，仍受逐调用 write 效果授权约束，bootstrap 禁止写入。该声明不授权 Vault 正文、任意文件或外部服务写入；状态根之外的副作用仍必须单独声明并获批。候选实现与真实安装包验收未完成前不能记为发布支持。
 
 候选 API 1.3 的受管运行时使用 `entrypoints.desktopRuntime`；`entrypoints.resources` 为 `{resourceId: relativeEntry}` 映射，ID 非空、每个入口必须是包内实际文件且随 npm 包发布，声明资源时必须声明其 Desktop owner。资源在独立进程中运行，SQLite 等写目录由宿主选定；manifest 不赋予 Vault 或任意路径权限。
 
