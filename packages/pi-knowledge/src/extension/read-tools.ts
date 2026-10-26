@@ -84,18 +84,17 @@ export function createKnowledgeReadTool<C extends KnowledgeReadContext, T extend
 					observer?.recordRead?.(_id, ctx, c, page, p);
 					// 双向链接：把出链/反链一并返回，省去 agent 再去搜索邻居笔记的往返
 					let links;
-					if (page.hash && !page.missing && (p.start_line ?? 1) === 1 && typeof c.service.request === "function") {
-						try {
-							const nl = await c.service.request("noteLinks", { path: page.path || p.path });
-							const slim = (xs: any[]) =>
-								(xs || [])
-									.filter((x: any) => x.exists !== false)
-									.slice(0, 12)
-									.map((x: any) => ({ path: x.path, title: x.title }));
-							links = { outgoing: slim(nl.outgoing), backlinks: slim(nl.incoming) };
-						} catch {
-							links = undefined;
-						}
+					if (page.hash && !page.missing && (p.start_line ?? 1) === 1) {
+						const nl = await c.service.request("noteLinks", {
+							path: page.path || p.path,
+							project: c.project,
+						});
+						const slim = (xs: any[]) =>
+							(xs || [])
+								.filter((x: any) => x.exists !== false)
+								.slice(0, 12)
+								.map((x: any) => ({ path: x.path, title: x.title }));
+						links = { outgoing: slim(nl.outgoing), backlinks: slim(nl.incoming) };
 					}
 					return result({
 						...page,
