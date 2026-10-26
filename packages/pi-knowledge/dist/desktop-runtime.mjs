@@ -407,6 +407,19 @@ var rejectReviewResultSchema = object({
   vaultWritten: { const: false },
   reviewRecorded: boolean
 });
+var applyReviewInputSchema = object({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedProposalHash: proposalHash
+});
+var applyReviewResultSchema = object({
+  id: proposalId,
+  status: { const: "applied" },
+  path: { type: "string", minLength: 1 },
+  vaultWritten: { const: true },
+  reviewRecorded: boolean,
+  indexed: boolean
+});
 var semanticConfigProperties = { enabled: boolean, provider: { enum: ["none", "ollama", "openai-compatible"] }, baseUrl: string, model: string, credentialEnv: string, remoteConsent: boolean, timeoutMs: { type: "integer", minimum: 500, maximum: 3e4 }, chunkChars: { type: "integer", minimum: 256, maximum: 8e3 }, minSimilarity: { type: "number", minimum: 0, maximum: 1 } };
 var semanticPreferencesInputSchema = { type: "null" };
 var semanticPreferencesResultSchema = object({ binding: nullable(object({ vaultId: string, revision: bindingRevision, label: string })), settings: nullable(object({ ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string }, ["enabled", "provider", "baseUrl", "model", "credentialEnv", "remoteConsent", "version", "revision", "updatedAt"])), canWriteState: boolean, providerExecution: { const: "unavailable" } });
@@ -3537,7 +3550,7 @@ function createKnowledgeReviewReads(owner, capabilities, root) {
 }
 
 // src/desktop/review-writes.ts
-function createKnowledgeReviewWrites(owner, capabilities, stateRoot, canWriteState) {
+function createKnowledgeReviewWrites(owner, capabilities, stateRoot, filesRoot, canWriteState, canWriteFiles) {
   const storage = {
     async read(path) {
       const result2 = await capabilities.call("state.readJson", { root: stateRoot, path });
@@ -3548,7 +3561,29 @@ function createKnowledgeReviewWrites(owner, capabilities, stateRoot, canWriteSta
       throw new Error("Review writes do not list state");
     }
   };
-  const reader = createWikiReviewReader(storage, async () => null);
+  const readFile5 = async (path) => {
+    if (filesRoot === null) throw new Error("Configured Vault file access is unavailable");
+    try {
+      const result2 = await capabilities.call("files.readText", { root: filesRoot, path });
+      return result2;
+    } catch (error) {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    }
+  };
+  const reader = createWikiReviewReader(storage, async (_service, path) => {
+    const note = await readFile5(path);
+    return note ? { hash: note.sha256 } : null;
+  });
+  const statePath = (vaultId, area, id) => `${vaultId}/wiki-review/${area}/${id}.json`;
+  const reviewed = (proposal) => ({
+    ...proposal,
+    status: "applied",
+    reviewedAt: Date.now(),
+    reviewMethod: "human",
+    humanReviewed: true,
+    scientificallyVerified: false
+  });
   return {
     reject(input, project) {
       if (!canWriteState) throw new Error("Application-state write permission is required");
@@ -3573,6 +3608,60 @@ function createKnowledgeReviewWrites(owner, capabilities, stateRoot, canWriteSta
           expectedVersion: current.version
         });
         return { id: proposal.id, status: "rejected", vaultWritten: false, reviewRecorded: true };
+      });
+    },
+    apply(input, project) {
+      if (!canWriteState || !canWriteFiles)
+        throw new Error("Configured Vault write permission is required");
+      if (filesRoot === null) throw new Error("Configured Vault file access is unavailable");
+      return owner.run(async () => {
+        const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+        if (!binding) throw new Error("No application knowledge Vault is bound");
+        if (binding.revision !== input.revision)
+          throw new Error("Knowledge binding changed; refresh before reviewing");
+        if (project === null) throw new Error("Select a project session to apply a Wiki proposal");
+        const service = { binding };
+        const preview = await reader.previewWikiProposal(service, input.id, project);
+        if (preview.proposalHash !== input.expectedProposalHash)
+          throw new Error("Wiki proposal changed; refresh before reviewing");
+        if (!preview.canApply) throw new Error("Wiki proposal is stale or no longer applicable");
+        const proposal = await reader.loadProposal(service, input.id, project);
+        const current = await readFile5(proposal.path);
+        if ((current?.sha256 ?? null) !== proposal.beforeHash)
+          throw new Error("Wiki changed after preview; no user edits were overwritten");
+        const parent = proposal.path.includes("/") ? proposal.path.slice(0, proposal.path.lastIndexOf("/")) : ".";
+        await capabilities.call("files.ensureDirectory", { root: filesRoot, path: parent });
+        await capabilities.call("files.writeText", {
+          root: filesRoot,
+          path: proposal.path,
+          text: proposal.after,
+          expectedHash: proposal.beforeHash
+        });
+        const written = await readFile5(proposal.path);
+        if (!written || written.sha256 !== proposal.afterHash)
+          throw new Error("Vault write readback did not match the reviewed proposal");
+        const pendingPath = statePath(binding.vaultId, "pending", proposal.id);
+        const pending = await capabilities.call("state.readJson", { root: stateRoot, path: pendingPath });
+        if (pending.kind === "missing") throw new Error("Wiki proposal disappeared; refresh before reviewing");
+        await capabilities.call("state.writeJson", {
+          root: stateRoot,
+          path: statePath(binding.vaultId, "reviewed", proposal.id),
+          value: reviewed(proposal),
+          expectedVersion: null
+        });
+        await capabilities.call("state.removeJson", {
+          root: stateRoot,
+          path: pendingPath,
+          expectedVersion: pending.version
+        });
+        return {
+          id: proposal.id,
+          status: "applied",
+          path: proposal.path,
+          vaultWritten: true,
+          reviewRecorded: true,
+          indexed: false
+        };
       });
     }
   };
@@ -3914,6 +4003,9 @@ var createDesktopRuntime = async (context) => {
   const states = context.resources.filter((resource) => resource.kind === "state");
   if (states.length !== 1) throw new Error("Knowledge runtime requires exactly one authorized application-state root");
   const state = states[0].handle;
+  const fileRoots = context.resources.filter((resource) => resource.kind === "files");
+  if (fileRoots.length > 1) throw new Error("Knowledge runtime requires at most one selected file root");
+  const filesRoot = fileRoots[0]?.handle ?? null;
   if (!context.resourcesLifecycle) throw new Error("Knowledge services require the host resource shutdown barrier");
   async function readKnowledgeBinding2() {
     const response = await context.capabilities.call("state.readJson", { root: state, path: "binding.json" });
@@ -3940,7 +4032,7 @@ var createDesktopRuntime = async (context) => {
   const owner = { config, services, ...lifecycle };
   const reads = createKnowledgeReadModel(owner);
   const reviews = createKnowledgeReviewReads(owner, context.capabilities, state);
-  const reviewWrites = createKnowledgeReviewWrites(owner, context.capabilities, state, states[0].access === "read-write");
+  const reviewWrites = createKnowledgeReviewWrites(owner, context.capabilities, state, filesRoot, states[0].access === "read-write", fileRoots[0]?.access === "read-write");
   const preferences = createKnowledgePreferences(owner, context.capabilities, state, states[0].access === "read-write");
   const semanticPreferences = createKnowledgeSemanticPreferences(owner, semantic, states[0].access === "read-write");
   return {
@@ -3955,6 +4047,11 @@ var createDesktopRuntime = async (context) => {
       previewReview: { inputSchema: previewReviewInputSchema, resultSchema: previewReviewResultSchema, effect: "read", execute: async (input, call) => reviews.previewReview(input, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
       rejectReview: { inputSchema: rejectReviewInputSchema, resultSchema: rejectReviewResultSchema, effect: "write", execute: async (input, call) => {
         const result2 = await reviewWrites.reject(input, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory));
+        context.events.changed();
+        return result2;
+      } },
+      applyReview: { inputSchema: applyReviewInputSchema, resultSchema: applyReviewResultSchema, effect: "write", execute: async (input, call) => {
+        const result2 = await reviewWrites.apply(input, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory));
         context.events.changed();
         return result2;
       } },

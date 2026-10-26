@@ -556,6 +556,19 @@ export interface KnowledgeRejectReviewResult {
 	vaultWritten: false;
 	reviewRecorded: boolean;
 }
+export interface KnowledgeApplyReviewInput {
+	revision: number;
+	id: string;
+	expectedProposalHash: string;
+}
+export interface KnowledgeApplyReviewResult {
+	id: string;
+	status: "applied";
+	path: string;
+	vaultWritten: true;
+	reviewRecorded: boolean;
+	indexed: boolean;
+}
 const proposalId = { type: "string", pattern: "^[0-9a-f-]{36}$" };
 const proposalHash = { type: "string", pattern: "^[a-f0-9]{64}$" };
 export const reviewsInputSchema = object(
@@ -644,6 +657,19 @@ export const rejectReviewResultSchema = object({
 	status: { const: "rejected" },
 	vaultWritten: { const: false },
 	reviewRecorded: boolean,
+});
+export const applyReviewInputSchema = object({
+	revision: bindingRevision,
+	id: proposalId,
+	expectedProposalHash: proposalHash,
+});
+export const applyReviewResultSchema = object({
+	id: proposalId,
+	status: { const: "applied" },
+	path: { type: "string", minLength: 1 },
+	vaultWritten: { const: true },
+	reviewRecorded: boolean,
+	indexed: boolean,
 });
 
 export interface KnowledgeSemanticPreferences {

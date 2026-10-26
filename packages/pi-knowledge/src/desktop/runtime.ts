@@ -8,7 +8,7 @@ import { createBrokerSemanticSettings } from "./semantic-settings.js";
 import { createResourceServiceTransportFactory } from "./service-transport.js";
 import { createKnowledgeReviewReads } from "./reviews.js";
 import { createKnowledgeReviewWrites } from "./review-writes.js";
-import { reviewsInputSchema, reviewsResultSchema, previewReviewInputSchema, previewReviewResultSchema, rejectReviewInputSchema, rejectReviewResultSchema, type KnowledgeReviewsInput, type KnowledgePreviewReviewInput, type KnowledgeRejectReviewInput } from "./contract.js";
+import { reviewsInputSchema, reviewsResultSchema, previewReviewInputSchema, previewReviewResultSchema, rejectReviewInputSchema, rejectReviewResultSchema, applyReviewInputSchema, applyReviewResultSchema, type KnowledgeReviewsInput, type KnowledgePreviewReviewInput, type KnowledgeRejectReviewInput, type KnowledgeApplyReviewInput } from "./contract.js";
 import type { PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
 import type { PluginNativeRuntimeFactory } from "@gyoungwe/plugin-api/native";
 import { parseKnowledgeBinding, projectIdentity, type KnowledgeBinding } from "../core/config.js";
@@ -39,6 +39,9 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 	const states = context.resources.filter(resource => resource.kind === "state");
 	if (states.length !== 1) throw new Error("Knowledge runtime requires exactly one authorized application-state root");
 	const state = states[0].handle;
+ const fileRoots = context.resources.filter(resource => resource.kind === "files");
+ if (fileRoots.length > 1) throw new Error("Knowledge runtime requires at most one selected file root");
+ const filesRoot = fileRoots[0]?.handle ?? null;
  if (!context.resourcesLifecycle) throw new Error("Knowledge services require the host resource shutdown barrier");
 	async function readKnowledgeBinding(): Promise<KnowledgeBinding | null> {
 		const response = await context.capabilities.call("state.readJson", { root: state, path: "binding.json" }) as
@@ -68,7 +71,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 	const owner: KnowledgeReadOwner = { config, services, ...lifecycle };
 	const reads = createKnowledgeReadModel(owner);
  const reviews = createKnowledgeReviewReads(owner, context.capabilities, state);
-	const reviewWrites = createKnowledgeReviewWrites(owner, context.capabilities, state, states[0].access === "read-write");
+ const reviewWrites = createKnowledgeReviewWrites(owner, context.capabilities, state, filesRoot, states[0].access === "read-write", fileRoots[0]?.access === "read-write");
 	const preferences = createKnowledgePreferences(owner, context.capabilities, state, states[0].access === "read-write");
  const semanticPreferences=createKnowledgeSemanticPreferences(owner,semantic,states[0].access === "read-write");
 	return {
@@ -78,6 +81,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
    reviews: {inputSchema:reviewsInputSchema,resultSchema:reviewsResultSchema,effect:"read",execute:async(input,call)=>reviews.reviews(input as KnowledgeReviewsInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory))},
    previewReview: {inputSchema:previewReviewInputSchema,resultSchema:previewReviewResultSchema,effect:"read",execute:async(input,call)=>reviews.previewReview(input as KnowledgePreviewReviewInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory))},
    rejectReview: {inputSchema:rejectReviewInputSchema,resultSchema:rejectReviewResultSchema,effect:"write",execute:async(input,call)=>{const result=await reviewWrites.reject(input as KnowledgeRejectReviewInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory));context.events.changed();return result;}},
+   applyReview: {inputSchema:applyReviewInputSchema,resultSchema:applyReviewResultSchema,effect:"write",execute:async(input,call)=>{const result=await reviewWrites.apply(input as KnowledgeApplyReviewInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory));context.events.changed();return result;}},
 			preferences: { inputSchema: preferencesInputSchema, resultSchema: preferencesResultSchema, effect: "read",
 				execute: () => preferences.read() },
 			setReviewPolicy: { inputSchema: setReviewPolicyInputSchema, resultSchema: preferencesResultSchema, effect: "write",

@@ -57,7 +57,7 @@ it("records a rejected candidate through state CAS without touching the Vault", 
 		...createKnowledgeOwnerLifecycle({ async dispose() {} }),
 		services: { async getKnowledgeService() { throw new Error("reject must not start the index"); } },
 	};
-	const result = await createKnowledgeReviewWrites(owner, capabilities, "state-root", true).reject({ revision: binding.revision, id, expectedProposalHash: proposal.proposalHash }, "alpha");
+	const result = await createKnowledgeReviewWrites(owner, capabilities, "state-root", null, true, false).reject({ revision: binding.revision, id, expectedProposalHash: proposal.proposalHash }, "alpha");
 	expect(result).toEqual({ id, status: "rejected", vaultWritten: false, reviewRecorded: true });
 	expect(document.value).toMatchObject({ id, status: "rejected", reviewMethod: "human", humanReviewed: true });
 	expect(calls).toEqual(["state.readJson", "state.readJson", "state.writeJson"]);
@@ -75,7 +75,7 @@ it("rejects before any state write when the host grant is read-only", async () =
 	} as KnowledgeReadOwner;
 	const calls: string[] = [];
 	const capabilities = { async call(name: string) { calls.push(name); return { kind: "missing", version: null }; } };
-	await expect(Promise.resolve().then(() => createKnowledgeReviewWrites(owner, capabilities, "state-root", false).reject({ revision: 1, id: randomUUID(), expectedProposalHash: "0".repeat(64) }, "alpha"))).rejects.toThrow("write permission");
+	await expect(Promise.resolve().then(() => createKnowledgeReviewWrites(owner, capabilities, "state-root", null, false, false).reject({ revision: 1, id: randomUUID(), expectedProposalHash: "0".repeat(64) }, "alpha"))).rejects.toThrow("write permission");
 	expect(calls).toEqual([]);
 	await owner.dispose();
 });
