@@ -16,6 +16,12 @@ try {
 	await execFileAsync("npm", ["install", "--prefix", install, "--ignore-scripts", "--omit=peer", "--no-audit", "--no-fund", tarball], { cwd: root });
 	const pkg = JSON.parse(await readFile(join(install, "node_modules/@gyoungwe/pi-workbench/package.json"), "utf8"));
 	const mod = await import(`file://${join(install, "node_modules/@gyoungwe/pi-workbench", pkg.pi.extensions[0])}`);
+	const pluginManifest = JSON.parse(await readFile(join(install, "node_modules/@gyoungwe/pi-workbench/plugin.manifest.json"), "utf8"));
+	assert.equal(pluginManifest.entrypoints.ui, "./ui/plugin.json");
+	const uiManifest = JSON.parse(await readFile(join(install, "node_modules/@gyoungwe/pi-workbench", pluginManifest.entrypoints.ui), "utf8"));
+	assert.deepEqual(uiManifest.contributions, [{ id: "workbench", region: "panel.tab", export: "WorkbenchPanel", title: "Workbench" }]);
+	const ui = await import(`file://${join(install, "node_modules/@gyoungwe/pi-workbench", "ui", uiManifest.main)}`);
+	assert.equal(typeof ui.WorkbenchPanel, "function");
 	const tools = new Map();
 	const registered = mod.default({ registerTool(tool) { tools.set(tool.name, tool); } });
 	assert.equal(tools.size, 4);
@@ -30,7 +36,7 @@ try {
 	const extension = loaded.extensions.find((item) => item.path === extensionPath);
 	assert(extension, "installed pi-workbench extension was not discovered by the Pi SDK");
 	assert.deepEqual([...extension.tools.keys()], [...tools.keys()]);
-	console.log(JSON.stringify({ package: pkg.name, version: pkg.version, tools: [...tools.keys()], installed: true, scoped: true, sdkLoader: true }));
+	console.log(JSON.stringify({ package: pkg.name, version: pkg.version, tools: [...tools.keys()], installed: true, scoped: true, sdkLoader: true, uiLoader: { manifest: true, contribution: "panel.tab", export: "WorkbenchPanel" } }));
 } finally {
 	await rm(temp, { recursive: true, force: true });
 }

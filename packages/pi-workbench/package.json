@@ -8,10 +8,10 @@
   "repository": {"type": "git", "url": "git+https://github.com/Gyoungwe/drone-plugins.git", "directory": "packages/pi-workbench"},
   "type": "module",
   "main": "./dist/index.mjs",
-  "files": ["dist", "src", "package.json", "README.md", "build-manifest.json", "plugin.manifest.json"],
+  "files": ["dist", "src", "ui", "package.json", "README.md", "build-manifest.json", "plugin.manifest.json"],
   "pi": {"extensions": ["./dist/index.mjs"]},
   "exports": {".": {"types": "./src/index.ts", "import": "./dist/index.mjs", "default": "./dist/index.mjs"}, "./host": {"types": "./src/host.ts", "import": "./dist/host.mjs", "default": "./dist/host.mjs"}},
-  "scripts": {"build": "node scripts/build.mjs", "build:check": "node scripts/build.mjs --check", "typecheck": "tsc --noEmit", "test": "npm run build && node --test test/*.test.mjs", "smoke": "node scripts/smoke.mjs", "check": "npm run typecheck && npm run build:check && npm test && npm run smoke"},
+  "scripts": {"build": "node scripts/build.mjs", "build:check": "node scripts/build.mjs --check", "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.ui.json", "test": "npm run build && node --test test/*.test.mjs && vitest run --config vitest.config.ts", "smoke": "node scripts/smoke.mjs", "check": "npm run typecheck && npm run build:check && npm test && npm run smoke"},
   "peerDependencies": {"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"},
   "dependencies": {"@gyoungwe/plugin-api": "^1.2.0"},
   "devDependencies": {"typescript": "^5.9.0", "esbuild": "^0.25.12"}

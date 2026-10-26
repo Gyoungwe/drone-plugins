@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "pi": {"apiVersion": 1, "minHostVersion": "1.1.0", "testedHosts": ["1.1.0", "latest"]},
   "drone": {"pluginApi": 1, "resultContract": "drone-result/v3"},
-  "entrypoints": {"extension": "./dist/index.mjs", "desktopRuntime": "./dist/host.mjs"},
+  "entrypoints": {"extension": "./dist/index.mjs", "desktopRuntime": "./dist/host.mjs", "ui": "./ui/plugin.json"},
   "capabilities": ["planning", "evidence-context"],
   "tools": ["workbench_plan", "workbench_status", "workbench_todo", "workbench_memory_save"],
   "hosts": ["native-pi", "drone-desktop"],
