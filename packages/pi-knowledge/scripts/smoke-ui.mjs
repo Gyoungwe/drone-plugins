@@ -39,5 +39,7 @@ try {
 	const body=await readFile(join(installed,"ui/bundle.js"),"utf8");
 	assert.ok(!body.includes("window.pi"));
 	assert.ok(body.includes("drone-knowledge-ui"));
+	assert.ok(body.includes("semanticSettings"), "packed UI must use the semantic settings runtime operation");
+	assert.ok(body.includes("setSemanticSettings"), "packed UI must expose the host-controlled semantic write");
 	console.log(JSON.stringify({package:"@gyoungwe/pi-knowledge",version:manifest.version,tarball:packed.filename,cleanInstall:true,publicRegistryInstall:false,candidateApi:{version:api.version,sha256:api.sha256},exports:manifest.contributions.map(c=>c.export),hostReact:true,companionContributionsDistinct:true,gui:"NOT_RUN"}));
 } finally { await rm(smokeRoot,{recursive:true,force:true}); }

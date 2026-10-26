@@ -6,6 +6,7 @@ import type {
 import { useEffect, useRef, useState } from "react";
 import { Button } from "./runtime-api";
 import { useNativeKnowledgeText } from "./native-copy";
+import { NativeKnowledgeSemanticSettings } from "./NativeKnowledgeSemanticSettings";
 
 /** Package settings share the runtime owner; paths are display values, never new grants. */
 export function NativeKnowledgePreferences({
@@ -209,6 +210,11 @@ export function NativeKnowledgePreferences({
 							</p>
 						)}
 					</section>
+					<NativeKnowledgeSemanticSettings
+						client={client}
+						observationRevision={observationRevision}
+						refreshing={refreshing}
+					/>
 				</>
 			)}
 		</section>

@@ -50,6 +50,15 @@ const zh = {
 	savePolicy: "保存审核策略",
 	saving: "正在保存…",
 	policySaved: "策略已保存并回读核对。",
+	semanticSettings: "相似内容设置",
+	semanticSettingsHint: "设置只保存到宿主授权的应用状态；模型调用仍未在此页面启用。",
+	semanticEnabled: "启用相似内容检索",
+	semanticProvider: "模型服务",
+	semanticProviderNone: "不使用模型",
+	semanticBaseUrl: "服务地址",
+	semanticModel: "模型名称",
+	saveSemantic: "保存相似内容设置",
+	semanticSaved: "相似内容设置已保存并回读核对。",
 
 	inlineLinkUnavailable:
 		"此链接暂不能打开。库内笔记请使用下方的双向链接；外部链接需等待受控打开能力。",
@@ -85,7 +94,7 @@ const zh = {
 	lines: "行",
 	unsupportedTitle: "其他知识功能暂不可用",
 	unsupported:
-		"当前支持总览、搜索、笔记阅读、链接、图谱、索引任务查询及候选列表和差异预览。候选写入审核、其他设置、绑定编辑、自动发现、云同步及 Zotero 功能仍在迁移中。",
+		"当前支持总览、搜索、笔记阅读、链接、图谱、索引任务查询、候选列表和差异预览，以及审核策略和相似内容设置。候选写入审核、绑定编辑、自动发现、云同步及 Zotero 功能仍在迁移中。",
 	readOnly: "搜索片段仅供浏览，不代表当前会话已读取原文或完成证据核验。",
 };
 const en: Record<keyof typeof zh, string> = {
@@ -144,6 +153,15 @@ const en: Record<keyof typeof zh, string> = {
 	savePolicy: "Save review policy",
 	saving: "Saving…",
 	policySaved: "The policy was saved and read back successfully.",
+	semanticSettings: "Similarity settings",
+	semanticSettingsHint: "Settings are saved only through the host-authorized application state; model execution is not enabled on this page.",
+	semanticEnabled: "Enable similarity search",
+	semanticProvider: "Model service",
+	semanticProviderNone: "No model",
+	semanticBaseUrl: "Service URL",
+	semanticModel: "Model name",
+	saveSemantic: "Save similarity settings",
+	semanticSaved: "Similarity settings were saved and read back successfully.",
 
 	inlineLinkUnavailable:
 		"This link cannot be opened yet. Use the note links below; external links need the controlled opening capability.",
@@ -182,7 +200,7 @@ const en: Record<keyof typeof zh, string> = {
 	lines: "Lines",
 	unsupportedTitle: "Other knowledge features are temporarily unavailable",
 	unsupported:
-		"Overview, search, note reading, links, graphs, index jobs, candidate lists and diff previews are available. Candidate decisions, other settings, binding changes, discovery, cloud sync and Zotero are still being migrated.",
+	"Overview, search, note reading, links, graphs, index jobs, candidate lists and diff previews are available, along with review policy and similarity settings. Candidate decisions, binding changes, discovery, cloud sync and Zotero are still being migrated.",
 	readOnly:
 		"Search excerpts are for browsing. They do not establish that this session read the source or verified its evidence.",
 };

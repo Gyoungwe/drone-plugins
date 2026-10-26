@@ -94,7 +94,10 @@ it("keeps state mutation disabled when the real resource grant is read-only", as
 		(screen.getByRole("button", { name: "保存审核策略" }) as HTMLButtonElement)
 			.disabled,
 	).toBe(true);
-	expect(runtime.invoke.mock.calls.map(([op]) => op)).toEqual(["preferences"]);
+	expect(runtime.invoke.mock.calls.map(([op]) => op)).toEqual([
+		"preferences",
+		"semanticSettings",
+	]);
 });
 it.each(["invalid-json", "invalid-policy"] as const)(
 	"shows %s as a strict diagnostic without offering to overwrite it",
