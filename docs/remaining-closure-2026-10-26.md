@@ -33,4 +33,4 @@ API 1.2.0、core 0.1.9、suite 0.1.11 与 UI 0.2.0 全部公开，原 stage 均�
 
 suite 按 npm 包名全新安装到 Pi 1.1.0 / 1.4.0，真实会话各完成 13 次调用及完整研究交付回读；公开安装的 PDF 读取、页码及 Canvas 渲染复验通过。UI 公开干净安装与宿主生命周期测试通过，正式 DMG 安装应用中的知识页、PDF 第 3/15 页、停用回退和重新启用恢复均通过，安装的 61 个 UI 包文件与公开 tarball 相同。JSON 回执、日志/截图哈希在 Drone docs/releases/remaining-closure-2026-10-26.json 的 npmPublicationCompletion。
 
-新 profile 未选择项目时 PDF 预览显示参数错误，选定合成项目后正常；`PDF_WITHOUT_SELECTED_PROJECT` 保留为未修复观察。账户写入与其他平台 GUI 仍未完成。只更新文档，没有变更已通过完整 npm run check 的产品源码；此前在线科学验收的有限结论及暂缓范围保持不变。
+此前新 profile 未选择项目时 PDF 预览显示参数错误；`PDF_WITHOUT_SELECTED_PROJECT` 现已由宿主 `090fbe7f` 修复。新 DMG（SHA256 `229ce073158ef3426f95e225c3637d8a24eed6ddee5ba8e375f66b9cbd34be2d`）使用全新 profile、无凭据 agent 与公开 UI 0.2.0，全程不选择项目，引用第 3/15 页、翻页、越界提示及关闭返回验收通过，23 个测试 Vault 文件未改变。专项回执在 Drone docs/releases/projectless-resource-preview-2026-10-26.json；插件 main `b1db09d` 完整 `npm run check` 复验通过。账户写入与其他平台 GUI 仍未完成。只更新文档，没有变更已通过完整 npm run check 的产品源码；此前在线科学验收的有限结论及暂缓范围保持不变。
