@@ -42,6 +42,14 @@ it("reads and refreshes Desktop overview/search through the native owner's one r
 		expect(fromDesktop.hits.map(hit => hit.path)).toEqual(fromNative.details.hits.map((hit: any) => hit.path));
 		expect(fromDesktop.complete).toBe(true);
 		expect(workers).toBe(1);
+		const service = await owner.services.getKnowledgeService(binding);
+		const prepared = await service.prepare({ cwd: root, project: null, query: "Orchid" });
+		const humanRead = await readModel.readNote({ path: "Library/Methods/first.md", revision: binding.revision }, null);
+		expect(humanRead.missing).toBe(false);
+		await expect(service.evidenceReceipts(prepared.ticket, root, ["Library/Methods/first.md"]))
+			.rejects.toThrow("Source was not read this turn");
+		await service.read(prepared.ticket, root, { path: "Library/Methods/first.md" });
+		expect((await service.evidenceReceipts(prepared.ticket, root, ["Library/Methods/first.md"])).sources).toHaveLength(1);
 		await writeFile(join(vault, "Library/Methods/second.md"), "# Willow method\nWillow independent assay.\n");
 		expect((await readModel.overview(null)).index?.noteCount).toBe(2);
 		expect((await readModel.search({ query: "Willow", revision: binding.revision }, null)).hits[0].path).toBe("Library/Methods/second.md");

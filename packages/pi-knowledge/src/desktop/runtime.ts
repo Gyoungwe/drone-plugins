@@ -4,7 +4,7 @@ import { parseKnowledgeBinding, projectIdentity, type KnowledgeBinding } from ".
 import { createKnowledgeOwnerLifecycle } from "../core/owner-lifecycle.js";
 import { createKnowledgeReadModel, type KnowledgeReadOwner } from "./read-model.js";
 import { createDesktopKnowledgeNativeSession } from "./native.js";
-import { overviewInputSchema, overviewResultSchema, searchInputSchema, searchResultSchema, type KnowledgeSearchInput } from "./contract.js";
+import { overviewInputSchema, overviewResultSchema, searchInputSchema, searchResultSchema, type KnowledgeSearchInput, readNoteInputSchema, readNoteResultSchema, linksInputSchema, linksResultSchema, graphInputSchema, graphResultSchema, jobsInputSchema, jobsResultSchema, recentByCategoryInputSchema, recentByCategoryResultSchema, type KnowledgeReadNoteInput, type KnowledgeLinksInput, type KnowledgeGraphInput, type KnowledgeJobsInput, type KnowledgeRecentByCategoryInput } from "./contract.js";
 
 async function projectFor(capabilities: PluginRuntimeCapabilities, workspace: string | null): Promise<string | null> {
 	if (workspace === null) return null;
@@ -77,6 +77,16 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 				execute: async (_input, call) => reads.overview(await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
 			search: { inputSchema: searchInputSchema, resultSchema: searchResultSchema, effect: "read",
 				execute: async (input, call) => reads.search(input as KnowledgeSearchInput, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
+			readNote: { inputSchema: readNoteInputSchema, resultSchema: readNoteResultSchema, effect: "read",
+				execute: async (input, call) => reads.readNote(input as KnowledgeReadNoteInput, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
+			links: { inputSchema: linksInputSchema, resultSchema: linksResultSchema, effect: "read",
+				execute: async (input, call) => reads.links(input as KnowledgeLinksInput, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
+			graph: { inputSchema: graphInputSchema, resultSchema: graphResultSchema, effect: "read",
+				execute: async (input, call) => reads.graph(input as KnowledgeGraphInput, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
+			jobs: { inputSchema: jobsInputSchema, resultSchema: jobsResultSchema, effect: "read",
+				execute: async (input, call) => reads.jobs(input as KnowledgeJobsInput, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
+			recentByCategory: { inputSchema: recentByCategoryInputSchema, resultSchema: recentByCategoryResultSchema, effect: "read",
+				execute: async (input, call) => reads.recentByCategory(input as KnowledgeRecentByCategoryInput, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
 		},
 		createNativeSession: () => createDesktopKnowledgeNativeSession(owner, native => projectFor(context.capabilities, native.cwd)),
 		dispose: () => owner.dispose(),

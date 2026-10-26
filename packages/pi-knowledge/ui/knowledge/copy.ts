@@ -1,17 +1,19 @@
-import { useLanguage } from "../api";
+import { useLanguage } from "../runtime-api";
 export const knowledgeZh = {
 	cancel: "取消",
 	specialist_reviewer: "Wiki 模型审核员",
 	modelReviewButton: "模型自动审核",
 	modelReviewPreflight: "模型预审",
-	modelReviewAdviceHint: "对照本轮来源片段给出意见；通过后仍需你点应用才会写入 Wiki。",
+	modelReviewAdviceHint:
+		"对照本轮来源片段给出意见；通过后仍需你点应用才会写入 Wiki。",
 	modelReviewModel: "审核模型",
 	modelReviewInherit: "沿用当前会话模型",
 	modelReviewSession: "请在此候选所属项目打开会话，并选择可用模型。",
 	modelReviewHint:
 		"仅审核当前候选；读取候选修改、受保护人工内容和最多 6 个来源范围。独立请求不携带聊天历史；不会自动搜索整库或下载文献。",
 	modelReviewAck: "同意将这些内容发送给所选模型，知晓会产生模型用量。",
-	modelReviewAutoApply: "模型审核通过且所有程序检查通过后，自动应用这一个候选。",
+	modelReviewAutoApply:
+		"模型审核通过且所有程序检查通过后，自动应用这一个候选。",
 	modelReviewWriteHint:
 		"默认只给意见，不写 Wiki。选择自动应用会更新当前候选的托管区；来源不足、版本冲突、版本变化或取消时不自动写入。不会开启后台持续审核。",
 	modelReviewStart: "开始审核",
@@ -41,7 +43,8 @@ export const knowledgeZh = {
 	specialistOff: "关闭",
 	specialistCost:
 		"协作助手使用独立模型请求，可能产生费用。默认沿用主模型；可在模型设置中单独指定。只传当前任务与必要来源，不传主会话历史。",
-	specialistDenied: "当前知识库目录不允许协作助手访问；调度已关闭，不能用此开关提升权限。",
+	specialistDenied:
+		"当前知识库目录不允许协作助手访问；调度已关闭，不能用此开关提升权限。",
 	specialistPermissions: "角色、职责与最小权限",
 	specialistLimits:
 		"每轮最多 4 次，知识协作助手全应用最多并发 2 个；单个最长 120 秒。无 shell、网络抓取、递归委派、正式 Wiki 写入或批准权限。",
@@ -56,16 +59,20 @@ export const knowledgeZh = {
 	specialistTriggerReview: "仅人工触发审核",
 
 	specialist_navigator: "知识导航员",
-	specialist_navigator_hint: "知识请求开始时读导航、找相关 Wiki 与证据；返回少量入口。",
+	specialist_navigator_hint:
+		"知识请求开始时读导航、找相关 Wiki 与证据；返回少量入口。",
 	specialist_evidence: "证据整理员",
-	specialist_evidence_hint: "多来源比较时核对范围、版本与冲突；不认证科学正确性。",
+	specialist_evidence_hint:
+		"多来源比较时核对范围、版本与冲突；不认证科学正确性。",
 	specialist_wiki: "Wiki 修订员",
 	specialist_wiki_hint: "摘要保存后起草修订；应用暂存候选修改，仍需你审核。",
 	specialist_explainer: "Show Me 讲解员",
-	specialist_explainer_hint: "基于指定来源和已加载的研究工具生成讲解；应用归档结果，不执行软件测试。",
+	specialist_explainer_hint:
+		"基于指定来源和已加载的研究工具生成讲解；应用归档结果，不执行软件测试。",
 	specialistRuns: "知识协作助手运行",
 	specialistUsage: "输入 / 输出 tokens",
-	specialistUnverified: "协作助手摘要是待核验的交接摘要，不是主会话的读取记录或最终结论。",
+	specialistUnverified:
+		"协作助手摘要是待核验的交接摘要，不是主会话的读取记录或最终结论。",
 	worker_queued: "排队",
 	worker_running: "运行中",
 	worker_completed: "已交接",
@@ -84,7 +91,8 @@ export const knowledgeZh = {
 	title: "知识库",
 	subtitle: "全应用共享 · 项目背景独立",
 	cloudTitle: "云端知识库（WebDAV）",
-	cloudHint: "云端需要手动检查并按次读写；本地知识库目录仍是当前设备的工作副本，不提供实时镜像。",
+	cloudHint:
+		"云端需要手动检查并按次读写；本地知识库目录仍是当前设备的工作副本，不提供实时镜像。",
 	cloudNotesTitle: "同步说明",
 	cloudNotesWarning: "{count} 条安全提示 · 展开查看",
 	cloudProbe: "检查连接",
@@ -94,7 +102,8 @@ export const knowledgeZh = {
 	cloudPasswordSave: "保存密码",
 	cloudPasswordClear: "清除密码",
 	cloudPasswordSaved: "已保存到本机（仅当前用户可读），不会显示或回传",
-	cloudPasswordEnv: "正在使用环境变量 DRONE_WEBDAV_PASSWORD；它优先于此处保存的密码",
+	cloudPasswordEnv:
+		"正在使用环境变量 DRONE_WEBDAV_PASSWORD；它优先于此处保存的密码",
 	cloudEndpoint: "地址",
 	cloudFolder: "目录",
 	cloudModeDisabled: "未配置",
@@ -136,7 +145,8 @@ export const knowledgeZh = {
 	settingsTab: "设置",
 	network: "网络图",
 	networkUnboundTitle: "尚未关联知识库",
-	networkUnboundHint: "关联已有知识库或新建知识库后，这里会显示笔记之间的链接和主题关系。",
+	networkUnboundHint:
+		"关联已有知识库或新建知识库后，这里会显示笔记之间的链接和主题关系。",
 	networkDevHint:
 		"当前是开发版独立配置：userData-dev 与 ~/.pi/agent-dev 不会自动读取正式版配置。你可以选择正式版正在使用的 Vault 来继续。",
 	networkConnectExisting: "关联已有知识库",
@@ -153,6 +163,7 @@ export const knowledgeZh = {
 	homeCategoryIdea: "想法",
 	homeCategoryUnknown: "其他",
 	homeSearchEmpty: "没有找到相关笔记。",
+	homeSearchPartial: "索引尚未完整，当前结果不代表全部资料。",
 	homeSearchIncomplete: "没有找到；索引仍在核对，结果可能不完整。",
 	homeOpenGraph: "打开网络图",
 	homeCloseGraph: "收起网络图",
@@ -185,7 +196,8 @@ export const knowledgeZh = {
 	homeCountUnknown: "—",
 	graphTitle: "知识网络",
 	graphEmpty: "还没有带 [[双链]] 的笔记。",
-	graphSummary: "{nodes} 篇笔记、{edges} 条链接（共 {total} 篇，按连接数显示前 {limit} 篇）",
+	graphSummary:
+		"{nodes} 篇笔记、{edges} 条链接（共 {total} 篇，按连接数显示前 {limit} 篇）",
 	graphNebulaHint:
 		"滚轮缩放、拖动平移；颜色是自动识别的主题簇，越大的点连接越多。悬停高亮相连笔记，点击打开。",
 	graphAxisRelations: "关系密度（示意）",
@@ -246,14 +258,17 @@ export const knowledgeZh = {
 	graphHealthUncited: "未被引用的 Wiki",
 	graphHealthWarning: "需要核对",
 	graphHealthUntitled: "缺少主题",
-	graphHealthUntitledHint: "节点名还是文件名（例如 PMC 编号或 .pdf），看不出讲什么。建议补一个主题。",
+	graphHealthUntitledHint:
+		"节点名还是文件名（例如 PMC 编号或 .pdf），看不出讲什么。建议补一个主题。",
 	graphHealthUntitledPrompt:
 		"请阅读知识库笔记 {path} 及其来源，用一句简短的话概括它的主题（例如“DHX16 在 pre-mRNA 剪接中的作用”），然后调用 research_set_source_topic 把这个主题写进笔记；只改主题，不要改写正文。",
 	graphHealthEmpty: "当前视图里没有发现问题。",
 	graphHealthIntro: "参考 LLM Wiki 的 lint：找出写进库里却很难被复用的知识。",
-	graphHealthOrphanHint: "没有任何双链，检索和对话很难复用它。建议链接到相关 Wiki 页。",
+	graphHealthOrphanHint:
+		"没有任何双链，检索和对话很难复用它。建议链接到相关 Wiki 页。",
 	graphHealthUncitedHint: "已写成 Wiki，但没有其他笔记链接到它。",
-	graphHealthWarningHint: "构建图谱时标记了提示（镜像或标识问题），建议复核来源。",
+	graphHealthWarningHint:
+		"构建图谱时标记了提示（镜像或标识问题），建议复核来源。",
 	graphHealthOrphanPrompt:
 		"请检查知识库笔记 {path}：它目前没有任何双链。找出与它相关的 Wiki 页面或主题，把建议的链接作为候选提交到 Wiki 审阅队列，不要直接改写正文。",
 	graphHealthUncitedPrompt:
@@ -285,13 +300,16 @@ export const knowledgeZh = {
 		"工具权限在输入框的“自动执行 / 严格确认”中单独设置；删除、发布和费用边界不会因知识自动审核而放开。",
 	wikiHistory: "Wiki 保存历史与撤销",
 	wikiSaved: "已保存",
-	wikiUndoConfirm: "撤销 {path} 的这次保存？新建页面会删除，已修改的页面不会被覆盖。",
+	wikiUndoConfirm:
+		"撤销 {path} 的这次保存？新建页面会删除，已修改的页面不会被覆盖。",
 	wikiUndo: "撤销",
 	dailyNoNewNotes:
 		"上次运行时，自 {since} 以来 Library/、Wiki/、Projects/ 下没有新增或修改的笔记，所以没有新想法。其他目录里的笔记不参与每日发现。",
-	dailyRanNoIdeas: "上次读了 {notes} 篇最近更新的笔记，没有找到足够有依据的新想法。",
+	dailyRanNoIdeas:
+		"上次读了 {notes} 篇最近更新的笔记，没有找到足够有依据的新想法。",
 	dailyNotBound: "尚未关联知识库目录，关联后才会运行。",
-	dailyFailed: "上次运行没有完成（{error}），下个整点会自动重试；也可检查模型设置后点「现在运行」。",
+	dailyFailed:
+		"上次运行没有完成（{error}），下个整点会自动重试；也可检查模型设置后点「现在运行」。",
 	dailyEnabled: "每日发现",
 	dailyRunNow: "现在运行",
 	dailyHint:
@@ -314,14 +332,16 @@ export const knowledgeZh = {
 	homeRecentEmpty: "还没有保存记录。",
 	homePending: "待处理修改",
 	homeManage: "管理与维护",
-	homeManageHint: "关联、索引、相似内容检索、主题和审核模式在「知识库 › 知识库设置」。",
+	homeManageHint:
+		"关联、索引、相似内容检索、主题和审核模式在「知识库 › 知识库设置」。",
 	refresh: "刷新状态",
 	loading: "正在读取本地状态…",
 	failed: "操作未完成",
 	retry: "重试",
 	close: "关闭",
 	notBound: "尚未关联共享知识库",
-	notBoundHint: "创建或选择一次，所有项目和新会话共同使用。代码与结果目录仍属于各自项目。",
+	notBoundHint:
+		"创建或选择一次，所有项目和新会话共同使用。代码与结果目录仍属于各自项目。",
 	disabled: "此运行环境尚未启用应用级知识库。请使用新的桌面构建。",
 	vault: "当前知识库目录（Vault）",
 	scope: "适用范围",
@@ -339,7 +359,8 @@ export const knowledgeZh = {
 	unknown: "尚未完成",
 	watching: "文件监听正常",
 	notWatching: "文件监听不可用；需要检查",
-	privacy: "索引在本机。使用云端模型时，选中的导航与知识片段会发送给该模型；不等于纯本地隐私模式。",
+	privacy:
+		"索引在本机。使用云端模型时，选中的导航与知识片段会发送给该模型；不等于纯本地隐私模式。",
 	openVault: "打开知识库目录",
 	adjust: "切换或调整知识库",
 	setup: "开始初始化问答（知识库 + Zotero）",
@@ -349,7 +370,8 @@ export const knowledgeZh = {
 	newPath: "切换或创建知识库",
 	pathPlaceholder: "输入独立的知识库目录（Vault）绝对路径，或选择文件夹",
 	preview: "预览目录与模板",
-	previewOnly: "以下仅为目录和模板预览，不会写入。配置偏好只询问一次，最终写入由一张确认卡授权。",
+	previewOnly:
+		"以下仅为目录和模板预览，不会写入。配置偏好只询问一次，最终写入由一张确认卡授权。",
 	skillBound:
 		"知识库初始化：/obsidian-setup（research-vault）。文献接入由技能与连接页的内置 Zotero 连接器管理。",
 	globalSwitch:
@@ -363,14 +385,16 @@ export const knowledgeZh = {
 	library: "共享 Library",
 	projectFolders: "项目目录",
 	legacy: "发现旧项目知识库目录配置（不会覆盖全局关联）",
-	legacyHint: "请核对后通过初始化流程选择需要的知识库；程序不会自动迁移或删除旧笔记。",
+	legacyHint:
+		"请核对后通过初始化流程选择需要的知识库；程序不会自动迁移或删除旧笔记。",
 	notMcp: "原生知识索引，不代表原始 MCP 已连接",
 	literature: "文献库 · Zotero",
 	literatureHint:
 		"Zotero 管 PDF、条目和标注；Obsidian 管可引用的 Library/Papers 笔记、证据和 Wiki。文献接入在技能与连接页的内置 Zotero 连接器里完成。",
 	literatureSetup: "打开 Zotero 面板",
 	literatureBound: "技能与连接 · 内置 Zotero 连接器",
-	literatureSteps: "准备步骤：启动 Zotero 桌面端 → 打开本机通信 → 在连接器中授权",
+	literatureSteps:
+		"准备步骤：启动 Zotero 桌面端 → 打开本机通信 → 在连接器中授权",
 	literatureStatus: "安装流程会在当前会话中显示确认、结果和错误信息。",
 	literatureDownload: "下载 Zotero",
 	literatureCheck:
@@ -406,7 +430,8 @@ export const knowledgeZh = {
 	reviewQueued: "还有 {count} 个待确认",
 	applying: "正在执行…",
 	confirmReview: "我已查看差异和来源，同意应用这一具体修改。",
-	notScience: "通过阅读或回答检查 ≠ 科学结论已验证。批准 Wiki 仅表示接受本次修改。",
+	notScience:
+		"通过阅读或回答检查 ≠ 科学结论已验证。批准 Wiki 仅表示接受本次修改。",
 	preserve: "只替换智能体托管区；托管区外的人工正文与批注保持不变。",
 	applied: "Wiki 修改已应用",
 	rejected: "候选已拒绝，笔记未修改",
@@ -420,12 +445,15 @@ export const knowledgeZh = {
 	uiRead: "这里的阅读供你查看，不计作模型本轮的读取记录。",
 	buildIndex: "核对目录 / 重试索引",
 	refreshNavigation: "更新排队中的导航",
-	maintenanceHint: "直接操作后端，不调用模型。目录核对不改写 Wiki 正文；导航更新只处理最多 5 个任务。",
-	confirmNavigation: "确认更新这些导航的智能体托管区？人工内容保留，不会自动综合或改写主题 Wiki。",
+	maintenanceHint:
+		"直接操作后端，不调用模型。目录核对不改写 Wiki 正文；导航更新只处理最多 5 个任务。",
+	confirmNavigation:
+		"确认更新这些导航的智能体托管区？人工内容保留，不会自动综合或改写主题 Wiki。",
 	maintenanceDone: "维护操作已完成",
 	maintenanceBusy: "正在维护，请勿重复提交",
 	automaticMaintenance: "自动维护",
-	automaticMaintenanceHint: "默认关闭；每天最多运行一次，正文修改只进入 Wiki 审阅队列。",
+	automaticMaintenanceHint:
+		"默认关闭；每天最多运行一次，正文修改只进入 Wiki 审阅队列。",
 	maintenanceModel: "模型",
 	maintenanceModelDefault: "使用默认模型",
 	maintenanceItems: "每次项数",
@@ -437,7 +465,8 @@ export const knowledgeZh = {
 	enable: "开启",
 	disable: "关闭",
 	problems: "未覆盖或失败的条目（最多显示 20 条）",
-	problemHint: "未索引、不可读和无命中不同。修复文件后可重试索引，不能据此断言库中没有相关知识。",
+	problemHint:
+		"未索引、不可读和无命中不同。修复文件后可重试索引，不能据此断言库中没有相关知识。",
 	coverageReady: "已完成目录核对",
 	coverageIndexing: "正在建立 / 核对索引",
 	coveragePartial: "索引覆盖不完整",
@@ -456,7 +485,8 @@ export const knowledgeZh = {
 	researchCoverageUnknown: "待记录",
 	researchSourceList: "来源",
 	researchIntegrity: "完整性",
-	researchRouteHint: "路线只标记实际发生过的节点；分支没有发生时保持待处理。点击来源可在本面板阅读。",
+	researchRouteHint:
+		"路线只标记实际发生过的节点；分支没有发生时保持待处理。点击来源可在本面板阅读。",
 	researchProvenance: "来源与复现",
 	researchGaps: "证据缺口",
 	researchTimeline: "实际事件",
@@ -546,23 +576,29 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	specialist_reviewer: "Wiki reviewer",
 	modelReviewButton: "Automatic model review",
 	modelReviewPreflight: "Model pre-review",
-	modelReviewAdviceHint: "Advice from supplied source ranges; you still apply to write the Wiki.",
+	modelReviewAdviceHint:
+		"Advice from supplied source ranges; you still apply to write the Wiki.",
 	modelReviewModel: "Reviewer model",
 	modelReviewInherit: "Current session model",
-	modelReviewSession: "Open a session in the originating project and select an available model.",
+	modelReviewSession:
+		"Open a session in the originating project and select an available model.",
 	modelReviewHint:
 		"Review this candidate only, including the proposed block, protected human text and up to 6 source ranges. Independent request: no chat history, whole-knowledge-base search or downloads.",
-	modelReviewAck: "Send these contents to the selected model; I understand that model usage may be charged.",
-	modelReviewAutoApply: "Apply this candidate when the model review and all application checks pass.",
+	modelReviewAck:
+		"Send these contents to the selected model; I understand that model usage may be charged.",
+	modelReviewAutoApply:
+		"Apply this candidate when the model review and all application checks pass.",
 	modelReviewWriteHint:
 		"Advice only by default. Opting into application updates this managed section only. Insufficient evidence, conflicts, changed versions or cancellation prevent automatic writes. No ongoing background review is enabled.",
 	modelReviewStart: "Start review",
 	modelReviewRunning: "Independent review (up to 120 seconds)…",
 	modelReviewApplied: "Model review passed and was applied",
 	modelReviewPass: "Model recommends approval; not automatically applied",
-	modelReviewReject: "Model recommends rejection; candidate retained for human review",
+	modelReviewReject:
+		"Model recommends rejection; candidate retained for human review",
 	modelReviewHuman: "Human review required; not applied",
-	modelReviewNotHuman: "Model review is not human review or scientific verification",
+	modelReviewNotHuman:
+		"Model review is not human review or scientific verification",
 	modelReviewAudit: "Review record and checks",
 	modelReviewUsage: "Review usage",
 	modelReviewInput: "Input",
@@ -571,7 +607,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	modelReviewUsageHint:
 		"Activity record for this independent review request; it is not counted in the main chat turn. Cache hit rate is not inferred when cache fields are absent, and zero cost does not imply free usage.",
 	reviewCheck_evidenceSupportsChanges: "Evidence supports proposed changes",
-	reviewCheck_scopeAndUncertaintyPreserved: "Applicability and uncertainty preserved",
+	reviewCheck_scopeAndUncertaintyPreserved:
+		"Applicability and uncertainty preserved",
 	reviewCheck_noUnresolvedContradictions: "No unresolved contradictions",
 	reviewCheck_humanContentPreserved: "Human content preserved",
 	reviewCheck_noInstructionInjection: "No instruction injection identified",
@@ -621,7 +658,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	worker_cancelled: "Cancelled",
 	worker_skipped: "Skipped",
 
-	linkPreviewOnly: "Stored note unchanged. Local links resolve to existing files in the matching project:",
+	linkPreviewOnly:
+		"Stored note unchanged. Local links resolve to existing files in the matching project:",
 	emptyPreview:
 		"No directory entries or path selected. Planned folders and templates remain available below.",
 	sampleContent: "Note template content (read-only)",
@@ -630,7 +668,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	candidateHint:
 		"Search excerpts do not mean the model read the source or that a scientific conclusion was verified.",
 	outputs: "Session outputs and follow-ups",
-	noFindings: "No matching items this turn. Indexed sources and synthesized Wiki are separate layers.",
+	noFindings:
+		"No matching items this turn. Indexed sources and synthesized Wiki are separate layers.",
 	title: "Knowledge",
 	subtitle: "Application-wide · project context stays independent",
 	cloudTitle: "Cloud knowledge (WebDAV)",
@@ -676,8 +715,10 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	cloudResolveLocal: "Confirm overwrite cloud (use local version)",
 	cloudResolveRemote: "Confirm overwrite local (use cloud version)",
 	cloudSyncDone: "Sync completed",
-	cloudSyncNeedsReview: "Sync did not complete; review the result and preview again",
-	cloudSyncNeedsBinding: "Select a knowledge base before choosing and syncing notes",
+	cloudSyncNeedsReview:
+		"Sync did not complete; review the result and preview again",
+	cloudSyncNeedsBinding:
+		"Select a knowledge base before choosing and syncing notes",
 	overview: "Overview & setup",
 	settings: "Knowledge settings",
 	knowledgeSettings: "Knowledge settings",
@@ -707,7 +748,10 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	homeCategoryIdea: "Ideas",
 	homeCategoryUnknown: "Other",
 	homeSearchEmpty: "No matching notes.",
-	homeSearchIncomplete: "No match yet; the index is still being checked, so results may be incomplete.",
+	homeSearchPartial:
+		"The index is incomplete; these results do not represent all material.",
+	homeSearchIncomplete:
+		"No match yet; the index is still being checked, so results may be incomplete.",
 	homeOpenGraph: "Open network graph",
 	homeCloseGraph: "Hide network graph",
 	homeNewNote: "Create in knowledge base",
@@ -727,7 +771,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	homeHealthUnavailable: "—",
 	homeUnboundAction: "Connect knowledge base",
 	homeBindingHint: "Connect a knowledge base to search and view notes.",
-	homeSearchUnavailable: "No knowledge base is connected, so search is unavailable.",
+	homeSearchUnavailable:
+		"No knowledge base is connected, so search is unavailable.",
 	homeLoadingReviews: "Loading pending changes…",
 	homeReviewsError: "Could not load pending changes",
 	homeReviewUnavailable: "There are no reviewable candidates for this project.",
@@ -739,7 +784,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	homeCountUnknown: "—",
 	graphTitle: "Knowledge network",
 	graphEmpty: "No notes with [[links]] yet.",
-	graphSummary: "{nodes} notes, {edges} links ({total} notes in total; the {limit} most connected are shown)",
+	graphSummary:
+		"{nodes} notes, {edges} links ({total} notes in total; the {limit} most connected are shown)",
 	graphNebulaHint:
 		"Scroll to zoom, drag to pan. Colours are detected topic clusters; larger nodes have more links. Hover to highlight neighbours, click to open.",
 	graphAxisRelations: "Relation density (illustrative)",
@@ -747,7 +793,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	graphLinks: "{count} connections",
 	graphReset: "Reset",
 	graphRelayout: "Re-layout",
-	graphHint: "Hover to highlight connected notes; click to open. Blue nodes are Wiki pages.",
+	graphHint:
+		"Hover to highlight connected notes; click to open. Blue nodes are Wiki pages.",
 	graphSemantic: "Similarity view",
 	graphAllFiles: "All files",
 	graphMergeMirrors: "Merge paper mirrors",
@@ -760,9 +807,11 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	graphOutgoing: "Outgoing connections",
 	graphIncoming: "Incoming connections",
 	graphHops: "Relation steps",
-	graphMirrorWarning: "{count} mirror nodes found; hints only and excluded from degree.",
+	graphMirrorWarning:
+		"{count} mirror nodes found; hints only and excluded from degree.",
 	graphOpenNote: "Open note",
-	graphSelectHint: "Select a node to inspect its local neighbourhood and related content.",
+	graphSelectHint:
+		"Select a node to inspect its local neighbourhood and related content.",
 	graphLegendNote: "Note",
 	graphLegendMirror: "Mirror",
 	graphRelationAll: "All relations",
@@ -778,7 +827,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	graphPaused: "Paused · {count} pending",
 	graphLiveToggle: "Pause or resume live updates",
 	graphResetView: "Reset view",
-	graphShortcuts: "+ / − zoom · drag to pan · 0 reset · F focus · Esc close details",
+	graphShortcuts:
+		"+ / − zoom · drag to pan · 0 reset · F focus · Esc close details",
 	graphDrawerClose: "Close details",
 	graphLegendMethod: "Method",
 	graphCategory: "Category",
@@ -788,7 +838,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	graphLegendDirectory: "Directory / inferred",
 	graphSelectedNode: "Selected node",
 	graphRelatedNotes: "Related notes",
-	graphCollisionHint: "Labels avoid one another automatically; unrelated edges fade when a node is selected.",
+	graphCollisionHint:
+		"Labels avoid one another automatically; unrelated edges fade when a node is selected.",
 	graphColorType: "Colour by type",
 	graphColorCluster: "Colour by cluster",
 	graphScopeGlobal: "Global",
@@ -805,11 +856,14 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	graphHealthUntitledPrompt:
 		'Read the knowledge note {path} and its source, sum up its topic in a short phrase (e.g. "DHX16 in pre-mRNA splicing"), then call research_set_source_topic to write that topic into the note; change only the topic, not the body.',
 	graphHealthEmpty: "No issues in the current view.",
-	graphHealthIntro: "Like an LLM Wiki lint pass: knowledge that was written down but is hard to reuse.",
+	graphHealthIntro:
+		"Like an LLM Wiki lint pass: knowledge that was written down but is hard to reuse.",
 	graphHealthOrphanHint:
 		"Has no links, so search and chat rarely reuse it. Link it from a related Wiki page.",
-	graphHealthUncitedHint: "Written as a Wiki page, but no other note links to it.",
-	graphHealthWarningHint: "Flagged while building the graph (mirrors or identifiers); re-check its sources.",
+	graphHealthUncitedHint:
+		"Written as a Wiki page, but no other note links to it.",
+	graphHealthWarningHint:
+		"Flagged while building the graph (mirrors or identifiers); re-check its sources.",
 	graphHealthOrphanPrompt:
 		"Check the knowledge note {path}: it has no links. Find the Wiki pages or topics it relates to and submit the suggested links as candidates to the Wiki review queue instead of editing the note directly.",
 	graphHealthUncitedPrompt:
@@ -848,7 +902,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 		"On the last run no note under Library/, Wiki/ or Projects/ had been added or changed since {since}, so there were no new ideas. Notes in other folders are not part of daily discovery.",
 	dailyRanNoIdeas:
 		"The last run read {notes} recently updated notes and found no idea grounded enough to suggest.",
-	dailyNotBound: "No knowledge-base folder is associated yet; daily discovery runs once one is.",
+	dailyNotBound:
+		"No knowledge-base folder is associated yet; daily discovery runs once one is.",
 	dailyFailed:
 		"The last run did not finish ({error}); it retries on the hour. You can also check the model settings and click Run now.",
 	dailyEnabled: "Daily discovery",
@@ -883,7 +938,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	notBound: "No shared knowledge base is associated",
 	notBoundHint:
 		"Create or select once for all projects and new sessions. Code and result directories remain project-local.",
-	disabled: "Application knowledge is unavailable in this environment. Use the updated desktop build.",
+	disabled:
+		"Application knowledge is unavailable in this environment. Use the updated desktop build.",
 	vault: "Current knowledge-base folder (Vault)",
 	scope: "Applies to",
 	scopeValue: "Shared at app level",
@@ -909,7 +965,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	adjustCurrent: "Adjust current knowledge base",
 	switchFolder: "Switch to another folder…",
 	newPath: "Switch or create knowledge-base folder",
-	pathPlaceholder: "Enter an independent absolute knowledge-base folder path, or choose a folder",
+	pathPlaceholder:
+		"Enter an independent absolute knowledge-base folder path, or choose a folder",
 	preview: "Preview folders & templates",
 	previewOnly:
 		"This is a read-only directory/template preview. Preferences are collected once; one confirmation card authorizes the write.",
@@ -917,7 +974,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 		"Knowledge setup: /obsidian-setup (research-vault). Manage literature from the built-in Zotero connector on Skills & Connections.",
 	globalSwitch:
 		"The Vault is shared at the application level: projects can search shared Library notes, while project content stays under its Projects partition. Use “Switch or create knowledge-base folder” to change it; a running task is never silently redirected.",
-	selectProject: "Select a project or open a session as the setup interview context.",
+	selectProject:
+		"Select a project or open a session as the setup interview context.",
 	pathRequired: "Enter or select a knowledge-base folder path.",
 	existing: "Existing directory",
 	newVault: "Does not exist; created only after confirmation",
@@ -925,8 +983,10 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	templates: "Built-in template preview",
 	library: "Shared Library",
 	projectFolders: "Project folders",
-	legacy: "Legacy project knowledge-base folder found (does not override the global association)",
-	legacyHint: "Review it and choose through setup; no automatic migration or deletion occurs.",
+	legacy:
+		"Legacy project knowledge-base folder found (does not override the global association)",
+	legacyHint:
+		"Review it and choose through setup; no automatic migration or deletion occurs.",
 	notMcp: "Native knowledge index; not proof of a raw MCP connection",
 	literature: "Literature · Zotero",
 	literatureHint:
@@ -935,7 +995,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	literatureBound: "Skills & Connections · built-in Zotero connector",
 	literatureSteps:
 		"Preparation: start Zotero desktop → enable local communication → authorize in the connector",
-	literatureStatus: "The confirmation, result, and any error will appear in the current session.",
+	literatureStatus:
+		"The confirmation, result, and any error will appear in the current session.",
 	literatureDownload: "Download Zotero",
 	literatureCheck:
 		"After setup: Zotero desktop is running and the local API is reachable; any existing Zotero MCP remains an ordinary MCP entry.",
@@ -970,9 +1031,12 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	reviewLaterHint: "Reopen later from Knowledge or /obsidian-review.",
 	reviewQueued: "{count} more waiting",
 	applying: "Working…",
-	confirmReview: "I reviewed the changes and sources and approve this exact edit.",
-	notScience: "Read/publication checks do not verify scientific truth. Wiki approval only accepts this edit.",
-	preserve: "Only the managed block is replaced; human text outside it is preserved.",
+	confirmReview:
+		"I reviewed the changes and sources and approve this exact edit.",
+	notScience:
+		"Read/publication checks do not verify scientific truth. Wiki approval only accepts this edit.",
+	preserve:
+		"Only the managed block is replaced; human text outside it is preserved.",
 	applied: "Wiki change applied",
 	rejected: "Candidate rejected; note unchanged",
 	savedPartial:
@@ -993,7 +1057,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	maintenanceDone: "Maintenance completed",
 	maintenanceBusy: "Maintenance is running; please do not submit twice",
 	automaticMaintenance: "Automatic maintenance",
-	automaticMaintenanceHint: "Off by default; runs at most once a day and sends body edits to Wiki review.",
+	automaticMaintenanceHint:
+		"Off by default; runs at most once a day and sends body edits to Wiki review.",
 	maintenanceModel: "Model",
 	maintenanceModelDefault: "Use default model",
 	maintenanceItems: "Items per run",
@@ -1012,7 +1077,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	coveragePartial: "Incomplete index coverage",
 	coverageUninitialized: "Index not initialized",
 	researchRuns: "Research runs and route",
-	researchRunsHint: "See preparation, current route, sources and claims in this panel.",
+	researchRunsHint:
+		"See preparation, current route, sources and claims in this panel.",
 	researchRunsLoading: "Loading research runs…",
 	researchRunsEmpty: "No research runs are available for this project yet.",
 	researchAnswerable: "Ready to answer",
@@ -1037,12 +1103,14 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	evidenceReview: "Evidence awaiting synthesis",
 	wikiReview: "Wiki requires review",
 	navigationJob: "Navigation update pending",
-	manualReview: "Read the material and propose a reviewed change; no automatic model spend.",
+	manualReview:
+		"Read the material and propose a reviewed change; no automatic model spend.",
 	flow: "This turn’s knowledge access",
 	details: "Reading records",
 	manage: "Manage knowledge",
 	resume: "Continue knowledge checks",
-	resumeHint: "Sends a continuation request to the selected model; model charges may apply.",
+	resumeHint:
+		"Sends a continuation request to the selected model; model charges may apply.",
 	navigation: "Navigation & project context",
 	wiki: "Relevant Wiki",
 	search: "Evidence search",
@@ -1050,7 +1118,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	notStarted: "No completion recorded",
 	matched: "Returned items",
 	readScope: "Files and versions read this turn",
-	checksNotFacts: "These are observable steps, not proof of complete retrieval or correct conclusions.",
+	checksNotFacts:
+		"These are observable steps, not proof of complete retrieval or correct conclusions.",
 	preparing: "Preparing knowledge navigation",
 	navigationPhase: "Navigation supplied; waiting for Wiki reads",
 	readingWiki: "Reading related Wiki",
@@ -1063,13 +1132,15 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	unconfigured: "No knowledge base associated",
 	evidenceOnly: "Subagent evidence awaits verification",
 	interrupted: "Turn interrupted",
-	noHitsHint: "Zero hits apply only to this query, not to the whole knowledge base.",
+	noHitsHint:
+		"Zero hits apply only to this query, not to the whole knowledge base.",
 	errorDetails: "Error details",
 	newSetup: "Configure again",
 	notification: "Knowledge notice",
 	semantic: "Similarity search",
 	topics: "Topic memory",
-	semanticOptIn: "Similarity search is off by default; keyword search (FTS) remains the fallback.",
+	semanticOptIn:
+		"Similarity search is off by default; keyword search (FTS) remains the fallback.",
 	provider: "Model service",
 	providerNone: "None (keyword search only)",
 	providerOllama: "Ollama",
@@ -1081,7 +1152,8 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 		"I consent to sending original note chunks and the query to the configured remote model service",
 	saveSemantic: "Save similarity settings",
 	testSemantic: "Test model service",
-	testSemanticHint: "The test sends fixed generic text only; it does not send knowledge-base content.",
+	testSemanticHint:
+		"The test sends fixed generic text only; it does not send knowledge-base content.",
 	semanticMinSimilarity: "Minimum similarity",
 	semanticMinSimilarityHint:
 		"Candidates below this text-similarity score are dropped. Default 0.45; tune it using your own validation (cosine / embedding details remain available).",
@@ -1107,12 +1179,15 @@ const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 		"Both sources are retained; same-condition opposite observations never overwrite old knowledge automatically.",
 	topicConflictReason: "Assessment",
 	archiveTopic: "Archive topic",
-	archiveConfirm: "Archive this topic? The latest document revision is required.",
+	archiveConfirm:
+		"Archive this topic? The latest document revision is required.",
 	topicArchived: "Topic archived",
 	topicNeutral: "Topics are candidate memories, not scientific verification.",
 	resumeTopic: "Prepare and resume research",
-	resumeTopicHint: "Sends an explicit prompt to the current writable session, then resumes this exact topic.",
-	resumeUnavailable: "A writable current-project session is required, and its task must not be streaming.",
+	resumeTopicHint:
+		"Sends an explicit prompt to the current writable session, then resumes this exact topic.",
+	resumeUnavailable:
+		"A writable current-project session is required, and its task must not be streaming.",
 };
 export function useKnowledgeText() {
 	const language = useLanguage();

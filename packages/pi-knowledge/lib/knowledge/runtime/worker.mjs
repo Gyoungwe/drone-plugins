@@ -1201,10 +1201,10 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       }
     };
   }
-  function categoryCounts() {
+  function categoryCounts(project = void 0) {
     const counts = { paper: 0, software: 0, method: 0, idea: 0, other: 0 };
     for (const row of db.prepare("SELECT path,body,kind FROM notes WHERE kind IN ('note','wiki')").all())
-      counts[noteCategory(row)]++;
+      if (project === void 0 || canRead(row.path, project)) counts[noteCategory(row)]++;
     return counts;
   }
   function semanticStatus(fingerprint = null, project = null) {
@@ -1244,13 +1244,17 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
   async function read(path, project, options2 = {}) {
     if (!canRead(validateNote(path), project)) throw new Error("Note is outside shared/current-project scope");
     const row = await updatePath(path);
-    if (!row) return { path, missing: true };
+    if (!row) return { path, missing: true, revision };
     const part = snippet(row.body, options2);
     const reviewAt = row.body.split("\n").findIndex((line) => /^## Human review\s*$/i.test(line));
     const humanReview = reviewAt >= 0 ? snippet(row.body, { startLine: reviewAt + 1, maxChars: options2.reviewMaxChars || 1600 }) : null;
     return {
       path,
       hash: row.hash,
+      title: row.title,
+      kind: row.kind,
+      category: noteCategory(row),
+      revision,
       ...part,
       humanReview,
       pending: db.prepare("SELECT kind,revision FROM jobs WHERE path=?").all(path)
@@ -1499,10 +1503,10 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       nextCursor: null
     };
   }
-  function resolveLinkTarget(target) {
-    if (statements.get.get(target)) return target;
+  function resolveLinkTarget(target, project = void 0) {
+    if (statements.get.get(target) && (project === void 0 || canRead(target, project))) return target;
     if (target.includes("/")) return null;
-    const rows = db.prepare("SELECT path FROM notes WHERE path LIKE ? LIMIT 2").all(`%/${target}`);
+    const rows = project === void 0 ? db.prepare("SELECT path FROM notes WHERE path LIKE ? LIMIT 2").all(`%/${target}`) : db.prepare("SELECT path FROM notes WHERE path LIKE ? AND (scope='shared' OR scope=?) LIMIT 2").all(`%/${target}`, project || "");
     return rows.length === 1 ? rows[0].path : null;
   }
   function noteTitle(path) {
@@ -1511,16 +1515,19 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
   async function noteLinks(args) {
     await flushDirty();
     const path = validateNote(String(args.path || ""));
+    const project = args.project;
+    if (project !== void 0 && !canRead(path, project)) throw new Error("Note is outside shared/current-project scope");
     const outgoing = [];
     for (const { target } of db.prepare("SELECT target FROM links WHERE source=? ORDER BY target").all(path)) {
-      const resolved = resolveLinkTarget(target);
+      if (project !== void 0 && !canRead(target, project)) continue;
+      const resolved = resolveLinkTarget(target, project);
       outgoing.push(
         resolved ? { path: resolved, title: noteTitle(resolved), exists: true } : { path: target, title: target.split("/").at(-1).slice(0, -3), exists: false }
       );
     }
     const name = path.split("/").at(-1);
-    const targets = resolveLinkTarget(name) === path ? [path, name] : [path, path];
-    const incoming = db.prepare("SELECT DISTINCT source FROM links WHERE target=? OR target=? ORDER BY source LIMIT 200").all(...targets).map(({ source }) => source).filter((source) => source !== path).map((source) => ({ path: source, title: noteTitle(source), exists: true }));
+    const targets = resolveLinkTarget(name, project) === path ? [path, name] : [path, path];
+    const incoming = db.prepare("SELECT DISTINCT source FROM links WHERE target=? OR target=? ORDER BY source LIMIT 200").all(...targets).map(({ source }) => source).filter((source) => source !== path && (project === void 0 || canRead(source, project))).map((source) => ({ path: source, title: noteTitle(source), exists: true }));
     return { path, title: noteTitle(path), outgoing, incoming, revision };
   }
   async function graphNeighbors(args) {
@@ -1588,17 +1595,19 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     const limit = Math.max(10, Math.min(5e3, Math.floor(args.limit || 200)));
     const view = args.view === "all" ? "all" : "semantic";
     const mergeMirrors = args.mergeMirrors !== false;
-    const cacheKey = `${view}\0${limit}\0${mergeMirrors ? "merge" : "raw"}`;
+    const project = args.project;
+    const scopeKey = project === void 0 ? "legacy-all" : `project:${project || ""}`;
+    const cacheKey = `${scopeKey}\0${view}\0${limit}\0${mergeMirrors ? "merge" : "raw"}`;
     const cached = graphSnapshots.get(revision, cacheKey);
     if (cached) return cached;
     const allNotes = new Map(
-      db.prepare("SELECT path,title,kind,scope,body FROM notes").all().map((row) => [row.path, row])
+      db.prepare("SELECT path,title,kind,scope,body FROM notes").all().filter((row) => project === void 0 || row.scope === "shared" || row.scope === project).map((row) => [row.path, row])
     );
     const notes = new Map([...allNotes].filter(([, row]) => row.kind === "note" || row.kind === "wiki"));
     const rawEdges = [];
     for (const { source, target } of db.prepare("SELECT source,target FROM links").all()) {
       if (!notes.has(source)) continue;
-      const resolved = resolveLinkTarget(target);
+      const resolved = resolveLinkTarget(target, project);
       if (!resolved || resolved === source || !notes.has(resolved)) continue;
       rawEdges.push({ source, target: resolved, type: "link" });
     }
@@ -1766,10 +1775,10 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       const where = "(scope='shared' OR scope=?)";
       const total = Number(db.prepare(`SELECT count(*) n FROM jobs WHERE ${where}`).get(scope).n);
       const items = db.prepare(`SELECT * FROM jobs WHERE ${where} ORDER BY updated DESC,key LIMIT ? OFFSET ?`).all(scope, limit, offset);
-      return { items, total, offset, nextOffset: offset + items.length < total ? offset + items.length : null };
+      return { items, total, offset, nextOffset: offset + items.length < total ? offset + items.length : null, revision };
     }
     if (op === "recentNotes") return { items: await recentNotes(args.project, args.limit), revision };
-    if (op === "recentByCategory") return { groups: await recentByCategory2(args.project, args.limit), revision };
+    if (op === "recentByCategory") return { groups: await recentByCategory2(args.project, args.limit), counts: categoryCounts(args.project), revision };
     if (op === "jobs") return { ...status(), items: pending(args.project, 100, args.kind || null) };
     if (op === "completeJob") {
       db.prepare("DELETE FROM jobs WHERE key=? AND revision=?").run(args.key, args.revision);

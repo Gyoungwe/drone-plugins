@@ -1,0 +1,130 @@
+{
+  "date": "2026-10-26",
+  "status": "PARTIAL",
+  "published": false,
+  "scope": "P2 Desktop reading closure and complete CLI transport extraction; full Desktop writes/hooks/model and host removal unfinished",
+  "previousEvidence": "knowledge-ui-co-package-2026-10-26.json",
+  "candidates": [
+    {
+      "name": "@gyoungwe/pi-knowledge",
+      "version": "0.3.0",
+      "sha256": "f26ce487965dd5b96bbb8b08c99a07bf770baddcdee1d8ff046d771d26a9dd60",
+      "integrity": "sha512-UP0+M1S/YZBPvl3tsiWvzFvLzrogtdANtbXA2iHZtAsWbYFarHJ/V6iO1y2EY3oAarAs2eOi1xjfeE9WzqzRjw==",
+      "files": 235
+    },
+    {
+      "name": "@gyoungwe/desktop-ui-pack",
+      "version": "0.3.0",
+      "sha256": "557cbd5ab4e9f6ec855e15cad90fb607639f88a13fc6e0bcc2af9bbc9a1b762e",
+      "integrity": "sha512-nH94HCWu6zRKlH85cuVhBK3iRBOHni+j3NspyUFZUl4BlCiE0Ep3Qx6n9jjL9zRdp5i23VG39ZxxcUUeGeEBaA==",
+      "files": 9
+    },
+    {
+      "name": "@gyoungwe/research-suite",
+      "version": "0.2.0",
+      "sha256": "5c038fde59cb5138faede367c2d747939a0ca5303c26cea12fc280721a184a74",
+      "integrity": "sha512-BlFAuJ/91CEyoI5sQVtz91+b0UPsz1TfpA7bGOtPLX10qukHq4g1bQJieERRzPio44ha+hMT8HYedWsJVkSUpg==",
+      "files": 1298
+    }
+  ],
+  "candidateApi": {
+    "version": "1.3.0",
+    "sha256": "60e18708d667924a00a29edd62cfca273c15fdd1d69efa02062b74df9824c7dc",
+    "publicRegistryInstall": false
+  },
+  "knowledgeSourceSha256": "888a5df4922860f82cafc1c0f7e0e58c5d73d9181c91fdb1aae4f6dcb50d6352",
+  "operations": [
+    "overview",
+    "search",
+    "readNote",
+    "links",
+    "graph",
+    "jobs",
+    "recentByCategory"
+  ],
+  "reading": {
+    "application": "shared notes only",
+    "session": "shared/current project notes",
+    "indexNoteCount": "all notes in already-authorized Vault, not scope count",
+    "graphCacheScoped": true,
+    "pagedHashConflictRejected": true,
+    "humanReadGrantsModelEvidence": false,
+    "externalOpen": "NOT_PROVIDED"
+  },
+  "sourceProcessRegression": {
+    "status": "PASS",
+    "packagedArtifact": false,
+    "realRestrictedDomainAndIndexProcesses": true,
+    "inputResultSchemas": true,
+    "leasesReleased": true
+  },
+  "fullPluginGate": {
+    "status": "PASS",
+    "command": "DRONE_PLUGIN_API_TARBALL=<reading-private-api-1.3-tarball> npm run check",
+    "exitCode": 0,
+    "knowledgeTestFiles": 72,
+    "knowledgeTests": 449,
+    "logSha256": "f0da3e16e3e6ef9fdbd976c43ad3f952d29ae8dfeb234e8a7c9da0012521d39e"
+  },
+  "packedCoordinatorGate": {
+    "status": "PASS_WITH_OPEN_CLEANUP_OBSERVATION",
+    "consecutiveFinalPasses": 2,
+    "hostTest": "packages/backend/test/packed-knowledge-runtime-sdk.test.mjs",
+    "sdk": "1.1.0",
+    "actualReadOnlySession": true,
+    "productionCapabilityRouting": true,
+    "operations": [
+      "readNote",
+      "links",
+      "graph",
+      "jobs",
+      "recentByCategory"
+    ],
+    "scopeSequence": [
+      {
+        "project": null,
+        "visibleNotes": 1,
+        "jobs": 2
+      },
+      {
+        "project": "alpha",
+        "visibleNotes": 2,
+        "jobs": 4
+      },
+      {
+        "project": null,
+        "visibleNotes": 1,
+        "jobs": 2
+      }
+    ],
+    "inputResultSchemas": true,
+    "pagedReadHashAndLines": true,
+    "changedHashRejected": true,
+    "foreignProjectReadRejected": true,
+    "unknownAndWriteToolsExecuted": 0,
+    "sameOwnerProcesses": true,
+    "childrenExited": true,
+    "reservationsReleased": true,
+    "reportSha256": "6a5c3dfb2e53c7f842a02fa45f4000522686a7365084b61efce9e4714bf065be",
+    "logSha256": "3ea445af5c3820ea42d56f0ec8615329ed0dfe0b1617f79032f363a23e4ea6bb",
+    "openObservation": "An earlier run completed feature assertions but threw an unexpanded cleanup AggregateError. Test diagnostics were improved; two subsequent serial runs and nine runs across three concurrent fixtures in three rounds passed without production changes. Cause remains UNRESOLVED_NOT_REPRODUCED, not fixed.",
+    "stress": {
+      "status": "PASS",
+      "parallelFixtures": 3,
+      "rounds": 3,
+      "passes": 9,
+      "manifestSha256": "d71704868a045bb9496606c8f6967af79385a689ab3f8eebd63afc0bf5f6e3d5",
+      "initialFailure": "UNRESOLVED_NOT_REPRODUCED"
+    }
+  },
+  "formalInstalledReadingGui": "NOT_RUN",
+  "remaining": [
+    "Full Desktop service, hooks and publication owner integration",
+    "Authorized state/Vault write and model/semantic ports",
+    "Old host knowledge facade, named IPC and compatibility listeners removal",
+    "Existing-binding upgrade and zero-domain-plugin host acceptance",
+    "Public API 1.3 release, real minimum dependency and public clean install",
+    "Deferred external acceptance and B8/MinerU/GROBID scope unchanged",
+    "Investigate earlier unexplained coordinator cleanup AggregateError; two serial and nine concurrent successes do not establish its cause"
+  ]
+}

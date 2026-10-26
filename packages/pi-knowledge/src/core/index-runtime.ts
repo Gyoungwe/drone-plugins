@@ -445,10 +445,10 @@ export async function createKnowledgeIndexRuntime(
 			},
 		};
 	}
-	function categoryCounts() {
+	function categoryCounts(project = undefined) {
 		const counts = { paper: 0, software: 0, method: 0, idea: 0, other: 0 };
 		for (const row of db.prepare("SELECT path,body,kind FROM notes WHERE kind IN ('note','wiki')").all())
-			counts[noteCategory(row)]++;
+			if (project === undefined || canRead(row.path, project)) counts[noteCategory(row)]++;
 		return counts;
 	}
 	function semanticStatus(fingerprint = null, project = null) {
@@ -503,7 +503,7 @@ export async function createKnowledgeIndexRuntime(
 	async function read(path, project, options = {}) {
 		if (!canRead(validateNote(path), project)) throw new Error("Note is outside shared/current-project scope");
 		const row = await updatePath(path);
-		if (!row) return { path, missing: true };
+		if (!row) return { path, missing: true, revision };
 		const part = snippet(row.body, options);
 		const reviewAt = row.body.split("\n").findIndex((line) => /^## Human review\s*$/i.test(line));
 		const humanReview =
@@ -512,7 +512,7 @@ export async function createKnowledgeIndexRuntime(
 				: null;
 		return {
 			path,
-			hash: row.hash,
+			hash: row.hash, title: row.title, kind: row.kind, category: noteCategory(row), revision,
 			...part,
 			humanReview,
 			pending: db.prepare("SELECT kind,revision FROM jobs WHERE path=?").all(path),
@@ -824,10 +824,12 @@ export async function createKnowledgeIndexRuntime(
 	 * 链接解析：全路径 [[Library/Papers/x]] 直接对应；只写笔记名的 [[x]] 按文件名唯一匹配。
 	 * 返回 null 表示目标不在库里（未建的笔记或外部链接）。
 	 */
-	function resolveLinkTarget(target) {
-		if (statements.get.get(target)) return target;
+	function resolveLinkTarget(target, project = undefined) {
+		if (statements.get.get(target) && (project === undefined || canRead(target, project))) return target;
 		if (target.includes("/")) return null;
-		const rows = db.prepare("SELECT path FROM notes WHERE path LIKE ? LIMIT 2").all(`%/${target}`);
+		const rows = project === undefined
+			? db.prepare("SELECT path FROM notes WHERE path LIKE ? LIMIT 2").all(`%/${target}`)
+			: db.prepare("SELECT path FROM notes WHERE path LIKE ? AND (scope='shared' OR scope=?) LIMIT 2").all(`%/${target}`, project || "");
 		return rows.length === 1 ? rows[0].path : null;
 	}
 	function noteTitle(path) {
@@ -837,9 +839,14 @@ export async function createKnowledgeIndexRuntime(
 	async function noteLinks(args) {
 		await flushDirty();
 		const path = validateNote(String(args.path || ""));
+		// 0.2 callers omit project for their historical whole-Vault view. Remove
+		// this unscoped mode after all old host consumers leave the facade.
+		const project = args.project;
+		if (project !== undefined && !canRead(path, project)) throw new Error("Note is outside shared/current-project scope");
 		const outgoing = [];
 		for (const { target } of db.prepare("SELECT target FROM links WHERE source=? ORDER BY target").all(path)) {
-			const resolved = resolveLinkTarget(target);
+			if (project !== undefined && !canRead(target, project)) continue;
+			const resolved = resolveLinkTarget(target, project);
 			outgoing.push(
 				resolved
 					? { path: resolved, title: noteTitle(resolved), exists: true }
@@ -848,12 +855,12 @@ export async function createKnowledgeIndexRuntime(
 		}
 		const name = path.split("/").at(-1);
 		// A bare [[name]] link counts as a backlink only when that name resolves uniquely to this note.
-		const targets = resolveLinkTarget(name) === path ? [path, name] : [path, path];
+		const targets = resolveLinkTarget(name, project) === path ? [path, name] : [path, path];
 		const incoming = db
 			.prepare("SELECT DISTINCT source FROM links WHERE target=? OR target=? ORDER BY source LIMIT 200")
 			.all(...targets)
 			.map(({ source }) => source)
-			.filter((source) => source !== path)
+			.filter((source) => source !== path && (project === undefined || canRead(source, project)))
 			.map((source) => ({ path: source, title: noteTitle(source), exists: true }));
 		return { path, title: noteTitle(path), outgoing, incoming, revision };
 	}
@@ -929,20 +936,24 @@ export async function createKnowledgeIndexRuntime(
 		const limit = Math.max(10, Math.min(5000, Math.floor(args.limit || 200)));
 		const view = args.view === "all" ? "all" : "semantic";
 		const mergeMirrors = args.mergeMirrors !== false;
-		const cacheKey = `${view}\u0000${limit}\u0000${mergeMirrors ? "merge" : "raw"}`;
+		// 0.2 omitted-project callers retain whole-Vault view until host facade removal.
+		const project = args.project;
+		const scopeKey = project === undefined ? "legacy-all" : `project:${project || ""}`;
+		const cacheKey = `${scopeKey}\u0000${view}\u0000${limit}\u0000${mergeMirrors ? "merge" : "raw"}`;
 		const cached = graphSnapshots.get(revision, cacheKey);
 		if (cached) return cached;
 		const allNotes = new Map(
 			db
 				.prepare("SELECT path,title,kind,scope,body FROM notes")
 				.all()
+				.filter((row) => project === undefined || row.scope === "shared" || row.scope === project)
 				.map((row) => [row.path, row]),
 		);
 		const notes = new Map([...allNotes].filter(([, row]) => row.kind === "note" || row.kind === "wiki"));
 		const rawEdges = [];
 		for (const { source, target } of db.prepare("SELECT source,target FROM links").all()) {
 			if (!notes.has(source)) continue;
-			const resolved = resolveLinkTarget(target);
+			const resolved = resolveLinkTarget(target, project);
 			if (!resolved || resolved === source || !notes.has(resolved)) continue;
 			rawEdges.push({ source, target: resolved, type: "link" });
 		}
@@ -1130,10 +1141,10 @@ export async function createKnowledgeIndexRuntime(
 			const items = db
 				.prepare(`SELECT * FROM jobs WHERE ${where} ORDER BY updated DESC,key LIMIT ? OFFSET ?`)
 				.all(scope, limit, offset);
-			return { items, total, offset, nextOffset: offset + items.length < total ? offset + items.length : null };
+			return { items, total, offset, nextOffset: offset + items.length < total ? offset + items.length : null, revision };
 		}
 		if (op === "recentNotes") return { items: await recentNotes(args.project, args.limit), revision };
-		if (op === "recentByCategory") return { groups: await recentByCategory(args.project, args.limit), revision };
+		if (op === "recentByCategory") return { groups: await recentByCategory(args.project, args.limit), counts: categoryCounts(args.project), revision };
 		if (op === "jobs") return { ...status(), items: pending(args.project, 100, args.kind || null) };
 		if (op === "completeJob") {
 			db.prepare("DELETE FROM jobs WHERE key=? AND revision=?").run(args.key, args.revision);

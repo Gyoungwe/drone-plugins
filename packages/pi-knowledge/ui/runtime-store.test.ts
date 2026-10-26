@@ -152,7 +152,11 @@ describe("knowledge runtime store", () => {
 	it("refreshes once for a new changed revision and replaces in-flight search with current results", async () => {
 		const fresh = results("old index");
 		fresh.hits[0].text = "Fresh index text";
-		const value = fixture(vi.fn(async operation => operation === "overview" ? overview() : fresh));
+		const value = fixture(
+			vi.fn(async (operation) =>
+				operation === "overview" ? overview() : fresh,
+			),
+		);
 		const disconnect = value.store.connect();
 		await settle();
 		const pending = deferred<unknown>();
@@ -167,7 +171,9 @@ describe("knowledge runtime store", () => {
 				([method]) => method === "overview",
 			),
 		).toHaveLength(2);
-		await vi.waitFor(() => expect(value.store.getSnapshot().searchResult).toEqual(fresh));
+		await vi.waitFor(() =>
+			expect(value.store.getSnapshot().searchResult).toEqual(fresh),
+		);
 		pending.resolve(results("old index"));
 		await searching;
 		expect(value.store.getSnapshot().searchResult).toEqual(fresh);
@@ -180,7 +186,11 @@ describe("knowledge runtime store", () => {
 		).toHaveLength(2);
 	});
 	it("does not restart an old query after a newer query supersedes its refresh", async () => {
-		const value = fixture(vi.fn(async (operation, input: any) => operation === "overview" ? overview() : results(input.query)));
+		const value = fixture(
+			vi.fn(async (operation, input: any) =>
+				operation === "overview" ? overview() : results(input.query),
+			),
+		);
 		const disconnect = value.store.connect();
 		await settle();
 		await value.store.search("first");
@@ -191,13 +201,19 @@ describe("knowledge runtime store", () => {
 		refreshed.resolve(overview());
 		await settle();
 		expect(value.store.getSnapshot().searchResult?.query).toBe("second");
-		expect(value.client.invoke.mock.calls.filter(([method]) => method === "search")).toHaveLength(2);
+		expect(
+			value.client.invoke.mock.calls.filter(([method]) => method === "search"),
+		).toHaveLength(2);
 		disconnect();
 	});
 
 	for (const change of ["binding", "session"] as const) {
 		it(`does not repeat a query after ${change} changes during refresh`, async () => {
-			const value = fixture(vi.fn(async operation => operation === "overview" ? overview() : results("first")));
+			const value = fixture(
+				vi.fn(async (operation) =>
+					operation === "overview" ? overview() : results("first"),
+				),
+			);
 			const disconnect = value.store.connect();
 			await settle();
 			await value.store.search("first");
@@ -208,9 +224,62 @@ describe("knowledge runtime store", () => {
 			refreshed.resolve(overview("New binding", 2));
 			await settle();
 			expect(value.store.getSnapshot().searchResult).toBeNull();
-			expect(value.client.invoke.mock.calls.filter(([method]) => method === "search")).toHaveLength(1);
+			expect(
+				value.client.invoke.mock.calls.filter(
+					([method]) => method === "search",
+				),
+			).toHaveLength(1);
 			if (change === "binding") disconnect();
 		});
 	}
+});
 
+it("rejects delayed note/graph reads after changed, binding change, or caller disconnect", async () => {
+	const pending = deferred<unknown>();
+	const value = fixture();
+	const disconnect = value.store.connect();
+	await settle();
+	value.store.openNote("Library/a.md", { startLine: 3, hash: "a".repeat(64) });
+	value.client.invoke.mockImplementation(async (operation) =>
+		operation === "overview" ? overview() : pending.promise,
+	);
+	const oldRead = value.store.readNote({ path: "Library/a.md", startLine: 1 });
+	const rejected = expect(oldRead).rejects.toThrow("superseded");
+	value.emit(3);
+	await settle();
+	pending.resolve({ path: "Library/a.md", missing: true });
+	await rejected;
+	expect(value.store.getSnapshot().selectedNote).toEqual({
+		path: "Library/a.md",
+		startLine: 1,
+	});
+	value.client.invoke.mockResolvedValueOnce(overview("B", 2));
+	await value.store.refresh();
+	expect(value.store.getSnapshot().selectedNote).toBeNull();
+	const later = deferred<unknown>();
+	value.client.invoke.mockReturnValueOnce(later.promise);
+	const graph = value.store.graph({ view: "all" });
+	const closed = expect(graph).rejects.toThrow("superseded");
+	disconnect();
+	later.resolve({ nodes: [] });
+	await closed;
+});
+
+it("keeps the submitted query through refresh and typing cancels an older repeat", async () => {
+	const value = fixture();
+	value.store.connect();
+	await settle();
+	value.client.invoke.mockResolvedValueOnce(results("original"));
+	await value.store.search("original");
+	const pending = deferred<KnowledgeOverview>();
+	value.client.invoke.mockReturnValueOnce(pending.promise);
+	value.emit(2);
+	value.store.setQuery("new text");
+	pending.resolve(overview());
+	await settle();
+	expect(value.store.getSnapshot().query).toBe("new text");
+	expect(value.store.getSnapshot().searchResult).toBeNull();
+	expect(
+		value.client.invoke.mock.calls.filter(([op]) => op === "search"),
+	).toHaveLength(1);
 });

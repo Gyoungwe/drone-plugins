@@ -56,7 +56,19 @@ function client() {
 	return {
 		invoke: vi.fn(
 			async (operation: string, _input: unknown): Promise<unknown> =>
-				operation === "overview" ? overview : results,
+				operation === "overview"
+					? overview
+					: operation === "recentByCategory"
+						? {
+								groups: {
+									paper: [],
+									software: [],
+									method: overview.recentNotes,
+									idea: [],
+								},
+								counts: { paper: 0, software: 0, method: 3, idea: 0, other: 0 },
+							}
+						: results,
 		),
 		subscribe: vi.fn(() => vi.fn()),
 	};
@@ -77,8 +89,8 @@ it("renders overview, search excerpts and read-only refresh through the generic 
 	});
 	render(<KnowledgePage />);
 	await screen.findByText("Observed method");
-	expect(screen.getByText("3 篇笔记 · 索引已就绪")).toBeDefined();
-	fireEvent.change(screen.getByRole("searchbox", { name: "搜索知识库" }), {
+	expect(screen.getByText("3 篇笔记（全库索引） · 索引已就绪")).toBeDefined();
+	fireEvent.change(screen.getByRole("searchbox", { name: "搜索" }), {
 		target: { value: "method" },
 	});
 	fireEvent.click(screen.getByRole("button", { name: "搜索" }));
@@ -114,9 +126,14 @@ it("removes a previous session's search results and rejects late responses after
 	runtime.invoke.mockImplementation(async (operation) =>
 		operation === "overview"
 			? overview
-			: new Promise((resolve) => {
-					complete = resolve;
-				}),
+			: operation === "recentByCategory"
+				? {
+						groups: { paper: [], software: [], method: [], idea: [] },
+						counts: { paper: 0, software: 0, method: 0, idea: 0, other: 0 },
+					}
+				: new Promise((resolve) => {
+						complete = resolve;
+					}),
 	);
 	setPluginRuntime(runtime);
 	render(<KnowledgePage />);

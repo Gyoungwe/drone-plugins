@@ -2,9 +2,26 @@ import type { PluginUiRuntimeClient } from "@gyoungwe/plugin-api/ui";
 import type {
 	KnowledgeOverview,
 	KnowledgeSearchResult,
+	KnowledgeReadNoteInput,
+	KnowledgeReadNoteResult,
+	KnowledgeLinksInput,
+	KnowledgeLinksResult,
+	KnowledgeGraphInput,
+	KnowledgeGraphResult,
+	KnowledgeJobsInput,
+	KnowledgeJobsResult,
+	KnowledgeRecentByCategoryResult,
 } from "../src/desktop/contract.js";
 
 export interface KnowledgeRuntimeState {
+	query: string;
+	selectedNote: {
+		path: string;
+		startLine: number;
+		expectedHash?: string;
+	} | null;
+	view: "reading" | "graph" | "jobs";
+	observationRevision: number;
 	overview: KnowledgeOverview | null;
 	overviewLoading: boolean;
 	overviewError: string | null;
@@ -14,6 +31,10 @@ export interface KnowledgeRuntimeState {
 }
 
 const initialState = (): KnowledgeRuntimeState => ({
+	query: "",
+	selectedNote: null,
+	view: "reading",
+	observationRevision: 0,
 	overview: null,
 	overviewLoading: false,
 	overviewError: null,
@@ -34,6 +55,7 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 	let searchRequest = 0;
 	let eventRevision = 0;
 	let currentQuery: string | null = null;
+	let readEpoch = 0;
 	const update = (patch: Partial<KnowledgeRuntimeState>) => {
 		state = { ...state, ...patch };
 		for (const listener of listeners) listener();
@@ -42,6 +64,7 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 		if (!connected) return false;
 		const owner = generation;
 		const request = ++overviewRequest;
+		++readEpoch;
 		update({ overviewLoading: true, overviewError: null });
 		try {
 			const overview = (await client.invoke(
@@ -56,9 +79,23 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 			) {
 				currentQuery = null;
 				++searchRequest;
-				update({ searchResult: null, searchError: null, searchLoading: false });
+				update({
+					searchResult: null,
+					searchError: null,
+					searchLoading: false,
+					selectedNote: null,
+					view: "reading",
+					query: "",
+				});
 			}
-			update({ overview, overviewLoading: false });
+			update({
+				overview,
+				overviewLoading: false,
+				observationRevision: state.observationRevision + 1,
+				selectedNote: state.selectedNote
+					? { path: state.selectedNote.path, startLine: 1 }
+					: null,
+			});
 			return true;
 		} catch (error) {
 			if (connected && generation === owner && request === overviewRequest)
@@ -71,7 +108,12 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 		currentQuery = query;
 		const owner = generation;
 		const request = ++searchRequest;
-		update({ searchLoading: true, searchError: null, searchResult: null });
+		update({
+			query,
+			searchLoading: true,
+			searchError: null,
+			searchResult: null,
+		});
 		try {
 			const binding = state.overview?.binding;
 			if (!binding) throw new Error("Knowledge search requires a bound Vault");
@@ -87,6 +129,21 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 				update({ searchLoading: false, searchError: errorText(error) });
 		}
 	}
+
+	async function read<T>(operation: string, input: object): Promise<T> {
+		if (!connected) throw new Error("Knowledge caller is disconnected");
+		const binding = state.overview?.binding;
+		if (!binding) throw new Error("Knowledge reading requires a bound Vault");
+		const owner = generation,
+			epoch = readEpoch;
+		const result = (await client.invoke(operation, {
+			...input,
+			revision: binding.revision,
+		})) as T;
+		if (!connected || owner !== generation || epoch !== readEpoch)
+			throw new Error("Knowledge observation was superseded");
+		return result;
+	}
 	function connect() {
 		connected = true;
 		const owner = ++generation;
@@ -101,7 +158,14 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 			const request = ++searchRequest;
 			update({ searchResult: null, searchLoading: false, searchError: null });
 			void refresh().then((refreshed) => {
-				if (refreshed && connected && generation === owner && request === searchRequest && query !== null && query === currentQuery)
+				if (
+					refreshed &&
+					connected &&
+					generation === owner &&
+					request === searchRequest &&
+					query !== null &&
+					query === currentQuery
+				)
 					void search(query);
 			});
 		});
@@ -125,5 +189,37 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 		connect,
 		refresh,
 		search,
+		setQuery: (query: string) => {
+			currentQuery = null;
+			++searchRequest;
+			update({
+				query,
+				searchResult: null,
+				searchLoading: false,
+				searchError: null,
+			});
+		},
+		openNote: (path: string, hit?: { startLine?: number; hash?: string }) =>
+			update({
+				selectedNote: {
+					path,
+					startLine: hit?.startLine ?? 1,
+					expectedHash: hit?.hash,
+				},
+				view: "reading",
+			}),
+		closeNote: () => update({ selectedNote: null }),
+		setView: (view: KnowledgeRuntimeState["view"]) =>
+			update({ view, selectedNote: null }),
+		readNote: (input: Omit<KnowledgeReadNoteInput, "revision">) =>
+			read<KnowledgeReadNoteResult>("readNote", input),
+		links: (input: Omit<KnowledgeLinksInput, "revision">) =>
+			read<KnowledgeLinksResult>("links", input),
+		graph: (input: Omit<KnowledgeGraphInput, "revision">) =>
+			read<KnowledgeGraphResult>("graph", input),
+		jobs: (input: Omit<KnowledgeJobsInput, "revision">) =>
+			read<KnowledgeJobsResult>("jobs", input),
+		recentByCategory: () =>
+			read<KnowledgeRecentByCategoryResult>("recentByCategory", { limit: 8 }),
 	};
 }

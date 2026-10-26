@@ -140,3 +140,9 @@ CLI 默认 export 保持官方同步注册形状，但由 wrapper 创建自己�
 聚焦验证：包内 TypeScript 检查及 7 文件、16 项回归通过；涵盖真实 SQLite、默认及显式注入 transport、ready 前接受请求后关闭、内容改变使读证据失效、替换与失败关闭、实际 SDK 会话票据/publication 隔离、owner 写入未结束时保留 reservation。回执日志保存在本机 `/tmp/knowledge-transport-focused.log`。全仓构建/check 由统一集成步骤运行，本文不将聚焦回归当作正式安装包完成。
 
 这一步未把完整 owner 接到 Desktop resource，也未增加 state/model/write 权限。后续 resource invoke adapter 可以实现同一 transport 合同，但必须先具备相应授权、取消和真实退出回执；不能用当前只读 index adapter 假装支持完整写工作流。
+
+## 11. 知识阅读闭包
+
+`src/desktop/{contract,read-model,runtime}.ts` 在同一个真实 index resource 上提供 readNote/links/graph/jobs/recentByCategory。行号、hash、分类与 binding/index revision 保留；UI 阅读不进入模型票据账本。`core/index-runtime.ts` 的显式 project 模式只返回共享/当前项目，图谱缓存包含 scope。旧 0.2 未传 project 的全 Vault 调用仅保留到旧宿主消费者移除，不能成为新 UI 的回退。
+
+页面由插件本地 store 与纯展示组件组成；内部链接受控导航，外部打开和写操作仍不提供。CLI transport 抽取与新阅读候选的结果见 [阅读闭包证据](native-knowledge-reading-2026-10-26.md)，旧 352444917 候选的 GUI 证据保持独立，不能混用。
