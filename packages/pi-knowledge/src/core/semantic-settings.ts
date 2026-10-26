@@ -169,9 +169,8 @@ export function createSemanticSettingsState(): SemanticSettingsState {
 	return { defaultUpdatedAt: new Map() };
 }
 
-function pathFor(vaultId: string): string {
+function pathFor(vaultId: string, directory: string | null): string {
 	if (!/^[a-f0-9]{24}$/.test(vaultId || "")) throw new Error("Invalid Vault binding");
-	const directory = knowledgeDirectory();
 	if (!directory) throw new Error("Application knowledge directory is not configured");
 	return join(directory, vaultId, "semantic.json");
 }
@@ -266,11 +265,19 @@ async function readUnlocked(state: SemanticSettingsState, path: string): Promise
 
 export function createSemanticSettingsApi(
 	state: SemanticSettingsState = createSemanticSettingsState(),
+	directory: string | null = knowledgeDirectory(),
+): SemanticSettingsApi {
+	return semanticSettingsApiForDirectory(state, () => directory);
+}
+
+function semanticSettingsApiForDirectory(
+	state: SemanticSettingsState,
+	directory: () => string | null,
 ): SemanticSettingsApi {
 	return {
-		readSemanticSettings: async (vaultId) => readUnlocked(state, pathFor(vaultId)),
+		readSemanticSettings: async (vaultId) => readUnlocked(state, pathFor(vaultId, directory())),
 		saveSemanticSettings: async (vaultId, input, expectedRevision) => {
-			const path = pathFor(vaultId);
+			const path = pathFor(vaultId, directory());
 			const current = await readUnlocked(state, path);
 			if (!Number.isSafeInteger(expectedRevision) || expectedRevision !== current.revision)
 				throw new Error("Semantic settings revision is stale");
@@ -291,7 +298,9 @@ export function createSemanticSettingsApi(
 	};
 }
 
-const defaultApi = createSemanticSettingsApi();
+// pi-knowledge 0.2 compatibility; remove the dynamic directory facade after
+// native/Desktop consumers share the explicitly composed 0.3 owner.
+const defaultApi = semanticSettingsApiForDirectory(createSemanticSettingsState(), knowledgeDirectory);
 export const readSemanticSettings = (vaultId: string) => defaultApi.readSemanticSettings(vaultId);
 export const saveSemanticSettings = (
 	vaultId: string,

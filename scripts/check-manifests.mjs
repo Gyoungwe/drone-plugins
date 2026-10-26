@@ -6,7 +6,7 @@ export const CAPABILITIES = new Set([
 	"knowledge", "research", "search", "evidence-context", "analysis", "planning", "files", "evidence",
 	"provenance", "replay", "connectors", "read-only", "provenance-receipts", "ui",
 ]);
-const FILESYSTEM_PERMISSIONS = new Set(["workspace-read", "workspace", "configured-vault", "vault-read"]);
+const FILESYSTEM_PERMISSIONS = new Set(["workspace-read", "workspace", "configured-vault", "vault-read", "application-state"]);
 const PERMISSION_KEYS = new Set(["filesystem", "network", "subprocess", "externalWrites", "credentials", "readWrite", "externalSideEffects"]);
 const HOSTS = new Set(["native-pi", "drone-desktop"]);
 const TOOL_RE = /^[a-z][a-z0-9_-]*$/u;

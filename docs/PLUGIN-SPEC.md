@@ -104,7 +104,9 @@ packages/<name>/
 | `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
 | `hosts` | `native-pi`、`drone-desktop` 的非空子集；只写 `drone-desktop` 时必须在 README 说明原因 |
 | `requires.hostCapabilities` | 依赖的宿主能力，由 `negotiateCapabilities` 协商；缺失时插件必须返回 `degraded` 或 `incompatible`，不能抛错 |
-| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`）、`network`（主机名列表）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
+| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`、`application-state`）、`network`（主机名列表）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
+
+`application-state` 只声明宿主明确指定的插件状态目录及已登记的本机资源协调目录，不能推导出整个 HOME 的权限。0.3 knowledge 候选把既有配置/SQLite 状态和 `~/.drone/runtime-leases/knowledge-writers` 的本机同用户租约列入此范围；host/broker 必须另行验证具体 root 与操作。新增词表不代表旧宿主已经支持或自动授予该能力，尚未接通时只能保留候选/未验收状态。
 
 manifest 是声明，不是安全边界：外部写入、远程执行、删除和发布仍由宿主授权。宿主会在安装确认和插件详情中展示 `permissions` 与 `tools`。
 

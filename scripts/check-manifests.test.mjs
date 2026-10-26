@@ -92,3 +92,9 @@ test("rejects a readWrite write permission when external writes are disabled", (
 	};
 	assert.match(errors(manifest), /externalWrites=false conflicts/);
 });
+
+// This is a bounded declared scope, not a general home-directory grant.
+test("accepts application-state and rejects invented broad state roots", () => {
+	assert.equal(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state"] } }), "");
+	assert.match(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state/**"] } }), /invalid value/);
+});

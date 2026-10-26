@@ -75,7 +75,8 @@
   "permissions": {
     "filesystem": [
       "workspace",
-      "configured-vault"
+      "configured-vault",
+      "application-state"
     ],
     "network": [
       "api.zotero.org",

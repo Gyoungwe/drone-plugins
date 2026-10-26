@@ -135,6 +135,7 @@ export {
 	type ReviewerTrigger,
 } from "./deliverable-review.js";
 export {
+	createKnowledgeReviewPolicy,
 	advisoryCodes,
 	type ReviewMode,
 	readReviewMode,
@@ -221,6 +222,8 @@ export * from "./memory-note.js";
 export * from "./project-identity.js";
 export * from "./related-notes.js";
 export {
+	createKnowledgeRuntimeHost,
+	type KnowledgeRuntimeHost,
 	configureKnowledgeWorker,
 	configureKnowledgeEvidence,
 	configureKnowledgeHost,
@@ -260,6 +263,7 @@ export {
 } from "./semantic-model.js";
 
 export {
+	createKnowledgeUi,
 	beginKnowledgeFlow,
 	clearKnowledgeFlow,
 	emitKnowledgeUi,
@@ -281,7 +285,7 @@ export {
 	registerAnswerPublication,
 } from "./publication.js";
 
-export { KnowledgeService, closeKnowledgeServices, getKnowledgeService, notifyKnowledgeChange } from "./service.js";
+export { createKnowledgeServicePool, KnowledgeService, closeKnowledgeServices, getKnowledgeService, notifyKnowledgeChange } from "./service.js";
 
 export {
 	checkKnowledgeReceiptFreshness,
@@ -320,6 +324,7 @@ export {
 } from "./wiki-review.js";
 
 export {
+	createKnowledgeSpecialistHost,
 	SPECIALIST_LIMITS,
 	contextSessionId,
 	knowledgeSpecialistHost,

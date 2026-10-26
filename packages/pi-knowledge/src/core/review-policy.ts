@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { knowledgeDirectory } from "./config.js";
+import * as compatibilityConfig from "./config.js";
+import type { KnowledgeConfigApi } from "./config.js";
 
 export type ReviewMode = "automatic" | "strict";
 
@@ -11,35 +12,43 @@ function errorCode(error: unknown): unknown {
 	return error && typeof error === "object" && "code" in error ? error.code : undefined;
 }
 
-/**
- * Read the review policy from the host-owned application directory.
- * Environment policy is intentionally higher precedence than persisted state.
- */
-export function readReviewMode(): ReviewMode {
-	if (process.env.DRONE_REVIEW_MODE === "strict") return "strict";
-	const root = knowledgeDirectory();
-	if (!root) return "automatic";
-	try {
-		const value: unknown = JSON.parse(readFileSync(join(root, "review-policy.json"), "utf8"));
-		const mode =
-			value && typeof value === "object" && "mode" in value ? (value as { mode?: unknown }).mode : undefined;
-		return mode === "automatic" ? "automatic" : "strict";
-	} catch (error) {
-		return errorCode(error) === "ENOENT" ? "automatic" : "strict";
+export function createKnowledgeReviewPolicy(config: Pick<KnowledgeConfigApi, "knowledgeDirectory">) {
+	const { knowledgeDirectory } = config;
+	/**
+	 * Read the review policy from the host-owned application directory.
+	 * Environment policy is intentionally higher precedence than persisted state.
+	 */
+	function readReviewMode(): ReviewMode {
+		if (process.env.DRONE_REVIEW_MODE === "strict") return "strict";
+		const root = knowledgeDirectory();
+		if (!root) return "automatic";
+		try {
+			const value: unknown = JSON.parse(readFileSync(join(root, "review-policy.json"), "utf8"));
+			const mode =
+				value && typeof value === "object" && "mode" in value ? (value as { mode?: unknown }).mode : undefined;
+			return mode === "automatic" ? "automatic" : "strict";
+		} catch (error) {
+			return errorCode(error) === "ENOENT" ? "automatic" : "strict";
+		}
 	}
+
+	/** Persist a review mode atomically with restrictive file permissions. */
+	async function saveReviewMode(mode: string): Promise<{ mode: ReviewMode }> {
+		if (mode !== "automatic" && mode !== "strict") throw new Error("Invalid review mode");
+		const root = knowledgeDirectory();
+		if (!root) throw new Error("No application knowledge directory");
+		await mkdir(root, { recursive: true });
+		const temp = join(root, `review-policy.${randomUUID()}.tmp`);
+		await writeFile(temp, JSON.stringify({ version: 1, mode }), { flag: "wx", mode: 0o600 });
+		await rename(temp, join(root, "review-policy.json"));
+		return { mode: readReviewMode() };
+	}
+	return { readReviewMode, saveReviewMode };
 }
 
-/** Persist a review mode atomically with restrictive file permissions. */
-export async function saveReviewMode(mode: string): Promise<{ mode: ReviewMode }> {
-	if (mode !== "automatic" && mode !== "strict") throw new Error("Invalid review mode");
-	const root = knowledgeDirectory();
-	if (!root) throw new Error("No application knowledge directory");
-	await mkdir(root, { recursive: true });
-	const temp = join(root, `review-policy.${randomUUID()}.tmp`);
-	await writeFile(temp, JSON.stringify({ version: 1, mode }), { flag: "wx", mode: 0o600 });
-	await rename(temp, join(root, "review-policy.json"));
-	return { mode: readReviewMode() };
-}
+// pi-knowledge 0.2 compatibility; remove when all native/Desktop consumers
+// share the same explicit 0.3 owner and fixed configuration directory.
+export const { readReviewMode, saveReviewMode } = createKnowledgeReviewPolicy(compatibilityConfig);
 
 export const advisoryCodes = new Set([
 	"paper-citation-required",

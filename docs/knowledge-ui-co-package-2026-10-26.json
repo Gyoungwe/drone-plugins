@@ -1,16 +1,16 @@
 {
   "date": "2026-10-26",
   "status": "PARTIAL",
-  "scope": "P2 knowledge UI co-packaging and runtime foundations; host domain migration and formal app acceptance incomplete",
+  "scope": "P2 co-packaging, explicit runtime resources and candidate-owner writer lease; full native/UI composition, host migration and formal acceptance incomplete",
   "published": false,
   "basePluginCommit": "d2f76a0",
   "candidates": [
     {
       "name": "@gyoungwe/pi-knowledge",
       "version": "0.3.0",
-      "sha256": "cb15c4bc9347de7ecc2cb24eca5fdf5140cabe682079b8c5bad3ce0aca548832",
-      "integrity": "sha512-iYyGhL7WKLKSlwm2DionqlJ85Bh7atJx2IsnDLJHw1BYbtSiXyx+cOdU/amjLuV5NrkNLDad39iiqBQwWlTCTA==",
-      "files": 189
+      "sha256": "3013407ee391a9919f37c982730766400a306738c31579466f7086f990988825",
+      "integrity": "sha512-C9lDlvr59X0jmlMNBw2d9YdTWn8fyb1u5nIXOGara+Yvn7cCYcpr/t/eH/ecyoj/b1OIYp9dJd8dx7Smy8dMGA==",
+      "files": 191
     },
     {
       "name": "@gyoungwe/desktop-ui-pack",
@@ -22,16 +22,16 @@
     {
       "name": "@gyoungwe/research-suite",
       "version": "0.2.0",
-      "sha256": "9b2f1a9b4e1a5bb6336086655bbd8db7e380f27ac778d164f53d39055c02daa3",
-      "integrity": "sha512-vjVYVD1JC5lzgbCA+kiuKO0DAG0aKRiBNnkh/Yhlo8dibnaVd+JRMBGpi72r/I5OiNlNscALX4Aonr8Sp83aww==",
-      "files": 1240
+      "sha256": "ae4db1d5cc110472cb278a496b911a30bb7d0c6e5aba61fe0bc17db17267dde6",
+      "integrity": "sha512-bbuAe+/FzzthUWLJHGJACJ4C/h5ODiY88vQ7wSTC2lCM6D261pcWISElHWHXNPWeLMe7AcYY3iqu4kAh9Fw6vw==",
+      "files": 1242
     }
   ],
   "checks": [
     {
       "command": "npm run check",
       "exitCode": 0,
-      "logSha256": "6691f616d92f6bdb119f2fe9ed398928835103d98a5b97224a4c331f2196f733"
+      "logSha256": "efe266553a19e8244a7fda3d9c993015db4dc6e008fa8f8171b3987e544942d1"
     },
     {
       "command": "npm run test:styles -w @gyoungwe/pi-knowledge",
@@ -40,8 +40,8 @@
     }
   ],
   "knowledgeTests": {
-    "files": 56,
-    "tests": 398
+    "files": 60,
+    "tests": 411
   },
   "desktopTests": {
     "files": 1,
@@ -91,6 +91,7 @@
     "dispatchCountPerVersion": 14
   },
   "remaining": [
+    "Complete native extension and Desktop UI must share one owner; enable lease only after correct owner disposal and session proof isolation",
     "Host knowledge services, named IPC and process event bridge extraction",
     "Formal installed-app discovery, disable/re-enable, uninstall/reinstall and old-UI rollback",
     "Zero-domain-plugin host build/start/chat",
@@ -111,10 +112,43 @@
       "failureReasonPresent": true,
       "falseRollbackReceiptAbsent": true
     },
-    "scope": "Same runtime worker pool; cross-process sole-writer lease and native/UI runtime unification not implemented",
+    "scope": "Explicit runtime resources isolated; candidate-owner local same-user writer lease tested; legacy native/Desktop owner does not enable lease until complete disposal is connected",
     "targetedFiles": 2,
     "targetedTests": 7,
     "queuedWriteFailureReturnedToCaller": true,
     "nextQueuedWriteSucceeds": true
-  }
+  },
+  "runtimeInstances": {
+    "callbacksSlotsLocks": true,
+    "uiFlowsAndSpecialistQueues": true,
+    "fixedSemanticAndReviewPolicyDirectory": true,
+    "realSqliteOwnersIsolated": true,
+    "acceptedGetCloseBarrier": true,
+    "closeAggregatesFailures": true,
+    "failedOrForcedCloseDoesNotReportDrained": true,
+    "nativeFullOwnerComposition": "NOT_IMPLEMENTED",
+    "legacyProcessBridgesRetained": 3,
+    "publicationProofIdentityUnchanged": true,
+    "acknowledgedCloseThenNonzeroExitRejects": true,
+    "acknowledgedCloseThenWorkerErrorRejects": true,
+    "firstWorkerErrorAndExitCodePreserved": true
+  },
+  "writerLease": {
+    "candidateExplicitOwner": "LOCAL_SAME_USER_TESTED",
+    "legacyNativeDesktop": "NOT_ENABLED_PENDING_OWNER_DISPOSAL",
+    "path": "~/.drone/runtime-leases/knowledge-writers",
+    "resourceKeys": [
+      "canonical-vault",
+      "canonical-index"
+    ],
+    "vaultLockFile": false,
+    "releasedAfterActualWorkerExit": true,
+    "constructorFailureRelease": true,
+    "crossProcessContentionTest": true,
+    "crashResidueAutomaticallyRemoved": false,
+    "multiUserOrMultiMachine": "NOT_COVERED",
+    "permissionsDeclaration": "application-state",
+    "sandboxBrokerGrant": "NOT_CONNECTED"
+  },
+  "knowledgeSourceSha256": "f7b96cc01ce6c4f034ae3cedbe92651e85744a57ecdf16a91427f2ae4ed153fe"
 }

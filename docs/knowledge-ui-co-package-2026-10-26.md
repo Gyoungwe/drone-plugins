@@ -23,7 +23,7 @@
 | 检查 | 结果与范围 |
 | --- | --- |
 | 两直接包 build / build:check / typecheck | 通过；UI 构建在 pi-knowledge 包内，不依赖宿主源码。 |
-| pi-knowledge native + UI Vitest | 56 文件、398 测试通过；原知识 UI 回归随源码移动。 |
+| pi-knowledge native + UI Vitest | 60 文件、411 测试通过；原知识 UI 回归随源码移动。 |
 | desktop-ui-pack Vitest | 1 测试通过；研究面板保留且不导出知识贡献。 |
 | pi-knowledge pack native smoke | 官方 Pi SDK 1.1.0 的真实 AgentSession，离线确定性 provider 实际派发 1 次 knowledge_status，返回 unconfigured；无 Vault 自动创建。这个切片不是完整知识工作流验收。 |
 | 双候选 clean install / UI load | npm pack 后在临时 consumer 安装，知识三个 UI export 存在，ResearchStatusPanel 不在知识 bundle 中，贡献互斥；输出明确 `gui: NOT_RUN`。 |
@@ -37,4 +37,6 @@
 
 无 npm 发布、无正式 Vault 修改、无外部账户写入；四项用户保留未完成验收、B8/B8-2 与 MinerU/GROBID 暂缓项未改动。
 
-机器回执与候选 tarball 指纹见 [JSON 证据](knowledge-ui-co-package-2026-10-26.json)。全仓日志 sha256 记录于该文件；候选均未发布。最初 UI 同包切片没有改 native 行为；后续 [runtime 基础修复](native-knowledge-runtime-plan.md) 已修改 config/锁/worker 替换并重建 native 产物，本页 JSON 指纹与全仓门禁现已更新到该修复后的候选。
+机器回执与候选 tarball 指纹见 [JSON 证据](knowledge-ui-co-package-2026-10-26.json)。全仓日志 sha256 记录于该文件；候选均未发布。最初 UI 同包切片没有改 native 行为；后续 [runtime 实例化切片](native-knowledge-runtime-plan.md) 已修改 config/锁/worker 替换、显式资源实例、关闭 barrier 和新 owner 租约并重建 native 产物，本页 JSON 指纹与全仓门禁现已更新到该修复后的候选。
+
+本轮新增 `application-state` 候选权限声明，限配置/索引目录和固定本机租约目录；这不是沙箱自动授权。显式 owner 的本机同用户租约有真实进程/SQLite 回归，旧 native/Desktop compatibility owner 的租约仍未启用，因为完整共享 owner 与正常退出 dispose 尚未接通。UI/service/specialist 的旧 process 桥仍为 3 处，publication proof 身份校验未放宽。全量 native 注入与正式 GUI 仍未验收。
