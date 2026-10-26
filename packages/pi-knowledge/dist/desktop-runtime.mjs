@@ -396,6 +396,17 @@ var previewReviewResultSchema = object({
   expiresAt: integer,
   scientificallyVerified: { const: false }
 });
+var rejectReviewInputSchema = object({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedProposalHash: proposalHash
+});
+var rejectReviewResultSchema = object({
+  id: proposalId,
+  status: { const: "rejected" },
+  vaultWritten: { const: false },
+  reviewRecorded: boolean
+});
 var semanticConfigProperties = { enabled: boolean, provider: { enum: ["none", "ollama", "openai-compatible"] }, baseUrl: string, model: string, credentialEnv: string, remoteConsent: boolean, timeoutMs: { type: "integer", minimum: 500, maximum: 3e4 }, chunkChars: { type: "integer", minimum: 256, maximum: 8e3 }, minSimilarity: { type: "number", minimum: 0, maximum: 1 } };
 var semanticPreferencesInputSchema = { type: "null" };
 var semanticPreferencesResultSchema = object({ binding: nullable(object({ vaultId: string, revision: bindingRevision, label: string })), settings: nullable(object({ ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string }, ["enabled", "provider", "baseUrl", "model", "credentialEnv", "remoteConsent", "version", "revision", "updatedAt"])), canWriteState: boolean, providerExecution: { const: "unavailable" } });
@@ -3405,6 +3416,7 @@ function createWikiReviewReader(storage, currentNote) {
           throw new Error("Wiki proposal disappeared; refresh the list");
         if (!p || typeof p !== "object" || Array.isArray(p))
           throw new Error("Invalid Wiki proposal document");
+        if (p.status !== "pending") continue;
         if (p.project !== project) continue;
         if (p.vaultId !== service.binding.vaultId || p.id !== name.slice(0, -5))
           throw new Error(
@@ -3519,6 +3531,48 @@ function createKnowledgeReviewReads(owner, capabilities, root) {
         if (preview.proposalHash !== input.expectedProposalHash)
           throw new Error("Wiki proposal changed; refresh before previewing");
         return { ...preview, bindingRevision: binding.revision };
+      });
+    }
+  };
+}
+
+// src/desktop/review-writes.ts
+function createKnowledgeReviewWrites(owner, capabilities, stateRoot, canWriteState) {
+  const storage = {
+    async read(path) {
+      const result2 = await capabilities.call("state.readJson", { root: stateRoot, path });
+      if (result2.kind === "missing") return void 0;
+      return result2.value;
+    },
+    async list(_path) {
+      throw new Error("Review writes do not list state");
+    }
+  };
+  const reader = createWikiReviewReader(storage, async () => null);
+  return {
+    reject(input, project) {
+      if (!canWriteState) throw new Error("Application-state write permission is required");
+      return owner.run(async () => {
+        const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+        if (!binding) throw new Error("No application knowledge Vault is bound");
+        if (binding.revision !== input.revision) throw new Error("Knowledge binding changed; refresh before reviewing");
+        if (project === null) throw new Error("Select a project session to review a Wiki proposal");
+        const service = { binding };
+        const proposal = await reader.loadProposal(service, input.id, project);
+        if (proposal.proposalHash !== input.expectedProposalHash) throw new Error("Wiki proposal changed; refresh before reviewing");
+        if (proposal.status !== "pending") throw new Error("Wiki proposal was already reviewed; refresh before reviewing");
+        const current = await capabilities.call("state.readJson", {
+          root: stateRoot,
+          path: `${binding.vaultId}/wiki-review/pending/${proposal.id}.json`
+        });
+        if (current.kind === "missing") throw new Error("Wiki proposal disappeared; refresh before reviewing");
+        await capabilities.call("state.writeJson", {
+          root: stateRoot,
+          path: `${binding.vaultId}/wiki-review/pending/${proposal.id}.json`,
+          value: { ...proposal, status: "rejected", reviewedAt: Date.now(), reviewMethod: "human", humanReviewed: true, scientificallyVerified: false },
+          expectedVersion: current.version
+        });
+        return { id: proposal.id, status: "rejected", vaultWritten: false, reviewRecorded: true };
       });
     }
   };
@@ -3886,6 +3940,7 @@ var createDesktopRuntime = async (context) => {
   const owner = { config, services, ...lifecycle };
   const reads = createKnowledgeReadModel(owner);
   const reviews = createKnowledgeReviewReads(owner, context.capabilities, state);
+  const reviewWrites = createKnowledgeReviewWrites(owner, context.capabilities, state, states[0].access === "read-write");
   const preferences = createKnowledgePreferences(owner, context.capabilities, state, states[0].access === "read-write");
   const semanticPreferences = createKnowledgeSemanticPreferences(owner, semantic, states[0].access === "read-write");
   return {
@@ -3898,6 +3953,11 @@ var createDesktopRuntime = async (context) => {
       } },
       reviews: { inputSchema: reviewsInputSchema, resultSchema: reviewsResultSchema, effect: "read", execute: async (input, call) => reviews.reviews(input, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
       previewReview: { inputSchema: previewReviewInputSchema, resultSchema: previewReviewResultSchema, effect: "read", execute: async (input, call) => reviews.previewReview(input, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory)) },
+      rejectReview: { inputSchema: rejectReviewInputSchema, resultSchema: rejectReviewResultSchema, effect: "write", execute: async (input, call) => {
+        const result2 = await reviewWrites.reject(input, await projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory));
+        context.events.changed();
+        return result2;
+      } },
       preferences: {
         inputSchema: preferencesInputSchema,
         resultSchema: preferencesResultSchema,

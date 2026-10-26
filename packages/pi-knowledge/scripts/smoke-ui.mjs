@@ -19,6 +19,8 @@ try {
 	await writeFile(join(smokeRoot,"package.json"), JSON.stringify({private:true,name:"knowledge-ui-clean-consumer",version:"0.0.0"}));
 	await execFileAsync("npm", ["install","--legacy-peer-deps","--ignore-scripts","--no-audit","--no-fund",tarball,join(smokeRoot, companion.filename),api.path],{cwd:smokeRoot,maxBuffer:4*1024*1024});
 	const installed = join(smokeRoot,"node_modules/@gyoungwe/pi-knowledge");
+	const desktopRuntime = await readFile(join(installed, "dist/desktop-runtime.mjs"), "utf8");
+	assert.ok(desktopRuntime.includes("rejectReview"), "packed Desktop runtime must expose the controlled reject operation");
 	const manifest = JSON.parse(await readFile(join(installed,"ui/plugin.json"),"utf8"));
 	assert.equal(manifest.version,"0.3.0");
 	assert.equal(manifest.droneUi,2);

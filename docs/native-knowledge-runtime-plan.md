@@ -162,7 +162,7 @@ CLI 默认 export 保持官方同步注册形状，但由 wrapper 创建自己�
 
 `core/wiki-review-reader.ts` 提取共享候选加载、列表与预览，旧 CLI 和新 Desktop 都消费该实现；纯目标与托管区规则复用 `wiki-policy.ts`。Desktop `reviews`/`previewReview` 只经批准状态根读取 pending/reviewed JSON，以当前真实项目、binding revision 和 proposalHash 校验。没有项目时列表明确 project:null；跨项目预览拒绝。真实 SQLite 只提供当前来源 hash，UI 不进入模型阅读票据账本。坏 JSON/内容校验是可见诊断，权限撤销直接失败。
 
-新页面复用纯差异视图，保留来源行号/hash导航、分页与刷新；apply/reject、模型审核和写入票据尚未提供。`canApply` 仅保留旧内容条件判断，不是写授权。完整 pool 的 Desktop resource adapter、semantic 设置及 metrics 端口仍在下一片，当前不宣称 full owner 或完整审核完成。历史 68012bd 设置与 f26ce487 阅读 tarball 不变，新包门禁/正式 GUI 记录独立更新。
+新页面复用纯差异视图，保留来源行号/hash导航；刷新和设置页现在已通过 runtime client 接入 semantic settings 的 HostPort CAS 写入。Desktop runtime 新增受控 `rejectReview` 写 operation：仅在 `application-state-write` grant 下，将候选以版本比较写入终态 `rejected`，不触碰 Vault；pending 列表过滤终态记录，避免依赖未登记的 state.delete。`canApply` 仍只保留旧内容条件判断，不是写授权。候选 apply、模型审核和写入 Vault 仍未提供：当前 resource/HostPort 合同只有 Vault read/stat/list，没有受控 write/delete/rename，插件不发明 capability 名称或绕过授权。完整 pool 的 Desktop resource adapter 仍在下一片，当前不宣称 full owner 或完整审核完成。历史 68012bd 设置与 f26ce487 阅读 tarball 不变，新包门禁/正式 GUI 记录独立更新。
 
 本片固定候选、实际 SDK/coordinator 回执与未完成 GUI 范围见 [审阅阅读证据](native-knowledge-review-2026-10-26.md)。
 
@@ -172,4 +172,4 @@ Desktop read owner 已改用显式 `createKnowledgeServicePool` 与受管 resour
 
 语义配置算法现在共享 `SemanticSettingsStorage`：CLI 适配保留本地原子文件、revision/CAS、写后读回；读取缺失只返回默认值，不创建目录。Desktop 写入先调用独立的 `state.ensureDirectory` 再 `state.writeJson`，每次保存均要求绑定 revision 与 expected settings revision；provider 执行仍标记 unavailable，未获得网络/model 能力时不伪造语义结果。focused 回归覆盖真实 resource close race、worker drain、无目录 read 和现有 SQLite owner。
 
-该切片尚未生成新正式 tarball或接入完整 GUI；旧 68012bd/fb8a0c 候选和真实回执保持独立。metrics、native hooks、publication/recovery、写审阅与旧 facade 删除仍未完成。
+该切片新增 broker CAS/只读拒绝回归和打包 smoke 对 `rejectReview` 的检查；尚未生成新正式 tarball或接入完整 GUI。旧 68012bd/fb8a0c 候选和真实回执保持独立。metrics、native hooks、publication/recovery、apply 写审阅、Vault write capability 和旧 facade 删除仍未完成。

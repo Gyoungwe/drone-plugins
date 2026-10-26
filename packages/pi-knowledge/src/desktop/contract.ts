@@ -545,6 +545,17 @@ export interface KnowledgePreviewReviewResult {
 	expiresAt: number;
 	scientificallyVerified: false;
 }
+export interface KnowledgeRejectReviewInput {
+	revision: number;
+	id: string;
+	expectedProposalHash: string;
+}
+export interface KnowledgeRejectReviewResult {
+	id: string;
+	status: "rejected";
+	vaultWritten: false;
+	reviewRecorded: boolean;
+}
 const proposalId = { type: "string", pattern: "^[0-9a-f-]{36}$" };
 const proposalHash = { type: "string", pattern: "^[a-f0-9]{64}$" };
 export const reviewsInputSchema = object(
@@ -622,6 +633,17 @@ export const previewReviewResultSchema = object({
 	canApply: boolean,
 	expiresAt: integer,
 	scientificallyVerified: { const: false },
+});
+export const rejectReviewInputSchema = object({
+	revision: bindingRevision,
+	id: proposalId,
+	expectedProposalHash: proposalHash,
+});
+export const rejectReviewResultSchema = object({
+	id: proposalId,
+	status: { const: "rejected" },
+	vaultWritten: { const: false },
+	reviewRecorded: boolean,
 });
 
 export interface KnowledgeSemanticPreferences {

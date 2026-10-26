@@ -1,6 +1,6 @@
 # P2 审阅阅读候选 — 2026-10-26
 
-本片状态 **PARTIAL**：候选包提供 `reviews` 与 `previewReview`，不提供应用、拒绝、模型审核或写入票据。公开版本仍为 knowledge 0.2.1 / desktop-ui-pack 0.2.0 / suite 0.1.11；本片 0.3.0 / 0.3.0 / 0.2.0 未发布。机器回执见 [JSON](native-knowledge-review-2026-10-26.json)。
+本片状态 **PARTIAL**：候选包提供 `reviews`、`previewReview` 和受 `application-state-write` 授权控制的 `rejectReview`；仍不提供 Vault 应用、模型审核或写入票据。公开版本仍为 knowledge 0.2.1 / desktop-ui-pack 0.2.0 / suite 0.1.11；本片 0.3.0 / 0.3.0 / 0.2.0 未发布。机器回执见 [JSON](native-knowledge-review-2026-10-26.json)。
 
 - `core/wiki-review-reader.ts` 是 CLI 与 Desktop 共用的列表/预览算法；目标规则、托管块和 immutable hash 复用 `wiki-policy.ts`。状态文档仍位于现有 `<vaultId>/wiki-review/{pending,reviewed}`，没有搬动数据或读取状态根的父目录。
 - 列表沿用已有前 100 个有序候选文件的读取预算；total 是该有界范围中的当前项目结果，不是无限量归档总数。真实项目来自可信 caller。应用级无项目返回明确 `project:null` 空列表，跨项目预览拒绝；binding revision 和 proposalHash 变化要求刷新。损坏 JSON 显示诊断，权限撤销向上传递；pending JSON null 不得回退到 reviewed 旧文档。

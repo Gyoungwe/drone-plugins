@@ -7,7 +7,8 @@ import { createBrokerReviewPolicyStorage } from "./state-policy.js";
 import { createBrokerSemanticSettings } from "./semantic-settings.js";
 import { createResourceServiceTransportFactory } from "./service-transport.js";
 import { createKnowledgeReviewReads } from "./reviews.js";
-import { reviewsInputSchema, reviewsResultSchema, previewReviewInputSchema, previewReviewResultSchema, type KnowledgeReviewsInput, type KnowledgePreviewReviewInput } from "./contract.js";
+import { createKnowledgeReviewWrites } from "./review-writes.js";
+import { reviewsInputSchema, reviewsResultSchema, previewReviewInputSchema, previewReviewResultSchema, rejectReviewInputSchema, rejectReviewResultSchema, type KnowledgeReviewsInput, type KnowledgePreviewReviewInput, type KnowledgeRejectReviewInput } from "./contract.js";
 import type { PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
 import type { PluginNativeRuntimeFactory } from "@gyoungwe/plugin-api/native";
 import { parseKnowledgeBinding, projectIdentity, type KnowledgeBinding } from "../core/config.js";
@@ -67,6 +68,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 	const owner: KnowledgeReadOwner = { config, services, ...lifecycle };
 	const reads = createKnowledgeReadModel(owner);
  const reviews = createKnowledgeReviewReads(owner, context.capabilities, state);
+	const reviewWrites = createKnowledgeReviewWrites(owner, context.capabilities, state, states[0].access === "read-write");
 	const preferences = createKnowledgePreferences(owner, context.capabilities, state, states[0].access === "read-write");
  const semanticPreferences=createKnowledgeSemanticPreferences(owner,semantic,states[0].access === "read-write");
 	return {
@@ -75,6 +77,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
    setSemanticSettings:{inputSchema:setSemanticSettingsInputSchema,resultSchema:semanticPreferencesResultSchema,effect:"write",execute:async input=>{const saved=await semanticPreferences.write(input as KnowledgeSetSemanticSettingsInput);context.events.changed();return saved;}},
    reviews: {inputSchema:reviewsInputSchema,resultSchema:reviewsResultSchema,effect:"read",execute:async(input,call)=>reviews.reviews(input as KnowledgeReviewsInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory))},
    previewReview: {inputSchema:previewReviewInputSchema,resultSchema:previewReviewResultSchema,effect:"read",execute:async(input,call)=>reviews.previewReview(input as KnowledgePreviewReviewInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory))},
+   rejectReview: {inputSchema:rejectReviewInputSchema,resultSchema:rejectReviewResultSchema,effect:"write",execute:async(input,call)=>{const result=await reviewWrites.reject(input as KnowledgeRejectReviewInput,await projectFor(call.capabilities,call.scope.kind === "application" ? null : call.scope.workspaceDirectory));context.events.changed();return result;}},
 			preferences: { inputSchema: preferencesInputSchema, resultSchema: preferencesResultSchema, effect: "read",
 				execute: () => preferences.read() },
 			setReviewPolicy: { inputSchema: setReviewPolicyInputSchema, resultSchema: preferencesResultSchema, effect: "write",

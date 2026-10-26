@@ -133,6 +133,7 @@ export function createWikiReviewReader(
 					throw new Error("Wiki proposal disappeared; refresh the list");
 				if (!p || typeof p !== "object" || Array.isArray(p))
 					throw new Error("Invalid Wiki proposal document");
+				if (p.status !== "pending") continue;
 				if (p.project !== project) continue;
 				if (p.vaultId !== service.binding.vaultId || p.id !== name.slice(0, -5))
 					throw new Error(
