@@ -27,6 +27,13 @@ to these host-mediated operations; loading the native entry does not implicitly
 perform them. Writes require authorization and read-back. Actual Zotero account
 and Protocols.io write acceptance remains separate from isolated unit tests.
 
+The `/host` entry also exports the versioned, read-only `researchHostLoader` and
+`registerResearchHost` seams. A composition root injects a `ResearchHostPort`
+(`resolveRoot`, `readText`, and `listFiles`) and receives `status`/`listRuns`
+operations without giving the plugin direct filesystem, network, Electron, or Pi
+runtime access. Desktop's `desktopRuntime` uses this same adapter, so host and UI
+reads share one run projection.
+
 Pi is a peer dependency and is never bundled. There are no `@drone/*`, Electron,
 plugin-to-plugin, or source-checkout dependencies. `migration-sources.json` records
 original paths and reachable Git ancestry. Build with `npm run build`; `npm run

@@ -48,3 +48,4 @@ export { assessManualPage } from "./core/source-delivery.js";
 export { zoteroLibraryEnvValue, zoteroLibraryPath } from "./core/zotero-library.js";
 export { describeZoteroUpdatePlan, executeZoteroUpdate, prepareZoteroUpdate, receiptWithoutUpdate } from "./core/zotero-write-runtime.js";
 export * from "./evidence-gate.js";
+export { createResearchHost, registerResearchHost, researchHostLoader, type ResearchFileEntry, type ResearchHostAdapter, type ResearchHostLoader, type ResearchHostOperations, type ResearchHostPort, type ResearchHostRegistry, type ResearchResolvedRoot, type ResearchRunListInput, type ResearchRunListResult, type ResearchRunStatusInput, type ResearchRunSummary, } from "./research-host.js";
