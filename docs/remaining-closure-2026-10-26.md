@@ -10,7 +10,7 @@ research-suite 0.1.11 顶层声明可选 @napi-rs/canvas ^1.0.0，由消费者 n
 
 旧候选红灯日志 SHA256 `f6402083345a96ffaef0e8b84b29968406febbeb10fafb4b081bc6bad71e0029`；修复后的绿灯日志 `860f8a61944648c272ffed55e7d3abdb76afe1b37ee9c5420853927de06d18cc`。默认 npm ci 与完整 npm run check 通过，后者日志 `0c31452ea8d6542fb1a8d636c60085164731beb9e58cf007ff6260906abc3319`。
 
-## 候选及公开状态
+## 候选及公开状态（阶段记录，最终状态见下文）
 
 - plugin-api 1.2.0 已公开，下载字节与候选一致，干净 npm 安装、ESM/ui 导入与能力协商通过；SHA256 `056322c91ff96fb05bc0b9d1721d834450e6146f3969b819fc1d6267c33ad960`。
 - core 0.1.9 已公开，公开 tarball 与候选逐字节一致；SHA256 `4ebf4bf82c2166f07a5312a1b2f6795ff88880bb79698c1f27cce4e26a6358fe`。按公开包名干净安装到 Pi 1.1.0 / 1.4.0 后，真实 AgentSession 各完成四次调用、一次批准、任务 completed 和交付文件独立回读。desktop-ui-pack 0.2.0 仍 staged。
@@ -26,3 +26,11 @@ research-suite 0.1.11 顶层声明可选 @napi-rs/canvas ^1.0.0，由消费者 n
 在线复核跟进：两个原始场景累计七次真实会话，最终方法/临床推断报告为 297/152 词，经过明确审阅反馈后有限范围通过。首次字数失败、中间范围/来源描述和指标概括问题全部保留；不能称首次自主科学质量通过。七次交付字节与 completed 回执一致，候选笔记另行回读；有些笔记引用格式与报告不同，不声称字节相同。详见 Drone 同名证据的 onlineFollowup。上述在线复核时三个目标包仍 staged 且公开 registry 404，原 stage ID 保留；未完成账户/设备状态不变。
 
 发布跟进：用户完成 npm 重新登录及 core 安全认证后，core 0.1.9 已公开并通过上述验证；suite 原 stage 的认证回调返回 E404，公开版本复查仍 404，待重新认证；UI 原 stage 保留，未重复上传。账户自查没有找到 Drone 配置的 Zotero 云端及 Protocols.io 凭据；登记的远程桌面离线，本机 Parallels 服务不可达。账户写入与其他平台 GUI 继续未完成，详见宿主 JSON。
+
+## 最终公开发布状态
+
+API 1.2.0、core 0.1.9、suite 0.1.11 与 UI 0.2.0 全部公开，原 stage 均已批准，最终列表为空。suite SHA256 `767c37940aa32741fe133dfc57b0a75d3597521b11fd5d32904ff3d563ef794e`，UI SHA256 `c9f468edb8eef41ca6cb7aae613eedd7040ba6be774e16295170e6dd241ddf2a`；公开下载、integrity/shasum 与候选字节匹配。
+
+suite 按 npm 包名全新安装到 Pi 1.1.0 / 1.4.0，真实会话各完成 13 次调用及完整研究交付回读；公开安装的 PDF 读取、页码及 Canvas 渲染复验通过。UI 公开干净安装与宿主生命周期测试通过，正式 DMG 安装应用中的知识页、PDF 第 3/15 页、停用回退和重新启用恢复均通过，安装的 61 个 UI 包文件与公开 tarball 相同。JSON 回执、日志/截图哈希在 Drone docs/releases/remaining-closure-2026-10-26.json 的 npmPublicationCompletion。
+
+新 profile 未选择项目时 PDF 预览显示参数错误，选定合成项目后正常；`PDF_WITHOUT_SELECTED_PROJECT` 保留为未修复观察。账户写入与其他平台 GUI 仍未完成。只更新文档，没有变更已通过完整 npm run check 的产品源码；此前在线科学验收的有限结论及暂缓范围保持不变。
