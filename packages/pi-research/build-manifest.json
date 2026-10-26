@@ -1,10 +1,10 @@
 {
   "version": 1,
   "generator": "packages/pi-research/scripts/build.mjs",
-  "inputsSha256": "c7ad0dd06658997f0907d3975a853728a64641f030d2fa3901cb4920249217df",
+  "inputsSha256": "025317b1ab3a67486a7809e59d47a1616042f1b08f102c4fc2b4149164f02d4f",
   "outputs": {
     "dist/desktop-runtime.mjs": "542921d8ee701d77fa0a6ae7461366e02d4328ff5da2d0b206281c285795c348",
-    "dist/host.mjs": "e37781c048f85f2f5c0fe1586646bad9936853592a3e4cfce39c5d6c3629c0ec",
+    "dist/host.mjs": "35fc8e3fcea5cae07d622d8cf5db630326e0adc8930493e780ec8221bcd7258c",
     "dist/index.mjs": "d25fd0e64f1bbbdfc45bc4f6bcc3d39ba0344a131b9e0d079e99d589ddabeaaf",
     "dist/types/core/claim-bindings.d.ts": "876229bb74474e71943fd1843cef98b38325daf5dc163cc28f2caabc5348e533",
     "dist/types/core/external-effect-key.d.ts": "dbd00836bea9e1c8541fecebdcc5e6687351eb3d0cf3a9757ee9c489dad86d7f",
@@ -33,10 +33,10 @@
     "dist/types/evidence-gate.d.ts": "4f01bdeb41824004cf332e009f79dffea3f0f377e0e49895ac01db913ea01eea",
     "dist/types/evidence-loop.d.ts": "f8a7724620e7202c0b028729cbeff7e2afb5d9efe606c2bac8f163ee939d28f7",
     "dist/types/extension.d.ts": "fa43776cd14beb0b43d0b2742cf31306c1ea1086eb3db9d0a4f1a5adc71f57ef",
-    "dist/types/host.d.ts": "5a3b72491f0997a42b597943cade1df655d181abdc8270dd903632a3cd0c1fad",
+    "dist/types/host.d.ts": "02c16c3225667093b3d95c145212a68584a0dd6dee46af931905a0a86689e5e3",
     "dist/types/index.d.ts": "5b1704f0b2f221f0bd8b9f3797af4b420dbd7809bb2653a888fbd650a6438103",
     "dist/types/research-host.d.ts": "5e80e91fb39aebcc9fdeff4981ea8e12e228f90b5d1f48181d23fcfe744fc74b",
     "dist/types/research-loop.d.ts": "80d7650cc81596afb405262de3bf859765d00fb7754d481487257df65cf3c46a",
-    "dist/types/zotero-host.d.ts": "ee4232b43fced09bb8ff0b086f2b11398ca9d1778ea9e7e363de11b3989a4d56"
+    "dist/types/zotero-host.d.ts": "4da513bed2428b4a2f26e811b929065ace27041463da492e954b36324c6fd657"
   }
 }

@@ -5519,8 +5519,21 @@ function createZoteroHost(port, context = {}) {
     }
   };
 }
+function createZoteroConnectorHost(port, context = {}) {
+  return createZoteroHost(
+    {
+      read: (path) => port.execute({ connectorId: "zotero", operation: "read", input: { path } })
+    },
+    context
+  );
+}
 function registerZoteroHost(registry, port, context) {
   const adapter = createZoteroHost(port, context);
+  registry.register("lookup", adapter.operations.lookup);
+  return adapter;
+}
+function registerZoteroConnectorHost(registry, port, context) {
+  const adapter = createZoteroConnectorHost(port, context);
   registry.register("lookup", adapter.operations.lookup);
   return adapter;
 }
@@ -5569,6 +5582,7 @@ export {
   createResearchHost,
   createResearchLoop,
   createResearchReceiptJournal,
+  createZoteroConnectorHost,
   createZoteroHost,
   createZoteroReconciler,
   deliveryContract,
@@ -5631,6 +5645,7 @@ export {
   recordRunProvenance,
   registerResearchExtension,
   registerResearchHost,
+  registerZoteroConnectorHost,
   registerZoteroHost,
   registerZoteroMcp,
   remainingZoteroSetupSteps,
