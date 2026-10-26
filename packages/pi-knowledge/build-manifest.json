@@ -16,7 +16,7 @@
 		"src/core/flow-cards.ts": "8cea1019c2c84b9322e45105479526d509fef2a14594b450f07f20cbd789ff0f",
 		"src/core/graph-cache.ts": "69877e42ea611ca0c2a244dd83017ce91de1d511735253bff815e5238e7b78d6",
 		"src/core/graph-retrieval.ts": "ac74005cf7fed222cb0548669608cd65ed3eb320bdef2e8537084d76c0ee8f2c",
-		"src/core/host.ts": "08cefa64947a98f96c91563f70beedaf941a811b57abf02418013f5afa75fd73",
+		"src/core/host.ts": "2fad61067cf17a7ce150b4ce2414df6cb99ec8ade256e28c7c5f290ca59a84d7",
 		"src/core/index-runtime-local.ts": "02013bf5400a22950011944ce56bdd8aa48a7cba1bcae73ec8e003f00b440563",
 		"src/core/index-runtime-ports.ts": "1887d0cd86ccc242fadc4fce04fc77ec3a53f794999ea4753cb04e800afd10ef",
 		"src/core/index-runtime.ts": "687544d76381f1aca6609656e4e5729c537a362c4246606c8c37b08d3aa06675",
@@ -98,7 +98,7 @@
 		"dist/desktop-runtime.mjs": "0a0799214589d489ca051d09bd4bc3826829d68034636c49eba96dd2015f8ad6",
 		"lib/knowledge/runtime/desktop-index.mjs": "becaf424e993e4b6efd096ce6c52d8be660b50d986c6f6857bd8d08e25446e22",
 		"lib/knowledge/runtime/worker.mjs": "72c809b9d15e7d8b57d695c0a0b62aec2b101e0986f0a04627b913867e2d7f0c",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "587caec8dc312f64b2ed0fe75ae9a67df115db8ce0e205804ba575766e7671a3",
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "9cd767a93fbe3be029e742382ba1d83d45f4738577cb032f4e8bc46731563f41",
 		"ui/bundle.js": "396adaa153d08d734130ae1ea519a518181df150526bde520f6220be2e965fc9",
 		"ui/build-manifest.json": "54766877a8c5d1d6a290d4f8b10ea7731a6ad85ea3ace0d3546b10d9f680b24f"
 	},
