@@ -1,8 +1,9 @@
 {
 	"version": 1,
 	"generator": "packages/pi-workbench/scripts/build.mjs",
-	"inputsSha256": "db1ffefccbb5673e76b4edf2b1ba00ba2f5536fd9c80fa49e6eb1f449046b5f9",
+	"inputsSha256": "b2deb8452716fd2dcda44314a9cb509eeb29458a4da1cb45bf9c6aa1bf0f148b",
 	"outputs": {
-		"dist/index.mjs": "832e7b85c039b300c43db65a89e33a682ffb40db15655ad468716954dd25e66b"
+		"dist/index.mjs": "68f7673c466eaab4165a26af35ffdd53d27cbc0a484eedfeca8cf79ceb066657",
+		"dist/host.mjs": "218eb004829a2a2f1eeda8067b30380d154730de5e1da86eb4dc30fb629ef3ee"
 	}
 }

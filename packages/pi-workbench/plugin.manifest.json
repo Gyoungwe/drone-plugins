@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "pi": {"apiVersion": 1, "minHostVersion": "1.1.0", "testedHosts": ["1.1.0", "latest"]},
   "drone": {"pluginApi": 1, "resultContract": "drone-result/v3"},
-  "entrypoints": {"extension": "./dist/index.mjs"},
+  "entrypoints": {"extension": "./dist/index.mjs", "desktopRuntime": "./dist/host.mjs"},
   "capabilities": ["planning", "evidence-context"],
   "tools": ["workbench_plan", "workbench_status", "workbench_todo", "workbench_memory_save"],
   "hosts": ["native-pi", "drone-desktop"],
-  "permissions": {"filesystem": [], "network": [], "subprocess": [], "externalWrites": false, "readWrite": {"read": false, "write": false, "delete": false}}
+  "permissions": {"filesystem": ["application-state", "application-state-write"], "network": [], "subprocess": [], "externalWrites": true, "readWrite": {"read": true, "write": true, "delete": false}}
 }

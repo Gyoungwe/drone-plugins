@@ -19,10 +19,17 @@ export interface WorkbenchSnapshot {
 	memory: WorkbenchMemory[];
 }
 
+export const emptyWorkbenchSnapshot = (): WorkbenchSnapshot => ({ tasks: [], memory: [] });
+
 /** In-memory, registration-scoped task and memory state. Hosts own persistence and UI. */
 export class WorkbenchStore {
 	private readonly tasks = new Map<string, WorkbenchTask>();
 	private readonly memory = new Map<string, WorkbenchMemory>();
+
+	constructor(snapshot: WorkbenchSnapshot = emptyWorkbenchSnapshot()) {
+		for (const task of snapshot.tasks) this.tasks.set(task.id, { ...task });
+		for (const entry of snapshot.memory) this.memory.set(entry.id, { ...entry });
+	}
 
 	plan(items: readonly string[]): WorkbenchTask[] {
 		const now = new Date().toISOString();
