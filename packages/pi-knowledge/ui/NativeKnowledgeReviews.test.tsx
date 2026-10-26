@@ -90,6 +90,22 @@ function fixture() {
 				nextOffset: input.offset ? null : 12,
 			};
 		if (operation === "previewReview") return { ...preview, id: input.id };
+		if (operation === "applyReview")
+			return {
+				id: input.id,
+				status: "applied",
+				path: item.path,
+				vaultWritten: true,
+				reviewRecorded: true,
+				indexed: false,
+			};
+		if (operation === "rejectReview")
+			return {
+				id: input.id,
+				status: "rejected",
+				vaultWritten: false,
+				reviewRecorded: true,
+			};
 		if (operation === "readNote")
 			return {
 				revision: 4,
@@ -166,8 +182,8 @@ it("reads paginated candidate diff/protected/source views without legacy domain 
 	});
 	fireEvent.click(screen.getByRole("tab", { name: "受保护的人工内容" }));
 	await screen.findByText("Human-authored content");
-	expect(screen.getByText(/应用、拒绝和模型审核尚未迁移/)).toBeDefined();
-	expect(screen.queryByRole("button", { name: "应用" })).toBeNull();
+	expect(screen.getByText(/候选写入需要宿主明确授予/)).toBeDefined();
+	expect(screen.getByRole("button", { name: "应用候选" })).toBeDefined();
 	fireEvent.click(screen.getByRole("button", { name: "关闭预览" }));
 	fireEvent.click(screen.getByRole("button", { name: "下一页" }));
 	await screen.findByRole("button", { name: "Candidate B" });
@@ -188,6 +204,40 @@ it("reads paginated candidate diff/protected/source views without legacy domain 
 	expect(knowledge.getState().dialog).toBeNull();
 	for (const method of Object.values(services))
 		expect(method).not.toHaveBeenCalled();
+});
+
+it("applies a reviewed candidate through the host-authorized write operation", async () => {
+	const runtime = fixture();
+	await openReviews();
+	fireEvent.click(await screen.findByRole("button", { name: "Candidate A" }));
+	await screen.findByText("Suggested claim");
+	fireEvent.click(screen.getByRole("button", { name: "应用候选" }));
+	await waitFor(() =>
+		expect(runtime.invoke).toHaveBeenCalledWith("applyReview", {
+			id: item.id,
+			expectedProposalHash: proposalHash,
+			revision: 2,
+		}),
+	);
+	await waitFor(() =>
+		expect(screen.queryByTestId("native-review-preview")).toBeNull(),
+	);
+});
+
+it("keeps the review open and reports a failed rejection", async () => {
+	const runtime = fixture();
+	const normal = runtime.invoke.getMockImplementation()!;
+	runtime.invoke.mockImplementation((operation, input) => {
+		if (operation === "rejectReview")
+			return Promise.reject(new Error("State write permission is required"));
+		return normal(operation, input);
+	});
+	await openReviews();
+	fireEvent.click(await screen.findByRole("button", { name: "Candidate A" }));
+	await screen.findByText("Suggested claim");
+	fireEvent.click(screen.getByRole("button", { name: "拒绝候选" }));
+	await screen.findByText("State write permission is required");
+	expect(screen.getByTestId("native-review-preview")).toBeDefined();
 });
 it("shows changed proposal failures without displaying a stale preview", async () => {
 	const runtime = fixture(),

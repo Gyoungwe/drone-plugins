@@ -93,6 +93,32 @@ describe("knowledge runtime store", () => {
 		expect(value.unsubscribe).toHaveBeenCalledOnce();
 	});
 
+	it("forwards review decisions with the current binding revision", async () => {
+		const value = fixture(
+			vi.fn(async (operation) => {
+				if (operation === "overview") return overview("Vault A", 7);
+				return operation === "applyReview"
+					? { id: "candidate", status: "applied", path: "Wiki/A.md", vaultWritten: true, reviewRecorded: true, indexed: false }
+					: { id: "candidate", status: "rejected", vaultWritten: false, reviewRecorded: true };
+			}),
+		);
+		const disconnect = value.store.connect();
+		await settle();
+		await value.store.applyReview({ id: "candidate", expectedProposalHash: "a".repeat(64) });
+		await value.store.rejectReview({ id: "candidate", expectedProposalHash: "b".repeat(64) });
+		expect(value.client.invoke).toHaveBeenCalledWith("applyReview", {
+			id: "candidate",
+			expectedProposalHash: "a".repeat(64),
+			revision: 7,
+		});
+		expect(value.client.invoke).toHaveBeenCalledWith("rejectReview", {
+			id: "candidate",
+			expectedProposalHash: "b".repeat(64),
+			revision: 7,
+		});
+		disconnect();
+	});
+
 	it("reports backend failures and allows explicit retry without fabricating empty results", async () => {
 		const value = fixture(
 			vi

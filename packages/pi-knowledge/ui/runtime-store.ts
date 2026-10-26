@@ -15,6 +15,10 @@ import type {
 	KnowledgeReviewsResult,
 	KnowledgePreviewReviewInput,
 	KnowledgePreviewReviewResult,
+	KnowledgeRejectReviewInput,
+	KnowledgeRejectReviewResult,
+	KnowledgeApplyReviewInput,
+	KnowledgeApplyReviewResult,
 } from "../src/desktop/contract.js";
 
 export interface KnowledgeRuntimeState {
@@ -227,6 +231,10 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 			read<KnowledgeReviewsResult>("reviews", input),
 		previewReview: (input: Omit<KnowledgePreviewReviewInput, "revision">) =>
 			read<KnowledgePreviewReviewResult>("previewReview", input),
+		rejectReview: (input: Omit<KnowledgeRejectReviewInput, "revision">) =>
+			read<KnowledgeRejectReviewResult>("rejectReview", input),
+		applyReview: (input: Omit<KnowledgeApplyReviewInput, "revision">) =>
+			read<KnowledgeApplyReviewResult>("applyReview", input),
 		recentByCategory: () =>
 			read<KnowledgeRecentByCategoryResult>("recentByCategory", { limit: 8 }),
 	};

@@ -17,20 +17,24 @@ function ReviewPreview({
 	store,
 	selection,
 	onClose,
+	onDecision,
 }: {
 	store: Store;
 	selection: Selection;
 	onClose: () => void;
+	onDecision: () => void;
 }) {
 	const t = useNativeKnowledgeText();
 	const [preview, setPreview] = useState<KnowledgePreviewReviewResult | null>(
 		null,
 	);
 	const [error, setError] = useState<string | null>(null);
+	const [action, setAction] = useState<"apply" | "reject" | null>(null);
 	useEffect(() => {
 		let live = true;
 		setPreview(null);
 		setError(null);
+		setAction(null);
 		void store
 			.previewReview({
 				id: selection.id,
@@ -48,6 +52,29 @@ function ReviewPreview({
 			live = false;
 		};
 	}, [store, selection]);
+	const decide = async (kind: "apply" | "reject") => {
+		if (!preview || action) return;
+		setAction(kind);
+		setError(null);
+		try {
+			if (kind === "apply") {
+				await store.applyReview({
+					id: selection.id,
+					expectedProposalHash: selection.proposalHash,
+				});
+			} else {
+				await store.rejectReview({
+					id: selection.id,
+					expectedProposalHash: selection.proposalHash,
+				});
+			}
+			onDecision();
+		} catch (cause) {
+			setError(errorText(cause));
+		} finally {
+			setAction(null);
+		}
+	};
 	return (
 		<article
 			className="space-y-4 rounded-xl border border-border bg-surface p-4"
@@ -99,6 +126,22 @@ function ReviewPreview({
 						}
 					/>
 					<p className="text-xs text-ink-dim">{t.reviewNotVerified}</p>
+					<div className="flex gap-2">
+						<Button
+							size="sm"
+							disabled={action !== null || !preview.canApply}
+							onClick={() => void decide("apply")}
+						>
+							{action === "apply" ? t.applying : t.applyReview}
+						</Button>
+						<Button
+							size="sm"
+							disabled={action !== null}
+							onClick={() => void decide("reject")}
+						>
+							{action === "reject" ? t.rejecting : t.rejectReview}
+						</Button>
+					</div>
 				</>
 			)}
 		</article>
@@ -117,6 +160,7 @@ export function NativeKnowledgeReviews({
 	const [page, setPage] = useState<KnowledgeReviewsResult | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [selection, setSelection] = useState<Selection | null>(null);
+	const [decisionRevision, setDecisionRevision] = useState(0);
 	useEffect(() => {
 		let live = true;
 		setPage(null);
@@ -133,7 +177,7 @@ export function NativeKnowledgeReviews({
 		return () => {
 			live = false;
 		};
-	}, [store, offset, observationRevision]);
+	}, [store, offset, observationRevision, decisionRevision]);
 	return (
 		<section aria-label={t.reviews} className="space-y-4">
 			<p className="text-xs text-ink-dim">{t.reviewReadOnly}</p>
@@ -216,6 +260,10 @@ export function NativeKnowledgeReviews({
 					store={store}
 					selection={selection}
 					onClose={() => setSelection(null)}
+					onDecision={() => {
+						setSelection(null);
+						setDecisionRevision((value) => value + 1);
+					}}
 				/>
 			)}
 		</section>

@@ -12,7 +12,7 @@ var zh = {
   title: "\u77E5\u8BC6\u5E93",
   settings: "\u8BBE\u7F6E",
   reviews: "\u5F85\u5BA1\u5019\u9009",
-  reviewReadOnly: "\u6B64\u5904\u53EA\u8BFB\u6D4F\u89C8\u5019\u9009\u53CA\u5176\u6765\u6E90\u3002\u5E94\u7528\u3001\u62D2\u7EDD\u548C\u6A21\u578B\u5BA1\u6838\u5C1A\u672A\u8FC1\u79FB\uFF0C\u5F53\u524D\u9884\u89C8\u4E0D\u6388\u4E88\u5199\u5165\u6743\u9650\u3002",
+  reviewReadOnly: "\u5019\u9009\u5199\u5165\u9700\u8981\u5BBF\u4E3B\u660E\u786E\u6388\u4E88\u72B6\u6001\u548C\u77E5\u8BC6\u5E93\u5199\u5165\u6743\u9650\uFF1B\u5E94\u7528\u524D\u8BF7\u6838\u5BF9\u5DEE\u5F02\u4E0E\u6765\u6E90\u3002",
   reviewBack: "\u5173\u95ED\u9884\u89C8",
   reviewCount: "\u6761\u5019\u9009",
   reviewEmpty: "\u5F53\u524D\u8BFE\u9898\u6682\u65E0\u5019\u9009\u3002",
@@ -22,6 +22,12 @@ var zh = {
   reviewTargetChanged: "\u76EE\u6807\u7B14\u8BB0\u5DF2\u53D8\u5316\uFF1B\u6B64\u5904\u663E\u793A\u751F\u6210\u5019\u9009\u65F6\u7684\u539F\u6587\u4E0E\u5EFA\u8BAE\u5185\u5BB9\u3002",
   reviewVersion: "\u5019\u9009\u7248\u672C",
   reviewNotVerified: "\u5DEE\u5F02\u9884\u89C8\u4E0D\u4EE3\u8868\u79D1\u5B66\u6838\u9A8C\uFF0C\u4E5F\u4E0D\u4F1A\u786E\u8BA4\u6216\u5E94\u7528\u5019\u9009\u3002",
+  applyReview: "\u5E94\u7528\u5019\u9009",
+  rejectReview: "\u62D2\u7EDD\u5019\u9009",
+  applying: "\u6B63\u5728\u5E94\u7528\u2026",
+  rejecting: "\u6B63\u5728\u62D2\u7EDD\u2026",
+  reviewApplied: "\u5019\u9009\u5DF2\u5E94\u7528\u5E76\u5B8C\u6210\u5199\u540E\u56DE\u8BFB\u3002",
+  reviewRejected: "\u5019\u9009\u5DF2\u62D2\u7EDD\u5E76\u8BB0\u5F55\u5BA1\u6838\u7ED3\u679C\u3002",
   bindingDetails: "\u5F53\u524D\u77E5\u8BC6\u5E93\u7ED1\u5B9A",
   vaultPath: "\u76EE\u5F55",
   profile: "\u8D44\u6599\u7EC4\u7EC7",
@@ -100,7 +106,7 @@ var en = {
   title: "Knowledge",
   settings: "Settings",
   reviews: "Review candidates",
-  reviewReadOnly: "Read candidates and their sources here. Apply, reject and model review are still being migrated; this preview grants no write permission.",
+  reviewReadOnly: "Applying a candidate requires explicit host permission for state and Vault writes. Check the diff and sources before applying.",
   reviewBack: "Close preview",
   reviewCount: "candidates",
   reviewEmpty: "This project has no candidates.",
@@ -110,6 +116,12 @@ var en = {
   reviewTargetChanged: "The target note changed. This view shows the original text and suggestion recorded in the candidate.",
   reviewVersion: "Candidate version",
   reviewNotVerified: "A diff is not scientific verification and does not approve or apply a candidate.",
+  applyReview: "Apply candidate",
+  rejectReview: "Reject candidate",
+  applying: "Applying\u2026",
+  rejecting: "Rejecting\u2026",
+  reviewApplied: "Candidate applied and read back after the Vault write.",
+  reviewRejected: "Candidate rejected and the review decision was recorded.",
   bindingDetails: "Current library binding",
   vaultPath: "Directory",
   profile: "Organization",
@@ -1708,17 +1720,20 @@ var errorText2 = (error) => error instanceof Error ? error.message : String(erro
 function ReviewPreview({
   store,
   selection,
-  onClose
+  onClose,
+  onDecision
 }) {
   const t = useNativeKnowledgeText();
   const [preview, setPreview] = useState4(
     null
   );
   const [error, setError] = useState4(null);
+  const [action, setAction] = useState4(null);
   useEffect3(() => {
     let live = true;
     setPreview(null);
     setError(null);
+    setAction(null);
     void store.previewReview({
       id: selection.id,
       expectedProposalHash: selection.proposalHash
@@ -1734,6 +1749,29 @@ function ReviewPreview({
       live = false;
     };
   }, [store, selection]);
+  const decide = async (kind) => {
+    if (!preview || action) return;
+    setAction(kind);
+    setError(null);
+    try {
+      if (kind === "apply") {
+        await store.applyReview({
+          id: selection.id,
+          expectedProposalHash: selection.proposalHash
+        });
+      } else {
+        await store.rejectReview({
+          id: selection.id,
+          expectedProposalHash: selection.proposalHash
+        });
+      }
+      onDecision();
+    } catch (cause) {
+      setError(errorText2(cause));
+    } finally {
+      setAction(null);
+    }
+  };
   return /* @__PURE__ */ jsxs4(
     "article",
     {
@@ -1773,7 +1811,27 @@ function ReviewPreview({
               })
             }
           ),
-          /* @__PURE__ */ jsx4("p", { className: "text-xs text-ink-dim", children: t.reviewNotVerified })
+          /* @__PURE__ */ jsx4("p", { className: "text-xs text-ink-dim", children: t.reviewNotVerified }),
+          /* @__PURE__ */ jsxs4("div", { className: "flex gap-2", children: [
+            /* @__PURE__ */ jsx4(
+              Button,
+              {
+                size: "sm",
+                disabled: action !== null || !preview.canApply,
+                onClick: () => void decide("apply"),
+                children: action === "apply" ? t.applying : t.applyReview
+              }
+            ),
+            /* @__PURE__ */ jsx4(
+              Button,
+              {
+                size: "sm",
+                disabled: action !== null,
+                onClick: () => void decide("reject"),
+                children: action === "reject" ? t.rejecting : t.rejectReview
+              }
+            )
+          ] })
         ] })
       ]
     }
@@ -1788,6 +1846,7 @@ function NativeKnowledgeReviews({
   const [page, setPage] = useState4(null);
   const [error, setError] = useState4(null);
   const [selection, setSelection] = useState4(null);
+  const [decisionRevision, setDecisionRevision] = useState4(0);
   useEffect3(() => {
     let live = true;
     setPage(null);
@@ -1804,7 +1863,7 @@ function NativeKnowledgeReviews({
     return () => {
       live = false;
     };
-  }, [store, offset, observationRevision]);
+  }, [store, offset, observationRevision, decisionRevision]);
   return /* @__PURE__ */ jsxs4("section", { "aria-label": t.reviews, className: "space-y-4", children: [
     /* @__PURE__ */ jsx4("p", { className: "text-xs text-ink-dim", children: t.reviewReadOnly }),
     error && /* @__PURE__ */ jsx4("p", { role: "alert", className: "text-sm text-err", children: error }),
@@ -1871,7 +1930,11 @@ function NativeKnowledgeReviews({
       {
         store,
         selection,
-        onClose: () => setSelection(null)
+        onClose: () => setSelection(null),
+        onDecision: () => {
+          setSelection(null);
+          setDecisionRevision((value) => value + 1);
+        }
       },
       `${selection.id}:${selection.proposalHash}`
     )
@@ -4561,6 +4624,8 @@ function createKnowledgeRuntimeStore(client) {
     jobs: (input) => read("jobs", input),
     reviews: (input) => read("reviews", input),
     previewReview: (input) => read("previewReview", input),
+    rejectReview: (input) => read("rejectReview", input),
+    applyReview: (input) => read("applyReview", input),
     recentByCategory: () => read("recentByCategory", { limit: 8 })
   };
 }
