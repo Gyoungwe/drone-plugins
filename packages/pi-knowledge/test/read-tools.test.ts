@@ -7,11 +7,12 @@ function setup(requestResult: unknown = { outgoing: [], incoming: [] }) {
 		return requestResult;
 	});
 	const service = {
+		search: vi.fn(async () => ({ revision: 1, hits: [] })),
 		read: vi.fn(async () => ({ path: "Library/alpha.md", hash: "a".repeat(64), text: "# Alpha", startLine: 1, endLine: 1, missing: false })),
 		request,
 	};
 	const tool = createKnowledgeReadTool({
-		ensureTurn: async () => ({ service, ticket: "ticket", binding: { vaultId: "vault", revision: 3 }, project: "project-alpha" }),
+		ensureTurn: async () => ({ service, ticket: "ticket", binding: { version: 1, vault: "/vault", vaultId: "vault", revision: 3, profile: "hybrid", depositMode: "verified", subagentPolicy: "none", updatedAt: new Date(0).toISOString() }, project: "project-alpha" }),
 		toolBudget: { consume: () => null },
 	});
 	return { tool, service, request };
