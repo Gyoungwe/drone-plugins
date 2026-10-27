@@ -16,6 +16,8 @@ Evidence:
 
 - `npm run typecheck --workspace @gyoungwe/pi-research` — PASS
 - `npm test --workspace @gyoungwe/pi-research -- research-host.test.ts` — PASS (3 tests)
+- `npm run check --workspace @gyoungwe/pi-research` — PASS, including clean-pack
+  SDK sessions against Pi `1.1.0` and latest `1.4.0` (152 package tests).
 - The transport-backed test uses a stubbed public response and host project index;
   it is a contract regression test, not a real-account or network acceptance.
 - Build artifacts and their manifest are regenerated with `npm run build --workspace
