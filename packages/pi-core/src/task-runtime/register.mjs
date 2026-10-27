@@ -15,7 +15,7 @@ import {
 } from "./failure-feedback.mjs";
 import { hostLanguage } from "./host-language.mjs";
 import { createTaskProgression } from "./progress-action.mjs";
-import { withHostRuntime } from "./runtime-bridge.mjs";
+import { currentRuntime, withHostRuntime } from "./runtime-bridge.mjs";
 import { singleFlightCommand } from "./single-flight.mjs";
 import { isReadOnlyTool } from "./tool-manifest.mjs";
 import { restoreTaskToolOrder } from "./tool-protocol.mjs";
@@ -81,7 +81,7 @@ function registerWorkbench(pi, options = {}) {
       )
     };
   };
-  let journal = createTaskWorkbench({
+  const journal = createTaskWorkbench({
     requireAuthorization: true,
     // Resolve the effective SDK registration in this session on every call.
     // Native adapters publish an explicit false for write/unknown effects, which
@@ -96,31 +96,12 @@ function registerWorkbench(pi, options = {}) {
     // 里程碑验收器（zotero_item / wiki_review / …）由各自的扩展 registerAcceptanceVerifier 登记（挂钩 2）
     inspect
   });
-  const SESSION_WORKBENCH = "__drone_task_workbench_v2";
-  const attachSessionJournal = (ctx) => {
-    const manager = ctx?.sessionManager;
-    if (!manager || typeof manager !== "object" && typeof manager !== "function") return;
-    const attached = manager[SESSION_WORKBENCH];
-    if (attached?.journal && attached.journal !== journal) {
-      journal = attached.journal;
-      askAuthorization = createTaskAuthorization(journal, () => bindingKey());
-      return;
-    }
-    if (!attached && Object.isExtensible(manager))
-      Object.defineProperty(manager, SESSION_WORKBENCH, {
-        value: { version: 2, journal },
-        enumerable: false,
-        configurable: false,
-        writable: false
-      });
-  };
-  let askAuthorization = createTaskAuthorization(journal, () => bindingKey());
+  const askAuthorization = createTaskAuthorization(journal, () => bindingKey());
   const evidence = createEvidenceRecovery({
     authorize,
     persist: (data) => pi.appendEntry("drone-task-evidence-v1", data)
   });
   const attach = (ctx, force = false) => {
-    attachSessionJournal(ctx);
     options.onJournalAttached?.(journal);
     context = ctx;
     activeSessionId = ctx.sessionManager?.getSessionId?.() || ctx.sessionId || void 0;
@@ -162,6 +143,7 @@ function registerWorkbench(pi, options = {}) {
     automaticTurn = false;
     continuationToken = null;
   };
+  currentRuntime().registerDisposable({ dispose: cancelHandoff });
   const continueAuthorized = (ctx) => {
     const taskId = journal.snapshot()?.id;
     const generation = ++handoffGeneration;

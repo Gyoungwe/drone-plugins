@@ -3,7 +3,7 @@ const CORE_FIELDS = Object.freeze(["kind", "path", "sha256", "rootKind"]);
 const KIND = /^[a-z][a-z0-9_]{1,40}$/;
 const FIELD = /^[a-zA-Z][a-zA-Z0-9]{0,40}$/;
 const stringField = { type: "string", minLength: 1, maxLength: 512 };
-import { runtimeSlot, withRuntime } from "./runtime-bridge.mjs";
+import { currentRuntime, runtimeSlot, withRuntime } from "./runtime-bridge.mjs";
 const ACCEPTANCE_VERIFIER_EVENT = "drone:acceptance-verifier/v1";
 const ACCEPTANCE_VERIFIER_REQUEST_EVENT = "drone:acceptance-verifier/request/v1";
 const eventBridges = runtimeSlot("tasks", "acceptanceEventBridges", () => /* @__PURE__ */ new WeakSet());
@@ -35,7 +35,6 @@ function ensureRegistryShape() {
     maxLength: 32
   };
 }
-ensureRegistryShape();
 function definitionOf(verifier) {
   const definition = {
     fields: [...verifier.fields || []],
@@ -55,33 +54,18 @@ function registrationOf(verifier) {
   };
 }
 function bindAcceptanceVerifierEvents(pi) {
-  if (!pi?.events?.on || eventBridges.has(pi)) return () => {
-  };
+  if (eventBridges.has(pi)) return () => {};
   eventBridges.add(pi);
-  const publish = (verifier) => {
-    void pi.events.emit?.(ACCEPTANCE_VERIFIER_EVENT, registrationOf(verifier));
+  const runtime = currentRuntime();
+  const receive = (payload) => {
+    if (payload?.version !== 1 || typeof payload.kind !== "string" ||
+        !payload.definition || typeof payload.definition !== "object")
+      throw new Error("Invalid task acceptance registration event");
+    withRuntime(runtime, () => registerAcceptanceVerifier(payload.kind, payload.definition));
   };
-  const replay = () => {
-    for (const verifier of acceptanceVerifiers()) publish(verifier);
-  };
-  const onRequest = (payload) => {
-    if (payload?.version === 1) replay();
-  };
-  const onRuntime = (payload) => {
-    if (payload?.version !== 1 || !payload.runtime || typeof payload.runtime !== "object") return;
-    const verifiers = acceptanceVerifiers().map(registrationOf);
-    if (!payload.runtime.scheduler) return;
-    withRuntime(payload.runtime, () => {
-      for (const registration of verifiers)
-        registerAcceptanceVerifier(registration.kind, registration.definition);
-    });
-    for (const registration of verifiers) void pi.events.emit?.(ACCEPTANCE_VERIFIER_EVENT, registration);
-  };
-  pi.events.on(ACCEPTANCE_VERIFIER_REQUEST_EVENT, onRequest);
-  pi.events.on("drone:runtime/v1", onRuntime);
-  void pi.events.emit?.(ACCEPTANCE_VERIFIER_REQUEST_EVENT, { version: 1 });
-  return () => {
-  };
+  const unsubscribe = pi.events.on(ACCEPTANCE_VERIFIER_EVENT, receive);
+  pi.events.emit(ACCEPTANCE_VERIFIER_REQUEST_EVENT, { version: 1 });
+  return unsubscribe;
 }
 function registerAcceptanceVerifier(kind, definition = {}) {
   ensureRegistryShape();

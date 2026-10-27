@@ -44,7 +44,7 @@ async function fixture(readOnly = false) {
 		services: { getKnowledgeService: async () => service },
 		publication, delivery: {}, specialists: { createKnowledgeSpecialists: () => ({ close: async () => {} }) },
 		topics: { createTopicMemory: () => ({}) }, ui, wiki: {},
-	} as unknown as KnowledgeInterfaceDependencies, { registerTaskRuntime: oldRegister });
+	} as unknown as KnowledgeInterfaceDependencies, { registerTaskRuntime: oldRegister, registerAcceptanceVerifier: oldRegister, bindAcceptanceVerifierEvents: oldRegister });
 	const registration = knowledge.registerKnowledgeInterface(pi, { readOnly });
 	const ctx = { cwd, sessionManager: { getSessionId: () => "session", getBranch: () => entries } };
 	const emitHook = async (name: string) => { for (const handler of hooks.get(name) ?? []) await handler({}, ctx); };
@@ -104,4 +104,18 @@ it("keeps read-only knowledge projections from configuring task write-side state
 		expect(state.publication().getTaskRuntime()).toBeNull();
 		expect(state.emitter.listenerCount("drone:task-runtime/v1")).toBe(0);
 	} finally { await state.registration.dispose(); }
+});
+
+it("full native interfaces publish function declarations only on their own official event bus", async () => {
+ const first = await fixture(), other = await fixture();
+ const received: any[] = [], unrelated: any[] = [];
+ first.emitter.on("drone:acceptance-verifier/v1", payload => received.push(payload));
+ other.emitter.on("drone:acceptance-verifier/v1", payload => unrelated.push(payload));
+ first.emitter.emit("drone:acceptance-verifier/request/v1", { version: 1 });
+ expect(received).toHaveLength(1);
+ expect(typeof received[0].definition.resolve).toBe("function");
+ expect(unrelated).toEqual([]);
+ expect(first.oldRegister).not.toHaveBeenCalled();
+ await first.registration.dispose();await other.registration.dispose();
+ expect(first.emitter.listenerCount("drone:acceptance-verifier/request/v1")).toBe(0);
 });

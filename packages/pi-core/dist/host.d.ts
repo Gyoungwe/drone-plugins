@@ -8,7 +8,8 @@
 import type { MemoryType } from "./memory";
 import { memoryIndexPrompt as memoryIndexPromptImpl } from "./memory";
 import { normalizeTaskMilestones } from "./milestone-plan";
-import { type TaskAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
+import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
+import type { TaskAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
 import { makeDeliverFilesTool as makeDeliverFilesToolImpl } from "./tools/deliver-files";
 import { makeMemorySaveTool as makeMemorySaveToolImpl } from "./tools/memory-save";
 import { makeStatusTool as makeStatusToolImpl } from "./tools/status";
@@ -62,9 +63,11 @@ export declare const taskHostLoader: {
     }) => {
         workbench?: WorkbenchPluginClient | undefined;
         contractVersion: 1;
-        registerAcceptanceVerifier: (kind: string, definition: Readonly<Record<string, unknown>>) => void;
+        registerAcceptanceVerifier: (kind: string, definition: Readonly<Record<string, unknown>>) => TaskAcceptanceVerifier;
         readAcceptanceVerifier: (kind: string) => TaskAcceptanceVerifier | null;
         normalizeMilestones: typeof normalizeTaskMilestones;
+        createNativeSession: () => PluginNativeSession;
+        dispose: () => Promise<void>;
     };
 };
 export { normalizeTaskMilestones } from "./milestone-plan";

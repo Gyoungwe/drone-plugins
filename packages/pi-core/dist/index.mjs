@@ -5,16 +5,9 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// src/task-runtime/register.mjs
-import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
-import { realpath as realpath3 } from "node:fs/promises";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve4, sep as sep2 } from "node:path";
-
 // src/task-runtime/runtime-bridge.mjs
 import { AsyncLocalStorage } from "node:async_hooks";
 var contexts = new AsyncLocalStorage();
-var installedRuntime = null;
-var standaloneRuntime = null;
 var runtimeBindings = /* @__PURE__ */ new WeakSet();
 var hostRuntimes = /* @__PURE__ */ new WeakMap();
 var KeyedScheduler = class {
@@ -68,11 +61,12 @@ function createStandaloneRuntime(log = {}) {
     disposables.add(resource);
     return () => disposables.delete(resource);
   };
+  const scheduler = new KeyedScheduler();
   const runtime = {
     knowledge: {},
     tasks: {},
     tools: { tools: /* @__PURE__ */ new Map(), families: /* @__PURE__ */ new Map() },
-    scheduler: new KeyedScheduler(),
+    scheduler,
     log,
     registerDisposable,
     dispose() {
@@ -90,7 +84,7 @@ function createStandaloneRuntime(log = {}) {
             }
           })
         );
-        await runtime.scheduler.dispose();
+        await scheduler.dispose();
       })();
       return disposal;
     }
@@ -102,103 +96,25 @@ function withRuntime(runtime, operation) {
     throw new TypeError("A DroneRuntime with a scheduler is required");
   return contexts.run(runtime, operation);
 }
-function bindRuntime(pi) {
-  if (!pi || typeof pi !== "object" && typeof pi !== "function") return () => {
-  };
+function bindRuntime(pi, ownedRuntime) {
   if (runtimeBindings.has(pi)) return () => {
   };
   runtimeBindings.add(pi);
-  const inherited = currentRuntime();
-  const fallback = createStandaloneRuntime();
-  adoptRuntimeState(inherited, fallback);
-  hostRuntimes.set(pi, fallback);
-  if (!pi.events?.on || !pi.events?.emit) {
-    return () => {
-      if (hostRuntimes.get(pi) !== fallback) return;
-      runtimeBindings.delete(pi);
-      hostRuntimes.delete(pi);
-      void fallback.dispose();
-    };
-  }
+  const runtime = ownedRuntime || createStandaloneRuntime();
+  hostRuntimes.set(pi, runtime);
   const receive = (payload) => {
-    if (!payload || typeof payload !== "object") return;
-    const event = payload;
-    if (event.version !== RUNTIME_BRIDGE_VERSION) return;
-    const runtime = event.runtime;
-    if (!runtime || typeof runtime !== "object" || !runtime.scheduler) return;
-    const previous = hostRuntimes.get(pi);
-    if (previous && previous !== runtime) {
-      adoptRuntimeState(previous, runtime);
-      const acceptance = previous.tasks?.acceptance;
-      if (acceptance) {
-        Object.assign(acceptance.properties, runtime.tasks.acceptance.properties);
-        runtime.tasks.acceptance.properties = acceptance.properties;
-      }
-    }
-    hostRuntimes.set(pi, runtime);
-    if (previous && previous !== runtime) void previous.dispose();
+    if (payload?.version !== RUNTIME_BRIDGE_VERSION || !payload.runtime?.scheduler) return;
+    runtime.scheduler = payload.runtime.scheduler;
+    runtime.log = payload.runtime.log;
+    runtime.tools = payload.runtime.tools;
   };
-  pi.events.on("drone:runtime/v1", receive);
-  void pi.events.emit?.("drone:runtime/request/v1", { version: RUNTIME_BRIDGE_VERSION });
+  const unsubscribe = pi.events.on("drone:runtime/v1", receive);
+  pi.events.emit("drone:runtime/request/v1", { version: RUNTIME_BRIDGE_VERSION });
   return () => {
+    unsubscribe();
     runtimeBindings.delete(pi);
-    if (hostRuntimes.get(pi) === fallback) {
-      hostRuntimes.delete(pi);
-      void fallback.dispose();
-    } else hostRuntimes.delete(pi);
+    hostRuntimes.delete(pi);
   };
-}
-function adoptRuntimeState(previous, runtime) {
-  const sourceTools = previous?.tools?.manifest;
-  if (sourceTools) {
-    if (!runtime.tools) runtime.tools = {};
-    const targetTools = runtime.tools.manifest ?? { tools: /* @__PURE__ */ new Map(), families: /* @__PURE__ */ new Map() };
-    runtime.tools.manifest = targetTools;
-    if (!targetTools.tools) targetTools.tools = /* @__PURE__ */ new Map();
-    for (const [name, meta] of sourceTools.tools || []) {
-      if (!targetTools.tools.has(name)) targetTools.tools.set(name, meta);
-    }
-    if (!targetTools.families) targetTools.families = /* @__PURE__ */ new Map();
-    for (const [name, meta] of sourceTools.families || []) {
-      if (!targetTools.families.has(name)) targetTools.families.set(name, meta);
-    }
-  }
-  const sourceAcceptance = previous?.tasks?.acceptance;
-  if (sourceAcceptance) {
-    if (!runtime.tasks) runtime.tasks = {};
-    const targetAcceptance = runtime.tasks.acceptance ?? {
-      verifiers: /* @__PURE__ */ new Map(),
-      kinds: [],
-      properties: {}
-    };
-    runtime.tasks.acceptance = targetAcceptance;
-    if (!targetAcceptance.verifiers) targetAcceptance.verifiers = /* @__PURE__ */ new Map();
-    for (const [kind, verifier] of sourceAcceptance.verifiers || []) {
-      if (!targetAcceptance.verifiers.has(kind)) targetAcceptance.verifiers.set(kind, verifier);
-    }
-    if (Array.isArray(sourceAcceptance.kinds)) {
-      targetAcceptance.kinds ??= [];
-      for (const kind of sourceAcceptance.kinds)
-        if (!targetAcceptance.kinds.includes(kind)) targetAcceptance.kinds.push(kind);
-    }
-    targetAcceptance.properties ??= {};
-    for (const [key, value] of Object.entries(sourceAcceptance.properties || {}))
-      if (!(key in targetAcceptance.properties)) targetAcceptance.properties[key] = value;
-    targetAcceptance.properties.kind = { ...targetAcceptance.properties.kind, enum: targetAcceptance.kinds };
-  }
-  for (const domain of ["knowledge", "tasks", "tools"]) {
-    const source = previous?.[domain];
-    if (!source || typeof source !== "object") continue;
-    let target = runtime[domain];
-    if (!target) {
-      target = {};
-      runtime[domain] = target;
-    }
-    for (const key of Reflect.ownKeys(source)) {
-      if (domain === "tasks" && key === "workbench") continue;
-      if (!(key in target)) target[key] = source[key];
-    }
-  }
 }
 function runtimeForHost(pi) {
   return hostRuntimes.get(pi) ?? currentRuntime();
@@ -209,12 +125,10 @@ function withHostRuntime(pi, operation) {
 function currentRuntime() {
   const scoped = contexts.getStore();
   if (scoped) return scoped;
-  if (installedRuntime) return installedRuntime;
-  if (!standaloneRuntime) standaloneRuntime = createStandaloneRuntime();
-  return standaloneRuntime;
+  throw new Error("Task runtime is unavailable outside a session owner");
 }
 function hasRuntimeContext() {
-  return Boolean(contexts.getStore() || installedRuntime);
+  return Boolean(contexts.getStore());
 }
 function resolveSlot(domain, slot, create) {
   const runtime = currentRuntime();
@@ -258,7 +172,11 @@ var RUNTIME_BRIDGE_VERSION = 1;
 // src/task-runtime/acceptance.mjs
 var CORE_ACCEPTANCE_KINDS = Object.freeze(["file", "human_review"]);
 var CORE_FIELDS = Object.freeze(["kind", "path", "sha256", "rootKind"]);
+var KIND = /^[a-z][a-z0-9_]{1,40}$/;
+var FIELD = /^[a-zA-Z][a-zA-Z0-9]{0,40}$/;
 var stringField = { type: "string", minLength: 1, maxLength: 512 };
+var ACCEPTANCE_VERIFIER_EVENT = "drone:acceptance-verifier/v1";
+var ACCEPTANCE_VERIFIER_REQUEST_EVENT = "drone:acceptance-verifier/request/v1";
 var eventBridges = runtimeSlot("tasks", "acceptanceEventBridges", () => /* @__PURE__ */ new WeakSet());
 var createRegistry = () => {
   const kinds = [...CORE_ACCEPTANCE_KINDS];
@@ -288,7 +206,50 @@ function ensureRegistryShape() {
     maxLength: 32
   };
 }
-ensureRegistryShape();
+function bindAcceptanceVerifierEvents(pi) {
+  if (eventBridges.has(pi)) return () => {
+  };
+  eventBridges.add(pi);
+  const runtime = currentRuntime();
+  const receive = (payload) => {
+    if (payload?.version !== 1 || typeof payload.kind !== "string" || !payload.definition || typeof payload.definition !== "object")
+      throw new Error("Invalid task acceptance registration event");
+    withRuntime(runtime, () => registerAcceptanceVerifier(payload.kind, payload.definition));
+  };
+  const unsubscribe = pi.events.on(ACCEPTANCE_VERIFIER_EVENT, receive);
+  pi.events.emit(ACCEPTANCE_VERIFIER_REQUEST_EVENT, { version: 1 });
+  return unsubscribe;
+}
+function registerAcceptanceVerifier(kind, definition = {}) {
+  ensureRegistryShape();
+  if (!KIND.test(kind || "")) throw new Error(`Acceptance kind "${kind}" must match ${KIND}`);
+  if (CORE_ACCEPTANCE_KINDS.includes(kind)) throw new Error(`Acceptance kind "${kind}" is owned by the host`);
+  for (const fn of ["label", "verify", "observe", "resolve", "identify", "consent", "pending"])
+    if (definition[fn] !== void 0 && typeof definition[fn] !== "function")
+      throw new Error(`Acceptance verifier ${kind}.${fn} must be a function`);
+  const fields = [...new Set(definition.fields || [])];
+  for (const field of fields)
+    if (!FIELD.test(field) || CORE_FIELDS.includes(field))
+      throw new Error(`Acceptance verifier ${kind}: invalid field "${field}"`);
+  const verifier = Object.freeze({
+    kind,
+    fields: Object.freeze(fields),
+    evidenceKind: definition.evidenceKind || `${kind}-verified`,
+    operationVerifier: definition.operationVerifier || `${kind}-record-not-scientific-proof`,
+    label: definition.label || (() => kind),
+    verify: definition.verify || null,
+    observe: definition.observe || null,
+    resolve: definition.resolve || null,
+    identify: definition.identify || null,
+    consent: definition.consent || null,
+    pending: definition.pending || null,
+    acknowledgeError: definition.acknowledgeError || null
+  });
+  registry.verifiers.set(kind, verifier);
+  if (!registry.kinds.includes(kind)) registry.kinds.push(kind);
+  for (const field of fields) registry.properties[field] ??= stringField;
+  return verifier;
+}
 function acceptanceVerifier(kind) {
   ensureRegistryShape();
   return registry.verifiers.get(kind) || null;
@@ -327,6 +288,11 @@ function describeAcceptance(acceptance, verifier = acceptanceVerifier(acceptance
   }
   return `\u5B8C\u6210 ${acceptance?.kind || "\u672A\u77E5"} \u9A8C\u6536`;
 }
+
+// src/task-runtime/register.mjs
+import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
+import { realpath as realpath3 } from "node:fs/promises";
+import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve4, sep as sep2 } from "node:path";
 
 // src/task-runtime/consent.mjs
 import { createHash } from "node:crypto";
@@ -2151,7 +2117,7 @@ function registerWorkbench(pi, options = {}) {
       )
     };
   };
-  let journal = createTaskWorkbench({
+  const journal = createTaskWorkbench({
     requireAuthorization: true,
     // Resolve the effective SDK registration in this session on every call.
     // Native adapters publish an explicit false for write/unknown effects, which
@@ -2166,31 +2132,12 @@ function registerWorkbench(pi, options = {}) {
     // 里程碑验收器（zotero_item / wiki_review / …）由各自的扩展 registerAcceptanceVerifier 登记（挂钩 2）
     inspect
   });
-  const SESSION_WORKBENCH = "__drone_task_workbench_v2";
-  const attachSessionJournal = (ctx) => {
-    const manager = ctx?.sessionManager;
-    if (!manager || typeof manager !== "object" && typeof manager !== "function") return;
-    const attached = manager[SESSION_WORKBENCH];
-    if (attached?.journal && attached.journal !== journal) {
-      journal = attached.journal;
-      askAuthorization = createTaskAuthorization(journal, () => bindingKey());
-      return;
-    }
-    if (!attached && Object.isExtensible(manager))
-      Object.defineProperty(manager, SESSION_WORKBENCH, {
-        value: { version: 2, journal },
-        enumerable: false,
-        configurable: false,
-        writable: false
-      });
-  };
-  let askAuthorization = createTaskAuthorization(journal, () => bindingKey());
+  const askAuthorization = createTaskAuthorization(journal, () => bindingKey());
   const evidence = createEvidenceRecovery({
     authorize,
     persist: (data) => pi.appendEntry("drone-task-evidence-v1", data)
   });
   const attach = (ctx, force = false) => {
-    attachSessionJournal(ctx);
     options.onJournalAttached?.(journal);
     context = ctx;
     activeSessionId = ctx.sessionManager?.getSessionId?.() || ctx.sessionId || void 0;
@@ -2232,6 +2179,7 @@ function registerWorkbench(pi, options = {}) {
     automaticTurn = false;
     continuationToken = null;
   };
+  currentRuntime().registerDisposable({ dispose: cancelHandoff });
   const continueAuthorized = (ctx) => {
     const taskId = journal.snapshot()?.id;
     const generation = ++handoffGeneration;
@@ -2729,40 +2677,34 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
 
 // src/task-runtime/runtime.mjs
 function registerTaskRuntime(pi, options = {}) {
-  bindRuntime(pi);
+  const shared = requestSharedTaskRuntime(pi);
+  bindRuntime(pi, shared?.runtime || options.runtime);
   const hostRuntime = runtimeForHost(pi);
   hostRuntime.tasks ??= {};
   if (hostRuntime.tasks.workbench?.journal) {
     hostRuntime.tasks.workbench.journal.configure?.(options);
     return hostRuntime.tasks.workbench.journal;
   }
-  const shared = requestSharedTaskRuntime(pi);
   if (shared?.journal) {
     shared.journal.configure?.(options);
     hostRuntime.tasks.workbench = { ...hostRuntime.tasks.workbench, ...shared };
     return shared.journal;
   }
-  const registry3 = taskRuntimeRegistry(pi);
-  if (registry3?.journal) {
-    registry3.journal.configure?.(options);
-    return registry3.journal;
-  }
+  const registry3 = { version: 1, journal: null, runtime: hostRuntime };
   const journal = withHostRuntime(pi, () => registerWorkbench(pi, {
     ...options,
     onJournalAttached: (current) => {
-      if (registry3) registry3.journal = current;
+      registry3.journal = current;
       hostRuntime.tasks.workbench.journal = current;
     }
   }));
-  if (registry3) registry3.journal = journal;
+  registry3.journal = journal;
   hostRuntime.tasks.workbench = { ...hostRuntime.tasks.workbench, version: 1, journal };
   publishTaskRuntimeRegistry(pi, registry3);
   return journal;
 }
-var TASK_RUNTIME_REGISTRY = "__drone_task_runtime_v1";
 var TASK_RUNTIME_REQUEST = "drone:task-runtime/request/v1";
 var TASK_RUNTIME_RESPONSE = "drone:task-runtime/v1";
-var localTaskRuntimeRegistry = /* @__PURE__ */ new WeakMap();
 function requestSharedTaskRuntime(pi) {
   const events = pi?.events;
   if (!events?.on || !events.emit) return null;
@@ -2777,29 +2719,126 @@ function requestSharedTaskRuntime(pi) {
 function publishTaskRuntimeRegistry(pi, registry3) {
   const events = pi?.events;
   if (!events?.on || !events.emit) return;
-  events.on(TASK_RUNTIME_REQUEST, (payload) => {
+  registry3.unsubscribe = events.on(TASK_RUNTIME_REQUEST, (payload) => {
     if (payload?.version === 1) events.emit(TASK_RUNTIME_RESPONSE, { version: 1, registry: registry3 });
   });
 }
-function taskRuntimeRegistry(pi) {
-  if (!pi || typeof pi !== "object" && typeof pi !== "function") return null;
-  const owner = pi.events && (typeof pi.events === "object" || typeof pi.events === "function") ? pi.events : pi;
-  const attached = owner[TASK_RUNTIME_REGISTRY];
-  if (attached && attached.version === 1) return attached;
-  const local = localTaskRuntimeRegistry.get(owner);
-  if (local) return local;
-  const registry3 = { version: 1, journal: null };
-  if (Object.isExtensible(owner)) {
-    Object.defineProperty(owner, TASK_RUNTIME_REGISTRY, {
-      value: registry3,
-      enumerable: false,
-      configurable: false,
-      writable: false
-    });
-  } else {
-    localTaskRuntimeRegistry.set(owner, registry3);
-  }
-  return registry3;
+
+// src/task-runtime/owner.mjs
+function createTaskRuntimeOwner(definitions = []) {
+  const runtime = createStandaloneRuntime();
+  withRuntime(runtime, () => {
+    for (const verifier of definitions) registerAcceptanceVerifier(verifier.kind, verifier);
+  });
+  let active = true;
+  const lifetime = new AbortController();
+  const signalFor = (signal) => signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal;
+  let attached;
+  let unbind;
+  let unlisten;
+  let linkedOwner;
+  const eventCleanups = /* @__PURE__ */ new Set();
+  const requireActive = () => {
+    if (!active) throw new Error("Task plugin session is unavailable: owner disposed");
+  };
+  return {
+    registerAcceptanceVerifier(kind, definition) {
+      requireActive();
+      return withRuntime(runtime, () => registerAcceptanceVerifier(kind, definition));
+    },
+    readAcceptanceVerifier(kind) {
+      requireActive();
+      return withRuntime(runtime, () => acceptanceVerifier(kind));
+    },
+    definitions() {
+      requireActive();
+      return withRuntime(runtime, acceptanceVerifiers);
+    },
+    attach(pi) {
+      requireActive();
+      if (attached) throw new Error("Task owner already attached to a Pi session");
+      attached = pi;
+      const shared = requestSharedTaskRuntime(pi);
+      const current = shared?.runtime || runtime;
+      unbind = bindRuntime(pi, current);
+      withRuntime(current, () => {
+        for (const verifier of withRuntime(runtime, acceptanceVerifiers))
+          registerAcceptanceVerifier(verifier.kind, verifier);
+        unlisten = bindAcceptanceVerifierEvents(pi);
+      });
+      if (shared?.journal) {
+        linkedOwner = shared.owner;
+        pi.on("session_shutdown", () => this.dispose());
+        return shared.journal;
+      }
+      const guardedEvents = {
+        on(event, handler) {
+          const unsubscribe = pi.events.on(event, (...args) => {
+            if (active) return withHostRuntime(pi, () => handler(...args));
+          });
+          eventCleanups.add(unsubscribe);
+          return () => {
+            unsubscribe();
+            eventCleanups.delete(unsubscribe);
+          };
+        },
+        emit: pi.events.emit.bind(pi.events)
+      };
+      const guarded = new Proxy(pi, {
+        get(target, name) {
+          if (name === "events") return guardedEvents;
+          if (name === "on") return (event, handler) => target.on(event, (value2, context) => {
+            if (active) return withHostRuntime(pi, () => handler(value2, { ...context, signal: signalFor(context.signal) }));
+          });
+          if (name === "registerTool") return (tool) => target.registerTool({
+            ...tool,
+            execute: (id, input, signal, update, context) => {
+              requireActive();
+              const scopedSignal = signalFor(signal);
+              return withHostRuntime(pi, () => tool.execute(id, input, scopedSignal, update, { ...context, signal: scopedSignal }));
+            }
+          });
+          if (name === "registerCommand") return (command, definition) => target.registerCommand(command, {
+            ...definition,
+            handler: (...args) => {
+              requireActive();
+              return withHostRuntime(pi, () => definition.handler(...args));
+            }
+          });
+          const value = target[name];
+          return typeof value === "function" ? value.bind(target) : value;
+        }
+      });
+      const unbindGuarded = bindRuntime(guarded, current);
+      const journal = registerTaskRuntime(guarded, { runtime: current });
+      const oldUnbind = unbind;
+      unbind = () => {
+        unbindGuarded();
+        oldUnbind();
+      };
+      for (const [name, method] of Object.entries(journal)) {
+        journal[name] = (...args) => {
+          requireActive();
+          return withRuntime(current, () => method(...args));
+        };
+      }
+      const registry3 = requestSharedTaskRuntime(pi);
+      registry3.owner = this;
+      pi.on("session_shutdown", () => this.dispose());
+      return journal;
+    },
+    async dispose() {
+      if (!active) return;
+      active = false;
+      lifetime.abort(new Error("Task owner disposed"));
+      unlisten?.();
+      unbind?.();
+      for (const cleanup of eventCleanups) cleanup();
+      eventCleanups.clear();
+      await linkedOwner?.dispose();
+      await runtime.dispose();
+    }
+  };
 }
 
 // src/drone-commands.ts
@@ -8297,7 +8336,8 @@ function registerPiCore(pi, options = {}) {
   pi.on?.("session_shutdown", () => {
     activeContext = void 0;
   });
-  const journal = registerTaskRuntime(pi);
+  const taskOwner = createTaskRuntimeOwner();
+  const journal = taskOwner.attach(pi);
   if (options.host?.host !== "drone-desktop" && process.env.DRONE_TASK_WORKBENCH !== "off")
     registerNativeTaskReadback(pi, journal, () => activeContext);
   registerDroneCommands(pi, {
