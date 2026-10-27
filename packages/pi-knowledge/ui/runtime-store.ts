@@ -19,6 +19,9 @@ import type {
 	KnowledgeRejectReviewResult,
 	KnowledgeApplyReviewInput,
 	KnowledgeApplyReviewResult,
+	KnowledgeReviewHistoryResult,
+	KnowledgeUndoReviewInput,
+	KnowledgeUndoReviewResult,
 } from "../src/desktop/contract.js";
 
 export interface KnowledgeRuntimeState {
@@ -28,7 +31,7 @@ export interface KnowledgeRuntimeState {
 		startLine: number;
 		expectedHash?: string;
 	} | null;
-	view: "reading" | "graph" | "jobs" | "settings" | "reviews";
+	view: "reading" | "graph" | "jobs" | "settings" | "reviews" | "history";
 	observationRevision: number;
 	overview: KnowledgeOverview | null;
 	overviewLoading: boolean;
@@ -50,8 +53,7 @@ const initialState = (): KnowledgeRuntimeState => ({
 	searchLoading: false,
 	searchError: null,
 });
-const errorText = (error: unknown) =>
-	error instanceof Error ? error.message : String(error);
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** One mounted caller owns its observations. Backend scope comes only from the bound client. */
 export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
@@ -75,15 +77,12 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 		++readEpoch;
 		update({ overviewLoading: true, overviewError: null });
 		try {
-			const overview = (await client.invoke(
-				"overview",
-				null,
-			)) as KnowledgeOverview;
-			if (!connected || generation !== owner || request !== overviewRequest)
-				return false;
+			const overview = (await client.invoke("overview", null)) as KnowledgeOverview;
+			if (!connected || generation !== owner || request !== overviewRequest) return false;
 			if (
-				state.overview?.binding?.vaultId !== overview.binding?.vaultId ||
-				state.overview?.binding?.revision !== overview.binding?.revision
+				state.overview &&
+				(state.overview.binding?.vaultId !== overview.binding?.vaultId ||
+					state.overview.binding?.revision !== overview.binding?.revision)
 			) {
 				currentQuery = null;
 				++searchRequest;
@@ -100,9 +99,7 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 				overview,
 				overviewLoading: false,
 				observationRevision: state.observationRevision + 1,
-				selectedNote: state.selectedNote
-					? { path: state.selectedNote.path, startLine: 1 }
-					: null,
+				selectedNote: state.selectedNote ? { path: state.selectedNote.path, startLine: 1 } : null,
 			});
 			return true;
 		} catch (error) {
@@ -152,6 +149,23 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 			throw new Error("Knowledge observation was superseded");
 		return result;
 	}
+	async function mutate<T>(operation: string, input: object): Promise<T> {
+		if (!connected) throw new Error("Knowledge caller is disconnected");
+		const binding = state.overview?.binding;
+		if (!binding) throw new Error("Knowledge writing requires a bound Vault");
+		const owner = generation;
+		const result = (await client.invoke(operation, { ...input, revision: binding.revision })) as T;
+		// A successful write invalidates reads before its receipt arrives. Retain that
+		// receipt for this caller, while rejecting a replaced caller or binding.
+		if (
+			!connected ||
+			owner !== generation ||
+			state.overview?.binding?.vaultId !== binding.vaultId ||
+			state.overview.binding.revision !== binding.revision
+		)
+			throw new Error("Knowledge caller or binding changed during writing");
+		return result;
+	}
 	function connect() {
 		connected = true;
 		const owner = ++generation;
@@ -159,8 +173,7 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 		currentQuery = null;
 		state = initialState();
 		const unsubscribe = client.subscribe((event) => {
-			if (!connected || generation !== owner || event.revision <= eventRevision)
-				return;
+			if (!connected || generation !== owner || event.revision <= eventRevision) return;
 			eventRevision = event.revision;
 			const query = currentQuery;
 			const request = ++searchRequest;
@@ -217,25 +230,23 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 				view: "reading",
 			}),
 		closeNote: () => update({ selectedNote: null }),
-		setView: (view: KnowledgeRuntimeState["view"]) =>
-			update({ view, selectedNote: null }),
+		setView: (view: KnowledgeRuntimeState["view"]) => update({ view, selectedNote: null }),
 		readNote: (input: Omit<KnowledgeReadNoteInput, "revision">) =>
 			read<KnowledgeReadNoteResult>("readNote", input),
-		links: (input: Omit<KnowledgeLinksInput, "revision">) =>
-			read<KnowledgeLinksResult>("links", input),
-		graph: (input: Omit<KnowledgeGraphInput, "revision">) =>
-			read<KnowledgeGraphResult>("graph", input),
-		jobs: (input: Omit<KnowledgeJobsInput, "revision">) =>
-			read<KnowledgeJobsResult>("jobs", input),
+		links: (input: Omit<KnowledgeLinksInput, "revision">) => read<KnowledgeLinksResult>("links", input),
+		graph: (input: Omit<KnowledgeGraphInput, "revision">) => read<KnowledgeGraphResult>("graph", input),
+		jobs: (input: Omit<KnowledgeJobsInput, "revision">) => read<KnowledgeJobsResult>("jobs", input),
 		reviews: (input: Omit<KnowledgeReviewsInput, "revision">) =>
 			read<KnowledgeReviewsResult>("reviews", input),
 		previewReview: (input: Omit<KnowledgePreviewReviewInput, "revision">) =>
 			read<KnowledgePreviewReviewResult>("previewReview", input),
 		rejectReview: (input: Omit<KnowledgeRejectReviewInput, "revision">) =>
-			read<KnowledgeRejectReviewResult>("rejectReview", input),
+			mutate<KnowledgeRejectReviewResult>("rejectReview", input),
 		applyReview: (input: Omit<KnowledgeApplyReviewInput, "revision">) =>
-			read<KnowledgeApplyReviewResult>("applyReview", input),
-		recentByCategory: () =>
-			read<KnowledgeRecentByCategoryResult>("recentByCategory", { limit: 8 }),
+			mutate<KnowledgeApplyReviewResult>("applyReview", input),
+		reviewHistory: () => read<KnowledgeReviewHistoryResult>("reviewHistory", {}),
+		undoReview: (input: Omit<KnowledgeUndoReviewInput, "revision">) =>
+			mutate<KnowledgeUndoReviewResult>("undoReview", input),
+		recentByCategory: () => read<KnowledgeRecentByCategoryResult>("recentByCategory", { limit: 8 }),
 	};
 }

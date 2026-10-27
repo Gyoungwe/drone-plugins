@@ -1,9 +1,5 @@
 /** Package-owned JSON view models. No host, renderer or Node dependency. */
-export type KnowledgeCoverage =
-	| "uninitialized"
-	| "indexing"
-	| "partial"
-	| "ready";
+export type KnowledgeCoverage = "uninitialized" | "indexing" | "partial" | "ready";
 export interface KnowledgeBindingSummary {
 	vaultId: string;
 	revision: number;
@@ -57,10 +53,7 @@ const string = { type: "string" };
 const integer = { type: "integer", minimum: 0 };
 const coverage = { enum: ["uninitialized", "indexing", "partial", "ready"] };
 const nullable = (schema: object) => ({ anyOf: [schema, { type: "null" }] });
-const object = (
-	properties: Record<string, object>,
-	required = Object.keys(properties),
-) => ({
+const object = (properties: Record<string, object>, required = Object.keys(properties)) => ({
 	type: "object",
 	properties,
 	required,
@@ -124,12 +117,7 @@ export const searchResultSchema = object({
 	},
 });
 
-export type KnowledgeCategory =
-	| "paper"
-	| "software"
-	| "method"
-	| "idea"
-	| "other";
+export type KnowledgeCategory = "paper" | "software" | "method" | "idea" | "other";
 export interface KnowledgeReadScope {
 	revision: number;
 	bindingRevision: number;
@@ -320,14 +308,7 @@ const semanticNodeSchema = object(
 	{
 		...graphNodeProperties,
 		nodeType: {
-			enum: [
-				"note",
-				"wiki",
-				"navigation",
-				"mirror",
-				"infrastructure",
-				"memory",
-			],
+			enum: ["note", "wiki", "navigation", "mirror", "infrastructure", "memory"],
 		},
 		isInfrastructure: boolean,
 		community: { type: "integer", minimum: -1 },
@@ -338,23 +319,11 @@ const semanticNodeSchema = object(
 		isMain: boolean,
 		sharedWith: array(string),
 	},
-	[
-		"path",
-		"title",
-		"kind",
-		"degree",
-		"nodeType",
-		"isInfrastructure",
-		"community",
-		"x",
-		"y",
-	],
+	["path", "title", "kind", "degree", "nodeType", "isInfrastructure", "community", "x", "y"],
 );
 export const graphResultSchema = object({
 	...readScope,
-	nodes: array(
-		object(graphNodeProperties, ["path", "title", "kind", "degree"]),
-	),
+	nodes: array(object(graphNodeProperties, ["path", "title", "kind", "degree"])),
 	edges: array(edgeSchema),
 	totalNotes: integer,
 	semantic: object({
@@ -568,6 +537,9 @@ export interface KnowledgeApplyReviewResult {
 	vaultWritten: true;
 	reviewRecorded: boolean;
 	indexed: boolean;
+	recovered: boolean;
+	recordError: string | null;
+	indexError: string | null;
 }
 const proposalId = { type: "string", pattern: "^[0-9a-f-]{36}$" };
 const proposalHash = { type: "string", pattern: "^[a-f0-9]{64}$" };
@@ -629,16 +601,7 @@ export const previewReviewResultSchema = object({
 				changed: boolean,
 				error: nullable(string),
 			},
-			[
-				"path",
-				"hash",
-				"startLine",
-				"endLine",
-				"excerptHash",
-				"currentHash",
-				"changed",
-				"error",
-			],
+			["path", "hash", "startLine", "endLine", "excerptHash", "currentHash", "changed", "error"],
 		),
 	),
 	expired: boolean,
@@ -670,20 +633,93 @@ export const applyReviewResultSchema = object({
 	vaultWritten: { const: true },
 	reviewRecorded: boolean,
 	indexed: boolean,
+	recovered: boolean,
+	recordError: nullable(string),
+	indexError: nullable(string),
 });
 
 export interface KnowledgeSemanticPreferences {
- binding:KnowledgeBindingSummary|null;
- settings:import("../core/semantic-settings.js").SemanticSettings|null;
- canWriteState:boolean;
- /** Config storage is available; model/provider execution has not been granted to this adapter. */
- providerExecution:"unavailable";
+	binding: KnowledgeBindingSummary | null;
+	settings: import("../core/semantic-settings.js").SemanticSettings | null;
+	canWriteState: boolean;
+	/** Config storage is available; model/provider execution has not been granted to this adapter. */
+	providerExecution: "unavailable";
 }
 export interface KnowledgeSetSemanticSettingsInput {
- bindingRevision:number;expectedSettingsRevision:number;
- settings:Partial<import("../core/semantic-settings.js").SemanticConfig>;
+	bindingRevision: number;
+	expectedSettingsRevision: number;
+	settings: Partial<import("../core/semantic-settings.js").SemanticConfig>;
 }
-const semanticConfigProperties={enabled:boolean,provider:{enum:["none","ollama","openai-compatible"]},baseUrl:string,model:string,credentialEnv:string,remoteConsent:boolean,timeoutMs:{type:"integer",minimum:500,maximum:30000},chunkChars:{type:"integer",minimum:256,maximum:8000},minSimilarity:{type:"number",minimum:0,maximum:1}};
-export const semanticPreferencesInputSchema={type:"null"};
-export const semanticPreferencesResultSchema=object({binding:nullable(object({vaultId:string,revision:bindingRevision,label:string})),settings:nullable(object({...semanticConfigProperties,version:{const:1},revision:integer,updatedAt:string},["enabled","provider","baseUrl","model","credentialEnv","remoteConsent","version","revision","updatedAt"])),canWriteState:boolean,providerExecution:{const:"unavailable"}});
-export const setSemanticSettingsInputSchema=object({bindingRevision,expectedSettingsRevision:integer,settings:object(semanticConfigProperties,[])});
+const semanticConfigProperties = {
+	enabled: boolean,
+	provider: { enum: ["none", "ollama", "openai-compatible"] },
+	baseUrl: string,
+	model: string,
+	credentialEnv: string,
+	remoteConsent: boolean,
+	timeoutMs: { type: "integer", minimum: 500, maximum: 30000 },
+	chunkChars: { type: "integer", minimum: 256, maximum: 8000 },
+	minSimilarity: { type: "number", minimum: 0, maximum: 1 },
+};
+export const semanticPreferencesInputSchema = { type: "null" };
+export const semanticPreferencesResultSchema = object({
+	binding: nullable(object({ vaultId: string, revision: bindingRevision, label: string })),
+	settings: nullable(
+		object({ ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string }, [
+			"enabled",
+			"provider",
+			"baseUrl",
+			"model",
+			"credentialEnv",
+			"remoteConsent",
+			"version",
+			"revision",
+			"updatedAt",
+		]),
+	),
+	canWriteState: boolean,
+	providerExecution: { const: "unavailable" },
+});
+export const setSemanticSettingsInputSchema = object({
+	bindingRevision,
+	expectedSettingsRevision: integer,
+	settings: object(semanticConfigProperties, []),
+});
+
+export interface KnowledgeReviewHistoryInput {
+	revision: number;
+}
+export interface KnowledgeReviewHistoryResult {
+	bindingRevision: number;
+	project: string;
+	items: { id: string; path: string; afterHash: string; reviewedAt: number; reviewMethod: string }[];
+}
+export interface KnowledgeUndoReviewInput {
+	revision: number;
+	id: string;
+	expectedHash: string;
+}
+export interface KnowledgeUndoReviewResult {
+	status: "reverted";
+	path: string;
+}
+export const reviewHistoryInputSchema = object({ revision: bindingRevision });
+export const reviewHistoryResultSchema = object({
+	bindingRevision,
+	project: string,
+	items: array(
+		object({
+			id: proposalId,
+			path: string,
+			afterHash: proposalHash,
+			reviewedAt: integer,
+			reviewMethod: string,
+		}),
+	),
+});
+export const undoReviewInputSchema = object({
+	revision: bindingRevision,
+	id: proposalId,
+	expectedHash: proposalHash,
+});
+export const undoReviewResultSchema = object({ status: { const: "reverted" }, path: string });

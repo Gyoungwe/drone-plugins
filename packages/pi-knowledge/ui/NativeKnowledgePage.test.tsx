@@ -1,17 +1,7 @@
-import {
-	act,
-	cleanup,
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { sessions, services, setPluginRuntime } from "../test/setup";
-import type {
-	KnowledgeOverview,
-	KnowledgeSearchResult,
-} from "../src/desktop/contract";
+import type { KnowledgeOverview, KnowledgeSearchResult } from "../src/desktop/contract";
 import { KnowledgePage, KnowledgeSurface } from "./entry";
 
 const overview: KnowledgeOverview = {
@@ -100,21 +90,13 @@ it("renders overview, search excerpts and read-only refresh through the generic 
 		revision: 4,
 		limit: 12,
 	});
-	expect(
-		screen.getByText("索引尚未完整，当前结果不代表全部资料。"),
-	).toBeDefined();
+	expect(screen.getByText("索引尚未完整，当前结果不代表全部资料。")).toBeDefined();
 	fireEvent.click(screen.getByRole("button", { name: "刷新" }));
 	await waitFor(() =>
-		expect(
-			runtime.invoke.mock.calls.filter(
-				([operation]) => operation === "overview",
-			),
-		).toHaveLength(2),
+		expect(runtime.invoke.mock.calls.filter(([operation]) => operation === "overview")).toHaveLength(2),
 	);
 	expect(
-		runtime.invoke.mock.calls.every(
-			([, input]) => input === null || !("cwd" in (input as object)),
-		),
+		runtime.invoke.mock.calls.every(([, input]) => input === null || !("cwd" in (input as object))),
 	).toBe(true);
 	expect(services.getKnowledgeOverview).not.toHaveBeenCalled();
 	expect(services.searchKnowledge).not.toHaveBeenCalled();
@@ -157,7 +139,7 @@ it("shows explicit errors and unavailable surfaces without calling any legacy do
 	expect(screen.queryByRole("searchbox")).toBeNull();
 	page.unmount();
 	runtime.invoke.mockClear();
-	render(<KnowledgeSurface />);
+	render(<KnowledgeSurface kind="flow" sessionId={null} />);
 	expect(screen.getByText("其他知识功能暂不可用")).toBeDefined();
 	expect(runtime.invoke).not.toHaveBeenCalled();
 });

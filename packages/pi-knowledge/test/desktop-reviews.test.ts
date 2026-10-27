@@ -1,15 +1,7 @@
 import { Worker } from "node:worker_threads";
 import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
 import { createHash, randomUUID } from "node:crypto";
-import {
-	mkdtemp,
-	mkdir,
-	readFile,
-	readdir,
-	writeFile,
-	rm,
-	realpath,
-} from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, writeFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -17,13 +9,14 @@ import { createKnowledgeConfigApi } from "../src/core/config.js";
 import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
 import { createKnowledgeRuntime } from "../src/core/knowledge-runtime.js";
 import { immutableWikiProposalHash } from "../src/core/wiki-policy.js";
-import { createKnowledgeReviewReads } from "../src/desktop/reviews.js";
+import { createKnowledgeWikiReview } from "../src/core/wiki-review.js";
+import { createBrokerWikiReviewPorts } from "../src/desktop/review-storage.js";
+import { readNoteFile, inspectNote } from "../src/core/files.js";
+import { createKnowledgeReviewModel } from "../src/desktop/reviews.js";
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 
 it("shares CLI review projection through broker state and real SQLite with scope, version and revocation checks", async () => {
-	const root = await realpath(
-		await mkdtemp(join(tmpdir(), "knowledge-review-read-")),
-	);
+	const root = await realpath(await mkdtemp(join(tmpdir(), "knowledge-review-read-")));
 	const vault = join(root, "Vault"),
 		state = join(root, "state");
 	await mkdir(join(vault, "Library/Methods"), { recursive: true });
@@ -38,11 +31,7 @@ it("shares CLI review projection through broker state and real SQLite with scope
 	});
 	const host = createKnowledgeRuntimeHost();
 	host.configureKnowledgeWorker(
-		(_url, options) =>
-			new Worker(
-				new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url),
-				options,
-			),
+		(_url, options) => new Worker(new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url), options),
 		() => ({ version: "review-test" }),
 	);
 	const owner = createKnowledgeRuntime(config, host, {}, (input) =>
@@ -51,14 +40,21 @@ it("shares CLI review projection through broker state and real SQLite with scope
 	let revoked = false;
 	const capabilities = {
 		async call(name: string, input: unknown): Promise<unknown> {
-			if (revoked)
-				throw Object.assign(new Error("Permission revoked"), { code: "EPERM" });
+			if (revoked) throw Object.assign(new Error("Permission revoked"), { code: "EPERM" });
 			const args = input as { root: string; path: string };
+			if (name === "roots.resolve") return { handle: "vault-root" };
+			if (name === "files.readText") {
+				const note = await readNoteFile(vault, args.path);
+				return {
+					text: note.text,
+					sha256: note.hash,
+					bytes: note.bytes,
+					version: (await inspectNote(vault, args.path)).stat,
+				};
+			}
 			expect(args.root).toBe("state-root");
 			if (name === "state.list")
-				return (
-					await readdir(join(state, args.path), { withFileTypes: true })
-				).map((e) => ({
+				return (await readdir(join(state, args.path), { withFileTypes: true })).map((e) => ({
 					name: e.name,
 					kind: e.isFile() ? "file" : "directory",
 				}));
@@ -69,15 +65,21 @@ it("shares CLI review projection through broker state and real SQLite with scope
 						value: JSON.parse(await readFile(join(state, args.path), "utf8")),
 					};
 				} catch (e) {
-					if ((e as NodeJS.ErrnoException).code === "ENOENT")
-						return { kind: "missing" };
+					if ((e as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
 					throw e;
 				}
 			}
 			throw new Error(`Unexpected capability ${name}`);
 		},
 	};
-	const reviews = createKnowledgeReviewReads(owner, capabilities, "state-root");
+	owner.wiki = createKnowledgeWikiReview(
+		host,
+		config,
+		owner.reviewPolicy,
+		owner.ui,
+		createBrokerWikiReviewPorts(capabilities, "state-root"),
+	);
+	const reviews = createKnowledgeReviewModel(owner, false, false);
 	const pending = join(state, binding.vaultId, "wiki-review/pending");
 	await mkdir(pending, { recursive: true });
 	const proposal = (project: string) => {
@@ -92,8 +94,7 @@ it("shares CLI review projection through broker state and real SQLite with scope
 			createdAt: Date.now(),
 			before: null,
 			beforeHash: null,
-			after:
-				"<!-- pi-agent:managed:start -->\nNew summary\n<!-- pi-agent:managed:end -->",
+			after: "<!-- pi-agent:managed:start -->\nNew summary\n<!-- pi-agent:managed:end -->",
 			afterHash: "",
 			status: "pending",
 			sources: [
@@ -145,25 +146,14 @@ it("shares CLI review projection through broker state and real SQLite with scope
 		});
 		const service = await owner.services.getKnowledgeService(binding);
 		const { bindingRevision: _, ...projection } = preview;
-		expect(
-			await owner.wiki.previewWikiProposal(service, a.id, "alpha"),
-		).toEqual(projection);
+		expect(await owner.wiki.previewWikiProposal(service, a.id, "alpha")).toEqual(projection);
 		await expect(
-			reviews.previewReview(
-				{ ...request, id: b.id, expectedProposalHash: b.proposalHash },
-				"alpha",
-			),
+			reviews.previewReview({ ...request, id: b.id, expectedProposalHash: b.proposalHash }, "alpha"),
 		).rejects.toThrow("different project");
 		await expect(
-			reviews.previewReview(
-				{ ...request, expectedProposalHash: "0".repeat(64) },
-				"alpha",
-			),
+			reviews.previewReview({ ...request, expectedProposalHash: "0".repeat(64) }, "alpha"),
 		).rejects.toThrow("changed");
-		await writeFile(
-			join(vault, "Library/Methods/orchid.md"),
-			note + "Changed source.\n",
-		);
+		await writeFile(join(vault, "Library/Methods/orchid.md"), note + "Changed source.\n");
 		expect(await reviews.previewReview(request, "alpha")).toMatchObject({
 			canApply: false,
 			sources: [{ changed: true }],
@@ -177,13 +167,9 @@ it("shares CLI review projection through broker state and real SQLite with scope
 		await mkdir(reviewed);
 		await writeFile(join(reviewed, `${a.id}.json`), JSON.stringify(a));
 		await writeFile(join(pending, `${a.id}.json`), "null");
-		await expect(reviews.previewReview(request, "alpha")).rejects.toThrow(
-			"Invalid Wiki proposal document",
-		);
+		await expect(reviews.previewReview(request, "alpha")).rejects.toThrow("Invalid Wiki proposal document");
 		revoked = true;
-		await expect(reviews.reviews({ revision: 1 }, "alpha")).rejects.toThrow(
-			"Permission revoked",
-		);
+		await expect(reviews.reviews({ revision: 1 }, "alpha")).rejects.toThrow("Permission revoked");
 	} finally {
 		await owner.dispose();
 		await rm(root, { recursive: true, force: true });

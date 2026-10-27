@@ -36,6 +36,16 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 		createHash("sha256")
 			.update(JSON.stringify(content ?? []))
 			.digest("hex");
+	// Private provider replay only: publication authority still requires this
+	// session's WeakSet proof. Host projections may remove that domain proof.
+	const protocolKey = (message) => hash({
+		timestamp: message.timestamp,
+		api: message.api,
+		provider: message.provider,
+		model: message.model,
+		responseId: message.responseId,
+		calls: message.content.filter((block) => block.type === "toolCall"),
+	});
 	function sanitizeError(text) {
 		return diagnosticText(text, 4096).trim();
 	}
@@ -46,22 +56,22 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 		return /was aborted|request aborted/i.test(String(message?.errorMessage || ""));
 	}
 	function base(message, content) {
-		// Draft/thinking snapshots stay out of public history. Provider errors are not
-		// published as answer text; a sanitized errorMessage is kept for the LLM error card.
+		// Preserve the official SDK envelope, including provider metadata and usage.
+		// Only answer content and the provider error text belong to this projection.
+		const { errorMessage: originalError, diagnostics, ...metadata } = message;
 		const errorMessage =
-			message.stopReason === "error" && typeof message.errorMessage === "string"
-				? sanitizeError(message.errorMessage)
+			message.stopReason === "error" && typeof originalError === "string"
+				? sanitizeError(originalError)
 				: "";
 		return {
-			role: "assistant",
+			...metadata,
 			content,
-			api: message.api,
-			provider: message.provider,
-			model: message.model,
-			usage: message.usage,
-			timestamp: message.timestamp,
-			stopReason: message.stopReason,
-			...(message.responseId ? { responseId: message.responseId } : {}),
+			// Diagnostics do not control provider replay. Keep only safe error text;
+			// arbitrary details and stacks must not enter public/persisted history.
+			...(diagnostics ? { diagnostics: diagnostics.map(({ type, timestamp, error }) => ({
+				type: sanitizeError(type), timestamp,
+				...(error ? { error: { message: sanitizeError(error.message) } } : {}),
+			})) } : {}),
 			...(errorMessage ? { errorMessage } : {}),
 		};
 	}
@@ -291,7 +301,8 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 		// Keep signed model protocol blocks unchanged in live provider context, not in public history.
 		pi.on("context", async (event) => ({
 			messages: event.messages.map((message) => {
-				const original = protocol.get(message[FIELD]?.id);
+				if (message.role !== "assistant") return message;
+				const original = protocol.get(protocolKey(message));
 				return original ? { ...message, content: original } : message;
 			}),
 		}));
@@ -342,7 +353,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 					return report(denied);
 				}
 				const safe = seal(message, tools, { status: "tool-only", turnId, scientificallyVerified: false });
-				protocol.set(safe[FIELD].id, structuredClone(blocks));
+				protocol.set(protocolKey(message), structuredClone(blocks));
 				protocolBytes += bytes;
 				return report(safe);
 			}
