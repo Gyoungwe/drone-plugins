@@ -11,6 +11,7 @@ describe("knowledge host loader", () => {
 		expect(port.contractVersion).toBe(1);
 		expect(Object.keys(port).sort()).toEqual([
 			"contractVersion",
+			"dailyDiscovery",
 			"decide",
 			"graph",
 			"jobs",
@@ -43,6 +44,9 @@ describe("knowledge host loader", () => {
 			"maintenance",
 		] as const)
 			expect(typeof port[method]).toBe("function");
+		expect(port.dailyDiscovery?.systemPrompt).toContain("research colleague");
+		expect(typeof port.dailyDiscovery?.buildMessage).toBe("function");
+		expect(typeof port.dailyDiscovery?.parseIdeas).toBe("function");
 		expect(Object.keys(port.vault ?? {}).sort()).toEqual([
 			"containedFile",
 			"createFileOnly",

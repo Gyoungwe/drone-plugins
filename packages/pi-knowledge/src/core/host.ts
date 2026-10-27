@@ -16,6 +16,14 @@ import {
 	replaceVaultFile,
 	VaultFileConflictError,
 } from "./layout.js";
+import { DAILY_DISCOVERY_SYSTEM, buildDailyDiscoveryMessage, parseDailyIdeas } from "./daily-discovery-prompt.js";
+
+export interface KnowledgeDiscoveryNote {
+	path: string;
+	title: string;
+	text: string;
+	mtime: number;
+}
 
 export interface KnowledgeHostPort {
 	readonly contractVersion: 1;
@@ -31,6 +39,11 @@ export interface KnowledgeHostPort {
 	setupPreview?(input: unknown): Promise<unknown>;
 	specialistSettings?(input: unknown): Promise<unknown>;
 	openTarget?(input: unknown): Promise<unknown>;
+	dailyDiscovery?: {
+		systemPrompt: string;
+		buildMessage(fresh: readonly KnowledgeDiscoveryNote[], related: readonly KnowledgeDiscoveryNote[]): string;
+		parseIdeas(text: string, allowedPaths: Iterable<string>, freshPaths: Iterable<string>): unknown;
+	};
 	vault?: {
 		readBinding(options?: { fresh?: boolean }): Promise<unknown>;
 		readNote(vault: string, path: string): Promise<unknown>;
@@ -77,6 +90,11 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			import("./ui-service.js").then(({ knowledgeSpecialistSettings }) => knowledgeSpecialistSettings(input as never)),
 		openTarget: (input) =>
 			import("./ui-service.js").then(({ knowledgeOpenTarget }) => knowledgeOpenTarget(input as never)),
+		dailyDiscovery: {
+			systemPrompt: DAILY_DISCOVERY_SYSTEM,
+			buildMessage: (fresh, related) => buildDailyDiscoveryMessage(fresh as never, related as never),
+			parseIdeas: (text, allowedPaths, freshPaths) => parseDailyIdeas(text, allowedPaths, freshPaths),
+		},
 		vault: {
 			readBinding: (options) => readKnowledgeBinding(options),
 			readNote: (vault, path) => readNoteFile(vault, path),
