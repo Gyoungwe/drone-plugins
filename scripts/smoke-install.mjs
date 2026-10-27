@@ -102,7 +102,7 @@ try {
 		"pi-analysis",
 		piAnalysisPackage.pi.extensions[0],
 	);
-	const { DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+	const { createEventBus, DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
 	const loader = new DefaultResourceLoader({
 		cwd: installRoot,
 		agentDir: join(installRoot, "agent"),
@@ -182,7 +182,7 @@ try {
 	const tools = new Map();
 	const commands = new Map();
 	const pi = {
-		events: { on() {}, emit() {} },
+		events: createEventBus(),
 		on() {},
 		appendEntry() {},
 		getCommands: () => [...commands.keys()].map((name) => ({ name })),

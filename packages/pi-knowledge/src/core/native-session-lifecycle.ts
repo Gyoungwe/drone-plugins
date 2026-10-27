@@ -64,7 +64,7 @@ export function createKnowledgeNativeAdapter(
 				return Reflect.get(target, property, target);
 			},
 		});
-		const scopedEvents = pi.events && typeof pi.events === "object" ? {
+		const scopedEvents = {
 			on: (channel: string, handler: (data: unknown) => void) => {
 				assertOpen();
 				const unsubscribe = pi.events.on(channel, (data: unknown) => { if (!closed) handler(data); });
@@ -72,14 +72,18 @@ export function createKnowledgeNativeAdapter(
 				return () => { eventUnsubscribers.delete(unsubscribe); unsubscribe(); };
 			},
 			emit: (channel: string, data: unknown) => { assertOpen(); return pi.events.emit(channel, data); },
-		} : pi.events;
+		};
 		const scopedSignal = (signal?: AbortSignal) => signal
 			? AbortSignal.any([controller.signal, signal]) : controller.signal;
 		const ownedPi = new Proxy(pi, {
 			get(target, property) {
 				if (property === "appendEntry") return (...args: unknown[]) => { assertOpen(); return target.appendEntry(...args); };
 				if (property === "sendUserMessage") return (...args: unknown[]) => run(() => target.sendUserMessage(...args));
-				if (property === "events") return scopedEvents;
+				if (property === "events") {
+					// Resolve the API when requested, preserving the managed host's actual support boundary.
+					const events = Reflect.get(target, property, target);
+					return events && typeof events === "object" ? scopedEvents : events;
+				}
 				if (property === "registerTool") return (definition: any) => target.registerTool({
 					...definition,
 					execute: (id: string, input: unknown, signal: AbortSignal | undefined, update: unknown, context: any) => {

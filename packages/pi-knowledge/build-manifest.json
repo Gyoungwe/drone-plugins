@@ -31,7 +31,7 @@
 		"src/core/maintenance.ts": "1f74c220341bbd1aed9c658a1ef3aef40bdee659bc53449e13c37008b8b16567",
 		"src/core/memory-note.ts": "880b5d183c6522b25527cf6c4597b908d05aac6307cc97b519e355a38f53b3f7",
 		"src/core/metacognitive-policy.ts": "363fd45ab2445e2d564cf010d9eeff53a36af9fc4895d1ab3c137c7773ca81e5",
-		"src/core/native-session-lifecycle.ts": "33a9c1247b93cc856b82f204865ec356c4c900fa384f55d7bca2c7a6e45372c4",
+		"src/core/native-session-lifecycle.ts": "507c65eb87c3501df285bc80aa0e53a7a0b31aaedc26d7b1099a1a35061c6716",
 		"src/core/note-category.ts": "f7a36898fe803d5b6d2fa0dab5cd4a0fa462c2dfa17714eedbe2ee42f40aa40f",
 		"src/core/note-title.ts": "5d7c4fd110ceafa74bc1cc0776bb87d53febc5762082dcd4fe38575c7b8fadfc",
 		"src/core/orchestration-policy.ts": "38119d774b07aea61e37ba3d9e3ba0589652fdd803f1769a0880f2a443bb0b61",
@@ -96,13 +96,13 @@
 		"src/maintenance/run.ts": "2575e35c4a879955e0e0d6dae32456318a34fef8ea6d19a63797bbd06d2f3460"
 	},
 	"outputs": {
-		"dist/index.mjs": "560b3f2a33409582bc5144a1d23e0ae7688aaad6d4c269b3de2fa8b8b3aab8f8",
-		"dist/host.mjs": "cb5cccf79ff0fd5c20dbea2bfac68fbb04ba8b413da35c2ee45024693e70d0ee",
+		"dist/index.mjs": "fcfefb362b1261bf7456344d7f2d58591340c968228bf2c126de8e4daa4193eb",
+		"dist/host.mjs": "d9b1531ef0db349825bbf76a6dbf96c23f192b56cfffb42496878056d5d3fc51",
 		"dist/host.d.ts": "f0adedba8cffd2a68e3a8767923e75bb52ea01e530848e446483e4bef735463f",
-		"dist/desktop-runtime.mjs": "254c4f09af818755dee933d76a68c15ef3d2003fd28c5cd616becd79ef465ffb",
+		"dist/desktop-runtime.mjs": "e49529cbfe6e73899212ce55b7383e96db6a7fb8ad30dc3805749719b6dff265",
 		"lib/knowledge/runtime/desktop-index.mjs": "becaf424e993e4b6efd096ce6c52d8be660b50d986c6f6857bd8d08e25446e22",
 		"lib/knowledge/runtime/worker.mjs": "72c809b9d15e7d8b57d695c0a0b62aec2b101e0986f0a04627b913867e2d7f0c",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "4b9f5ddea7d428e659b49e2e7fe5edaaab9db766152f41f4c767728697151f51",
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "a924ada08739e7ace373f2de8dcd83463bc745218eac26645ea908071c5d1a68",
 		"ui/bundle.js": "b457ce61c111b668458edef3ba73483c23c763954beb9c74d02b3d95950b99e7",
 		"ui/build-manifest.json": "44216717b036ddc9f623c569da6cd8c515d90bf6f13ddbffffec394c098884fe"
 	},

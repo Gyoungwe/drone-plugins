@@ -4602,7 +4602,7 @@ function createKnowledgeNativeAdapter(owner, controller, register, cleanup) {
         return Reflect.get(target, property, target);
       }
     });
-    const scopedEvents = pi.events && typeof pi.events === "object" ? {
+    const scopedEvents = {
       on: (channel, handler) => {
         assertOpen();
         const unsubscribe = pi.events.on(channel, (data) => {
@@ -4618,7 +4618,7 @@ function createKnowledgeNativeAdapter(owner, controller, register, cleanup) {
         assertOpen();
         return pi.events.emit(channel, data);
       }
-    } : pi.events;
+    };
     const scopedSignal = (signal) => signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
     const ownedPi = new Proxy(pi, {
       get(target, property) {
@@ -4627,7 +4627,10 @@ function createKnowledgeNativeAdapter(owner, controller, register, cleanup) {
           return target.appendEntry(...args);
         };
         if (property === "sendUserMessage") return (...args) => run(() => target.sendUserMessage(...args));
-        if (property === "events") return scopedEvents;
+        if (property === "events") {
+          const events = Reflect.get(target, property, target);
+          return events && typeof events === "object" ? scopedEvents : events;
+        }
         if (property === "registerTool") return (definition) => target.registerTool({
           ...definition,
           execute: (id, input, signal, update, context) => {
