@@ -5,6 +5,18 @@ import { join } from "node:path";
 import { knowledgeHostLoader } from "../src/core/host.js";
 
 describe("knowledge host loader", () => {
+	it("accepts a host-owned worker seam without resolving a resource eagerly", () => {
+		let calls = 0;
+		knowledgeHostLoader.configureWorker?.({
+			createWorker: () => {
+				calls += 1;
+				throw new Error("worker must be lazy");
+			},
+			workerMetadata: () => ({ version: "test" }),
+		});
+		expect(calls).toBe(0);
+	});
+
 	it("exposes the versioned read port without importing Drone", () => {
 		expect(knowledgeHostLoader.contractVersion).toBe(1);
 		const port = knowledgeHostLoader.load();

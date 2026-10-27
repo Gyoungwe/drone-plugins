@@ -22,6 +22,10 @@ import { notifyKnowledgeUi, subscribeKnowledgeUi } from "./ui-state.js";
 import { registerAnswerPublication } from "./publication.js";
 import { ingestKnowledgeSnapshot, resolveKnowledgeContext } from "./reuse.js";
 import { reviewWikiWithModel } from "./wiki-model-review.js";
+import {
+	configureKnowledgeWorker,
+	type KnowledgeWorkerMetadata,
+} from "./runtime-host.js";
 
 export interface KnowledgeDiscoveryNote {
 	path: string;
@@ -89,12 +93,22 @@ export interface KnowledgeHostPort {
 
 export interface KnowledgeHostLoader {
 	readonly contractVersion: 1;
+	configureWorker?(setup: {
+		createWorker(url: URL, options: Record<string, unknown>): unknown;
+		workerMetadata?(): unknown;
+	}): void;
 	load(): KnowledgeHostPort;
 }
 
 /** Generic discovery export consumed by Drone's optional capability loader. */
 export const knowledgeHostLoader: KnowledgeHostLoader = {
 	contractVersion: 1,
+	configureWorker: (setup) => {
+		configureKnowledgeWorker(
+			setup.createWorker,
+			setup.workerMetadata as (() => KnowledgeWorkerMetadata) | undefined,
+		);
+	},
 	load: () => ({
 		contractVersion: 1,
 		overview: (input) => import("./ui-service.js").then(({ knowledgeOverview }) => knowledgeOverview(input as never)),
