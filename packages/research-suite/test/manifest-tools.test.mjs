@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import test from "node:test";
 import { tmpdir } from "node:os";
@@ -13,10 +14,17 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 	const previous = process.env.DRONE_KNOWLEDGE_DIR;
 	process.env.DRONE_KNOWLEDGE_DIR = knowledgeDir;
 	const names = [];
+	const events = new EventEmitter();
 	const pi = {
 		registerTool(tool) { names.push(tool.name); },
 		registerCommand() {},
-		events: { on() {} },
+		events: {
+			on(name, handler) {
+				events.on(name, handler);
+				return () => events.off(name, handler);
+			},
+			emit(name, data) { events.emit(name, data); },
+		},
 		on() {},
 		appendEntry() {},
 		sendMessage() {},
