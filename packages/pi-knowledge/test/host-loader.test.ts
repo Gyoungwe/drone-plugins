@@ -13,11 +13,14 @@ describe("knowledge host loader", () => {
 			"jobs",
 			"maintenance",
 			"noteLinks",
+			"openTarget",
 			"overview",
 			"preview",
 			"read",
 			"reviews",
 			"search",
+			"setupPreview",
+			"specialistSettings",
 		]);
 		for (const method of [
 			"overview",
@@ -28,6 +31,9 @@ describe("knowledge host loader", () => {
 			"reviews",
 			"preview",
 			"decide",
+			"setupPreview",
+			"specialistSettings",
+			"openTarget",
 			"jobs",
 			"maintenance",
 		] as const)

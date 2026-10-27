@@ -19,6 +19,9 @@ export interface KnowledgeHostPort {
 	reviews?(input: unknown): Promise<unknown>;
 	preview?(input: unknown): Promise<unknown>;
 	decide?(input: unknown): Promise<unknown>;
+	setupPreview?(input: unknown): Promise<unknown>;
+	specialistSettings?(input: unknown): Promise<unknown>;
+	openTarget?(input: unknown): Promise<unknown>;
 	/** Optional UI operations are exposed incrementally as the host migrates. */
 	jobs?(input: unknown): Promise<unknown>;
 	maintenance?(input: unknown): Promise<unknown>;
@@ -44,6 +47,12 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			import("./ui-service.js").then(({ knowledgePreviewReview }) => knowledgePreviewReview(input as never)),
 		decide: (input) =>
 			import("./ui-service.js").then(({ knowledgeDecideReview }) => knowledgeDecideReview(input as never)),
+		setupPreview: (input) =>
+			import("./ui-service.js").then(({ knowledgeSetupPreview }) => knowledgeSetupPreview(input as never)),
+		specialistSettings: (input) =>
+			import("./ui-service.js").then(({ knowledgeSpecialistSettings }) => knowledgeSpecialistSettings(input as never)),
+		openTarget: (input) =>
+			import("./ui-service.js").then(({ knowledgeOpenTarget }) => knowledgeOpenTarget(input as never)),
 		jobs: (input) => import("./ui-service.js").then(({ knowledgeJobs }) => knowledgeJobs(input as never)),
 		maintenance: (input) =>
 			import("./ui-service.js").then(({ knowledgeMaintenance }) => knowledgeMaintenance(input as never)),
