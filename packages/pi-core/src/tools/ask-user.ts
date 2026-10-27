@@ -5,7 +5,7 @@ import {
 	type AskRequest,
 	type AskResponse,
 	askDecisionHash,
-} from "@drone/shared";
+} from "../contracts";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 

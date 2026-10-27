@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { MAX_DELIVERED_FILES } from "@drone/shared";
+import { MAX_DELIVERED_FILES } from "../contracts";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { resolveToolPath } from "../path";

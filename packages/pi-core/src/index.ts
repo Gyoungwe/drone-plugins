@@ -1,4 +1,4 @@
-import type { AskQuestion, AskRequest, AskResponse } from "@drone/shared";
+import type { AskQuestion, AskRequest, AskResponse } from "./contracts";
 import { registerTaskRuntime } from "./task-runtime/runtime.mjs";
 import type { DroneHostPort, HostCapabilities } from "@gyoungwe/plugin-api";
 import { registerDroneCommands } from "./drone-commands";
@@ -162,5 +162,25 @@ export { deliverFilesParams, makeDeliverFilesTool } from "./tools/deliver-files"
 export { MEMORY_SAVE_TOOL, makeMemorySaveTool } from "./tools/memory-save";
 export { makeStatusTool } from "./tools/status";
 export { formatTodoList, makeTodoTool, normalizeTodos } from "./tools/todo";
+export {
+	MAX_DELIVERED_FILES,
+	TODO_TOOL_NAME,
+	askDecisionHash,
+} from "./contracts";
+export type {
+	AskAnswer,
+	AskDecision,
+	AskDecisionProposal,
+	AskOption,
+	AskQuestion,
+	AskQuestionType,
+	AskRecommendation,
+	AskRecommendationConfidence,
+	AskRequest,
+	AskRequestKind,
+	AskResponse,
+	TodoItem,
+	TodoStatus,
+} from "./contracts";
 
 export default registerPiCore;

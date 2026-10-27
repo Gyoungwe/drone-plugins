@@ -1,8 +1,8 @@
-import { formatTodoList, TODO_TOOL_NAME, type TodoItem } from "@drone/shared";
+import { formatTodoList, TODO_TOOL_NAME, type TodoItem } from "../contracts";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
-export { formatTodoList } from "@drone/shared";
+export { formatTodoList } from "../contracts";
 
 /** 单次调用最多任务数（全量替换协议，防滥用） */
 const MAX_TODOS = 50;
