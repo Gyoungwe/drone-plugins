@@ -57,10 +57,8 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 	function configureKnowledgeExtensionHost(host: KnowledgeExtensionHost = {}): void {
 		extensionHost = { ...defaultHost, ...host };
 	}
-	function bindAcceptanceVerifierEvents(pi: any): void { extensionHost.bindAcceptanceVerifierEvents?.(pi); }
-	function registerAcceptanceVerifier(name: string, definition: any): any {
-		return extensionHost.registerAcceptanceVerifier?.(name, definition) ?? definition;
-	}
+	// Legacy acceptance callbacks stay in the 1.x type until its next breaking release.
+	// Registration is now a same-event-bus declaration owned by this extension.
 	function registerTool(pi: any, definition: any): void { (extensionHost.registerTool || ((target: any, value: any) => target.registerTool(value)))(pi, definition); }
 
 	/**
@@ -91,7 +89,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 	 * 只有用户在 Wiki 审阅页通过（宿主读回 applied 且来源未变）才算完成；任务卡上的「确认」不能替代。
 	 */
 	function registerWikiReviewAcceptance() {
-		return registerAcceptanceVerifier("wiki_review", {
+		return {
 			evidenceKind: "wiki-applied",
 			operationVerifier: "wiki-review-record-not-scientific-proof",
 			label: () => "Wiki 更新经你在审阅页确认",
@@ -122,7 +120,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				reason: "Wiki 上的修改还没经过你审阅通过",
 				next: "去 Wiki 审阅页看一下这次改了什么，通过或打回都在那里操作",
 			}),
-		});
+		};
 	}
 
 	/** Wiki 候选卡：applied = 已保存（带历史），pending = 尚未进入正式知识。 */
@@ -158,8 +156,13 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 	}
 
 	function registerKnowledgeInterface(pi, { readOnly = false, runtime = null } = {}) {
-		bindAcceptanceVerifierEvents(pi);
-		registerWikiReviewAcceptance();
+		const declaration = { version: 1, kind: "wiki_review", definition: registerWikiReviewAcceptance() };
+		const publishAcceptance = () => pi.events.emit("drone:acceptance-verifier/v1", declaration);
+		const removeAcceptance = pi.events.on("drone:acceptance-verifier/request/v1", (payload) => {
+			if (payload?.version === 1) publishAcceptance();
+		});
+		pi.on("session_shutdown", removeAcceptance);
+		publishAcceptance();
 		const getTaskRuntime = () => {
 			if (readOnly || !pi.events) return null;
 			let taskRuntime = null;
@@ -223,7 +226,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				setupCompleted: () => {},
 				beforeStart: async () => ({}),
 				withTurnBinding: async (_ctx, operation) => operation(),
-				dispose: async () => undefined,
+				dispose: async () => { removeAcceptance(); },
 			};
 		let disposed = false;
 		const assertSessionActive = () => { if (disposed) throw new Error("Knowledge session has been disposed"); };
@@ -1360,6 +1363,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 		async function dispose() {
 			if (disposed) return;
 			disposed = true;
+			removeAcceptance();
 			current = null;
 			bootstrap = null;
 			preparing = null;

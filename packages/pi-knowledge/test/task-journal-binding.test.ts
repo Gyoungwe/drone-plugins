@@ -44,7 +44,7 @@ async function fixture(readOnly = false) {
 		services: { getKnowledgeService: async () => service },
 		publication, delivery: {}, specialists: { createKnowledgeSpecialists: () => ({ close: async () => {} }) },
 		topics: { createTopicMemory: () => ({}) }, ui, wiki: {},
-	} as unknown as KnowledgeInterfaceDependencies, { registerTaskRuntime: oldRegister });
+	} as unknown as KnowledgeInterfaceDependencies, { registerTaskRuntime: oldRegister, registerAcceptanceVerifier: oldRegister, bindAcceptanceVerifierEvents: oldRegister });
 	const registration = knowledge.registerKnowledgeInterface(pi, { readOnly });
 	const ctx = { cwd, sessionManager: { getSessionId: () => "session", getBranch: () => entries } };
 	const emitHook = async (name: string) => { for (const handler of hooks.get(name) ?? []) await handler({}, ctx); };
@@ -105,3 +105,19 @@ it("keeps read-only knowledge projections from configuring task write-side state
 		expect(state.emitter.listenerCount("drone:task-runtime/v1")).toBe(0);
 	} finally { await state.registration.dispose(); }
 });
+
+ it("replays raw function declarations only on the current event bus and releases its listener", async () => {
+ const first = await fixture(), second = await fixture();
+ const received: any[] = [], other: any[] = [];
+ first.emitter.on("drone:acceptance-verifier/v1", payload => received.push(payload));
+ second.emitter.on("drone:acceptance-verifier/v1", payload => other.push(payload));
+ first.emitter.emit("drone:acceptance-verifier/request/v1", { version: 1 });
+ expect(received).toHaveLength(1);
+ expect(received[0]).toMatchObject({ version: 1, kind: "wiki_review" });
+ expect(typeof received[0].definition.resolve).toBe("function");
+ expect(other).toEqual([]);
+ expect(first.oldRegister).not.toHaveBeenCalled();
+ await first.registration.dispose();
+ expect(first.emitter.listenerCount("drone:acceptance-verifier/request/v1")).toBe(0);
+ await second.registration.dispose();
+ });
