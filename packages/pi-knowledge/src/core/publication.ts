@@ -36,6 +36,16 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 		createHash("sha256")
 			.update(JSON.stringify(content ?? []))
 			.digest("hex");
+	// Private provider replay only: publication authority still requires this
+	// session's WeakSet proof. Host projections may remove that domain proof.
+	const protocolKey = (message) => hash({
+		timestamp: message.timestamp,
+		api: message.api,
+		provider: message.provider,
+		model: message.model,
+		responseId: message.responseId,
+		calls: message.content.filter((block) => block.type === "toolCall"),
+	});
 	function sanitizeError(text) {
 		return diagnosticText(text, 4096).trim();
 	}
@@ -285,7 +295,8 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 		// Keep signed model protocol blocks unchanged in live provider context, not in public history.
 		pi.on("context", async (event) => ({
 			messages: event.messages.map((message) => {
-				const original = protocol.get(message[FIELD]?.id);
+				if (message.role !== "assistant") return message;
+				const original = protocol.get(protocolKey(message));
 				return original ? { ...message, content: original } : message;
 			}),
 		}));
@@ -336,7 +347,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 					return report(denied);
 				}
 				const safe = seal(message, tools, { status: "tool-only", turnId, scientificallyVerified: false });
-				protocol.set(safe[FIELD].id, structuredClone(blocks));
+				protocol.set(protocolKey(message), structuredClone(blocks));
 				protocolBytes += bytes;
 				return report(safe);
 			}
