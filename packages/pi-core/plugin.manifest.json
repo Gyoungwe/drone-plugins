@@ -1,0 +1,35 @@
+{
+	"schemaVersion": 1,
+	"id": "drone-pi-core",
+	"version": "0.1.9",
+	"pi": {
+		"apiVersion": 1,
+		"minHostVersion": "1.1.0",
+		"testedHosts": ["1.1.0", "latest"]
+	},
+	"drone": {
+		"pluginApi": 1,
+		"resultContract": "drone-result/v3"
+	},
+	"entrypoints": {"extension": "./dist/index.mjs"},
+	"capabilities": ["planning", "files", "read-only", "evidence"],
+	"tools": [
+		"ask_user",
+		"set_status",
+		"todo",
+		"deliver_files",
+		"memory_save",
+		"task_status",
+		"task_plan",
+		"task_wait",
+		"task_reconcile",
+		"task_evidence_restore"
+	],
+	"hosts": ["native-pi", "drone-desktop"],
+	"permissions": {
+		"filesystem": ["workspace-read", "workspace"],
+		"network": [],
+		"subprocess": [],
+		"externalWrites": false
+	}
+}

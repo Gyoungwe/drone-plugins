@@ -11,24 +11,21 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/Gyoungwe/Drone.git",
+		"url": "git+https://github.com/Gyoungwe/drone-plugins.git",
 		"directory": "packages/pi-core"
 	},
 	"type": "module",
 	"main": "./dist/index.mjs",
 	"files": [
 		"dist",
-		"skills",
 		"package.json",
+		"plugin.manifest.json",
 		"README.md",
 		"build-manifest.json"
 	],
 	"pi": {
 		"extensions": [
 			"./dist/index.mjs"
-		],
-		"skills": [
-			"./skills/*"
 		]
 	},
 	"exports": {
@@ -46,20 +43,21 @@
 		"./memory": "./src/memory.ts"
 	},
 	"scripts": {
-		"build": "node ../../scripts/build-pi-core.mjs",
-		"build:check": "node ../../scripts/build-pi-core.mjs --check",
-		"typecheck": "tsc --noEmit",
+		"build": "node scripts/build.mjs",
+		"build:check": "node scripts/build.mjs --check",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "npm run build && node --test test/*.test.mjs",
-		"check": "npm run typecheck && npm run build:check && node ../../scripts/smoke-pi-core.mjs && npm test"
+		"smoke": "node scripts/smoke.mjs",
+		"check": "npm run typecheck && npm run build:check && npm run smoke && npm test"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
 	},
 	"dependencies": {
-		"@gyoungwe/plugin-api": "*"
+		"@gyoungwe/plugin-api": "^1.2.0"
 	},
 	"devDependencies": {
-		"@drone/shared": "*",
+		"esbuild": "^0.25.12",
 		"typebox": "1.3.7",
 		"typescript": "^5.9.0"
 	}
