@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readFile,
+	realpath,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -23,7 +30,7 @@ import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
 import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
 import { createNativeSession } from "../src/extension/knowledge-extension.js";
 
-it("real native SDK keeps text/toolCall protocol and provider metadata through read, but rejects an unchecked final answer", async () => {
+it("real native SDK privately replays signed protocol, persists only tool calls and keeps provider metadata while rejecting an unchecked final answer", async () => {
 	const root = await realpath(
 		await mkdtemp(join(tmpdir(), "knowledge-native-publication-")),
 	);
@@ -100,26 +107,46 @@ it("real native SDK keeps text/toolCall protocol and provider metadata through r
 			});
 			return { ...result, services, diagnostics: services.diagnostics };
 		},
-		{ cwd: root, agentDir, sessionManager: SessionManager.inMemory(root) },
+		{
+			cwd: root,
+			agentDir,
+			sessionManager: SessionManager.create(root, join(root, "history")),
+		},
 	);
 	const errors: unknown[] = [];
 	await sdk.session.bindExtensions({ onError: (error) => errors.push(error) });
 	const progress = "I will read the actual file before answering.";
+	const thinking = "PRIVATE_SIGNED_THINKING";
 	const unchecked =
 		"UNCHECKED_FINAL_CLAIM is scientifically established. [[Library/Papers/unread]]";
 	const response = Object.assign(
 		fauxAssistantMessage(
 			[
 				{ type: "text", text: progress },
+				{
+					type: "thinking",
+					thinking,
+					thinkingSignature: "provider-signed-thinking",
+				},
 				fauxToolCall("read", { path: "input.txt" }),
 			],
 			{ stopReason: "toolUse", responseId: "provider-tool-response" },
 		),
-		{ id: "provider-message-id" },
+		{
+			responseModel: "provider-model-version",
+			rawStopReason: "tool_use",
+			endTurn: false,
+		},
 	);
+	const providerHistory: any[] = [];
 	provider.setResponses([
 		response,
-		fauxAssistantMessage(unchecked, { responseId: "provider-final-response" }),
+		(context) => {
+			providerHistory.push(structuredClone(context.messages));
+			return fauxAssistantMessage(unchecked, {
+				responseId: "provider-final-response",
+			});
+		},
 	]);
 	try {
 		await sdk.session.prompt(
@@ -129,9 +156,18 @@ it("real native SDK keeps text/toolCall protocol and provider metadata through r
 			(message) =>
 				message.role === "assistant" && message.stopReason === "toolUse",
 		);
-		expect(toolMessage.content).toEqual(response.content);
+		expect(toolMessage.content).toEqual(
+			response.content.filter((block) => block.type === "toolCall"),
+		);
+		expect(providerHistory).toHaveLength(1);
+		expect(
+			providerHistory[0].find((message: any) => message.role === "assistant")
+				.content,
+		).toEqual(response.content);
 		expect(toolMessage).toMatchObject({
-			id: "provider-message-id",
+			responseModel: "provider-model-version",
+			rawStopReason: "tool_use",
+			endTurn: false,
 			responseId: "provider-tool-response",
 			api: provider.getModel().api,
 			provider: provider.provider.id,
@@ -154,11 +190,17 @@ it("real native SDK keeps text/toolCall protocol and provider metadata through r
 				type: "message_end",
 				message: untrustedProofCopy,
 			}).message.content,
-		).toEqual(response.content);
+		).not.toContainEqual(expect.objectContaining({ type: "toolCall" }));
 		expect(
 			observer.projectKnowledgeSnapshot([structuredClone(toolMessage)])[0]
 				.content,
-		).toEqual(response.content);
+		).not.toContainEqual(expect.objectContaining({ type: "toolCall" }));
+		expect(JSON.stringify(sdk.session.messages)).not.toContain(progress);
+		expect(JSON.stringify(sdk.session.messages)).not.toContain(thinking);
+		const persisted = await readFile(sdk.session.sessionFile!, "utf8");
+		expect(persisted).not.toContain(progress);
+		expect(persisted).not.toContain(thinking);
+		expect(persisted).not.toContain(unchecked);
 		const final: any = sdk.session.messages
 			.filter((message) => message.role === "assistant")
 			.at(-1);
