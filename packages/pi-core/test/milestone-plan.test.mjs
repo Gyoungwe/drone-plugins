@@ -1,3 +1,4 @@
+import { createEventBus } from "@earendil-works/pi-coding-agent";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeTaskMilestones, taskHostLoader } from "../dist/host.mjs";
@@ -146,7 +147,7 @@ test("native task_plan executes the plugin policy before appending task state", 
 			checkpoints.push({ customType, data });
 		},
 		sendMessage() {},
-		events: { on() {}, emit() {} },
+		events: createEventBus(),
 	};
 	registerPiCore(pi, {
 		host: {

@@ -6,11 +6,15 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
+import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+
 const run = promisify(execFile);
 const packageRoot = resolve(import.meta.dirname, "..");
 const workspaceRoot = resolve(packageRoot, "../..");
 
-test("packed public entries provide their own declarations to a clean TypeScript consumer", async () => {
+test("packed public entries provide their own declarations to a clean TypeScript consumer", async (t) => {
+	const api = await candidatePluginApi();
+	t.diagnostic(`Explicit Plugin API ${api.version} SHA-256 ${api.sha256}`);
 	const root = await mkdtemp(join(tmpdir(), "pi-core-types-"));
 	try {
 		const packed = await run(
@@ -30,6 +34,7 @@ test("packed public entries provide their own declarations to a clean TypeScript
 				"--no-audit",
 				"--no-fund",
 				join(root, filename),
+				api.path,
 				"@earendil-works/pi-coding-agent@1.1.0",
 				"@types/node@22",
 				"@modelcontextprotocol/sdk@1",

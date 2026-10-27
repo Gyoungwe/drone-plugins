@@ -62,7 +62,7 @@
 		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
 	},
 	"dependencies": {
-		"@gyoungwe/plugin-api": "^1.2.0",
+		"@gyoungwe/plugin-api": "^1.3.0",
 		"typebox": "1.3.7"
 	},
 	"devDependencies": {

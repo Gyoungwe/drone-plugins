@@ -1,3 +1,4 @@
+import { createEventBus } from "@earendil-works/pi-coding-agent";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
@@ -24,7 +25,7 @@ test("registerPiCore exposes the portable tools and task runtime", () => {
 		},
 		appendEntry() {},
 		sendMessage() {},
-		events: { on() {}, emit() {} },
+		events: createEventBus(),
 	};
 	const result = registerPiCore(pi);
 	assert.deepEqual(result.tools.slice(-5), [

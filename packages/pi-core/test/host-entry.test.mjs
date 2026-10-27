@@ -70,3 +70,46 @@ test("tasks host loader preserves the runtime client contract", async () => {
 		{ operation: "plan", input: { items: ["one", "two"] } },
 	]);
 });
+
+ test("two task loaders keep verifier registries and shutdown isolated", async () => {
+ const first = host.taskHostLoader.load(), second = host.taskHostLoader.load();
+ first.registerAcceptanceVerifier("loader_first", { fields: ["doi"] });
+ assert.equal(second.readAcceptanceVerifier("loader_first"), null);
+ second.registerAcceptanceVerifier("loader_second", { fields: ["title"] });
+ assert.equal(first.readAcceptanceVerifier("loader_second"), null);
+ await first.dispose();
+ assert.equal(second.readAcceptanceVerifier("loader_second").kind, "loader_second");
+ assert.throws(() => first.createNativeSession(), /disposed/);
+ await second.dispose();
+ });
+
+test("native entry and loader share one owner per event bus, while two sessions remain isolated", async () => {
+ const { createEventBus } = await import("@earendil-works/pi-coding-agent");
+ const { registerPiCore } = await import("../dist/index.mjs");
+ const loader = host.taskHostLoader.load();
+ const secondLoader = host.taskHostLoader.load();
+ const sessions = [loader.createNativeSession(), loader.createNativeSession(), secondLoader.createNativeSession()];
+ const makePi = () => {
+  const hooks = new Map(), tools = [], events = createEventBus();
+  return { events, tools, hooks, on(name, handler) { hooks.set(name, [...hooks.get(name) || [], handler]); },
+   registerTool(tool) { tools.push(tool); }, registerCommand() {},
+   getAllTools: () => tools, getCommands: () => [], appendEntry() {}, sendMessage() {},
+  };
+ };
+ const first = makePi(), second = makePi(), third = makePi();
+ registerPiCore(first);
+ await sessions[0].extension(first);
+ await sessions[1].extension(second);
+ await sessions[2].extension(third);
+ first.events.emit("drone:acceptance-verifier/v1", { version: 1, kind: "first_session", definition: { fields: ["firstField"], verify: () => "first" } });
+ const schema = (pi) => pi.tools.find((tool) => tool.name === "task_plan").parameters.properties.milestones.items.properties.acceptance;
+ assert.equal(first.tools.filter((tool) => tool.name === "task_plan").length, 1);
+ assert(schema(first).properties.kind.enum.includes("first_session"));
+ assert(!schema(second).properties.kind.enum.includes("first_session"));
+ assert(!schema(third).properties.kind.enum.includes("first_session"));
+ await loader.dispose();
+ assert.throws(() => first.tools.find((tool) => tool.name === "task_plan").execute(), /disposed/);
+ assert.throws(() => second.tools.find((tool) => tool.name === "task_plan").execute(), /disposed/);
+ assert.doesNotThrow(() => third.events.emit("drone:acceptance-verifier/v1", { version: 1, kind: "third_session", definition: { fields: [] } }));
+ await secondLoader.dispose();
+});

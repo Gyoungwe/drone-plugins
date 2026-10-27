@@ -12,11 +12,9 @@ import {
 	writeMemory as writeMemoryImpl,
 } from "./memory";
 import { normalizeTaskMilestones } from "./milestone-plan";
-import {
-	acceptanceVerifier,
-	registerAcceptanceVerifier,
-	type TaskAcceptanceVerifier,
-} from "./task-runtime/acceptance.mjs";
+import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
+import type { TaskAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
+import { createTaskRuntimeOwner } from "./task-runtime/owner.mjs";
 import { makeDeliverFilesTool as makeDeliverFilesToolImpl } from "./tools/deliver-files";
 import { makeMemorySaveTool as makeMemorySaveToolImpl } from "./tools/memory-save";
 import { makeStatusTool as makeStatusToolImpl } from "./tools/status";
@@ -103,6 +101,8 @@ interface TaskHostLoaderContract {
 		readonly readAcceptanceVerifier: (
 			kind: string,
 		) => TaskAcceptanceVerifier | null;
+		readonly createNativeSession: () => PluginNativeSession;
+		readonly dispose: () => Promise<void>;
 		readonly normalizeMilestones: typeof normalizeTaskMilestones;
 		readonly workbench?: WorkbenchPluginClient;
 	};
@@ -125,18 +125,37 @@ interface WorkbenchPluginClient {
 /** Optional tasks host discovered by Drone Desktop from the same Pi package. */
 export const taskHostLoader = {
 	contractVersion: 1 as const,
-	load: (input?: { readonly workbench?: WorkbenchPluginClient }) => ({
-		contractVersion: 1 as const,
-		registerAcceptanceVerifier: (
-			kind: string,
-			definition: Readonly<Record<string, unknown>>,
-		) => {
-			registerAcceptanceVerifier(kind, definition);
-		},
-		readAcceptanceVerifier: (kind: string) => acceptanceVerifier(kind),
-		normalizeMilestones: normalizeTaskMilestones,
-		...(input?.workbench ? { workbench: input.workbench } : {}),
-	}),
+	load: (input?: { readonly workbench?: WorkbenchPluginClient }) => {
+    const owner = createTaskRuntimeOwner();
+    const sessions = new Set<PluginNativeSession>();
+    let active = true;
+    return {
+      contractVersion: 1 as const,
+      registerAcceptanceVerifier: owner.registerAcceptanceVerifier,
+      readAcceptanceVerifier: owner.readAcceptanceVerifier,
+      normalizeMilestones: normalizeTaskMilestones,
+      createNativeSession: (): PluginNativeSession => {
+        if (!active) throw new Error("Task plugin is unavailable: loader disposed");
+        const sessionOwner = createTaskRuntimeOwner(owner.definitions());
+        const session: PluginNativeSession = {
+          extension: (pi) => { sessionOwner.attach(pi); },
+          dispose: async () => {
+            await sessionOwner.dispose();
+            sessions.delete(session);
+          },
+        };
+        sessions.add(session);
+        return session;
+      },
+      dispose: async () => {
+        if (!active) return;
+        active = false;
+        await Promise.all([...sessions].map((session) => session.dispose()));
+        await owner.dispose();
+      },
+      ...(input?.workbench ? { workbench: input.workbench } : {}),
+    };
+  },
 } satisfies TaskHostLoaderContract;
 
 export { normalizeTaskMilestones } from "./milestone-plan";

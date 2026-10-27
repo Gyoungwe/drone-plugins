@@ -181,14 +181,14 @@ function createTaskJournal({ persist = () => {
   };
 }
 function registerTaskRuntime(pi, options = {}) {
-  bindRuntime(pi);
+  const shared = requestSharedTaskRuntime(pi);
+  bindRuntime(pi, shared?.runtime || options.runtime);
   const hostRuntime = runtimeForHost(pi);
   hostRuntime.tasks ??= {};
   if (hostRuntime.tasks.workbench?.journal) {
     hostRuntime.tasks.workbench.journal.configure?.(options);
     return hostRuntime.tasks.workbench.journal;
   }
-  const shared = requestSharedTaskRuntime(pi);
   if (shared?.journal) {
     shared.journal.configure?.(options);
     hostRuntime.tasks.workbench = { ...hostRuntime.tasks.workbench, ...shared };
@@ -206,7 +206,10 @@ function registerTaskRuntime(pi, options = {}) {
       hostRuntime.tasks.workbench.journal = current;
     }
   }));
-  if (registry) registry.journal = journal;
+  if (registry) {
+    registry.journal = journal;
+    registry.runtime = hostRuntime;
+  }
   hostRuntime.tasks.workbench = { ...hostRuntime.tasks.workbench, version: 1, journal };
   publishTaskRuntimeRegistry(pi, registry);
   return journal;
@@ -229,7 +232,7 @@ function requestSharedTaskRuntime(pi) {
 function publishTaskRuntimeRegistry(pi, registry) {
   const events = pi?.events;
   if (!events?.on || !events.emit) return;
-  events.on(TASK_RUNTIME_REQUEST, (payload) => {
+  registry.unsubscribe = events.on(TASK_RUNTIME_REQUEST, (payload) => {
     if (payload?.version === 1) events.emit(TASK_RUNTIME_RESPONSE, { version: 1, registry });
   });
 }
@@ -259,5 +262,6 @@ export {
   continuesTask,
   createTaskJournal,
   isTaskStatusQuery,
-  registerTaskRuntime
+  registerTaskRuntime,
+  requestSharedTaskRuntime
 };
