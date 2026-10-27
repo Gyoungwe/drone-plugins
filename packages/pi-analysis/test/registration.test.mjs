@@ -51,6 +51,33 @@ const ready = await tools.get("analysis_assess_readiness").execute("ready", {
 assert.equal(ready.details.status, "ready");
 assert.equal(ready.details.execution, "host-required");
 
+const evidencePlan = await tools.get("analysis_prepare_evidence").execute("prepare", {
+	id: "assembly-evidence",
+	question: "Assemble reads",
+	assay: "assembly",
+	mode: "exploratory",
+	spec: {
+		outputs: [
+			"assembly/contigs.fasta",
+			"assembly/assembly-metrics.json",
+			"assembly/busco.json",
+			"assembly/contamination.json",
+		],
+		dataDesign: { dataset: { files: ["reads-1.fastq.gz"] }, rows: [{ sample: "reads-1" }] },
+	},
+	evidence: { readsValidated: true, assemblyGoalResolved: true, method: { id: "spades", version: "4.0.0" } },
+});
+assert.equal(evidencePlan.details.format, "drone-analysis-evidence-plan");
+assert.equal(evidencePlan.details.version, 1);
+assert.equal(evidencePlan.details.execution, "host-required");
+assert.equal(evidencePlan.details.evidence, "host-supplied");
+assert.deepEqual(evidencePlan.details.requiredOutputs, [
+	"assembly/contigs.fasta",
+	"assembly/assembly-metrics.json",
+	"assembly/busco.json",
+	"assembly/contamination.json",
+]);
+
 const blocked = await tools.get("analysis_assess_readiness").execute("blocked", {
 	id: "assembly-blocked",
 	question: "Assemble reads",

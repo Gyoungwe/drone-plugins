@@ -92,3 +92,22 @@ test("rejects a readWrite write permission when external writes are disabled", (
 	};
 	assert.match(errors(manifest), /externalWrites=false conflicts/);
 });
+
+// This is a bounded declared scope, not a general home-directory grant.
+test("accepts application-state and rejects invented broad state roots", () => {
+	assert.equal(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state"] } }), "");
+	assert.equal(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state-write"] } }), "");
+	assert.equal(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["configured-vault-write"] } }), "");
+	assert.match(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state/**"] } }), /invalid value/);
+	assert.match(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state-write/**"] } }), /invalid value/);
+});
+
+
+test("resources must have a Desktop owner and real packaged entries", () => {
+ const entrypoints = { desktopRuntime: "./dist/index.mjs", resources: { index: "./dist/index.mjs" } };
+ assert.equal(errors({ ...valid, entrypoints }), "");
+ assert.match(errors({ ...valid, entrypoints: { resources: entrypoints.resources } }), /resources require desktopRuntime/);
+ assert.match(errors({ ...valid, entrypoints: { ...entrypoints, resources: { index: "./dist/missing.mjs" } } }), /does not exist/);
+ assert.match(errors({ ...valid, entrypoints: { ...entrypoints, resources: [] } }), /nonempty resource IDs/);
+ assert.match(errors({ ...valid, entrypoints: { ...entrypoints, resources: { "": "./dist/index.mjs" } } }), /nonempty resource IDs/);
+});

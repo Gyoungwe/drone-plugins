@@ -31,11 +31,17 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 		sendUserMessage() {},
 	};
 	try {
-		for (const packageName of ["@gyoungwe/pi-core", "@gyoungwe/pi-knowledge", "@gyoungwe/pi-research"]) {
+		for (const packageName of [
+			"@gyoungwe/pi-core",
+			"@gyoungwe/pi-workbench",
+			"@gyoungwe/pi-knowledge",
+			"@gyoungwe/pi-research",
+		]) {
 			const module = await import(pathToFileURL(join(root, "node_modules", ...packageName.split("/"), "dist/index.mjs")).href);
 			module.default(pi);
 		}
-		assert.deepEqual(names, manifest.tools);
+		assert.equal(new Set(names).size, names.length, "bundled extension tools must not collide");
+		assert.deepEqual([...names].sort(), [...manifest.tools].sort());
 	} finally {
 		if (previous === undefined) delete process.env.DRONE_KNOWLEDGE_DIR;
 		else process.env.DRONE_KNOWLEDGE_DIR = previous;

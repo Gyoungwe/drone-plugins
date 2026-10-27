@@ -1,0 +1,256 @@
+{
+  "date": "2026-10-27",
+  "scope": "scientific/native UI history merge; package and runtime gates only",
+  "parents": {
+    "scientific": "9646a53bb49c3480b5c5a8f7107c612a0464a5ae",
+    "nativeArchitecture": "e09a6b01d820fe1ee086fd07bf5ac6837a85d98d"
+  },
+  "commands": [
+    {
+      "command": "npm ci --no-audit --no-fund",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run build",
+      "exitCode": 0
+    },
+    {
+      "command": "DRONE_PLUGIN_API_TARBALL=\"$PWD/vendor/gyoungwe-plugin-api-1.3.0.tgz\" npm run check",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --cached --check",
+      "exitCode": 0
+    }
+  ],
+  "tests": {
+    "piKnowledge": {
+      "files": 86,
+      "tests": 502
+    },
+    "piResearch": {
+      "files": 29,
+      "tests": 164
+    },
+    "piCore": 16,
+    "suite": 3,
+    "analysis": 16,
+    "evidence": 6,
+    "connectors": 3,
+    "workbenchNative": 5,
+    "workbenchUi": 1,
+    "discovery": 3,
+    "desktopUi": 1
+  },
+  "apiCandidate": {
+    "version": "1.3.0",
+    "sourceCommit": "74fe57e2",
+    "sha256": "5a4b46f427b7613d9ab6519fd6d29bb3c6e977d32fff1d33076317cbf185e55d",
+    "published": false
+  },
+  "knowledgeNative": {
+    "package": "@gyoungwe/pi-knowledge",
+    "version": "0.3.0",
+    "manifest": "drone-pi-knowledge",
+    "tarballFiles": 266,
+    "tools": [
+      "knowledge_status",
+      "knowledge_search",
+      "research_prepare_knowledge",
+      "research_topics",
+      "research_resume_topic",
+      "research_read_knowledge",
+      "research_restore_evidence",
+      "research_search_knowledge",
+      "research_check_answer",
+      "research_task_status",
+      "research_search_explainers",
+      "research_knowledge_status",
+      "research_update_topic",
+      "research_archive_topic",
+      "research_maintain_knowledge",
+      "research_delegate_knowledge",
+      "research_archive_explainer",
+      "research_propose_wiki_update",
+      "research_wiki_review_status"
+    ],
+    "status": "unconfigured",
+    "search": "unconfigured",
+    "realAgentSession": true,
+    "configuredNativeSessions": [
+      {
+        "attempt": 0,
+        "tools": [
+          "knowledge_status",
+          "research_knowledge_status"
+        ]
+      },
+      {
+        "attempt": 1,
+        "tools": [
+          "knowledge_status",
+          "research_knowledge_status"
+        ]
+      }
+    ],
+    "configuredShutdownLeaseReleased": true,
+    "configuredRestart": true,
+    "dispatchCount": 1,
+    "model": "Official SDK faux provider; offline deterministic model"
+  },
+  "knowledgeUiPackage": {
+    "package": "@gyoungwe/pi-knowledge",
+    "version": "0.3.0",
+    "tarball": "gyoungwe-pi-knowledge-0.3.0.tgz",
+    "cleanInstall": true,
+    "publicRegistryInstall": false,
+    "candidateApi": {
+      "version": "1.3.0",
+      "sha256": "5a4b46f427b7613d9ab6519fd6d29bb3c6e977d32fff1d33076317cbf185e55d"
+    },
+    "exports": [
+      "KnowledgePage",
+      "KnowledgeSurface"
+    ],
+    "hostReact": true,
+    "companionContributionsDistinct": true,
+    "gui": "NOT_RUN"
+  },
+  "researchSdk": {
+    "status": "PASS",
+    "packageVersion": "0.3.2",
+    "tarballSha256": "4db7092d8ef47a29f987833fd577ceaa18dc21f2295e605c0ce4be6be7a15176",
+    "model": "Pi faux provider (deterministic offline model); real AgentSession and tool dispatch; no remote model inference",
+    "isolation": "Fresh HOME, npm config, agent directory and install prefix for each matrix cell; environment allowlist; no user credentials",
+    "matrix": [
+      {
+        "target": "locked",
+        "version": "1.1.0",
+        "status": "PASS",
+        "dispatchCount": 14,
+        "tools": 6,
+        "sessions": 2,
+        "sameWorkspace": true,
+        "sharedExtensionClosure": true,
+        "contextSessionManager": true,
+        "sourcedAnswer": true,
+        "candidateDepositionReadBack": true,
+        "emptyClaimsBlocked": true,
+        "crossSessionReadBlocked": true,
+        "crossSessionLedgerBlocked": true
+      },
+      {
+        "target": "latest",
+        "version": "1.4.0",
+        "status": "PASS",
+        "dispatchCount": 14,
+        "tools": 6,
+        "sessions": 2,
+        "sameWorkspace": true,
+        "sharedExtensionClosure": true,
+        "contextSessionManager": true,
+        "sourcedAnswer": true,
+        "candidateDepositionReadBack": true,
+        "emptyClaimsBlocked": true,
+        "crossSessionReadBlocked": true,
+        "crossSessionLedgerBlocked": true
+      }
+    ]
+  },
+  "suiteInstall": {
+    "status": "PASS",
+    "package": "@gyoungwe/research-suite",
+    "version": "0.2.2",
+    "tarballSha256": "3ca6b334819dd78e7e02bc9c2184dd806b579299eb5ced0c98a150430a18f0f4",
+    "installRootIsClean": true,
+    "loadedExtensions": 4,
+    "toolCount": 22,
+    "tools": [
+      "task_status",
+      "task_plan",
+      "task_wait",
+      "task_reconcile",
+      "task_evidence_restore",
+      "ask_user",
+      "set_status",
+      "todo",
+      "deliver_files",
+      "memory_save",
+      "workbench_plan",
+      "workbench_status",
+      "workbench_todo",
+      "workbench_memory_save",
+      "knowledge_status",
+      "knowledge_search",
+      "research_search_sources",
+      "research_read_source",
+      "research_deposit_research_note",
+      "research_answer_sources",
+      "research_status",
+      "research_loop"
+    ],
+    "model": "Pi loader only; no credentials and no model call"
+  },
+  "pdfInstall": {
+    "status": "PASS",
+    "scope": "installed suite PDF text/page receipt and native Canvas rendering",
+    "page": 1,
+    "markedPixels": 1082
+  },
+  "allPackagesInstall": {
+    "packages": [
+      "@gyoungwe/pi-core",
+      "@gyoungwe/pi-workbench",
+      "@gyoungwe/pi-discovery",
+      "@gyoungwe/pi-knowledge",
+      "@gyoungwe/pi-research",
+      "@gyoungwe/pi-analysis",
+      "@gyoungwe/pi-evidence",
+      "@gyoungwe/pi-connectors",
+      "@gyoungwe/desktop-ui-pack",
+      "@gyoungwe/research-suite"
+    ],
+    "installed": true,
+    "publicRegistryInstall": false,
+    "candidateApi": {
+      "version": "1.3.0",
+      "sha256": "5a4b46f427b7613d9ab6519fd6d29bb3c6e977d32fff1d33076317cbf185e55d"
+    },
+    "piKnowledgeTools": 19,
+    "piAnalysisTools": [
+      "analysis_list_adapters",
+      "analysis_assess_readiness",
+      "analysis_prepare_evidence"
+    ],
+    "piEvidenceTools": [
+      "evidence_validate_analysis_plan",
+      "evidence_validate_manifest",
+      "evidence_validate_capsule",
+      "evidence_verify_replay"
+    ],
+    "piResearchTools": [
+      "research_search_sources",
+      "research_read_source",
+      "research_deposit_research_note",
+      "research_answer_sources",
+      "research_status",
+      "research_loop"
+    ],
+    "piConnectorTools": [
+      "connector_list",
+      "connector_get"
+    ],
+    "piAnalysisLoaderDiscovered": true,
+    "knowledgeStatus": "unconfigured"
+  },
+  "formalInstalledAppGui": "NOT_RUN",
+  "npmPublish": "NOT_RUN",
+  "remotePush": "NOT_RUN",
+  "remaining": [
+    "pi-core 0.2.0 and actual discovery-service integration",
+    "public Plugin API 1.3 publication and minimum-version closure",
+    "full native research/publication/background hooks on shared owner",
+    "native Desktop undo route and its hash/CAS regression",
+    "full knowledge surfaces and same-tarball formal installed-app GUI"
+  ]
+}

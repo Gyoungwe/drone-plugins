@@ -1,25 +1,34 @@
 {
   "schemaVersion": 1,
   "id": "drone-desktop-ui-pack",
-  "version": "0.1.1",
+  "version": "0.3.0",
   "pi": {
     "apiVersion": 1,
-    "minHostVersion": "0.32.0"
+    "minHostVersion": "1.1.0"
   },
   "drone": {
     "pluginApi": 1,
     "resultContract": "drone-result/v3"
   },
   "entrypoints": {
-		"ui": "./ui/plugin.json"
+    "ui": "./ui/plugin.json"
   },
-  "capabilities": ["ui"],
+  "capabilities": [
+    "ui"
+  ],
   "tools": [],
-  "hosts": ["drone-desktop"],
+  "hosts": [
+    "drone-desktop"
+  ],
   "permissions": {
     "filesystem": [],
     "network": [],
     "subprocess": [],
-    "externalWrites": false
+    "externalWrites": false,
+    "readWrite": {
+      "read": false,
+      "write": false,
+      "delete": false
+    }
   }
 }

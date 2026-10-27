@@ -135,6 +135,7 @@ export {
 	type ReviewerTrigger,
 } from "./deliverable-review.js";
 export {
+	createKnowledgeReviewPolicy,
 	advisoryCodes,
 	type ReviewMode,
 	readReviewMode,
@@ -206,6 +207,7 @@ export {
 	TOPIC_MEMORY_VERSION,
 	archiveTopic,
 	classifyTopic,
+	createTopicMemoryApi,
 	createTopicMemory,
 	listTopics,
 	readTopic,
@@ -221,6 +223,8 @@ export * from "./memory-note.js";
 export * from "./project-identity.js";
 export * from "./related-notes.js";
 export {
+	createKnowledgeRuntimeHost,
+	type KnowledgeRuntimeHost,
 	configureKnowledgeWorker,
 	configureKnowledgeEvidence,
 	configureKnowledgeHost,
@@ -260,6 +264,7 @@ export {
 } from "./semantic-model.js";
 
 export {
+	createKnowledgeUi,
 	beginKnowledgeFlow,
 	clearKnowledgeFlow,
 	emitKnowledgeUi,
@@ -276,17 +281,13 @@ export {
 	updateKnowledgeFlow,
 } from "./ui-state.js";
 export {
+	createKnowledgePublication,
 	projectKnowledgeEvent,
 	projectKnowledgeSnapshot,
 	registerAnswerPublication,
 } from "./publication.js";
 
-export {
-	KnowledgeService,
-	closeKnowledgeServices,
-	getKnowledgeService,
-	notifyKnowledgeChange,
-} from "./service.js";
+export { createKnowledgeServicePool, KnowledgeService, closeKnowledgeServices, getKnowledgeService, notifyKnowledgeChange } from "./service.js";
 
 export {
 	checkKnowledgeReceiptFreshness,
@@ -313,6 +314,7 @@ export {
 } from "./reuse.js";
 
 export {
+	createKnowledgeWikiReview,
 	autoApplyWikiProposal,
 	decideWikiProposal,
 	listWikiProposals,
@@ -325,6 +327,7 @@ export {
 } from "./wiki-review.js";
 
 export {
+	createKnowledgeSpecialistHost,
 	SPECIALIST_LIMITS,
 	contextSessionId,
 	knowledgeSpecialistHost,
@@ -335,9 +338,9 @@ export {
 	withSpecialistSlot,
 } from "./specialist-host.js";
 
-export { createKnowledgeSpecialists, knowledgeReadStart, shouldOrientKnowledge } from "./specialists.js";
+export { createKnowledgeSpecialistTools, createKnowledgeSpecialists, knowledgeReadStart, shouldOrientKnowledge } from "./specialists.js";
 
-export { saveSpecialistExplainer } from "./specialist-delivery.js";
+export { createSpecialistDelivery, saveSpecialistExplainer } from "./specialist-delivery.js";
 
 export { lastWikiModelReview, reviewWikiWithModel } from "./wiki-model-review.js";
 
@@ -374,4 +377,7 @@ export {
 	type WorkflowSpecDiffValue,
 } from "./experience-store.js";
 export { EvolutionIndex, type EvolutionIndexStore } from "./evolution.js";
+
+export { createKnowledgeRuntime, type KnowledgeRuntime } from "./knowledge-runtime.js";
+
 export { summaryDeliveryClaims } from "./delivery-claims.js";

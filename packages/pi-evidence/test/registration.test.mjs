@@ -34,6 +34,29 @@ const manifestResult = await tools.get("evidence_validate_manifest").execute("ma
 });
 assert.equal(manifestResult.details.valid, true);
 
+const plan = {
+	format: "drone-analysis-evidence-plan",
+	version: 1,
+	analysis: { id: "assembly-evidence", version: "analysis-contract-1" },
+	adapter: { id: "assembly", version: "1.0.0" },
+	adapterSnapshotSha256: "a".repeat(64),
+	method: { id: "spades", version: "4.0.0" },
+	requiredOutputs: ["assembly/contigs.fasta"],
+	readiness: { ok: true, inferentialClaimsAllowed: false, gates: [], warnings: [] },
+	execution: "host-required",
+	evidence: "host-supplied",
+};
+const planResult = await tools.get("evidence_validate_analysis_plan").execute("plan", { plan });
+assert.equal(planResult.details.valid, true);
+assert.deepEqual(planResult.details.plan.requiredOutputs, ["assembly/contigs.fasta"]);
+await assert.rejects(
+	() =>
+		tools.get("evidence_validate_analysis_plan").execute("unsafe", {
+			plan: { ...plan, requiredOutputs: ["../private.json"] },
+		}),
+	/relative paths/,
+);
+
 const dist = await readFile(join(root, "dist/index.mjs"), "utf8");
 assert(!dist.includes("@drone/backend"));
 assert(!dist.includes("electron"));

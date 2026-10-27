@@ -1,23 +1,24 @@
+import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
-const execFileAsync = promisify(execFile);
+const run = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
-const smokeRoot = await mkdtemp(join(tmpdir(), "drone-desktop-ui-pack-"));
+const temp = await mkdtemp(join(tmpdir(), "drone-research-status-ui-"));
 try {
-	const packed = JSON.parse(
-		(await execFileAsync("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", smokeRoot], { cwd: root })).stdout,
-	)[0];
-	const tarball = join(smokeRoot, packed.filename);
-	const list = (await execFileAsync("tar", ["-tzf", tarball])).stdout;
-	for (const entry of ["package/ui/plugin.json", "package/ui/src/index.ts", "package/plugin.manifest.json"]) {
-		if (!list.split("\n").includes(entry)) throw new Error(`tarball is missing ${entry}`);
-	}
-	const manifest = JSON.parse(await readFile(join(root, "ui/plugin.json"), "utf8"));
-	console.log(JSON.stringify({ package: "@gyoungwe/desktop-ui-pack", uiPlugin: manifest.name, tarball: packed.filename, clean: true }));
+	const pack = JSON.parse((await run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", temp], { cwd: root })).stdout)[0];
+	await writeFile(join(temp, "package.json"), '{"name":"research-status-consumer","private":true,"version":"0.0.0"}');
+	await run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", join(temp, pack.filename)], { cwd: temp });
+	const installed = join(temp, "node_modules/@gyoungwe/desktop-ui-pack");
+	const manifest = JSON.parse(await readFile(join(installed, "ui/plugin.json"), "utf8"));
+	assert.deepEqual(manifest.contributions.map(entry => entry.region), ["panel.tab"]);
+	const loaded = await import(pathToFileURL(join(installed, "ui", manifest.main)));
+	assert.deepEqual(Object.keys(loaded), ["ResearchStatusPanel"]);
+	console.log(JSON.stringify({ package: "@gyoungwe/desktop-ui-pack", version: manifest.version, cleanInstall: true, exports: Object.keys(loaded), gui: "NOT_RUN" }));
 } finally {
-	await rm(smokeRoot, { recursive: true, force: true });
+	await rm(temp, { recursive: true, force: true });
 }

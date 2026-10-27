@@ -104,7 +104,15 @@ packages/<name>/
 | `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
 | `hosts` | `native-pi`、`drone-desktop` 的非空子集；只写 `drone-desktop` 时必须在 README 说明原因 |
 | `requires.hostCapabilities` | 依赖的宿主能力，由 `negotiateCapabilities` 协商；缺失时插件必须返回 `degraded` 或 `incompatible`，不能抛错 |
-| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`）、`network`（主机名列表）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
+| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`、`application-state`、`application-state-write`）、`network`（主机名列表）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
+
+`application-state` 只声明宿主明确指定的插件状态目录及已登记的本机资源协调目录，不能推导出整个 HOME 的权限。0.3 knowledge 候选把既有配置/SQLite 状态和 `~/.drone/runtime-leases/knowledge-writers` 的本机同用户租约列入此范围；host/broker 必须另行验证具体 root 与操作。新增词表不代表旧宿主已经支持或自动授予该能力，尚未接通时只能保留候选/未验收状态。
+
+候选受管 Desktop 的 `application-state` 只允许读取用户明确选择的状态根；`application-state-write` 是另一个显式声明，要求启用时展示状态 JSON 读写并取得独立写 grant。旧只读授权不能自动升级。状态写入仅经 `state.writeJson`：限定 `.json` 文件、版本比较、原子写和写后回读，仍受逐调用 write 效果授权约束，bootstrap 禁止写入。该声明不授权 Vault 正文、任意文件或外部服务写入；状态根之外的副作用仍必须单独声明并获批。候选实现与真实安装包验收未完成前不能记为发布支持。
+
+候选 API 1.3 的受管运行时使用 `entrypoints.desktopRuntime`；`entrypoints.resources` 为 `{resourceId: relativeEntry}` 映射，ID 非空、每个入口必须是包内实际文件且随 npm 包发布，声明资源时必须声明其 Desktop owner。资源在独立进程中运行，SQLite 等写目录由宿主选定；manifest 不赋予 Vault 或任意路径权限。
+
+同包 UI 的 `droneUi: 2` 需要宿主已验证 installed desktopRuntime 来源；v1-only 宿主应在加载前拒绝。原生 `PluginNativeSession.toolEffects` 明确声明每个工具的 read/write 效果，未声明时宿主按写操作处理，不能依赖插件自定义 metadata 推断。可信 scope 的 `workspaceId` 是身份标识，`workspaceDirectory` 才是实际目录；两者都来自宿主，目录值本身不赋予文件访问权。API 1.3 尚未发布时只允许记录指纹的私有验收，正式最低依赖及公开 clean install 仍是发布门禁。
 
 manifest 是声明，不是安全边界：外部写入、远程执行、删除和发布仍由宿主授权。宿主会在安装确认和插件详情中展示 `permissions` 与 `tools`。
 
@@ -170,6 +178,9 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 | 区域：`app.background`、`app.overlay`、`chat.corner.*`、`chat.diff-sidebar`、`settings.panel`、`panel.tab`、`rail.view` | 已有 |
 | 无头插件 `headless: true` | 已有 |
 | 区域 `knowledge.tab`：知识库页的页签（与「总览 / 网络图 / 审阅 / 设置」并列） | 已有 |
+| 区域 `knowledge.page`：知识整页贡献；无贡献/错误时宿主显示轻量默认页 | 已有；0.2.0 完整页面迁移候选待正式 GUI 验收 |
+| 区域 `knowledge.surface`：设置、笔记、流程、Zotero、机构访问嵌入；`KnowledgeSurfaceProps` 通过公开 host mount 传递 | 1.2.0 API 候选 |
+| 公开 `@gyoungwe/plugin-api/ui` 类型与 `window.DroneUI.knowledge` 服务端口 | 1.2.0 API 候选；授权/持久化仍由宿主负责 |
 | 区域 `home.section`：新任务首页的卡片区 | 已有 |
 | 区域 `skills.section`：技能与连接页的分区 | 已有 |
 | 从任意已安装 npm 包的 `plugin.manifest.json` → `entrypoints.ui` 发现 UI 插件 | 已有 |

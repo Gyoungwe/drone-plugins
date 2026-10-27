@@ -1,0 +1,73 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "../knowledge";
+@source "../entry.tsx";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@theme inline reference {
+	/* G1/G2：字体栈（拉丁 → 中文各平台 → 兜底）与等宽 token，font-sans / font-mono 工具类同源 */
+	--font-sans:
+		"Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+		"Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+	--font-mono:
+		ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono",
+		"Noto Sans Mono CJK SC", monospace;
+	/* G3：字号梯度 7 档（最小 11px） */
+	--text-meta: 11px;
+	--text-meta--line-height: 16px;
+	--text-ui: 12px;
+	--text-ui--line-height: 18px;
+	--text-body: 13px;
+	--text-body--line-height: 20px;
+	--text-heading: 14px;
+	--text-heading--line-height: 22px;
+	--text-title: 15px;
+	--text-title--line-height: 22px;
+	--text-display: 20px;
+	--text-display--line-height: 28px;
+	/* G7：圆角梯度（与 Tailwind md/lg/xl/2xl 同值，CSS 里统一引用） */
+	--radius-sm: 6px;
+	--radius-md: 8px;
+	--radius-lg: 10px;
+	--radius-xl: 14px;
+	--radius-dialog: 18px;
+	--radius-3xl: 24px;
+	--color-canvas: var(--color-canvas);
+	--color-surface: var(--color-surface);
+	--color-hover: var(--color-hover);
+	--color-border: var(--color-border);
+	--color-border-strong: var(--color-border-strong);
+	--color-border-muted: var(--color-border-muted);
+	--color-border-subtle: var(--color-border-subtle);
+	--color-bubble: var(--color-bubble);
+	--color-ink: var(--color-ink);
+	--color-ink-2: var(--color-ink-2);
+	--color-ink-dim: var(--color-ink-dim);
+	--color-ink-faint: var(--color-ink-faint);
+	--color-ink-working: var(--color-ink-working);
+	--color-on-ink: var(--color-on-ink);
+	--color-accent: var(--color-accent);
+	--color-on-accent: var(--color-on-accent);
+	--color-update: var(--color-update);
+	--color-on-update: var(--color-on-update);
+	--color-err: var(--color-err);
+	--color-err-bg: var(--color-err-bg);
+	--color-err-border: var(--color-err-border);
+	--color-warn: var(--color-warn);
+	--color-warn-bg: var(--color-warn-bg);
+	--color-warn-border: var(--color-warn-border);
+	--color-info: var(--color-info);
+	--color-ok: var(--color-ok);
+	--color-switch-off: var(--color-switch-off);
+	/* U1：ClawsGO 语义 token（报告 5.2） */
+	--color-sidebar: var(--sidebar);
+	--color-chat-input: var(--chat-input);
+	--color-chat-status: var(--chat-status);
+	--color-chip-accent: var(--chip-accent);
+	--color-link: var(--link);
+	--color-ring: var(--ring);
+	--color-destructive: var(--destructive);
+	/* 阴影 token（shadow-soft/shadow-pop/shadow-dialog 工具类）：浅色深色系投影，深色白色发光 */
+	--shadow-soft: var(--shadow-soft);
+	--shadow-pop: var(--shadow-pop);
+	--shadow-dialog: var(--shadow-dialog);
+}

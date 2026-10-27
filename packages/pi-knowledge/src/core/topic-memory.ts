@@ -2,10 +2,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
 import { compareClaimSets } from "./claim-conflicts.js";
-import { knowledgeDirectory } from "./config.js";
+import { knowledgeDirectory, type KnowledgeConfigApi } from "./config.js";
 import { canRead, readNoteFile, validateNote } from "./files.js";
-import { runRuntimeExclusive } from "./runtime-host.js";
 
 export const TOPIC_MEMORY_VERSION = 1;
 export const TOPIC_MEMORY_LIMITS = Object.freeze({
@@ -340,10 +340,6 @@ async function atomicWrite(path, value) {
 		});
 	}
 }
-async function withLock(path, operation) {
-	return runRuntimeExclusive("topic-memory", path, operation);
-}
-
 export function classifyTopic(existing, incoming) {
 	if (!existing) return "new";
 	if (
@@ -368,8 +364,11 @@ export function classifyTopic(existing, incoming) {
 	return "additional";
 }
 
-/** @param {Record<string, any>} [options] */
-export function createTopicMemory({ binding, project, directory = knowledgeDirectory() } = {}) {
+function createTopicMemoryWithHost(
+	runtime: Pick<KnowledgeRuntimeHost, "runRuntimeExclusive">,
+	config: Pick<KnowledgeConfigApi, "knowledgeDirectory">,
+	{ binding, project, directory = config.knowledgeDirectory() } = {},
+) {
 	if (!binding?.vaultId) throw new Error("Topic memory requires a bound Vault");
 	const scope = { vaultId: binding.vaultId, project: projectKey(project) };
 	const path = memoryPath(directory, scope.vaultId, scope.project);
@@ -379,7 +378,7 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 		return readDocument(path, scope.vaultId, scope.project);
 	};
 	const mutate = async (expectedRevision, updater) =>
-		withLock(path, async () => {
+		runtime.runRuntimeExclusive("topic-memory", path, async () => {
 			await check();
 			const current = await readDocument(path, scope.vaultId, scope.project);
 			if (
@@ -766,21 +765,35 @@ export function topicRunHash(summary, sources = []) {
 	);
 }
 
-export async function listTopics(options = {}) {
-	return (await createTopicMemory(options).list(options.query || "")).topics;
+/** Topic state belongs to the composed owner's directory and exclusive-write queue. */
+export function createTopicMemoryApi(
+	runtime: Pick<KnowledgeRuntimeHost, "runRuntimeExclusive">,
+	config: Pick<KnowledgeConfigApi, "knowledgeDirectory">,
+) {
+	const createTopicMemory = (options = {}) => createTopicMemoryWithHost(runtime, config, options);
+	async function listTopics(options = {}) {
+		return (await createTopicMemory(options).list(options.query || "")).topics;
+	}
+
+	async function readTopic(options = {}) {
+		return (await createTopicMemory(options).get(options.topic || options.id || "")).matches;
+	}
+
+	async function updateTopic(options = {}) {
+		const { binding, project, directory, expectedRevision, ...input } = options;
+		if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
+		return createTopicMemory({ binding, project, directory }).update(input, expectedRevision);
+	}
+
+	async function archiveTopic(options = {}) {
+		if (!Number.isSafeInteger(options.expectedRevision)) throw new Error("expectedRevision is required");
+		return createTopicMemory(options).archive(options.id, options.expectedRevision);
+	}
+
+	return { createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic };
 }
 
-export async function readTopic(options = {}) {
-	return (await createTopicMemory(options).get(options.topic || options.id || "")).matches;
-}
-
-export async function updateTopic(options = {}) {
-	const { expectedRevision, ...input } = options;
-	if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
-	return createTopicMemory(options).update(input, expectedRevision);
-}
-
-export async function archiveTopic(options = {}) {
-	if (!Number.isSafeInteger(options.expectedRevision)) throw new Error("expectedRevision is required");
-	return createTopicMemory(options).archive(options.id, options.expectedRevision);
-}
+// pi-knowledge 0.2 compatibility. Remove once every native/Desktop consumer uses
+// the same explicitly composed 0.3 runtime owner instead of module facades.
+export const { createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic } =
+	createTopicMemoryApi(compatibilityKnowledgeRuntimeHost, { knowledgeDirectory });

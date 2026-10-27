@@ -1,25 +1,17 @@
 # @gyoungwe/research-suite
 
-The suite aggregates the published `@gyoungwe/pi-core`,
-`@gyoungwe/pi-knowledge`, and `@gyoungwe/pi-research` packages. The release
-tarball bundles those dependencies so a Pi host can discover the extensions and
-skills without a second network resolution step. `research-workflow` comes
-from `@gyoungwe/pi-research`; `@gyoungwe/pi-knowledge` supplies the Vault and
-Show Me skills, so the suite exposes one copy of each skill. `pi-core` also
-provides the stable `/drone-doctor` and `/drone-example` onboarding commands;
-the latter is read-only unless the user explicitly supplies `--run <question>`.
+The suite composes the standalone pi-core, pi-knowledge and pi-research packages. Its tarball bundles exact dependencies so official Pi can discover native extensions and skills without a second package resolution. The suite contains no second domain implementation.
 
-## 0.2.2 source candidate
+## Unpublished 0.2.2 candidate
 
-This candidate pins `pi-core@0.1.9`, `pi-knowledge@0.3.0`, and
-`pi-research@0.3.2`. The research package contains the complete evidence journal,
-source archive, claim checks, provenance and Zotero domain implementation. Its
-`/host` export and declarations are included in the aggregate tarball; the suite
-only composes package resources and does not provide a second implementation.
-The manifest includes the permissions of the bundled research package. External
-writes and installations still require the host authorization flow.
+This candidate pins `pi-core@0.1.9`, `pi-knowledge@0.3.0` and `pi-research@0.3.2`. The previously published suite 0.1.11 remains immutable. Knowledge and research packages contain their own optional Desktop UI manifests and browser bundles; the suite's native Pi extensions remain separate from those UI entries.
 
-Run `npm run build`, `npm run build:check`, and `npm test` in this package after
-building its workspace dependencies. The checks verify exact versions, resource
-paths, tool registration and rejection of unsupported research claims. This
-source update is not evidence of npm publication.
+The existing suite did not depend on desktop-ui-pack, so this candidate does not introduce that dependency. desktop-ui-pack 0.3.0 remains a separately installable research-status panel; knowledge contributions live only in pi-knowledge 0.3.0. The suite carries the nested knowledge UI resource, but this package change does not assert that every Desktop host discovers nested UI automatically. Host package discovery and formal GUI acceptance remain separate P2 work.
+
+Before enabling the new knowledge UI, disable or remove desktop-ui-pack 0.2.0, which still includes the historical knowledge page and overlays. Rollback disables the new UI and restores the old package without deleting Vault or binding data. See [co-packaging scope and evidence](../../docs/knowledge-ui-co-package-2026-10-26.md).
+
+`npm run build` stages complete dependencies and validates their versions, native entries, distinct skill ownership and knowledge UI resources. `build:check` verifies the staged result, and `npm test` checks registrations and research evidence behavior. External writes and installations still require host authorization. This is the P2 co-packaging slice, not completed extraction of host domain services or a publication claim.
+
+The candidate also declares `application-state` to cover its bundled knowledge package's configured state/index directory and fixed local writer-lease root. This declaration does not automatically grant sandbox access. Knowledge's legacy native/Desktop owner still has leases disabled until complete shared-owner shutdown is connected; the suite does not claim cross-process writer protection yet.
+
+The candidate also bundles pi-workbench 0.1.0 alongside the package-owned pi-core task runtime. Scientific connector host seams and body-bound claim delivery remain part of pi-research 0.3.2; the merge preserves both native owner lifetimes and those host adapters.

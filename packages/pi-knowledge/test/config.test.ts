@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	createKnowledgeConfigApi,
 	knowledgeDirectory,
 	projectIdentity,
 	readKnowledgeBinding,
@@ -26,6 +27,38 @@ afterEach(async () => {
 });
 
 describe("knowledge binding", () => {
+	it("reports a failed queued write to its caller and still runs the next write", async () => {
+		const api = createKnowledgeConfigApi();
+		const input = { vault, profile: "hybrid", depositMode: "verified", subagentPolicy: "none" } as const;
+		await api.saveKnowledgeBinding(input);
+		const rejected = api.saveKnowledgeBinding(input, 0);
+		const next = api.saveKnowledgeBinding(input, 1);
+		await expect(rejected).rejects.toThrow("Knowledge binding changed while confirming");
+		await expect(next).resolves.toMatchObject({ revision: 2 });
+		expect((await api.readKnowledgeBinding())?.revision).toBe(2);
+	});
+
+	it("keeps factory directories and binding contexts independent of later environment changes", async () => {
+		const first = createKnowledgeConfigApi();
+		const second = createKnowledgeConfigApi(undefined, join(root, "second-state"));
+		const otherVault = join(root, "OtherVault");
+		await mkdir(otherVault);
+		vi.stubEnv("DRONE_KNOWLEDGE_DIR", join(root, "unrelated-state"));
+		const [firstBinding, secondBinding] = await Promise.all([
+			first.saveKnowledgeBinding({ vault, profile: "hybrid", depositMode: "verified", subagentPolicy: "none" }),
+			second.saveKnowledgeBinding({ vault: otherVault, profile: "project", depositMode: "run-only", subagentPolicy: "none" }),
+		]);
+		expect(first.knowledgeDirectory()).toBe(join(root, "app"));
+		expect(second.knowledgeDirectory()).toBe(join(root, "second-state"));
+		await first.withKnowledgeBinding(firstBinding, async () => {
+			expect(await first.readKnowledgeBinding()).toEqual(firstBinding);
+			expect(await second.readKnowledgeBinding()).toEqual(secondBinding);
+		});
+		expect(await readKnowledgeBinding()).toBeNull();
+		expect(JSON.parse(await readFile(join(root, "app/binding.json"), "utf8"))).toEqual(firstBinding);
+		expect(JSON.parse(await readFile(join(root, "second-state/binding.json"), "utf8"))).toEqual(secondBinding);
+	});
+
 	it("derives stable identities and rejects an unconfigured relative directory", () => {
 		expect(projectIdentity(join(root, "My project"))).toMatch(/^my-project-[a-f0-9]{10}$/);
 		expect(projectIdentity(join(root, "My project"))).toBe(projectIdentity(join(root, "My project")));

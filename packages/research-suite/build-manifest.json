@@ -4,8 +4,9 @@
   "packageVersion": "0.2.2",
   "bundled": [
     "@gyoungwe/pi-core",
+    "@gyoungwe/pi-workbench",
     "@gyoungwe/pi-knowledge",
     "@gyoungwe/pi-research"
   ],
-  "dependenciesSha256": "f86b278862e30ac8d85b628d2f8e88ed9b4409c5722df3787b3b28bc8f297041"
+  "dependenciesSha256": "563cde4814657b460fd78b81300fc8be418bb7c2c32f96b3d42a7d6408649666"
 }

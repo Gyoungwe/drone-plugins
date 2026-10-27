@@ -18,12 +18,18 @@
     "extension": "./dist/index.mjs",
     "worker": "./lib/knowledge/runtime/worker.mjs",
     "host": "./dist/host.mjs",
-    "skills": "./skills"
+    "skills": "./skills",
+    "ui": "./ui/plugin.json",
+    "desktopRuntime": "./dist/desktop-runtime.mjs",
+    "resources": {
+      "index": "./lib/knowledge/runtime/desktop-index.mjs"
+    }
   },
   "capabilities": [
     "knowledge",
     "search",
-    "evidence-context"
+    "evidence-context",
+    "ui"
   ],
   "tools": [
     "knowledge_status",
@@ -53,10 +59,20 @@
   "permissions": {
     "filesystem": [
       "workspace",
-      "configured-vault"
+      "configured-vault",
+      "configured-vault-write",
+      "application-state",
+      "application-state-write"
     ],
-    "network": [],
+    "network": [
+      "configured-services"
+    ],
     "subprocess": [],
-    "externalWrites": true
+    "externalWrites": true,
+    "readWrite": {
+      "read": true,
+      "write": true,
+      "delete": true
+    }
   }
 }

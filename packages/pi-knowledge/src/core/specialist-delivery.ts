@@ -2,9 +2,8 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { loadWorkspaceConfig } from "./runtime-host.js";
-import { publishExplainer } from "./runtime-host.js";
-import { withKnowledgeBinding } from "./config.js";
+import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
+import { withKnowledgeBinding, type KnowledgeConfigApi } from "./config.js";
 
 const contained = (root, path) => {
 	const rel = relative(root, path);
@@ -24,39 +23,54 @@ export function validateSpecialistHtml(html) {
 		throw new Error("Explainer external resources are not allowed");
 	return html;
 }
-export async function saveSpecialistExplainer(c, ctx, { runDir, topicId, answer }) {
-	if (answer.status !== "completed") return answer;
-	const html = validateSpecialistHtml(answer.data.html),
-		config = await loadWorkspaceConfig(ctx.cwd);
-	const root = await realpath(config.resultsRoot),
-		run = await realpath(resolve(ctx.cwd, runDir || ""));
-	if (
-		!contained(root, run) ||
-		relative(root, run).split(sep).length !== 2 ||
-		!run.split(sep).at(-1).startsWith("run-") ||
-		!(await lstat(join(run, "metadata.json"))).isFile()
-	)
-		throw new Error("Explainer destination must be an existing research run");
-	return withKnowledgeBinding(c.binding, async () => {
-		const artifactPath = join(run, `show-me-${randomUUID()}.html`);
-		// Recheck evidence versions immediately before archive; no child-minted parent proof.
-		const sources = await c.service.evidenceReceipts(c.ticket, ctx.cwd, answer.data.source_paths);
-		await mkdir(run, { recursive: true });
-		await writeFile(artifactPath, html, { flag: "wx", mode: 0o600 });
-		const archived = await publishExplainer({
-			cwd: ctx.cwd,
-			project: c.project,
-			topicId,
-			title: answer.data.title,
-			artifactPath,
-			summary: answer.data.summary,
-			sources: sources.sources,
+/** Delivery uses the same owner's binding context and host callbacks as the native tools. */
+export function createSpecialistDelivery(
+	runtime: Pick<KnowledgeRuntimeHost, "loadWorkspaceConfig" | "publishExplainer">,
+	bindings: Pick<KnowledgeConfigApi, "withKnowledgeBinding">,
+) {
+	async function saveSpecialistExplainer(c, ctx, { runDir, topicId, answer }) {
+		if (answer.status !== "completed") return answer;
+		const html = validateSpecialistHtml(answer.data.html),
+			config = await runtime.loadWorkspaceConfig(ctx.cwd);
+		const root = await realpath(config.resultsRoot),
+			run = await realpath(resolve(ctx.cwd, runDir || ""));
+		if (
+			!contained(root, run) ||
+			relative(root, run).split(sep).length !== 2 ||
+			!run.split(sep).at(-1).startsWith("run-") ||
+			!(await lstat(join(run, "metadata.json"))).isFile()
+		)
+			throw new Error("Explainer destination must be an existing research run");
+		return bindings.withKnowledgeBinding(c.binding, async () => {
+			const artifactPath = join(run, `show-me-${randomUUID()}.html`);
+			// Recheck evidence versions immediately before archive; no child-minted parent proof.
+			const sources = await c.service.evidenceReceipts(c.ticket, ctx.cwd, answer.data.source_paths);
+			await mkdir(run, { recursive: true });
+			await writeFile(artifactPath, html, { flag: "wx", mode: 0o600 });
+			const archived = await runtime.publishExplainer({
+				cwd: ctx.cwd,
+				project: c.project,
+				topicId,
+				title: answer.data.title,
+				artifactPath,
+				summary: answer.data.summary,
+				sources: sources.sources,
+			});
+			return {
+				...archived,
+				result_file: artifactPath,
+				producer: "knowledge-explainer",
+				skill: answer.skillName || "show-me",
+			};
 		});
-		return {
-			...archived,
-			result_file: artifactPath,
-			producer: "knowledge-explainer",
-			skill: answer.skillName || "show-me",
-		};
-	});
+	}
+
+	return { saveSpecialistExplainer };
 }
+
+// pi-knowledge 0.2 compatibility. Remove once every native/Desktop consumer uses
+// the same explicitly composed 0.3 runtime owner instead of module facades.
+export const { saveSpecialistExplainer } = createSpecialistDelivery(
+	compatibilityKnowledgeRuntimeHost,
+	{ withKnowledgeBinding },
+);

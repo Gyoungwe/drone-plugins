@@ -23,7 +23,7 @@ try {
   assert(existsSync(join(packageDir, "plugin.manifest.json")), "plugin manifest missing from tarball");
   const installed = await import(pathToFileURL(join(packageDir, "dist/index.mjs")).href);
   const registry = installed.createConnectorRegistry();
-  assert.deepEqual(registry.list().map((descriptor) => descriptor.id), ["browser", "generic-mcp", "institutional", "search", "webdav", "zotero"]);
+  assert.deepEqual(registry.list().map((descriptor) => descriptor.id), ["arxiv", "browser", "generic-mcp", "institutional", "search", "semantic-scholar", "webdav", "zotero"]);
   const tools = [];
   const registration = installed.registerPiConnectors({ registerTool: (tool) => tools.push(tool) });
   assert.deepEqual(registration.tools, ["connector_list", "connector_get"]);

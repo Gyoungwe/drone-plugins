@@ -11,9 +11,10 @@
 		"pluginApi": 1,
 		"resultContract": "drone-result/v3"
 	},
-	"entrypoints": { "extension": "./dist/index.mjs" },
+	"entrypoints": { "extension": "./dist/index.mjs", "host": "./dist/host.mjs" },
 	"capabilities": ["evidence", "provenance", "replay", "files"],
 	"tools": [
+		"evidence_validate_analysis_plan",
 		"evidence_validate_manifest",
 		"evidence_validate_capsule",
 		"evidence_verify_replay"

@@ -66,6 +66,20 @@
 			"externalSideEffects": []
 		},
 		{
+			"id": "arxiv",
+			"readOnly": true,
+			"network": "public:export.arxiv.org, arxiv.org",
+			"credentials": "none",
+			"externalSideEffects": []
+		},
+		{
+			"id": "semantic-scholar",
+			"readOnly": true,
+			"network": "public:api.semanticscholar.org",
+			"credentials": "none",
+			"externalSideEffects": []
+		},
+		{
 			"id": "browser",
 			"readOnly": true,
 			"network": "host-approved navigation target",

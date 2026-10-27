@@ -530,14 +530,14 @@ async function verifyLiteratureReceipt({
     const rel = relative(root, file);
     if (isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep}`)) throw new Error("outside-vault");
     if ((await stat(file)).size > 1024 * 1024) throw new Error("note-too-large");
-    const text5 = await readFile2(file, "utf8");
-    const linked = text5.includes(`zotero:${zoteroKey}`) || new RegExp(`zotero://select/library/items/${zoteroKey}(?=[)\\s<>]|$)`).test(text5) || new RegExp(`^zotero_key: *["']?${zoteroKey}["']? *$`, "m").test(text5);
-    const dois = text5.match(/10\.\d{4,9}\/[^\s<>"'\])]+/gi) || [];
+    const text6 = await readFile2(file, "utf8");
+    const linked = text6.includes(`zotero:${zoteroKey}`) || new RegExp(`zotero://select/library/items/${zoteroKey}(?=[)\\s<>]|$)`).test(text6) || new RegExp(`^zotero_key: *["']?${zoteroKey}["']? *$`, "m").test(text6);
+    const dois = text6.match(/10\.\d{4,9}\/[^\s<>"'\])]+/gi) || [];
     receipt2.obsidian = {
       status: linked && dois.some((item) => normalizeDoi(item.replace(/[.,;]+$/, "")) === normalizedDoi) ? "verified" : "identity-mismatch",
       path: notePath,
       vault: root,
-      hash: createHash2("sha256").update(text5).digest("hex")
+      hash: createHash2("sha256").update(text6).digest("hex")
     };
   } catch (error) {
     if (vaultResolved && error instanceof Error && "code" in error && error.code === "ENOENT") {
@@ -709,10 +709,10 @@ function contactEmail(explicit, env = process.env) {
   return null;
 }
 var httpsUrl = (value) => {
-  const text5 = String(value || "").trim();
-  if (!/^https?:\/\//i.test(text5)) return null;
+  const text6 = String(value || "").trim();
+  if (!/^https?:\/\//i.test(text6)) return null;
   try {
-    const url = new URL(text5);
+    const url = new URL(text6);
     if (url.protocol === "ftp:") return null;
     return url.href;
   } catch {
@@ -720,10 +720,10 @@ var httpsUrl = (value) => {
   }
 };
 var pmcCloudHttps = (value) => {
-  const text5 = String(value || "").trim();
-  if (/^s3:\/\/pmc-oa-opendata\//i.test(text5))
-    return `${PMC_CLOUD_BASE}/${text5.replace(/^s3:\/\/pmc-oa-opendata\//i, "")}`;
-  return text5.startsWith(`${PMC_CLOUD_BASE}/`) ? text5 : null;
+  const text6 = String(value || "").trim();
+  if (/^s3:\/\/pmc-oa-opendata\//i.test(text6))
+    return `${PMC_CLOUD_BASE}/${text6.replace(/^s3:\/\/pmc-oa-opendata\//i, "")}`;
+  return text6.startsWith(`${PMC_CLOUD_BASE}/`) ? text6 : null;
 };
 async function fetchJson(fetchImpl, url, {
   timeoutMs,
@@ -740,22 +740,22 @@ async function fetchJson(fetchImpl, url, {
       headers: { accept },
       redirect: "follow"
     });
-    const text5 = await response.text();
+    const text6 = await response.text();
     if (!response.ok) return { ok: false, status: response.status, detail: `HTTP ${response.status}` };
     if (accept === "application/json") {
       try {
-        return { ok: true, status: response.status, body: JSON.parse(text5) };
+        return { ok: true, status: response.status, body: JSON.parse(text6) };
       } catch {
         return { ok: false, status: response.status, detail: "invalid JSON" };
       }
     }
-    return { ok: true, status: response.status, body: text5 };
+    return { ok: true, status: response.status, body: text6 };
   } catch (error) {
-    const detail = error instanceof Error ? error.message : "fetch failed";
+    const detail2 = error instanceof Error ? error.message : "fetch failed";
     return {
       ok: false,
       status: 0,
-      detail: error instanceof Error && error.name === "AbortError" ? "timeout" : detail
+      detail: error instanceof Error && error.name === "AbortError" ? "timeout" : detail2
     };
   } finally {
     clearTimeout(timer);
@@ -805,7 +805,7 @@ async function resolveOpenAccess({
   const collector = makeCollector(maxCandidates);
   const queried = [];
   const meta = { oaStatus: null, license: null, title: null };
-  const note = (source, status, detail) => queried.push({ source, status, detail: detail || null });
+  const note = (source, status, detail2) => queried.push({ source, status, detail: detail2 || null });
   const opts = { timeoutMs, signal };
   let epmc = null;
   if (enabled.has("europepmc")) {
@@ -1286,9 +1286,9 @@ function createResearchLoop(ports) {
     }
     return result;
   }
-  function validateReusedSourceSet(gate, fresh) {
-    if (!gate.reuse_count) return;
-    if (gate.reused_sources.length !== gate.reuse_count || gate.reused_sources.some(
+  function validateReusedSourceSet(gate2, fresh) {
+    if (!gate2.reuse_count) return;
+    if (gate2.reused_sources.length !== gate2.reuse_count || gate2.reused_sources.some(
       (old) => !fresh.some(
         (now) => now.path === old.path && now.hash === old.hash && now.doi === old.doi && now.zotero_key === old.zotero_key
       )
@@ -1297,14 +1297,14 @@ function createResearchLoop(ports) {
         "Reused source changed or current-turn receipt is missing; re-read and verify the existing note, do not re-import it"
       );
   }
-  async function validateReuse(cwd, runDir, gate) {
-    if (gate.reuse_count) validateReusedSourceSet(gate, await reusableSources(cwd, runDir));
+  async function validateReuse(cwd, runDir, gate2) {
+    if (gate2.reuse_count) validateReusedSourceSet(gate2, await reusableSources(cwd, runDir));
   }
-  async function validateStoredClaimBindings(cwd, runDir, gate) {
-    if (!Array.isArray(gate.claim_bindings) || gate.claim_bindings.length === 0)
+  async function validateStoredClaimBindings(cwd, runDir, gate2) {
+    if (!Array.isArray(gate2.claim_bindings) || gate2.claim_bindings.length === 0)
       throw new Error("Structured claim_bindings are required before answerable");
     return validateClaimBindings(
-      gate.claim_bindings,
+      gate2.claim_bindings,
       [...await reusableSources(cwd, runDir), ...await archivedSourceRecords(cwd, runDir)],
       ledger(cwd, runDir).reads
     );
@@ -1318,20 +1318,20 @@ function createResearchLoop(ports) {
       throw new Error("Summary must contain 1-131072 UTF-8 bytes");
     const { path, metadataPath } = await resolveRun(cwd, runDir);
     const metadata = await readJson4(metadataPath);
-    const gate = gateOf2(metadata);
-    if (gate.stage !== "answerable" || gate.status !== "ok" || !gate.answerable)
+    const gate2 = gateOf2(metadata);
+    if (gate2.stage !== "answerable" || gate2.status !== "ok" || !gate2.answerable)
       throw new Error("Evidence gate is closed; complete the research loop before summarizing");
     if (!Number.isSafeInteger(metadata.revision))
       throw new Error("Legacy research run needs fresh completion before delivery");
     const reused = await reusableSources(cwd, path);
     const archived = await archivedSourceRecords(cwd, path);
-    validateReusedSourceSet(gate, reused);
+    validateReusedSourceSet(gate2, reused);
     const claims2 = validateClaimBindings(
-      gate.claim_bindings,
+      gate2.claim_bindings,
       [...reused, ...archived],
       ledger(cwd, path).reads
     );
-    if (summaryHash(JSON.stringify(claims2)) !== summaryHash(JSON.stringify(gate.claim_bindings)))
+    if (summaryHash(JSON.stringify(claims2)) !== summaryHash(JSON.stringify(gate2.claim_bindings)))
       throw new Error("Claim evidence changed; complete the research loop again before delivery");
     if (!reused.length && !archived.length)
       throw new Error("No current verified source is available for this delivery");
@@ -1354,7 +1354,7 @@ function createResearchLoop(ports) {
     return {
       runId: metadata.run_id,
       evidenceRevision: metadata.revision,
-      gateSha256: summaryHash(JSON.stringify(gate)),
+      gateSha256: summaryHash(JSON.stringify(gate2)),
       claimsSha256: summaryHash(JSON.stringify(claims2)),
       bodySha256: summaryHash(body),
       body,
@@ -1416,9 +1416,9 @@ function createResearchLoop(ports) {
     return receipt2;
   }
   function safeSlug(value, label) {
-    const text5 = String(value ?? "").trim();
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(text5)) throw new Error(`${label} must be lowercase kebab-case`);
-    return text5;
+    const text6 = String(value ?? "").trim();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(text6)) throw new Error(`${label} must be lowercase kebab-case`);
+    return text6;
   }
   function topicIdFromResultSlug(value) {
     const slug = safeSlug(value || "research-question", "result_slug");
@@ -1492,9 +1492,9 @@ function createResearchLoop(ports) {
       if (selected[index] !== shown || lines.join("\n").length + shown.length > 9e4) break;
       lines.push(shown);
     }
-    const text5 = lines.join("\n");
-    if (!text5.trim()) return false;
-    const read = { hash: fileHash(bytes), text: text5, startLine, endLine: startLine + lines.length - 1 };
+    const text6 = lines.join("\n");
+    if (!text6.trim()) return false;
+    const read = { hash: fileHash(bytes), text: text6, startLine, endLine: startLine + lines.length - 1 };
     const aliases = /* @__PURE__ */ new Set([
       String(path),
       absolute,
@@ -1523,51 +1523,51 @@ function createResearchLoop(ports) {
     await rename(temp, path);
   }
   function gateOf2(metadata) {
-    const gate = metadata.evidence_gate && typeof metadata.evidence_gate === "object" ? metadata.evidence_gate : {};
+    const gate2 = metadata.evidence_gate && typeof metadata.evidence_gate === "object" ? metadata.evidence_gate : {};
     return {
-      stage: RESEARCH_STAGES.includes(gate.stage) ? gate.stage : "created",
-      status: gate.status === "failed" ? "failed" : "ok",
-      answerable: gate.answerable === true,
-      events: Array.isArray(gate.events) ? gate.events : [],
-      claim_refs: Array.isArray(gate.claim_refs) ? gate.claim_refs : [],
-      claim_bindings: Array.isArray(gate.claim_bindings) ? gate.claim_bindings : [],
-      warnings: gate.claim_refs?.length && !gate.claim_bindings?.length ? ["legacy-unstructured-claims: support not assessed"] : [],
-      source_refs: Array.isArray(gate.source_refs) ? gate.source_refs : [],
-      archive_count: Number(gate.archive_count) || 0,
-      reuse_count: Number(gate.reuse_count) || 0,
-      reused_sources: Array.isArray(gate.reused_sources) ? gate.reused_sources : [],
+      stage: RESEARCH_STAGES.includes(gate2.stage) ? gate2.stage : "created",
+      status: gate2.status === "failed" ? "failed" : "ok",
+      answerable: gate2.answerable === true,
+      events: Array.isArray(gate2.events) ? gate2.events : [],
+      claim_refs: Array.isArray(gate2.claim_refs) ? gate2.claim_refs : [],
+      claim_bindings: Array.isArray(gate2.claim_bindings) ? gate2.claim_bindings : [],
+      warnings: gate2.claim_refs?.length && !gate2.claim_bindings?.length ? ["legacy-unstructured-claims: support not assessed"] : [],
+      source_refs: Array.isArray(gate2.source_refs) ? gate2.source_refs : [],
+      archive_count: Number(gate2.archive_count) || 0,
+      reuse_count: Number(gate2.reuse_count) || 0,
+      reused_sources: Array.isArray(gate2.reused_sources) ? gate2.reused_sources : [],
       scientificallyVerified: false
     };
   }
-  function researchNodes(gate) {
-    const current = RESEARCH_STAGES.indexOf(gate.stage);
+  function researchNodes(gate2) {
+    const current = RESEARCH_STAGES.indexOf(gate2.stage);
     return RESEARCH_STAGES.map((id, index) => ({
       id,
-      state: gate.answerable || index < current ? "completed" : index === current ? "current" : "pending",
-      observed: (gate.events || []).some((event) => event.type === id && !event.skipped)
+      state: gate2.answerable || index < current ? "completed" : index === current ? "current" : "pending",
+      observed: (gate2.events || []).some((event) => event.type === id && !event.skipped)
     }));
   }
-  function provenanceFor(gate, status = "pending") {
+  function provenanceFor(gate2, status = "pending") {
     return {
       status,
-      source_refs: [...gate.source_refs],
-      claim_bindings: structuredClone(gate.claim_bindings),
+      source_refs: [...gate2.source_refs],
+      claim_bindings: structuredClone(gate2.claim_bindings),
       updated_at: (/* @__PURE__ */ new Date()).toISOString()
     };
   }
-  function advance(gate, stage, details = {}) {
-    const current = RESEARCH_STAGES.indexOf(gate.stage);
+  function advance(gate2, stage, details = {}) {
+    const current = RESEARCH_STAGES.indexOf(gate2.stage);
     const target = RESEARCH_STAGES.indexOf(stage);
     if (target < 0) throw new Error(`Unknown research stage: ${stage}`);
     if (target < current)
       return {
-        ...gate,
-        events: [...gate.events, { type: stage, at: (/* @__PURE__ */ new Date()).toISOString(), repeated: true, ...details }]
+        ...gate2,
+        events: [...gate2.events, { type: stage, at: (/* @__PURE__ */ new Date()).toISOString(), repeated: true, ...details }]
       };
     return {
-      ...gate,
+      ...gate2,
       stage,
-      events: [...gate.events, { type: stage, at: (/* @__PURE__ */ new Date()).toISOString(), ...details }]
+      events: [...gate2.events, { type: stage, at: (/* @__PURE__ */ new Date()).toISOString(), ...details }]
     };
   }
   async function resolveRun(cwd, runDir) {
@@ -1642,33 +1642,33 @@ function createResearchLoop(ports) {
     const revision = Number.isInteger(metadata.revision) ? metadata.revision : 0;
     if (expectedRevision != null && Number(expectedRevision) !== revision)
       throw new Error(`research run changed; expected revision ${expectedRevision}, found ${revision}`);
-    let gate = gateOf2(metadata);
-    const detail = {
+    let gate2 = gateOf2(metadata);
+    const detail2 = {
       ...query ? { query: String(query).trim() } : {},
       ...outcome ? { outcome } : {},
       ...notes ? { notes } : {}
     };
     const requireStage = (stage) => {
-      if (RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf(stage))
+      if (RESEARCH_STAGES.indexOf(gate2.stage) < RESEARCH_STAGES.indexOf(stage))
         throw new Error(`research loop must reach ${stage} before ${action}`);
     };
-    if (action === "status") return { run_dir: path, metadata, evidence_gate: gate, revision };
+    if (action === "status") return { run_dir: path, metadata, evidence_gate: gate2, revision };
     if (action === "record_local") {
       if (!query?.trim()) throw new Error("query is required");
-      gate = advance(gate, "local_query_recorded", detail);
+      gate2 = advance(gate2, "local_query_recorded", detail2);
     } else if (action === "record_external") {
       requireStage("local_query_recorded");
       if (!query?.trim() && !notes?.trim())
         throw new Error("record the external query or why external search was skipped");
-      gate = advance(gate, "external_search_recorded", detail);
+      gate2 = advance(gate2, "external_search_recorded", detail2);
     } else if (action === "inspect_sources") {
       requireStage("external_search_recorded");
       if (!Array.isArray(sourceRefs) || sourceRefs.length === 0)
         throw new Error("source_refs must list inspected original sources");
-      gate = advance(
-        { ...gate, source_refs: [.../* @__PURE__ */ new Set([...gate.source_refs, ...sourceRefs.map(String)])] },
+      gate2 = advance(
+        { ...gate2, source_refs: [.../* @__PURE__ */ new Set([...gate2.source_refs, ...sourceRefs.map(String)])] },
         "sources_inspected",
-        { ...detail, source_refs: sourceRefs }
+        { ...detail2, source_refs: sourceRefs }
       );
     } else if (action === "verify_archive") {
       requireStage("sources_inspected");
@@ -1685,8 +1685,8 @@ function createResearchLoop(ports) {
         throw new Error(
           "No available source: read an existing Library/Papers note this turn and verify its DOI/key with research_verify_literature, or archive an authorized new source. Do not repeat imports to clear this gate."
         );
-      gate = advance(
-        { ...gate, archive_count: downloaded.length, reuse_count: reused.length, reused_sources: reused },
+      gate2 = advance(
+        { ...gate2, archive_count: downloaded.length, reuse_count: reused.length, reused_sources: reused },
         downloaded.length ? "sources_archived" : "sources_reused",
         {
           archived: downloaded.map((item) => ({ id: item.id, sha256: item.sha256, path: item.path })),
@@ -1695,40 +1695,40 @@ function createResearchLoop(ports) {
         }
       );
     } else if (action === "bind_claims") {
-      if (gate.stage === "sources_inspected") {
+      if (gate2.stage === "sources_inspected") {
         const available = await updateResearchLoopUnlocked({ cwd, runDir, action: "verify_archive" });
-        gate = available.evidence_gate;
+        gate2 = available.evidence_gate;
       }
       requireStage("sources_archived");
-      await validateReuse(cwd, runDir, gate);
+      await validateReuse(cwd, runDir, gate2);
       if (claimBindings.length) {
         const checked = validateClaimBindings(
           claimBindings,
           [...await reusableSources(cwd, runDir), ...await archivedSourceRecords(cwd, runDir)],
           ledger(cwd, runDir).reads
         );
-        gate = { ...gate, claim_bindings: checked, warnings: [] };
+        gate2 = { ...gate2, claim_bindings: checked, warnings: [] };
         claimRefs = claimBindingRefs(checked);
-      } else if (gate.claim_bindings.length) {
-        const checked = await validateStoredClaimBindings(cwd, runDir, gate);
-        gate = { ...gate, claim_bindings: checked, claim_refs: claimBindingRefs(checked), warnings: [] };
+      } else if (gate2.claim_bindings.length) {
+        const checked = await validateStoredClaimBindings(cwd, runDir, gate2);
+        gate2 = { ...gate2, claim_bindings: checked, claim_refs: claimBindingRefs(checked), warnings: [] };
         claimRefs = claimBindingRefs(checked);
       } else if (claimRefs.length) {
         throw new Error(
           "Structured claim_bindings are required; legacy claim_refs cannot make a run answerable"
         );
       }
-      if (!Array.isArray(gate.claim_bindings) || gate.claim_bindings.length === 0)
+      if (!Array.isArray(gate2.claim_bindings) || gate2.claim_bindings.length === 0)
         throw new Error("Structured claim_bindings must contain at least one validated claim");
-      gate = advance({ ...gate, claim_refs: [...new Set(claimRefs.map(String))] }, "claims_bound", {
+      gate2 = advance({ ...gate2, claim_refs: [...new Set(claimRefs.map(String))] }, "claims_bound", {
         claim_refs: claimRefs
       });
     } else if (action === "finalize") {
       requireStage("claims_bound");
-      await validateReuse(cwd, runDir, gate);
-      const checked = await validateStoredClaimBindings(cwd, runDir, gate);
+      await validateReuse(cwd, runDir, gate2);
+      const checked = await validateStoredClaimBindings(cwd, runDir, gate2);
       const refs = claimBindingRefs(checked);
-      if (gate.archive_count + gate.reuse_count < 1 || !refs.length)
+      if (gate2.archive_count + gate2.reuse_count < 1 || !refs.length)
         throw new Error("archive verification and structured claim bindings are required before answerable");
       if (metadata.requires_provenance === true) {
         const manifestText = await readFile3(join2(path, "reproducibility-manifest.json"), "utf8").catch(
@@ -1743,27 +1743,27 @@ function createResearchLoop(ports) {
         if (provenance2?.version !== 1)
           throw new Error("This run requires a reproducibility manifest before it can become answerable");
       }
-      gate = advance(
-        { ...gate, claim_bindings: checked, claim_refs: refs, warnings: [], status: "ok", answerable: true },
+      gate2 = advance(
+        { ...gate2, claim_bindings: checked, claim_refs: refs, warnings: [], status: "ok", answerable: true },
         "answerable",
-        detail
+        detail2
       );
     } else if (action === "complete") {
       return completeResearchGate({ cwd, runDir, claimRefs, claimBindings });
     } else {
       throw new Error(`unknown research_loop action: ${action}`);
     }
-    metadata.evidence_gate = gate;
-    metadata.research_nodes = researchNodes(gate);
-    metadata.provenance = provenanceFor(gate, gate.answerable ? "host-verified" : "pending");
-    if (gate.answerable) {
+    metadata.evidence_gate = gate2;
+    metadata.research_nodes = researchNodes(gate2);
+    metadata.provenance = provenanceFor(gate2, gate2.answerable ? "host-verified" : "pending");
+    if (gate2.answerable) {
       metadata.status = "completed";
       metadata.finalized_at = metadata.finalized_at || (/* @__PURE__ */ new Date()).toISOString();
     }
     metadata.updated_at = (/* @__PURE__ */ new Date()).toISOString();
     metadata.revision = revision + 1;
     await atomicJson2(metadataPath, metadata);
-    return { run_dir: path, evidence_gate: gate, revision: metadata.revision };
+    return { run_dir: path, evidence_gate: gate2, revision: metadata.revision };
   }
   async function updateResearchLoop(input = {}) {
     const cwd = input.cwd || process.cwd();
@@ -1788,18 +1788,18 @@ function createResearchLoop(ports) {
     claimBindings = []
   } = {}) {
     let status = await updateResearchLoop({ cwd, runDir, action: "status" });
-    let gate = status.evidence_gate;
-    await validateReuse(cwd, runDir, gate);
-    if (RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf("sources_inspected"))
+    let gate2 = status.evidence_gate;
+    await validateReuse(cwd, runDir, gate2);
+    if (RESEARCH_STAGES.indexOf(gate2.stage) < RESEARCH_STAGES.indexOf("sources_inspected"))
       throw new Error("research loop must inspect sources before complete");
-    if (RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf("sources_archived"))
+    if (RESEARCH_STAGES.indexOf(gate2.stage) < RESEARCH_STAGES.indexOf("sources_archived"))
       status = await updateResearchLoop({ cwd, runDir, action: "verify_archive" });
-    gate = status.evidence_gate;
-    if (!claimBindings.length && !gate.claim_bindings.length)
+    gate2 = status.evidence_gate;
+    if (!claimBindings.length && !gate2.claim_bindings.length)
       throw new Error(
         "Provide structured claim_bindings; legacy claim_refs cannot make a research run answerable"
       );
-    if (claimBindings.length || RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf("claims_bound"))
+    if (claimBindings.length || RESEARCH_STAGES.indexOf(gate2.stage) < RESEARCH_STAGES.indexOf("claims_bound"))
       status = await updateResearchLoop({
         cwd,
         runDir,
@@ -1807,7 +1807,7 @@ function createResearchLoop(ports) {
         claimRefs,
         claimBindings
       });
-    gate = status.evidence_gate;
+    gate2 = status.evidence_gate;
     status = await updateResearchLoop({ cwd, runDir, action: "finalize" });
     return status;
   }
@@ -2038,25 +2038,25 @@ async function readJson(path) {
   }
 }
 function gateOf(metadata) {
-  const gate = metadata?.evidence_gate && typeof metadata.evidence_gate === "object" ? metadata.evidence_gate : {};
+  const gate2 = metadata?.evidence_gate && typeof metadata.evidence_gate === "object" ? metadata.evidence_gate : {};
   return {
-    stage: STAGES.includes(gate.stage) ? gate.stage : "created",
-    status: gate.status === "failed" ? "failed" : "ok",
-    answerable: gate.answerable === true,
-    events: Array.isArray(gate.events) ? gate.events.filter((e) => e && typeof e === "object") : [],
-    claimBindings: Array.isArray(gate.claim_bindings) ? gate.claim_bindings : [],
-    claimRefs: Array.isArray(gate.claim_refs) ? gate.claim_refs : [],
-    sourceRefs: Array.isArray(gate.source_refs) ? gate.source_refs : [],
-    archiveCount: Number.isFinite(Number(gate.archive_count)) ? Number(gate.archive_count) : 0,
-    reuseCount: Number.isFinite(Number(gate.reuse_count)) ? Number(gate.reuse_count) : 0,
-    reusedSources: Array.isArray(gate.reused_sources) ? gate.reused_sources : [],
-    warnings: Array.isArray(gate.warnings) ? gate.warnings.map((x) => text2(x, 240)).filter(Boolean) : []
+    stage: STAGES.includes(gate2.stage) ? gate2.stage : "created",
+    status: gate2.status === "failed" ? "failed" : "ok",
+    answerable: gate2.answerable === true,
+    events: Array.isArray(gate2.events) ? gate2.events.filter((e) => e && typeof e === "object") : [],
+    claimBindings: Array.isArray(gate2.claim_bindings) ? gate2.claim_bindings : [],
+    claimRefs: Array.isArray(gate2.claim_refs) ? gate2.claim_refs : [],
+    sourceRefs: Array.isArray(gate2.source_refs) ? gate2.source_refs : [],
+    archiveCount: Number.isFinite(Number(gate2.archive_count)) ? Number(gate2.archive_count) : 0,
+    reuseCount: Number.isFinite(Number(gate2.reuse_count)) ? Number(gate2.reuse_count) : 0,
+    reusedSources: Array.isArray(gate2.reused_sources) ? gate2.reused_sources : [],
+    warnings: Array.isArray(gate2.warnings) ? gate2.warnings.map((x) => text2(x, 240)).filter(Boolean) : []
   };
 }
 function route(metadata) {
-  const gate = gateOf(metadata);
-  const events = gate.events.filter((e) => STAGES.includes(e.type));
-  const current = events.at(-1)?.type || gate.stage;
+  const gate2 = gateOf(metadata);
+  const events = gate2.events.filter((e) => STAGES.includes(e.type));
+  const current = events.at(-1)?.type || gate2.stage;
   const currentIndex = STAGES.indexOf(current);
   const success = /* @__PURE__ */ new Map();
   for (const event of events) {
@@ -2064,14 +2064,14 @@ function route(metadata) {
     success.set(event.type, event);
   }
   return STAGES.map((key, index) => {
-    const event = success.get(key), count = gate.events.filter((e) => e.type === key).length, failed = gate.events.some(
+    const event = success.get(key), count = gate2.events.filter((e) => e.type === key).length, failed = gate2.events.some(
       (e) => e.type === key && (e.failed === true || e.status === "failed" || e.outcome === "failed")
     );
     let state = "pending";
     if (failed && index >= currentIndex) state = "blocked";
-    else if (event && (key === "answerable" || index < currentIndex || index === currentIndex && gate.answerable))
+    else if (event && (key === "answerable" || index < currentIndex || index === currentIndex && gate2.answerable))
       state = "complete";
-    else if (key === current && gate.status === "failed") state = "blocked";
+    else if (key === current && gate2.status === "failed") state = "blocked";
     else if (key === current) state = "active";
     return {
       key,
@@ -2084,8 +2084,8 @@ function route(metadata) {
   });
 }
 function timeline(metadata) {
-  const gate = gateOf(metadata);
-  return gate.events.slice(-128).map((event) => ({
+  const gate2 = gateOf(metadata);
+  return gate2.events.slice(-128).map((event) => ({
     type: text2(event.type, 100) || "event",
     at: typeof event.at === "string" ? event.at : null,
     detail: text2(event.notes || event.outcome || event.reason, 320) || null,
@@ -2101,7 +2101,7 @@ async function hashFile(path) {
     return { hash: null, size: null };
   }
 }
-async function sourceManifest(runDir, gate, vaultRoot) {
+async function sourceManifest(runDir, gate2, vaultRoot) {
   const manifest = await readJson(join3(runDir, "sources", "download-manifest.json"));
   const items = Array.isArray(manifest?.items) ? manifest.items : [];
   const byPath = /* @__PURE__ */ new Map();
@@ -2137,7 +2137,7 @@ async function sourceManifest(runDir, gate, vaultRoot) {
       metadata: item?.metadata && typeof item.metadata === "object" ? item.metadata : null
     });
   }
-  for (const path of gate.sourceRefs) {
+  for (const path of gate2.sourceRefs) {
     const key = text2(path, 480).replaceAll("\\", "/");
     if (key && !byPath.has(key))
       byPath.set(key, {
@@ -2150,7 +2150,7 @@ async function sourceManifest(runDir, gate, vaultRoot) {
         metadata: null
       });
   }
-  for (const source of gate.reusedSources) {
+  for (const source of gate2.reusedSources) {
     const key = text2(source?.path, 480).replaceAll("\\", "/");
     if (key && !byPath.has(key))
       byPath.set(key, {
@@ -2165,8 +2165,8 @@ async function sourceManifest(runDir, gate, vaultRoot) {
   }
   return { items: [...byPath.values()].slice(0, 64), integrity: { checked, verified, changed, missing } };
 }
-function claims(gate) {
-  return gate.claimBindings.slice(0, 64).map((binding) => {
+function claims(gate2) {
+  return gate2.claimBindings.slice(0, 64).map((binding) => {
     const evidence = Array.isArray(binding.sources) ? binding.sources.slice(0, 12).map((item) => ({
       path: text2(item?.path, 480),
       startLine: Number.isInteger(item?.start_line) ? item.start_line : null,
@@ -2212,7 +2212,7 @@ async function provenance(runDir) {
   };
 }
 function listItem(metadata, runDir, resultsRoot) {
-  const gate = gateOf(metadata);
+  const gate2 = gateOf(metadata);
   return {
     runId: text2(metadata.run_id || basename(runDir), 180),
     resultSlug: text2(metadata.result_slug || relative3(resultsRoot, runDir).split(sep3)[0], 180),
@@ -2220,8 +2220,8 @@ function listItem(metadata, runDir, resultsRoot) {
     topicId: text2(metadata.topic_id, 180) || null,
     query: text2(metadata.query, 1e3),
     status: text2(metadata.status, 80) || "unknown",
-    stage: gate.stage,
-    answerable: gate.answerable,
+    stage: gate2.stage,
+    answerable: gate2.answerable,
     scientificallyVerified: false,
     startedAt: text2(metadata.started_at, 80) || null,
     updatedAt: text2(metadata.updated_at || metadata.started_at, 80) || null,
@@ -2265,13 +2265,13 @@ async function getResearchRun(input) {
   if (!runDir) throw new Error("research run not found");
   const metadata = await readJson(join3(runDir, "metadata.json"));
   if (!metadata) throw new Error("research run metadata is invalid");
-  const gate = gateOf(metadata), sourceData = await sourceManifest(runDir, gate, input.vaultRoot), runClaims = claims(gate), runProvenance = await provenance(runDir), gaps = [];
-  const summary = await hashFile(join3(runDir, "SUMMARY.md"));
+  const gate2 = gateOf(metadata), sourceData = await sourceManifest(runDir, gate2, input.vaultRoot), runClaims = claims(gate2), runProvenance = await provenance(runDir), gaps = [];
+  const summary2 = await hashFile(join3(runDir, "SUMMARY.md"));
   const delivery = metadata.delivery_receipt;
   const deliveryVersion = delivery?.version === 1 ? {
-    status: summary.hash === delivery.bodySha256 ? "body-matched" : summary.hash ? "body-changed" : "body-missing",
+    status: summary2.hash === delivery.bodySha256 ? "body-matched" : summary2.hash ? "body-changed" : "body-missing",
     bodySha256: delivery.bodySha256,
-    currentBodySha256: summary.hash,
+    currentBodySha256: summary2.hash,
     semanticAssessment: delivery.semanticAssessment,
     evidenceFreshness: "requires-current-scope-recheck",
     scientificallyVerified: false
@@ -2297,7 +2297,7 @@ async function getResearchRun(input) {
     gaps.push("\u5B58\u5728\u672A\u76F4\u63A5\u652F\u6301\u7684\u4E3B\u5F20");
   if (sourceData.integrity.changed || sourceData.integrity.missing) gaps.push("\u6765\u6E90\u6587\u4EF6\u9700\u8981\u91CD\u65B0\u6838\u9A8C");
   if (runProvenance.status !== "observed") gaps.push("\u590D\u73B0\u6E05\u5355\u4E0D\u5B8C\u6574\u6216\u5DF2\u53D8\u5316");
-  if (gate.status === "failed") gaps.push("\u5F53\u524D\u8DEF\u7531\u88AB\u963B\u585E");
+  if (gate2.status === "failed") gaps.push("\u5F53\u524D\u8DEF\u7531\u88AB\u963B\u585E");
   return {
     ...listItem(metadata, runDir, resultsRoot),
     route: route(metadata),
@@ -2305,11 +2305,11 @@ async function getResearchRun(input) {
     sources: sourceData.items,
     claims: runClaims,
     delivery: deliveryVersion,
-    warnings: gate.warnings,
+    warnings: gate2.warnings,
     coverage: metadata.retrieval_coverage || metadata.metrics?.index?.semantic || null,
     archive: {
-      count: gate.archiveCount,
-      reused: gate.reuseCount,
+      count: gate2.archiveCount,
+      reused: gate2.reuseCount,
       verified: sourceData.integrity.checked > 0 && sourceData.integrity.checked === sourceData.integrity.verified
     },
     integrity: sourceData.integrity,
@@ -2748,8 +2748,8 @@ function assessManualPage(bytes, contentType, url) {
     };
   }
   const html = new TextDecoder().decode(bytes).slice(0, 25e4);
-  const text5 = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]*>/g, " ");
-  const flags = [...new Set(text5.match(/(?:^|\s)-{1,2}[a-zA-Z][a-zA-Z0-9_-]{2,}/g) || [])];
+  const text6 = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]*>/g, " ");
+  const flags = [...new Set(text6.match(/(?:^|\s)-{1,2}[a-zA-Z][a-zA-Z0-9_-]{2,}/g) || [])];
   const candidates = [];
   for (const match of html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
     try {
@@ -2783,13 +2783,13 @@ function deliveryContract(prompt, {
   showMeAvailable = false,
   researchContinuation = false
 } = {}) {
-  const text5 = String(prompt || "");
-  const readOnly = /只读|read[- ]only/i.test(text5);
-  const wantsExplainer = !readOnly && /说明书|使用手册|介绍|讲解|解释|图解|show.?me|explainer|explain|summariz/i.test(text5);
-  const manual = /说明书|使用手册|命令|参数|manual|command.line|reference/i.test(text5);
-  const paper = researchContinuation || requiresPaperEvidence(text5) || /文章|article|research/i.test(text5);
-  const software = manual || /软件|程序|software|package/i.test(text5);
-  const requested = manual || researchContinuation || requiresPaperEvidence(text5) || /下载|沉淀|介绍|讲解|解释|download|explain|summariz/i.test(text5) && (paper || software);
+  const text6 = String(prompt || "");
+  const readOnly = /只读|read[- ]only/i.test(text6);
+  const wantsExplainer = !readOnly && /说明书|使用手册|介绍|讲解|解释|图解|show.?me|explainer|explain|summariz/i.test(text6);
+  const manual = /说明书|使用手册|命令|参数|manual|command.line|reference/i.test(text6);
+  const paper = researchContinuation || requiresPaperEvidence(text6) || /文章|article|research/i.test(text6);
+  const software = manual || /软件|程序|software|package/i.test(text6);
+  const requested = manual || researchContinuation || requiresPaperEvidence(text6) || /下载|沉淀|介绍|讲解|解释|download|explain|summariz/i.test(text6) && (paper || software);
   if (!requested) return null;
   return {
     kind: software && paper ? "mixed" : software ? "software" : "research",
@@ -3712,9 +3712,9 @@ __export(zotero_library_exports, {
 });
 function zoteroLibraryPath(value) {
   if (value === void 0 || value === null) return "users";
-  const text5 = String(value).trim().toLowerCase();
-  if (text5 === "" || text5 === "user" || text5 === "users") return "users";
-  if (text5 === "group" || text5 === "groups") return "groups";
+  const text6 = String(value).trim().toLowerCase();
+  if (text6 === "" || text6 === "user" || text6 === "users") return "users";
+  if (text6 === "group" || text6 === "groups") return "groups";
   return null;
 }
 function zoteroLibraryEnvValue(path) {
@@ -3988,8 +3988,8 @@ function agentDir(override) {
 function mcpPath(dir) {
   return join6(agentDir(dir), "mcp.json");
 }
-function clip(text5) {
-  const value = String(text5 || "");
+function clip(text6) {
+  const value = String(text6 || "");
   return value.length <= OUTPUT_LIMIT ? value : `${value.slice(0, OUTPUT_LIMIT)}
 \u2026truncated`;
 }
@@ -4357,9 +4357,9 @@ var isRecord2 = (value) => typeof value === "object" && value !== null && !Array
 function textField(value, max, name) {
   if (value === void 0 || value === null) return "";
   if (typeof value !== "string" && typeof value !== "number") throw new Error(`${name} must be a string`);
-  const text5 = String(value).replace(new RegExp("\\p{Cc}", "gu"), " ").replace(/\s+/g, " ").trim();
-  if (text5.length > max) throw new Error(`${name} exceeds ${max} characters`);
-  return text5;
+  const text6 = String(value).replace(new RegExp("\\p{Cc}", "gu"), " ").replace(/\s+/g, " ").trim();
+  if (text6.length > max) throw new Error(`${name} exceeds ${max} characters`);
+  return text6;
 }
 function normalizeCreators(input) {
   if (input === void 0 || input === null) return [];
@@ -4397,11 +4397,11 @@ function normalizeTags(input) {
   return tags;
 }
 function httpUrl(value, name) {
-  const text5 = textField(value, 2048, name);
-  if (!text5) return "";
+  const text6 = textField(value, 2048, name);
+  if (!text6) return "";
   let url;
   try {
-    url = new URL(text5);
+    url = new URL(text6);
   } catch {
     throw new Error(`${name} must be an absolute http(s) URL`);
   }
@@ -4488,11 +4488,11 @@ function toWebApiItem(item, { collectionKey = null } = {}) {
   return payload;
 }
 function connectorTargetId(value) {
-  const text5 = textField(value, 32, "target");
-  if (!text5) return null;
-  if (!/^[LC]\d{1,12}$/.test(text5))
+  const text6 = textField(value, 32, "target");
+  if (!text6) return null;
+  if (!/^[LC]\d{1,12}$/.test(text6))
     throw new Error('target must look like "L1" (library) or "C123" (collection)');
-  return text5;
+  return text6;
 }
 
 // src/core/zotero-write-runtime.ts
@@ -5553,19 +5553,19 @@ function registerResearchExtension(pi, ports) {
             notes: params.notes
           })
         );
-        const gate = result?.evidence_gate;
+        const gate2 = result?.evidence_gate;
         const visible = params.action === "status" ? result : {
           run_dir: result?.run_dir,
           topic_id: result?.metadata?.topic_id,
-          evidence_gate: gate && {
-            stage: gate.stage,
-            answerable: gate.answerable,
-            archive_count: gate.archive_count,
-            reuse_count: gate.reuse_count,
-            source_refs: gate.source_refs,
-            claim_count: gate.claim_refs.length,
-            structured_claim_count: gate.claim_bindings.length,
-            warnings: gate.warnings,
+          evidence_gate: gate2 && {
+            stage: gate2.stage,
+            answerable: gate2.answerable,
+            archive_count: gate2.archive_count,
+            reuse_count: gate2.reuse_count,
+            source_refs: gate2.source_refs,
+            claim_count: gate2.claim_refs.length,
+            structured_claim_count: gate2.claim_bindings.length,
+            warnings: gate2.warnings,
             scientificallyVerified: false
           },
           receipt_journal: result?.receipt_journal,
@@ -5724,8 +5724,8 @@ function createEvidenceGate({ scope = "factual-answer" } = {}) {
   };
   return Object.freeze({ advance, fail, snapshot });
 }
-function assertEvidenceAnswerable(gate, { claimBindings = [] } = {}) {
-  const state = gate.snapshot();
+function assertEvidenceAnswerable(gate2, { claimBindings = [] } = {}) {
+  const state = gate2.snapshot();
   if (state.stage !== "answerable" || !Array.isArray(claimBindings) || claimBindings.length === 0 || claimBindings.some((binding) => !binding || typeof binding !== "object" || Array.isArray(binding))) {
     throw new Error(
       "Evidence gate is closed: complete retrieval, inspection, archiving and structured claim binding first"
@@ -5942,25 +5942,25 @@ function createProjectStorageConnector(projectStorage) {
       const limit = clampLimit(options.limit);
       const items = await projectStorage.search({ cwd: options.cwd, query, limit, signal: options.signal });
       return items.slice(0, limit).flatMap((item) => {
-        const relativePath = text4(item.relativePath).replaceAll("\\", "/");
-        if (!relativePath || relativePath.endsWith("/")) return [];
-        const sourceRef = `project-storage:${hash({ cwd: options.cwd, relativePath })}`;
-        const title = text4(item.title) || relativePath;
+        const relativePath2 = text4(item.relativePath).replaceAll("\\", "/");
+        if (!relativePath2 || relativePath2.endsWith("/")) return [];
+        const sourceRef = `project-storage:${hash({ cwd: options.cwd, relativePath: relativePath2 })}`;
+        const title = text4(item.title) || relativePath2;
         return [
           {
             id: sourceRef,
             title,
             summary: text4(item.summary) || [item.format, item.size == null ? "" : `${item.size} bytes`].filter(Boolean).join(" \xB7 "),
-            locator: relativePath,
+            locator: relativePath2,
             sourceType: "project-storage",
             sourceReceipt: {
               sourceRef,
-              locator: relativePath,
+              locator: relativePath2,
               sourceType: "project-storage",
               title,
               version: item.modifiedAt,
               accessedAt: isoNow(),
-              contentHash: item.contentHash || hash({ cwd: options.cwd, relativePath, size: item.size, modifiedAt: item.modifiedAt }),
+              contentHash: item.contentHash || hash({ cwd: options.cwd, relativePath: relativePath2, size: item.size, modifiedAt: item.modifiedAt }),
               readOnly: true
             }
           }
@@ -6047,6 +6047,201 @@ function createResearchConnectorHostLoader(options) {
 }
 
 // src/research-host.ts
+var STAGES2 = /* @__PURE__ */ new Set([
+  "created",
+  "local_query_recorded",
+  "external_search_recorded",
+  "sources_inspected",
+  "sources_archived",
+  "sources_reused",
+  "claims_bound",
+  "answerable"
+]);
+function text5(value, max = 1e3) {
+  return String(value ?? "").normalize("NFKC").replace(new RegExp("\\p{Cc}", "gu"), " ").replace(/\s+/gu, " ").trim().slice(0, max);
+}
+function relativePath(value, label) {
+  const normalized = value.replaceAll("\\", "/").replace(/^\.\//u, "");
+  if (!normalized || normalized.startsWith("/") || normalized.split("/").includes(".."))
+    throw new Error(`${label} must stay inside the configured workspace`);
+  return normalized;
+}
+function asObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+  return value;
+}
+function isErrno(error, code) {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
+}
+function gate(metadata) {
+  const value = metadata.evidence_gate;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { stage: "created", answerable: false };
+  const candidate = value;
+  const stage = text5(candidate.stage, 80);
+  return { stage: STAGES2.has(stage) ? stage : "created", answerable: candidate.answerable === true };
+}
+function summary(metadata, runDir, resultsPath) {
+  const evidence = gate(metadata);
+  const normalizedRunDir = runDir.replaceAll("\\", "/");
+  const relativeRunDir = resultsPath && normalizedRunDir.startsWith(`${resultsPath}/`) ? normalizedRunDir.slice(resultsPath.length + 1) : normalizedRunDir;
+  return {
+    runId: text5(metadata.run_id || normalizedRunDir.split("/").at(-1), 180),
+    resultSlug: text5(metadata.result_slug || relativeRunDir.split("/")[0], 180),
+    project: text5(metadata.project, 180),
+    topicId: text5(metadata.topic_id, 180) || null,
+    query: text5(metadata.query),
+    status: text5(metadata.status, 80) || "unknown",
+    stage: evidence.stage,
+    answerable: evidence.answerable,
+    startedAt: text5(metadata.started_at, 80) || null,
+    updatedAt: text5(metadata.updated_at || metadata.started_at, 80) || null,
+    runDir: relativeRunDir
+  };
+}
+function detail(metadata, runDir, resultsPath) {
+  const item = summary(metadata, runDir, resultsPath);
+  const gateValue = metadata.evidence_gate;
+  const gateObject = gateValue && typeof gateValue === "object" && !Array.isArray(gateValue) ? gateValue : {};
+  const events = Array.isArray(gateObject.events) ? gateObject.events : [];
+  const stages = [
+    "created",
+    "local_query_recorded",
+    "external_search_recorded",
+    "sources_inspected",
+    "sources_archived",
+    "sources_reused",
+    "claims_bound",
+    "answerable"
+  ];
+  const current = stages.includes(item.stage) ? item.stage : "created";
+  const currentIndex = stages.indexOf(current);
+  const route2 = stages.map((key, index) => ({
+    key,
+    state: index < currentIndex || key === current && item.answerable ? "complete" : key === current ? "active" : "pending",
+    at: null,
+    detail: null
+  }));
+  const timeline2 = events.slice(-128).map((event) => {
+    const value = event && typeof event === "object" && !Array.isArray(event) ? event : {};
+    return {
+      type: text5(value.type, 100) || "event",
+      at: text5(value.at, 80) || null,
+      detail: text5(value.notes || value.outcome || value.reason, 320) || null,
+      status: value.failed === true || value.status === "failed" ? "failed" : value.observed === true ? "observed" : "ok"
+    };
+  });
+  const sourceRefs = Array.isArray(gateObject.source_refs) ? gateObject.source_refs : [];
+  const sources = sourceRefs.map((source) => ({ path: text5(source, 480), status: "inspected", hash: null, verified: false }));
+  const bindings = Array.isArray(gateObject.claim_bindings) ? gateObject.claim_bindings : [];
+  const claims2 = bindings.map((binding) => {
+    const value = binding && typeof binding === "object" && !Array.isArray(binding) ? binding : {};
+    const support = Array.isArray(value.sources) ? value.sources.map((source) => {
+      if (source && typeof source === "object" && !Array.isArray(source)) return text5(source.path, 480);
+      return text5(source, 480);
+    }).filter(Boolean) : [];
+    return { id: text5(value.id, 120) || null, claim: text5(value.claim, 480), support, status: text5(value.status || value.relationship, 80) || "bound" };
+  }).filter((claim) => claim.claim);
+  const warnings = Array.isArray(gateObject.warnings) ? gateObject.warnings.map((warning) => text5(warning, 240)).filter(Boolean) : [];
+  const archiveCount = Number(gateObject.archive_count);
+  const reuseCount = Number(gateObject.reuse_count);
+  return {
+    ...item,
+    route: route2,
+    timeline: timeline2,
+    sources,
+    claims: claims2,
+    warnings,
+    coverage: metadata.retrieval_coverage && typeof metadata.retrieval_coverage === "object" && !Array.isArray(metadata.retrieval_coverage) ? metadata.retrieval_coverage : null,
+    archive: { count: Number.isFinite(archiveCount) ? archiveCount : 0, reused: Number.isFinite(reuseCount) ? reuseCount : 0, verified: false }
+  };
+}
+async function configuredResultsRoot(port, workspace) {
+  const workspaceRoot = await port.resolveRoot(workspace);
+  if (!workspaceRoot.handle) throw new Error("Host did not grant a workspace files root");
+  let config = {};
+  try {
+    config = asObject(JSON.parse(await port.readText(workspaceRoot.handle, ".pi/research-workspace.json")), "research workspace configuration");
+  } catch (error) {
+    if (!isErrno(error, "ENOENT")) throw error;
+  }
+  if (config.resultsRoot !== void 0 && typeof config.resultsRoot !== "string") throw new Error("resultsRoot must be a path");
+  if (!config.resultsRoot || !config.resultsRoot.startsWith("/"))
+    return { handle: workspaceRoot.handle, path: relativePath(config.resultsRoot || "results", "resultsRoot") };
+  const resultRoot = await port.resolveRoot(config.resultsRoot);
+  if (!resultRoot.handle) throw new Error("Host did not grant the configured results root");
+  return { handle: resultRoot.handle, path: "" };
+}
+async function readMetadata(port, root, runDir) {
+  const normalized = relativePath(runDir, "runDir");
+  const segments = normalized.split("/");
+  if (segments.length !== 2 || !segments[1].startsWith("run-"))
+    throw new Error("runDir must be a result slug followed by a run directory");
+  const path = [root.path, normalized, "metadata.json"].filter(Boolean).join("/");
+  return asObject(JSON.parse(await port.readText(root.handle, path)), "research run metadata");
+}
+async function discover2(port, root, project) {
+  let slugs;
+  try {
+    slugs = await port.listFiles(root.handle, root.path);
+  } catch (error) {
+    if (isErrno(error, "ENOENT")) return [];
+    throw error;
+  }
+  const found = [];
+  for (const slug of slugs.filter((entry) => entry.kind === "directory" && !entry.name.startsWith("."))) {
+    const slugPath = [root.path, relativePath(slug.name, "result slug")].filter(Boolean).join("/");
+    const runs = await port.listFiles(root.handle, slugPath);
+    for (const run2 of runs.filter((entry) => entry.kind === "directory" && entry.name.startsWith("run-"))) {
+      const runDir = `${slug.name}/${run2.name}`;
+      const metadata = await readMetadata(port, root, runDir);
+      if (!project || text5(metadata.project, 180) === text5(project, 180)) found.push(summary(metadata, runDir, root.path));
+    }
+  }
+  return found.sort((left, right) => (right.updatedAt || "").localeCompare(left.updatedAt || ""));
+}
+function limitOf(value) {
+  return Math.max(1, Math.min(50, Number(value) || 10));
+}
+function createResearchHost(port) {
+  const listRuns = async (input) => {
+    const root = await configuredResultsRoot(port, input.workspace);
+    const items = await discover2(port, root, input.project);
+    return { items: items.slice(0, limitOf(input.limit)), total: items.length };
+  };
+  const status = async (input) => {
+    const root = await configuredResultsRoot(port, input.workspace);
+    if (input.runDir !== void 0 && input.runDir !== null) {
+      const runDir = relativePath(text5(input.runDir, 240), "runDir");
+      const metadata = await readMetadata(port, root, runDir);
+      return { item: summary(metadata, runDir, root.path) };
+    }
+    const items = await discover2(port, root, input.project);
+    return { items: items.slice(0, limitOf(input.limit)), total: items.length };
+  };
+  const detailOperation = async (input) => {
+    const root = await configuredResultsRoot(port, input.workspace);
+    let runDir = input.runDir ? relativePath(text5(input.runDir, 240), "runDir") : null;
+    if (!runDir && input.runId) {
+      const items = await discover2(port, root);
+      runDir = items.find((item) => item.runId === text5(input.runId, 180))?.runDir ?? null;
+    }
+    if (!runDir) throw new Error("Research run detail requires runDir or runId");
+    const metadata = await readMetadata(port, root, runDir);
+    return detail(metadata, runDir, root.path);
+  };
+  return { contractVersion: 1, operations: { status, listRuns, detail: detailOperation } };
+}
+function registerResearchHost(registry, port) {
+  const adapter = createResearchHost(port);
+  registry.register("status", adapter.operations.status);
+  registry.register("listRuns", adapter.operations.listRuns);
+  if (adapter.operations.detail) registry.register("detail", adapter.operations.detail);
+  return adapter;
+}
+var researchHostLoader = {
+  contractVersion: 1,
+  load: createResearchHost
+};
 var UNAVAILABLE_WRITE_MESSAGE = "Research write adapters are unavailable; the host must inject an authorized write registry";
 var researchConnectorHostLoader = createResearchConnectorHostLoader({});
 var researchWriteAdapterHostLoader = {
@@ -6064,6 +6259,38 @@ var researchWriteAdapterHostLoader = {
       }
     };
   }
+};
+
+// src/zotero-host.ts
+function createZoteroHost(port, context = {}) {
+  return {
+    contractVersion: 1,
+    operations: {
+      lookup: (input) => lookupZoteroByDoi(port.read, input, context)
+    }
+  };
+}
+function createZoteroConnectorHost(port, context = {}) {
+  return createZoteroHost(
+    {
+      read: (path) => port.execute({ connectorId: "zotero", operation: "read", input: { path } })
+    },
+    context
+  );
+}
+function registerZoteroHost(registry, port, context) {
+  const adapter = createZoteroHost(port, context);
+  registry.register("lookup", adapter.operations.lookup);
+  return adapter;
+}
+function registerZoteroConnectorHost(registry, port, context) {
+  const adapter = createZoteroConnectorHost(port, context);
+  registry.register("lookup", adapter.operations.lookup);
+  return adapter;
+}
+var zoteroHostLoader = {
+  contractVersion: 1,
+  load: createZoteroHost
 };
 export {
   CLAIM_BINDING_SCHEMA,
@@ -6104,8 +6331,11 @@ export {
   createLiteratureOperations,
   createLocalZoteroReconciler,
   createResearchConnectorHostLoader,
+  createResearchHost,
   createResearchLoop,
   createResearchReceiptJournal,
+  createZoteroConnectorHost,
+  createZoteroHost,
   createZoteroReconciler,
   deliveryContract,
   deliveryMemoryClaims,
@@ -6167,10 +6397,14 @@ export {
   receiptWithoutWrite,
   recordRunProvenance,
   registerResearchExtension,
+  registerResearchHost,
+  registerZoteroConnectorHost,
+  registerZoteroHost,
   registerZoteroMcp,
   remainingZoteroSetupSteps,
   requiresPaperEvidence,
   researchConnectorHostLoader,
+  researchHostLoader,
   research_loop_exports as researchLoop,
   research_run_ui_exports as researchRunUi,
   researchWriteAdapterHostLoader,
@@ -6203,6 +6437,7 @@ export {
   webCreateItems,
   webKeyAccess,
   webSearchByDoi,
+  zoteroHostLoader,
   zotero_identity_exports as zoteroIdentity,
   zoteroItemDoi,
   zotero_library_exports as zoteroLibrary,

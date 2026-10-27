@@ -1,0 +1,230 @@
+{
+  "date": "2026-10-26",
+  "status": "PARTIAL",
+  "scope": "P2 co-packaging, full CLI owner, and Desktop read-only UI/native shared owner via real broker/resource subprocess; full Desktop domain and host removal incomplete",
+  "published": false,
+  "basePluginCommit": "d2f76a0",
+  "candidates": [
+    {
+      "name": "@gyoungwe/pi-knowledge",
+      "version": "0.3.0",
+      "sha256": "352444917a449186596af586664d2e00c2acb317126171e7ffa7c0183e020005",
+      "integrity": "sha512-tePY9B9HbT4WD2fzEyrCwANOjFysKgyF576xDtBZ8ZOvBKZ+yr2tcEbZypOmyMDi/EFsSyEJBvs08vX4rc/d2g==",
+      "files": 225
+    },
+    {
+      "name": "@gyoungwe/desktop-ui-pack",
+      "version": "0.3.0",
+      "sha256": "557cbd5ab4e9f6ec855e15cad90fb607639f88a13fc6e0bcc2af9bbc9a1b762e",
+      "integrity": "sha512-nH94HCWu6zRKlH85cuVhBK3iRBOHni+j3NspyUFZUl4BlCiE0Ep3Qx6n9jjL9zRdp5i23VG39ZxxcUUeGeEBaA==",
+      "files": 9
+    },
+    {
+      "name": "@gyoungwe/research-suite",
+      "version": "0.2.0",
+      "sha256": "8aec32de50debacc976a65c0c768d3f59c69f3f53dfc0d5720e2336e27f30d2a",
+      "integrity": "sha512-MBtMJkbRznpOhUADWz6+YYs1C90qcwoxxMz50gtfBPLg5kOpMmxrhNxTZrDO7Ax2opYz9J/vL3JbfH9GvzIonA==",
+      "files": 1288
+    }
+  ],
+  "checks": [
+    {
+      "command": "DRONE_PLUGIN_API_TARBALL=<verified-private-api-1.3-tarball> npm run check",
+      "exitCode": 0,
+      "logSha256": "ea0f31133d656f9a21975fd239f53a60ad816f70c0d15f4b76a5f5cd47797999",
+      "publicRegistryInstall": false
+    },
+    {
+      "command": "npm run test:styles -w @gyoungwe/pi-knowledge",
+      "exitCode": 0,
+      "scope": "isolated headless Chromium light/dark contract fixture; not formal GUI acceptance"
+    }
+  ],
+  "knowledgeTests": {
+    "files": 69,
+    "tests": 439
+  },
+  "desktopTests": {
+    "files": 1,
+    "tests": 1
+  },
+  "nativeKnowledgeSession": {
+    "sdk": "1.1.0",
+    "realAgentSession": true,
+    "tool": "knowledge_status",
+    "dispatchCount": 1,
+    "result": "unconfigured",
+    "provider": "offline deterministic SDK faux provider",
+    "configuredSessions": 2,
+    "configuredTools": [
+      "knowledge_status",
+      "research_knowledge_status"
+    ],
+    "shutdownLeaseReleased": true,
+    "restart": true
+  },
+  "cleanCandidateInstall": {
+    "knowledgeUiName": "drone-knowledge-ui",
+    "knowledgeContributions": [
+      "knowledge.page",
+      "knowledge.surface"
+    ],
+    "desktopContributions": [
+      "panel.tab"
+    ],
+    "distinctContributions": true,
+    "gui": "NOT_RUN",
+    "uiContract": 2,
+    "publicRegistryInstall": false,
+    "candidateApi": {
+      "version": "1.3.0",
+      "sha256": "da1ce7c766ae62045ed757f9d0120428a7385e599452d9919cceb7ee014b76a0"
+    },
+    "formalMinimumDependencyUpdate": "PENDING_API_1_3_PUBLIC_RELEASE"
+  },
+  "suite": {
+    "version": "0.2.0",
+    "pins": {
+      "pi-core": "0.1.9",
+      "pi-knowledge": "0.3.0",
+      "pi-research": "0.2.0"
+    },
+    "desktopUiPackDependencyAdded": false,
+    "nestedKnowledgeUiInTarball": true,
+    "nestedUiHostDiscovery": "NOT_RUN",
+    "installedPdfPage": 1,
+    "installedPdfMarkedPixels": 1082
+  },
+  "researchRegression": {
+    "sdkVersions": [
+      "1.1.0",
+      "1.4.0"
+    ],
+    "realAgentSession": true,
+    "sessionsPerVersion": 2,
+    "dispatchCountPerVersion": 14
+  },
+  "remaining": [
+    "Desktop full hooks, publication, wiki/topic/ingest/write/review/model capabilities and full scientific workflow remain; readonly UI/native share one real resource owner",
+    "Host knowledge services, named IPC and process event bridge extraction",
+    "Formal installed-app discovery, disable/re-enable, uninstall/reinstall and old-UI rollback",
+    "Zero-domain-plugin host build/start/chat",
+    "Previously deferred four external acceptance items unchanged",
+    "Publish API 1.3 first, update candidate minimum dependency/lock and prove public-registry clean installation",
+    "Existing host obsidian/0.2 compatibility hook can still create a legacy unleased owner for existing DRONE_KNOWLEDGE_DIR; isolated candidate acceptance is not an existing-binding upgrade proof"
+  ],
+  "runtimeFoundation": {
+    "fixedFactoryDirectory": true,
+    "legacy02ModuleApiRetained": true,
+    "namespaceKeyExclusiveQueue": true,
+    "realSqliteWriterReplacement": {
+      "oldWriterExitsBeforeNewStarts": true,
+      "simultaneousCallersShareReplacement": true,
+      "integrityCheck": "ok",
+      "indexedNoteReadBack": true,
+      "startupFailureReported": true,
+      "repairRetryReadBack": true,
+      "failureLifecycleStage": "disabled",
+      "failureReasonPresent": true,
+      "falseRollbackReceiptAbsent": true
+    },
+    "scope": "Explicit runtime resources and default CLI owner isolated; local same-user SQLite writer lease enabled and released by real SDK shutdown; old Desktop compatibility pool remains without lease",
+    "targetedFiles": 2,
+    "targetedTests": 7,
+    "queuedWriteFailureReturnedToCaller": true,
+    "nextQueuedWriteSucceeds": true
+  },
+  "runtimeInstances": {
+    "callbacksSlotsLocks": true,
+    "uiFlowsAndSpecialistQueues": true,
+    "fixedSemanticAndReviewPolicyDirectory": true,
+    "realSqliteOwnersIsolated": true,
+    "acceptedGetCloseBarrier": true,
+    "closeAggregatesFailures": true,
+    "failedOrForcedCloseDoesNotReportDrained": true,
+    "nativeFullOwnerComposition": "REAL_SDK_1_1_0_VERIFIED",
+    "legacyProcessBridgesRetained": 3,
+    "publicationProofIdentityUnchanged": true,
+    "acknowledgedCloseThenNonzeroExitRejects": true,
+    "acknowledgedCloseThenWorkerErrorRejects": true,
+    "firstWorkerErrorAndExitCodePreserved": true,
+    "sharedWorkerAcrossSessions": true,
+    "readTicketsPerSession": true,
+    "publicationProofsPerSession": true,
+    "closedPublicationReferencesRevoked": true,
+    "registeredCommandsDrained": true,
+    "sessionCancellationBeforeDrain": true,
+    "lateServiceResultsRejected": true,
+    "internalRequestCleanupPreserved": true,
+    "newOwnerPeerObjectEvents": false,
+    "newOwnerLegacyRuntimeHandshake": false
+  },
+  "writerLease": {
+    "candidateExplicitOwner": "LOCAL_SAME_USER_TESTED",
+    "legacyNativeDesktop": "DEFAULT_CLI_ENABLED_AND_TESTED; LEGACY_DESKTOP_NOT_ENABLED",
+    "path": "~/.drone/runtime-leases/knowledge-writers",
+    "resourceKeys": [
+      "canonical-vault",
+      "canonical-index"
+    ],
+    "vaultLockFile": false,
+    "releasedAfterActualWorkerExit": true,
+    "constructorFailureRelease": true,
+    "crossProcessContentionTest": true,
+    "crashResidueAutomaticallyRemoved": false,
+    "multiUserOrMultiMachine": "NOT_COVERED",
+    "permissionsDeclaration": "application-state",
+    "sandboxBrokerGrant": "READONLY_DESKTOP_FILES_STATE_INDEX_RESOURCE_CONNECTED",
+    "allVaultFileTransactions": "OWNER_GROUP_RETAINS_LEASE_ACROSS_WORKER_CRASH_TESTED; LEGACY_STANDALONE_FACADES_NOT_COVERED",
+    "releasedAfterOwnerOperationsAndActualWorkerExit": true
+  },
+  "knowledgeSourceSha256": "970acb57cf2d5313175be8a8d84c725e45f9cacc5e9d480a9fea81c15b79b601",
+  "desktopReadOnlyRuntime": {
+    "status": "REAL_PACKED_SDK_AND_SUBPROCESS_VERIFIED",
+    "officialSdk": "1.1.0",
+    "actualOfflineModelDispatch": true,
+    "tools": [
+      "knowledge_status",
+      "knowledge_search"
+    ],
+    "toolEffects": {
+      "knowledge_status": "read",
+      "knowledge_search": "read"
+    },
+    "operations": [
+      "overview",
+      "search"
+    ],
+    "sameDomainAndIndexProcessBeforeAfterNative": true,
+    "externalNoteRefreshVisible": true,
+    "backgroundVaultAccess": false,
+    "watchAvailable": false,
+    "childrenExited": true,
+    "leasesReleased": true,
+    "workspaceAndVault": "temporary test fixtures; no formal Vault",
+    "coordinatorReadOnlyCaller": "REAL_HOST_COORDINATOR_PASS",
+    "formalInstalledGui": "NOT_RUN",
+    "scriptSha256": "e92a8ffd26d24641dbc3b3788e1ecf30b432a73c248e85e3fdf661818cf04a30",
+    "logSha256": "b7d6f392160af7fbf7163ac9680db827b535785e4045f10787d9b6961c4075af",
+    "delayedIndexEventPreservesCurrentSearch": "REAL_SQLITE_RESOURCE_AND_UI_STORE_REGRESSION",
+    "scopeHarness": "Real file/resource/process runtime with explicit capability scope; true host coordinator gate tracked separately",
+    "coordinator": {
+      "status": "PASS",
+      "hostTest": "packages/backend/test/packed-knowledge-runtime-sdk.test.mjs",
+      "tarballSha256": "352444917a449186596af586664d2e00c2acb317126171e7ffa7c0183e020005",
+      "sdk": "1.1.0",
+      "actualSessionRegistry": true,
+      "actualReadOnlySession": true,
+      "actualOfflineModelDispatch": true,
+      "unknownAndWriteToolsExecuted": 0,
+      "scopedUiRefreshWithTrustedWorkspaceDirectory": true,
+      "sameDomainAndIndexProcesses": true,
+      "childrenExited": true,
+      "reservationsReleased": true,
+      "reportSha256": "6f149b289a5631c991d086742e4ad0dc299115c81c80d48606a67c2e9c92b5a8",
+      "logSha256": "686ae2f44c7c0871f0ff4c9ab1231ee074202adbacce9d3e5267989d3a6aaf7c",
+      "fullHooksAndPublication": "NOT_IMPLEMENTED",
+      "formalInstalledGui": "NOT_RUN"
+    }
+  }
+}

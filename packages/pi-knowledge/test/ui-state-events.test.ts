@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { EventEmitter } from "node:events";
 import { flowFor, subscribeKnowledgeUi } from "../src/core/ui-state.js";
 
 describe("knowledge UI module boundary", () => {

@@ -1,0 +1,16 @@
+{
+  "name": "drone-pi-workbench-ui",
+  "version": "0.1.0",
+  "displayName": "Workbench",
+  "description": "Task and memory view for the optional Pi workbench package.",
+  "droneUi": 1,
+  "main": "bundle.js",
+  "contributions": [
+    {
+      "id": "workbench",
+      "region": "panel.tab",
+      "export": "WorkbenchPanel",
+      "title": "Workbench"
+    }
+  ]
+}

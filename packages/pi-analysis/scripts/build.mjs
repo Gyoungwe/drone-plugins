@@ -44,7 +44,7 @@ function validateMetadata() {
 }
 
 function validateSource() {
-	for (const file of ["assembly.ts", "bulk-rnaseq.ts", "host.ts", "index.ts", "registry.ts"]) {
+	for (const file of ["assembly.ts", "bulk-rnaseq.ts", "evidence-plan.ts", "host.ts", "index.ts", "registry.ts"]) {
 		if (!existsSync(join(sourceRoot, file))) throw new Error(`source file is missing: ${file}`);
 	}
 }
@@ -57,6 +57,7 @@ function validateDeclarations() {
 		"bulk-rnaseq.d.ts",
 		"registry.d.ts",
 		"analysis-contract.d.ts",
+		"evidence-plan.d.ts",
 	])
 		if (!existsSync(join(distRoot, file))) throw new Error(`declaration output is missing: dist/${file}`);
 }
@@ -73,7 +74,7 @@ function validateBundle(output, kind) {
 	}
 	const markers =
 		kind === "extension"
-			? ["analysis_list_adapters", "analysis_assess_readiness"]
+		? ["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"]
 			: ["contractVersion", "bulk-rnaseq", "assembly"];
 	for (const marker of markers) {
 		if (!output.includes(kind === "extension" ? JSON.stringify(marker) : marker))

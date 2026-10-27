@@ -1,116 +1,122 @@
 {
-	"schemaVersion": 1,
-	"id": "drone-research-suite",
-	"version": "0.2.2",
-	"pi": {
-		"apiVersion": 1,
-		"minHostVersion": "1.1.0",
-		"testedHosts": [
-			"1.1.0",
-			"latest"
-		]
-	},
-	"drone": {
-		"pluginApi": 1,
-		"resultContract": "drone-result/v3"
-	},
-	"entrypoints": {
-		"extensions": [
-			"./node_modules/@gyoungwe/pi-core/dist/index.mjs",
-			"./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
-			"./node_modules/@gyoungwe/pi-research/dist/index.mjs"
-		],
-		"skills": [
-			"./node_modules/@gyoungwe/pi-knowledge/skills",
-			"./node_modules/@gyoungwe/pi-research/skills"
-		]
-	},
-	"capabilities": [
-		"knowledge",
-		"research",
-		"search",
-		"evidence-context"
-	],
-	"tools": [
-		"task_status",
-		"task_plan",
-		"task_wait",
-		"task_reconcile",
-		"task_evidence_restore",
-		"ask_user",
-		"set_status",
-		"todo",
-		"deliver_files",
-		"memory_save",
-		"knowledge_status",
-		"knowledge_search",
-		"research_prepare_knowledge",
-		"research_topics",
-		"research_resume_topic",
-		"research_read_knowledge",
-		"research_restore_evidence",
-		"research_search_knowledge",
-		"research_check_answer",
-		"research_task_status",
-		"research_search_explainers",
-		"research_knowledge_status",
-		"research_update_topic",
-		"research_archive_topic",
-		"research_maintain_knowledge",
-		"research_delegate_knowledge",
-		"research_archive_explainer",
-		"research_propose_wiki_update",
-		"research_wiki_review_status",
-		"research_search_sources",
-		"research_read_source",
-		"research_deposit_research_note",
-		"research_answer_sources",
-		"research_status",
-		"research_loop"
-	],
-	"hosts": [
-		"native-pi",
-		"drone-desktop"
-	],
-	"permissions": {
-		"filesystem": [
-			"workspace",
-			"configured-vault"
-		],
-		"network": [
-			"api.zotero.org",
-			"127.0.0.1",
-			"localhost",
-			"www.ebi.ac.uk",
-			"europepmc.org",
-			"pmc-oa-opendata.s3.amazonaws.com",
-			"api.unpaywall.org",
-			"api.openalex.org",
-			"api.semanticscholar.org",
-			"api.crossref.org",
-			"arxiv.org",
-			"doi.org",
-			"astral.sh",
-			"pypi.org",
-			"files.pythonhosted.org",
-			"host-authorized source and institutional endpoints"
-		],
-		"subprocess": [
-			"uv",
-			"uvx",
-			"zotero-mcp",
-			"sh",
-			"curl",
-			"powershell",
-			"where.exe"
-		],
-		"externalWrites": true,
-		"credentials": [
-			"host-supplied Zotero environment or local API reference"
-		],
-		"externalSideEffects": [
-			"host-authorized Zotero item and attachment writes",
-			"host-authorized Zotero MCP and uv installation"
-		]
-	}
+  "schemaVersion": 1,
+  "id": "drone-research-suite",
+  "version": "0.2.2",
+  "pi": {
+    "apiVersion": 1,
+    "minHostVersion": "1.1.0",
+    "testedHosts": [
+      "1.1.0",
+      "latest"
+    ]
+  },
+  "drone": {
+    "pluginApi": 1,
+    "resultContract": "drone-result/v3"
+  },
+  "entrypoints": {
+    "extensions": [
+      "./node_modules/@gyoungwe/pi-core/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-workbench/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-research/dist/index.mjs"
+    ],
+    "skills": [
+      "./node_modules/@gyoungwe/pi-knowledge/skills",
+      "./node_modules/@gyoungwe/pi-research/skills"
+    ]
+  },
+  "capabilities": [
+    "knowledge",
+    "research",
+    "search",
+    "evidence-context"
+  ],
+  "tools": [
+    "ask_user",
+    "set_status",
+    "todo",
+    "deliver_files",
+    "memory_save",
+    "task_status",
+    "task_plan",
+    "task_wait",
+    "task_reconcile",
+    "task_evidence_restore",
+    "workbench_plan",
+    "workbench_status",
+    "workbench_todo",
+    "workbench_memory_save",
+    "knowledge_status",
+    "knowledge_search",
+    "research_prepare_knowledge",
+    "research_topics",
+    "research_resume_topic",
+    "research_read_knowledge",
+    "research_restore_evidence",
+    "research_search_knowledge",
+    "research_check_answer",
+    "research_task_status",
+    "research_search_explainers",
+    "research_knowledge_status",
+    "research_update_topic",
+    "research_archive_topic",
+    "research_maintain_knowledge",
+    "research_delegate_knowledge",
+    "research_archive_explainer",
+    "research_propose_wiki_update",
+    "research_wiki_review_status",
+    "research_search_sources",
+    "research_read_source",
+    "research_deposit_research_note",
+    "research_answer_sources",
+    "research_status",
+    "research_loop"
+  ],
+  "hosts": [
+    "native-pi",
+    "drone-desktop"
+  ],
+  "permissions": {
+    "filesystem": [
+      "workspace",
+      "configured-vault",
+      "application-state"
+    ],
+    "network": [
+      "api.zotero.org",
+      "127.0.0.1",
+      "localhost",
+      "www.ebi.ac.uk",
+      "europepmc.org",
+      "pmc-oa-opendata.s3.amazonaws.com",
+      "api.unpaywall.org",
+      "api.openalex.org",
+      "api.semanticscholar.org",
+      "api.crossref.org",
+      "arxiv.org",
+      "doi.org",
+      "astral.sh",
+      "pypi.org",
+      "files.pythonhosted.org",
+      "host-authorized source and institutional endpoints"
+    ],
+    "subprocess": [
+      "uv",
+      "uvx",
+      "zotero-mcp",
+      "sh",
+      "curl",
+      "powershell",
+      "where.exe"
+    ],
+    "externalWrites": true,
+    "credentials": [
+      "host-supplied Zotero environment or local API reference"
+    ],
+    "externalSideEffects": [
+      "host-authorized Zotero item and attachment writes",
+      "host-authorized Zotero MCP and uv installation"
+    ]
+  }
 }

@@ -1,60 +1,68 @@
 {
-	"name": "@gyoungwe/research-suite",
-	"version": "0.2.2",
-	"description": "Bundled Drone native Pi research suite",
-	"keywords": [
-		"pi-package",
-		"research",
-		"evidence"
-	],
-	"license": "MIT",
-	"publishConfig": {
-		"access": "public"
-	},
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/Gyoungwe/drone-plugins.git",
-		"directory": "packages/research-suite"
-	},
-	"type": "module",
-	"files": [
-		"package.json",
-		"plugin.manifest.json",
-		"README.md",
-		"build-manifest.json",
-		"prompts"
-	],
-	"scripts": {
-		"build": "node scripts/build.mjs",
-		"build:check": "node scripts/build.mjs --check",
-		"typecheck": "node -e \"process.exit(0)\"",
-		"test": "node --test test/manifest-tools.test.mjs"
-	},
-	"pi": {
-		"extensions": [
-			"./node_modules/@gyoungwe/pi-core/dist/index.mjs",
-			"./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
-			"./node_modules/@gyoungwe/pi-research/dist/index.mjs"
-		],
-		"skills": [
-			"./node_modules/@gyoungwe/pi-knowledge/skills/*",
-			"./node_modules/@gyoungwe/pi-research/skills/*"
-		],
-		"prompts": [
-			"./prompts/*.md"
-		]
-	},
-	"dependencies": {
-		"@gyoungwe/pi-core": "0.1.9",
-		"@gyoungwe/pi-knowledge": "0.3.0",
-		"@gyoungwe/pi-research": "0.3.2"
-	},
-	"bundleDependencies": [
-		"@gyoungwe/pi-core",
-		"@gyoungwe/pi-knowledge",
-		"@gyoungwe/pi-research"
-	],
-	"peerDependencies": {
-		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
-	}
+  "name": "@gyoungwe/research-suite",
+  "version": "0.2.2",
+  "description": "Bundled Drone native Pi research suite",
+  "keywords": [
+    "pi-package",
+    "research",
+    "evidence"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gyoungwe/drone-plugins.git",
+    "directory": "packages/research-suite"
+  },
+  "type": "module",
+  "files": [
+    "package.json",
+    "plugin.manifest.json",
+    "README.md",
+    "build-manifest.json",
+    "prompts"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:check": "node scripts/build.mjs --check",
+    "typecheck": "node -e \"process.exit(0)\"",
+    "test": "node --test test/manifest-tools.test.mjs",
+    "test:pdf": "node scripts/check-pdf.mjs",
+    "smoke:install": "node scripts/smoke-install.mjs"
+  },
+  "pi": {
+    "extensions": [
+      "./node_modules/@gyoungwe/pi-core/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-workbench/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-research/dist/index.mjs"
+    ],
+    "skills": [
+      "./node_modules/@gyoungwe/pi-knowledge/skills/*",
+      "./node_modules/@gyoungwe/pi-research/skills/*"
+    ],
+    "prompts": [
+      "./prompts/*.md"
+    ]
+  },
+  "dependencies": {
+    "@gyoungwe/pi-core": "0.1.9",
+    "@gyoungwe/pi-workbench": "0.1.0",
+    "@gyoungwe/pi-knowledge": "0.3.0",
+    "@gyoungwe/pi-research": "0.3.2"
+  },
+  "bundleDependencies": [
+    "@gyoungwe/pi-core",
+    "@gyoungwe/pi-workbench",
+    "@gyoungwe/pi-knowledge",
+    "@gyoungwe/pi-research"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
+  },
+  "optionalDependencies": {
+    "@napi-rs/canvas": "^1.0.0"
+  }
 }

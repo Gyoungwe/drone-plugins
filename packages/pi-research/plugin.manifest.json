@@ -17,13 +17,16 @@
   "entrypoints": {
     "extension": "./dist/index.mjs",
     "skills": "./skills",
-    "host": "./dist/host.mjs"
+    "host": "./dist/host.mjs",
+    "desktopRuntime": "./dist/desktop-runtime.mjs",
+    "ui": "./ui/plugin.json"
   },
   "capabilities": [
     "research",
     "search",
     "evidence-context",
-    "files"
+    "files",
+    "ui"
   ],
   "tools": [
     "research_search_sources",

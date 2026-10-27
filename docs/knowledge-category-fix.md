@@ -1,5 +1,7 @@
 # Knowledge category repair — 2026-10-25
 
+> Subsequent release: the three target versions are now public with unchanged candidate hashes. See [release verification](knowledge-research-npm-2026-10-25.md). Unpublished statements below describe the repair-time snapshot.
+
 Source candidate: `pi-knowledge@0.2.1`, aggregated by `research-suite@0.1.10`; neither version is claimed published to npm.
 
 The old classifier concatenated frontmatter type and the entire note path, then checked paper/software keywords before method. Consequently `Library/Methods/mapping-tools.md` with `type: method` was counted as software. Both worker counts and recent groups carried duplicate copies of this rule.

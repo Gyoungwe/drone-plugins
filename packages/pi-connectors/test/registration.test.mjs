@@ -26,12 +26,18 @@ test("registerPiConnectors exposes read-only declaration tools", async () => {
 	const listed = await tools[0].execute();
 	assert.deepEqual(
 		listed.details.connectors.map((descriptor) => descriptor.id),
-		["browser", "generic-mcp", "institutional", "search", "webdav", "zotero"],
+		["arxiv", "browser", "generic-mcp", "institutional", "search", "semantic-scholar", "webdav", "zotero"],
 	);
 	assert.equal(
 		listed.details.connectors.every((descriptor) => descriptor.permissions.readOnly),
 		true,
 	);
+	const arxiv = listed.details.connectors.find((descriptor) => descriptor.id === "arxiv");
+	const semanticScholar = listed.details.connectors.find((descriptor) => descriptor.id === "semantic-scholar");
+	assert.deepEqual(arxiv.permissions.network.allowedHosts, ["export.arxiv.org", "arxiv.org"]);
+	assert.deepEqual(semanticScholar.permissions.network.allowedHosts, ["api.semanticscholar.org"]);
+	assert.equal(arxiv.enabledByDefault, true);
+	assert.equal(semanticScholar.enabledByDefault, true);
 });
 
 test("registry plans reads and blocks undeclared writes", () => {
