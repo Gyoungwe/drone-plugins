@@ -81,15 +81,16 @@ it("sends the rendered row's session and exact journal revision through the publ
 	fireEvent.click(screen.getByRole("button", { name: "我看过了，这项算完成" }));
 	await act(async () => {});
 	expect(uiFixture.prompt).toHaveBeenCalledOnce();
-	const [sessionId, command] = uiFixture.prompt.mock.calls[0] as unknown as [
+	const [sessionId, name, args] = uiFixture.prompt.mock.calls[0] as unknown as [
 		string,
 		string,
 	];
 	expect(sessionId).toBe("shown");
+	expect(name).toBe("task-action");
 	const decoded = JSON.parse(
 		new TextDecoder().decode(
 			Uint8Array.from(
-				atob(command.split(" ")[1].replaceAll("-", "+").replaceAll("_", "/")),
+				atob(args.replaceAll("-", "+").replaceAll("_", "/")),
 				(c) => c.charCodeAt(0),
 			),
 		),

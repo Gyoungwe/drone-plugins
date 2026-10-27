@@ -4,7 +4,7 @@ import type {
 	WorkbenchTask,
 } from "@gyoungwe/plugin-api/ui";
 
-export function taskActionCommand(
+export function taskActionArguments(
 	view: TaskView,
 	taskId: string,
 	action: string,
@@ -21,7 +21,7 @@ export function taskActionCommand(
 		.replaceAll("+", "-")
 		.replaceAll("/", "_")
 		.replace(/=+$/, "");
-	return `/task-action ${encoded}`;
+	return encoded;
 }
 /** Presentation only: never changes the ledger or certifies scientific claims. */
 export function taskDeliveryPresentation(

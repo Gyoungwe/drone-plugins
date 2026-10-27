@@ -5,7 +5,7 @@ function localHref(path: string): string | undefined {
 	const normalized = path.replaceAll("\\", "/");
 	if (
 		!normalized ||
-		[...normalized].some(character => character.charCodeAt(0) < 32) ||
+		[...normalized].some((character) => character.charCodeAt(0) < 32) ||
 		/^(?:file:|\/\/)/i.test(normalized) ||
 		(/^[a-z][a-z0-9+.-]*:/i.test(normalized) && !/^[a-z]:\//i.test(normalized))
 	)

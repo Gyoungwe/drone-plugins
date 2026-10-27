@@ -22,7 +22,7 @@ export const uiFixture = {
 	preview: vi.fn(),
 };
 window.DroneUI = {
-	sessions: { prompt: uiFixture.prompt },
+	sessions: { prompt: uiFixture.prompt, command: uiFixture.prompt },
 	hooks: {
 		useSessionMessages: () => uiFixture.messages,
 		useLanguage: () => uiFixture.language,

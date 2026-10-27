@@ -4,7 +4,7 @@ import { sessions, useLanguage } from "../api";
 import { useTaskText } from "../copy";
 import {
 	explainTaskReason,
-	taskActionCommand,
+	taskActionArguments,
 	taskDeliveryPresentation,
 } from "../presentation";
 import { MilestoneEvidence } from "./MilestoneEvidence";
@@ -121,9 +121,10 @@ export function TaskRow({
 						setBusy(true);
 						setError("");
 						try {
-							await sessions.prompt(
+							await sessions.command(
 								sessionId,
-								taskActionCommand(view, task.id, "progress"),
+								"task-action",
+								taskActionArguments(view, task.id, "progress"),
 							);
 						} catch (e) {
 							setError(String(e));

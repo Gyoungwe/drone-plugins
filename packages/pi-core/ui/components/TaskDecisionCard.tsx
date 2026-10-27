@@ -2,11 +2,11 @@ import type { TaskView, WorkbenchTask } from "@gyoungwe/plugin-api/ui";
 import { useState } from "react";
 import { sessions, useLanguage } from "../api";
 import { formatCardText } from "../format-card-text";
-import { taskActionCommand, taskDecision } from "../presentation";
+import { taskActionArguments, taskDecision } from "../presentation";
 
 /**
  * The task decision is also embedded in the route card. Keeping the action logic here means
- * chat, route and task-panel entry points all use the same taskActionCommand protocol.
+ * chat, route and task-panel entry points all use the same taskActionArguments protocol.
  */
 export function TaskDecisionCard({
 	task,
@@ -32,7 +32,7 @@ export function TaskDecisionCard({
 		setBusy(true);
 		setError("");
 		try {
-			await sessions.prompt(sessionId, text);
+			await sessions.command(sessionId, "task-action", text);
 		} catch (cause) {
 			setError(String(cause));
 		} finally {
@@ -68,7 +68,7 @@ export function TaskDecisionCard({
 							const actionId = decision.completeActionId;
 							if (!actionId) return;
 							void send(
-								taskActionCommand(view, task.id, "acknowledge", { actionId }),
+								taskActionArguments(view, task.id, "acknowledge", { actionId }),
 							);
 						}}
 					>
@@ -91,7 +91,7 @@ export function TaskDecisionCard({
 						disabled={busy || readOnly || !sessionId || agentActive}
 						className="rounded-md border border-border px-2 py-1 text-xs text-ink-dim hover:bg-hover disabled:opacity-40"
 						onClick={() =>
-							void send(taskActionCommand(view, task.id, "cancel"))
+							void send(taskActionArguments(view, task.id, "cancel"))
 						}
 					>
 						{decision.endLabel}
