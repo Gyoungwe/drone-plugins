@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { knowledgeHostLoader } from "../src/core/host.js";
 
 describe("knowledge host loader", () => {
@@ -55,5 +58,24 @@ describe("knowledge host loader", () => {
 			"status",
 			"testProvider",
 		]);
+	});
+
+	it("routes Vault create/read/replace through the host port with CAS", async () => {
+		const vault = await mkdtemp(join(tmpdir(), "pi-knowledge-host-vault-"));
+		try {
+			const port = knowledgeHostLoader.load();
+			if (!port.vault) throw new Error("Vault host port is missing");
+			const canonicalVault = await realpath(vault);
+			await mkdir(join(canonicalVault, "notes"));
+			const path = await port.vault.containedFile(canonicalVault, "notes/test.md");
+			expect(await port.vault.createFileOnly(path, "before\n")).toBe(true);
+			const first = (await port.vault.readNote(canonicalVault, "notes/test.md")) as { hash: string; text: string };
+			expect(first.text).toBe("before\n");
+			await port.vault.replaceFile(path, "after\n", { expectedHash: first.hash });
+			const second = (await port.vault.readNote(canonicalVault, "notes/test.md")) as { text: string };
+			expect(second.text).toBe("after\n");
+		} finally {
+			await rm(vault, { recursive: true, force: true });
+		}
 	});
 });
