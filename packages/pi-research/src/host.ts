@@ -252,3 +252,4 @@ export {
 	receiptWithoutUpdate,
 } from "./core/zotero-write-runtime.js";
 export * from "./evidence-gate.js";
+export { researchConnectorHostLoader, researchWriteAdapterHostLoader } from "./research-host.js";

@@ -1,9 +1,9 @@
 {
   "version": 1,
   "generator": "packages/pi-research/scripts/build.mjs",
-  "inputsSha256": "07e0e48dd14dd66aee702df139cb69a514cccff0291a1fbce52928f3d0eee462",
+  "inputsSha256": "89a6b37d101c9aa9c2e11d056f9bbf718497094637392e4251135659d21c5314",
   "outputs": {
-    "dist/host.mjs": "094e9fa4f8aef16647a43d3385fa8b35af0ae0a83a5cd313954de4b9341e72f8",
+    "dist/host.mjs": "a2b7878bd1495c16381e6ea7c266206388483e2202a672c1841933c010e713a8",
     "dist/index.mjs": "00e40ccf6668aeeb4ab7421b9e2b73202d8400355471b4ea20751229f47acf72",
     "dist/types/core/claim-bindings.d.ts": "cf2ab2c03ff2ef73967de61f7f4d98ed63b598c64731aaeebb65d42204254ab4",
     "dist/types/core/external-effect-key.d.ts": "dbd00836bea9e1c8541fecebdcc5e6687351eb3d0cf3a9757ee9c489dad86d7f",
@@ -32,8 +32,9 @@
     "dist/types/evidence-gate.d.ts": "4f01bdeb41824004cf332e009f79dffea3f0f377e0e49895ac01db913ea01eea",
     "dist/types/evidence-loop.d.ts": "f8a7724620e7202c0b028729cbeff7e2afb5d9efe606c2bac8f163ee939d28f7",
     "dist/types/extension.d.ts": "0f9e6cd7fb61a27243360d87aa1feab3ed99ee3f9a5de3c115968f4f0c36c365",
-    "dist/types/host.d.ts": "66d5c5fa4e2f32187d329e6a6ea75f8738cc5fae90fe07c555433ee476fa20e3",
+    "dist/types/host.d.ts": "823968d1fb8ee1e0cacf80854fa0dec781b82cd0bc2083b015f9b70edbaeae25",
     "dist/types/index.d.ts": "5b1704f0b2f221f0bd8b9f3797af4b420dbd7809bb2653a888fbd650a6438103",
+    "dist/types/research-host.d.ts": "cd0638046484378ac1027e8224abd0b9d24927750587dd6b87078bd3885d1dd0",
     "dist/types/research-loop.d.ts": "80d7650cc81596afb405262de3bf859765d00fb7754d481487257df65cf3c46a"
   }
 }

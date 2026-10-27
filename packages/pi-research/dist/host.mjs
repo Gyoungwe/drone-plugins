@@ -5733,6 +5733,42 @@ function assertEvidenceAnswerable(gate, { claimBindings = [] } = {}) {
   }
   return state;
 }
+
+// src/research-host.ts
+var UNAVAILABLE_CONNECTOR_MESSAGE = "Research connector transport is unavailable; the host must inject an authorized connector registry";
+var UNAVAILABLE_WRITE_MESSAGE = "Research write adapters are unavailable; the host must inject an authorized write registry";
+var researchConnectorHostLoader = {
+  contractVersion: 1,
+  load() {
+    return {
+      contractVersion: 1,
+      status: "unavailable",
+      list: () => [],
+      recommend: async (..._args) => {
+        throw new Error(UNAVAILABLE_CONNECTOR_MESSAGE);
+      },
+      search: async (..._args) => {
+        throw new Error(UNAVAILABLE_CONNECTOR_MESSAGE);
+      }
+    };
+  }
+};
+var researchWriteAdapterHostLoader = {
+  contractVersion: 1,
+  load() {
+    return {
+      contractVersion: 1,
+      status: "unavailable",
+      descriptors: () => [],
+      prepare: (..._args) => {
+        throw new Error(UNAVAILABLE_WRITE_MESSAGE);
+      },
+      execute: async (..._args) => {
+        throw new Error(UNAVAILABLE_WRITE_MESSAGE);
+      }
+    };
+  }
+};
 export {
   CLAIM_BINDING_SCHEMA,
   CORE_RESEARCH_RECEIPT_TOOLS,
@@ -5837,8 +5873,10 @@ export {
   registerZoteroMcp,
   remainingZoteroSetupSteps,
   requiresPaperEvidence,
+  researchConnectorHostLoader,
   research_loop_exports as researchLoop,
   research_run_ui_exports as researchRunUi,
+  researchWriteAdapterHostLoader,
   resolveInstallers,
   resolveOpenAccess,
   resolveZoteroCommands,
