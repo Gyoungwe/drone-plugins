@@ -22,6 +22,7 @@ describe("knowledge host loader", () => {
 			"semantic",
 			"setupPreview",
 			"specialistSettings",
+			"vault",
 		]);
 		for (const method of [
 			"overview",
@@ -39,6 +40,14 @@ describe("knowledge host loader", () => {
 			"maintenance",
 		] as const)
 			expect(typeof port[method]).toBe("function");
+		expect(Object.keys(port.vault ?? {}).sort()).toEqual([
+			"containedFile",
+			"createFileOnly",
+			"isConflict",
+			"readBinding",
+			"readNote",
+			"replaceFile",
+		]);
 		expect(Object.keys(port.semantic ?? {}).sort()).toEqual([
 			"cancelIndex",
 			"index",

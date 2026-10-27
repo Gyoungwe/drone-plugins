@@ -8,6 +8,15 @@
  */
 export * from "./index.js";
 
+import { readKnowledgeBinding } from "./config.js";
+import { readNoteFile } from "./files.js";
+import {
+	containedVaultFile,
+	createVaultFileOnly,
+	replaceVaultFile,
+	VaultFileConflictError,
+} from "./layout.js";
+
 export interface KnowledgeHostPort {
 	readonly contractVersion: 1;
 	overview(input: unknown): Promise<unknown>;
@@ -22,6 +31,14 @@ export interface KnowledgeHostPort {
 	setupPreview?(input: unknown): Promise<unknown>;
 	specialistSettings?(input: unknown): Promise<unknown>;
 	openTarget?(input: unknown): Promise<unknown>;
+	vault?: {
+		readBinding(options?: { fresh?: boolean }): Promise<unknown>;
+		readNote(vault: string, path: string): Promise<unknown>;
+		containedFile(vault: string, path: string): Promise<string>;
+		createFileOnly(path: string, content: string): Promise<boolean>;
+		replaceFile(path: string, content: string, options: { expectedHash?: string }): Promise<void>;
+		isConflict(error: unknown): boolean;
+	};
 	semantic?: {
 		status(input: unknown): Promise<unknown>;
 		saveSettings(input: unknown): Promise<unknown>;
@@ -60,6 +77,14 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			import("./ui-service.js").then(({ knowledgeSpecialistSettings }) => knowledgeSpecialistSettings(input as never)),
 		openTarget: (input) =>
 			import("./ui-service.js").then(({ knowledgeOpenTarget }) => knowledgeOpenTarget(input as never)),
+		vault: {
+			readBinding: (options) => readKnowledgeBinding(options),
+			readNote: (vault, path) => readNoteFile(vault, path),
+			containedFile: (vault, path) => containedVaultFile(vault, path),
+			createFileOnly: (path, content) => createVaultFileOnly(path, content),
+			replaceFile: (path, content, options) => replaceVaultFile(path, content, options),
+			isConflict: (error) => error instanceof VaultFileConflictError,
+		},
 		semantic: {
 			status: (input) =>
 				import("./ui-service.js").then(({ knowledgeSemanticStatus }) => knowledgeSemanticStatus(input as never)),
