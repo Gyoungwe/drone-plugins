@@ -35,6 +35,8 @@ async function buildReceipt() {
 		"scripts/build.mjs",
 		"tsconfig.json",
 		"tsconfig.build.json",
+		"tsconfig.ui.json",
+		"scripts/build-ui.mjs",
 	].sort();
 	const inputsSha256 = createHash("sha256");
 	for (const input of inputs)
@@ -163,6 +165,7 @@ if (!check) {
 		`${JSON.stringify(await buildReceipt(), null, "\t")}\n`,
 	);
 }
+execFileSync(process.execPath, [join(packageRoot, "scripts/build-ui.mjs"), ...(check ? ["--check"] : [])], { stdio: "inherit" });
 await verify();
 if (check) {
 	const recorded = JSON.parse(

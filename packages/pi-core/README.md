@@ -15,3 +15,12 @@ extension context's `ctx.ui`; Drone Desktop can inject its existing ask gate
 through `registerPiCore(pi, { ask })`. The package has no Electron, backend, or
 renderer dependency and keeps all task and memory data in the existing `.pi`
 locations.
+
+Desktop task views are packaged with this owner in `ui/plugin.json` (Drone UI v1).
+They require Plugin API 1.3's `sessions.prompt`, `hooks.useSessionMessages` and
+`chat.message` binding. Missing bindings show an incompatible diagnostic. Native
+Pi entry points remain React-free. The UI reads safe session journal projections;
+review/actions go through the existing `/task-action` command with the rendered
+session ID and journal revision. Disabling the UI contribution does not dispose
+the native owner. Removing the entire task owner releases its guard and makes its
+task operations unavailable; ordinary host permissions continue to apply.

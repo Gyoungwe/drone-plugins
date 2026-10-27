@@ -21,7 +21,10 @@
 		"package.json",
 		"plugin.manifest.json",
 		"README.md",
-		"build-manifest.json"
+		"build-manifest.json",
+		"ui/plugin.json",
+		"ui/bundle.js",
+		"ui/build-manifest.json"
 	],
 	"pi": {
 		"extensions": [
@@ -53,8 +56,8 @@
 	"scripts": {
 		"build": "node scripts/build.mjs",
 		"build:check": "node scripts/build.mjs --check",
-		"typecheck": "tsc -p tsconfig.json --noEmit",
-		"test": "npm run build && node --test test/*.test.mjs && vitest run test/task-runtime",
+		"typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
+		"test": "npm run build && node --test test/*.test.mjs && vitest run",
 		"smoke": "node scripts/smoke.mjs",
 		"check": "npm run typecheck && npm run build:check && npm run smoke && npm test"
 	},
