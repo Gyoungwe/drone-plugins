@@ -1,11 +1,4 @@
-import {
-	act,
-	cleanup,
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { knowledge, services, sessions, setPluginRuntime } from "../test/setup";
 import { KnowledgePage } from "./entry";
@@ -81,9 +74,7 @@ function fixture() {
 			return {
 				bindingRevision: 2,
 				project: "alpha",
-				items: input.offset
-					? [{ ...item, id: "candidate-b", title: "Candidate B" }]
-					: [item],
+				items: input.offset ? [{ ...item, id: "candidate-b", title: "Candidate B" }] : [item],
 				problems: [],
 				total: 13,
 				offset: input.offset,
@@ -97,7 +88,10 @@ function fixture() {
 				path: item.path,
 				vaultWritten: true,
 				reviewRecorded: true,
-				indexed: false,
+				indexed: true,
+				recovered: false,
+				recordError: null,
+				indexError: null,
 			};
 		if (operation === "rejectReview")
 			return {
@@ -161,9 +155,7 @@ function fixture() {
 async function openReviews() {
 	render(<KnowledgePage />);
 	const button = screen.getByRole("button", { name: "待审候选", exact: true });
-	await waitFor(() =>
-		expect((button as HTMLButtonElement).disabled).toBe(false),
-	);
+	await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
 	fireEvent.click(button);
 }
 afterEach(() => {
@@ -202,8 +194,7 @@ it("reads paginated candidate diff/protected/source views without legacy domain 
 		revision: 2,
 	});
 	expect(knowledge.getState().dialog).toBeNull();
-	for (const method of Object.values(services))
-		expect(method).not.toHaveBeenCalled();
+	for (const method of Object.values(services)) expect(method).not.toHaveBeenCalled();
 });
 
 it("applies a reviewed candidate through the host-authorized write operation", async () => {
@@ -219,17 +210,14 @@ it("applies a reviewed candidate through the host-authorized write operation", a
 			revision: 2,
 		}),
 	);
-	await waitFor(() =>
-		expect(screen.queryByTestId("native-review-preview")).toBeNull(),
-	);
+	await waitFor(() => expect(screen.queryByTestId("native-review-preview")).toBeNull());
 });
 
 it("keeps the review open and reports a failed rejection", async () => {
 	const runtime = fixture();
 	const normal = runtime.invoke.getMockImplementation()!;
 	runtime.invoke.mockImplementation((operation, input) => {
-		if (operation === "rejectReview")
-			return Promise.reject(new Error("State write permission is required"));
+		if (operation === "rejectReview") return Promise.reject(new Error("State write permission is required"));
 		return normal(operation, input);
 	});
 	await openReviews();
@@ -282,11 +270,7 @@ it("clears an open preview on changed and ignores its delayed result after refre
 	);
 	await openReviews();
 	fireEvent.click(await screen.findByRole("button", { name: "Candidate A" }));
-	await waitFor(() =>
-		expect(
-			runtime.invoke.mock.calls.some(([op]) => op === "previewReview"),
-		).toBe(true),
-	);
+	await waitFor(() => expect(runtime.invoke.mock.calls.some(([op]) => op === "previewReview")).toBe(true));
 	await act(async () => runtime.emit());
 	await screen.findByRole("button", { name: "Candidate A" });
 	await act(async () => pending.resolve(preview));
@@ -297,9 +281,7 @@ it("reports failed state reads instead of an empty successful list", async () =>
 	const runtime = fixture(),
 		normal = runtime.invoke.getMockImplementation()!;
 	runtime.invoke.mockImplementation((op, input) =>
-		op === "reviews"
-			? Promise.reject(new Error("State root access revoked"))
-			: normal(op, input),
+		op === "reviews" ? Promise.reject(new Error("State root access revoked")) : normal(op, input),
 	);
 	await openReviews();
 	await screen.findByText("State root access revoked");
@@ -317,18 +299,13 @@ it("refreshes the candidate version after a conflict and preserves source/target
 				bindingRevision: 2,
 				project: "alpha",
 				items: [{ ...item, proposalHash: updated ? nextHash : proposalHash }],
-				problems: [
-					{ id: "corrupt-candidate", error: "Candidate JSON is corrupt" },
-				],
+				problems: [{ id: "corrupt-candidate", error: "Candidate JSON is corrupt" }],
 				total: 1,
 				offset: 0,
 				nextOffset: null,
 			});
 		if (operation === "previewReview") {
-			if (!updated)
-				return Promise.reject(
-					new Error("Proposal changed; refresh candidates"),
-				);
+			if (!updated) return Promise.reject(new Error("Proposal changed; refresh candidates"));
 			return Promise.resolve({
 				...preview,
 				proposalHash: nextHash,
@@ -367,8 +344,7 @@ it("explains projectless scope instead of reporting an empty current project", a
 	const runtime = fixture(),
 		normal = runtime.invoke.getMockImplementation()!;
 	runtime.invoke.mockImplementation((operation, input) => {
-		if (operation === "overview")
-			return Promise.resolve({ ...overview, project: null });
+		if (operation === "overview") return Promise.resolve({ ...overview, project: null });
 		if (operation === "reviews")
 			return Promise.resolve({
 				bindingRevision: 2,
@@ -390,4 +366,30 @@ it("explains projectless scope instead of reporting an empty current project", a
 		offset: 0,
 		limit: 12,
 	});
+});
+
+it("shows a partial write receipt instead of presenting an incomplete review as complete", async () => {
+	const runtime = fixture();
+	const normal = runtime.invoke.getMockImplementation()!;
+	runtime.invoke.mockImplementation(async (operation, input) =>
+		operation === "applyReview"
+			? {
+					id: input.id,
+					status: "applied",
+					path: item.path,
+					vaultWritten: true,
+					reviewRecorded: false,
+					indexed: true,
+					recovered: false,
+					recordError: "Record storage refused",
+					indexError: null,
+				}
+			: normal(operation, input),
+	);
+	await openReviews();
+	fireEvent.click(await screen.findByRole("button", { name: "Candidate A" }));
+	await screen.findByText("Suggested claim");
+	fireEvent.click(screen.getByRole("button", { name: "应用候选" }));
+	await screen.findByText(/Record storage refused/);
+	expect(screen.getByRole("alert").textContent).toContain("笔记已写入");
 });
