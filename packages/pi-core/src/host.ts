@@ -12,7 +12,6 @@ import { makeMemorySaveTool as makeMemorySaveToolImpl } from "./tools/memory-sav
 import { makeStatusTool as makeStatusToolImpl } from "./tools/status";
 import { makeTodoTool as makeTodoToolImpl } from "./tools/todo";
 import { acceptanceVerifier, registerAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
-import { createWorkbenchPluginPort } from "./task-runtime/workbench-plugin.mjs";
 
 interface CoreMemoryEntry {
 	readonly name: string;
@@ -86,18 +85,13 @@ interface TaskHostLoaderContract {
 		readonly contractVersion: 1;
 		readonly registerAcceptanceVerifier: (kind: string, definition: Readonly<Record<string, unknown>>) => void;
 		readonly readAcceptanceVerifier: (kind: string) => unknown;
-		readonly workbench?: {
-			readonly status: () => Promise<unknown>;
-			readonly plan: (items: readonly string[]) => Promise<unknown>;
-			readonly todo: (input: unknown) => Promise<unknown>;
-			readonly memorySave: (input: unknown) => Promise<unknown>;
-			readonly persist: () => Promise<unknown>;
-		};
+		readonly workbench?: WorkbenchPluginClient;
 	};
 }
 
 interface WorkbenchPluginClient {
 	readonly invoke: (operation: string, input: unknown, signal?: AbortSignal) => Promise<unknown>;
+	readonly subscribe: (listener: (event: { readonly type: "changed"; readonly revision: number }) => void) => () => void;
 }
 
 /** Optional tasks host discovered by Drone Desktop from the same Pi package. */
@@ -109,6 +103,6 @@ export const taskHostLoader = {
 			registerAcceptanceVerifier(kind, definition);
 		},
 		readAcceptanceVerifier: (kind: string) => acceptanceVerifier(kind),
-		...(input?.workbench ? { workbench: createWorkbenchPluginPort(input.workbench) } : {}),
+		...(input?.workbench ? { workbench: input.workbench } : {}),
 	}),
 } satisfies TaskHostLoaderContract;

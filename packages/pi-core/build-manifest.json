@@ -4,6 +4,6 @@
 	"inputsSha256": "ae10f76473975ce5e8d2414ef29818d9f95fdef8d25ad8b09379c18ccb2f0db3",
 	"outputs": {
 		"dist/index.mjs": "c742c232a44b20d293fb8cf17ee13649f7d2bcb14f9572dcf62c89a92bde7283",
-		"dist/host.mjs": "69777c4d97bf4f3ab50d531441d6f9837c0be5912692dcd08bb4e897e362d583"
+		"dist/host.mjs": "69bb5aa0b7c438f3c613a02be8cf0c9a837987b7b616ce1cc3e6c2cd854ea0d5"
 	}
 }

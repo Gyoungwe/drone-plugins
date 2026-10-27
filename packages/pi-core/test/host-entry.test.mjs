@@ -42,19 +42,29 @@ test("versioned host entry exports the optional tasks host loader contract", () 
 	assert.equal(port.readAcceptanceVerifier("host_test").kind, "host_test");
 });
 
-test("tasks host loader adapts an injected workbench client", async () => {
+test("tasks host loader preserves the runtime client contract", async () => {
 	const calls = [];
-	const port = host.taskHostLoader.load({
-		workbench: {
-			invoke: async (operation, input) => {
-				calls.push({ operation, input });
-				return { operation, input };
-			},
+	const listeners = new Set();
+	const workbench = {
+		invoke: async (operation, input) => {
+			calls.push({ operation, input });
+			return { operation, input };
 		},
-	});
-	assert.equal(typeof port.workbench?.status, "function");
-	await port.workbench?.status();
-	await port.workbench?.plan(["one", "two"]);
+		subscribe: (listener) => {
+			listeners.add(listener);
+			return () => listeners.delete(listener);
+		},
+	};
+	const port = host.taskHostLoader.load({ workbench });
+	assert.equal(port.workbench, workbench);
+	await port.workbench.invoke("status", {});
+	await port.workbench.invoke("plan", { items: ["one", "two"] });
+	const changed = [];
+	const unsubscribe = port.workbench.subscribe((event) => changed.push(event));
+	for (const listener of listeners) listener({ type: "changed", revision: 2 });
+	unsubscribe();
+	assert.equal(listeners.size, 0);
+	assert.deepEqual(changed, [{ type: "changed", revision: 2 }]);
 	assert.deepEqual(calls, [
 		{ operation: "status", input: {} },
 		{ operation: "plan", input: { items: ["one", "two"] } },
