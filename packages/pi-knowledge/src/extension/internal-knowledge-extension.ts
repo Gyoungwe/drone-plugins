@@ -61,10 +61,6 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 	function registerAcceptanceVerifier(name: string, definition: any): any {
 		return extensionHost.registerAcceptanceVerifier?.(name, definition) ?? definition;
 	}
-	function registerTaskRuntime(pi: any, options: any): any {
-		if (extensionHost.registerTaskRuntime) return extensionHost.registerTaskRuntime(pi, options);
-		return null;
-	}
 	function registerTool(pi: any, definition: any): void { (extensionHost.registerTool || ((target: any, value: any) => target.registerTool(value)))(pi, definition); }
 
 	/**
@@ -164,7 +160,24 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 	function registerKnowledgeInterface(pi, { readOnly = false, runtime = null } = {}) {
 		bindAcceptanceVerifierEvents(pi);
 		registerWikiReviewAcceptance();
-		const taskRuntime = readOnly ? null : registerTaskRuntime(pi, { readKnowledgeBinding });
+		const getTaskRuntime = () => {
+			if (readOnly || !pi.events) return null;
+			let taskRuntime = null;
+			// Consume only a task owner already registered on this session's official Pi event bus.
+			const unsubscribe = pi.events.on("drone:task-runtime/v1", (payload) => {
+				if (payload?.version === 1 && payload.registry?.journal) taskRuntime = payload.registry.journal;
+			});
+			try {
+				pi.events.emit("drone:task-runtime/request/v1", { version: 1 });
+			} finally {
+				unsubscribe();
+			}
+			taskRuntime?.configure?.({ readKnowledgeBinding });
+			return taskRuntime;
+		};
+		getTaskRuntime();
+		pi.on("session_start", getTaskRuntime);
+		pi.on("session_tree", getTaskRuntime);
 		const recovery = new Map();
 		let recoveryScope = null;
 		const saveRecovery = () => {
@@ -277,7 +290,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			evidenceOnly: readOnly,
 			getDeliveryFooter: () => deliveryFooter,
 			getTaskFeedback: () => feedback,
-			getTaskRuntime: () => taskRuntime,
+			getTaskRuntime,
 			// The backend may inject a bounded, host-observed metacognitive snapshot
 			// on the current turn. Missing snapshots keep legacy operational turns
 			// compatible; when supplied, the publication gate fails closed.
@@ -791,7 +804,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 						recovery.set(_id, {
 							id: _id,
 							sessionId: sessionIdentity(ctx),
-							taskId: taskRuntime?.snapshot()?.id || null,
+							taskId: getTaskRuntime()?.snapshot()?.id || null,
 							path: p.path,
 							hash: page.hash,
 							startLine: p.start_line || 1,
@@ -826,7 +839,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				if (
 					!r?.evicted ||
 					r.used ||
-					r.taskId !== (taskRuntime?.snapshot()?.id || null) ||
+					r.taskId !== (getTaskRuntime()?.snapshot()?.id || null) ||
 					r.vaultId !== c.binding.vaultId ||
 					r.bindingRevision !== c.binding.revision
 				)
@@ -1296,6 +1309,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 		pi.on("message_start", async (event, ctx) => {
 			// SDK custom-message turns bypass before_agent_start. Only the host-minted
 			// continuation nonce may reset publication/read budgets; source text cannot.
+			const taskRuntime = getTaskRuntime();
 			const automatic = taskRuntime?.isAutoContinuation?.(event.message) === true;
 			if (event.message.role !== "user" && !automatic) return;
 			if (awaitingUserStart && !automatic) {

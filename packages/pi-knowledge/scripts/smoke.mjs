@@ -67,7 +67,7 @@ try {
 	const tools = new Map();
 	const commands = new Map();
 	const pi = {
-		events: { on() {}, emit() {} },
+		events: { on() { return () => {}; }, emit() {} },
 		on() {},
 		appendEntry() {},
 		getCommands() {

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { registerWorkbench } from "./register.mjs";
-import { bindRuntime, runtimeForHost } from "./runtime-bridge.mjs";
+import { bindRuntime, runtimeForHost, withHostRuntime } from "./runtime-bridge.mjs";
 import { isReadOnlyTool } from "./tool-manifest.mjs";
 const TASK_ENTRY = "drone-task-checkpoint-v1";
 const TASK_DOCUMENT_KIND = "drone.task.workbench";
@@ -199,7 +199,13 @@ function registerTaskRuntime(pi, options = {}) {
     registry.journal.configure?.(options);
     return registry.journal;
   }
-  const journal = registerWorkbench(pi, options);
+  const journal = withHostRuntime(pi, () => registerWorkbench(pi, {
+    ...options,
+    onJournalAttached: (current) => {
+      if (registry) registry.journal = current;
+      hostRuntime.tasks.workbench.journal = current;
+    }
+  }));
   if (registry) registry.journal = journal;
   hostRuntime.tasks.workbench = { ...hostRuntime.tasks.workbench, version: 1, journal };
   publishTaskRuntimeRegistry(pi, registry);

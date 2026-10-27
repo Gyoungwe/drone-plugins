@@ -123,7 +123,15 @@ function bindRuntime(pi) {
     const runtime = event.runtime;
     if (!runtime || typeof runtime !== "object" || !runtime.scheduler) return;
     const previous = hostRuntimes.get(pi);
-    if (previous && previous !== runtime) adoptRuntimeState(previous, runtime);
+    if (previous && previous !== runtime) {
+      adoptRuntimeState(previous, runtime);
+      const acceptance = previous.tasks?.acceptance;
+      if (acceptance) {
+        // SDK declarations retain the original properties object across the host handoff.
+        Object.assign(acceptance.properties, runtime.tasks.acceptance.properties);
+        runtime.tasks.acceptance.properties = acceptance.properties;
+      }
+    }
     hostRuntimes.set(pi, runtime);
     if (previous && previous !== runtime) void previous.dispose();
   };
@@ -173,6 +181,7 @@ function adoptRuntimeState(previous, runtime) {
     targetAcceptance.properties ??= {};
     for (const [key, value] of Object.entries(sourceAcceptance.properties || {}))
       if (!(key in targetAcceptance.properties)) targetAcceptance.properties[key] = value;
+    targetAcceptance.properties.kind = { ...targetAcceptance.properties.kind, enum: targetAcceptance.kinds };
   }
   for (const domain of ["knowledge", "tasks", "tools"]) {
     const source = previous?.[domain];
