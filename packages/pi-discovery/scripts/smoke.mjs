@@ -42,7 +42,9 @@ try {
 			join(prefix, "node_modules/@gyoungwe/pi-discovery/dist/host.mjs"),
 		).href
 	);
+	const { memoryServices } = await import("../test/memory-services.mjs");
 	const host = discoveryHostLoader.create({
+		...memoryServices(),
 		projectId: "smoke",
 		projectRoot: root,
 	});
@@ -57,7 +59,7 @@ try {
 			tarball: packed.filename,
 			cleanInstall: true,
 			hostLoaded: true,
-			readOnly: true,
+			readOnly: false,
 		}),
 	);
 } finally {

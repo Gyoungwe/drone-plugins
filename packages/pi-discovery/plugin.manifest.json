@@ -8,5 +8,5 @@
 	"capabilities": ["discovery"],
 	"tools": [],
 	"hosts": ["native-pi", "drone-desktop"],
-	"permissions": {"filesystem": ["project-read"], "network": [], "subprocess": [], "externalWrites": false}
+	"permissions": {"filesystem": ["project-read", "project-write"], "network": [], "subprocess": [], "externalWrites": false}
 }

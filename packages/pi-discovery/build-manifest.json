@@ -2,9 +2,18 @@
 	"version": 1,
 	"generator": "packages/pi-discovery/scripts/build.mjs",
 	"inputs": {
-		"src/host.ts": "3c964a0a9b1a5484d77640041556efb8dc3a2c4387d76c9f93ece69f48a31972"
+		"src/domain/critic.ts": "b3f67dc0e4ab24b28796ab84ceebaf970085a879630d11492bc00ac35f5bed64",
+		"src/domain/deadline.ts": "25a63415348d0d98161764e11f0245ada71255eb1e6fd7c12f2cfdd167670447",
+		"src/domain/evaluation.ts": "bc5e95954d56b3b0a81882f50d09a6d6eac8c34b7eb907f835eee67fa091a3b5",
+		"src/domain/exploration.ts": "c2b96cea5327e0d4f479dc978633731111ef43874d54b416b0d2a0704cd419b5",
+		"src/domain/index.ts": "89efa3feb980c5e58dbc1cacc53575dbb91aa6ffe5d0b90c468554443bf3d5cb",
+		"src/domain/inquiry-port.ts": "0fb5b3ec17da3723f4828105b8c3d0837525e3c06b2fb2cf721335c1b677be43",
+		"src/domain/kernel.ts": "9e26448f941f3094c08998978777a078649f245f448122146ab25b41b73bca26",
+		"src/domain/validation.ts": "e957d0827ed49a36fec1dff15e1c08d9387e0a0fa0f6efc00344f041a2c52a0e",
+		"src/host.ts": "bcbb9a28dc53e3216f9b15b5dcf23b199b9edf05cd7816a0a725bb3c044353f9",
+		"src/service.ts": "45e9d5e28c95c1fa4f18c9aea89c4068a6857d1506f72a85948275d2a40609a0"
 	},
 	"outputs": {
-		"dist/host.mjs": "652d720920bdf983cf047aee3a6c70519b80a3983555786a1cac4e502d50bd69"
+		"dist/host.mjs": "2f09531500087a9ed6517b8782973d734ced4d6e90d5f1a06271cc7e24b45e56"
 	}
 }
