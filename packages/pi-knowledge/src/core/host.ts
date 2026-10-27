@@ -26,6 +26,7 @@ import { notifyKnowledgeUi, subscribeKnowledgeUi } from "./ui-state.js";
 import { registerAnswerPublication } from "./publication.js";
 import { ingestKnowledgeSnapshot, resolveKnowledgeContext } from "./reuse.js";
 import { reviewWikiWithModel } from "./wiki-model-review.js";
+import { BackgroundReviewer, type BackgroundReviewerOptions } from "./deliverable-review.js";
 import {
 	configureKnowledgeWorker,
 	type KnowledgeWorkerMetadata,
@@ -169,6 +170,7 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 		},
 		registerAnswerPublication: (pi, options) => registerAnswerPublication(pi, options),
 		reviewWikiWithModel: (input, options) => reviewWikiWithModel(input, options as never),
+		backgroundReviewer: (options: BackgroundReviewerOptions) => new BackgroundReviewer(options),
 		jobs: (input) => import("./ui-service.js").then(({ knowledgeJobs }) => knowledgeJobs(input as never)),
 		maintenance: (input) =>
 			import("./ui-service.js").then(({ knowledgeMaintenance }) => knowledgeMaintenance(input as never)),
@@ -190,11 +192,22 @@ function packageKnowledgeWorkerUrl(): URL {
 					),
 				]
 				: []),
-		pathToFileURL(join(process.cwd(), "node_modules/@gyoungwe/pi-knowledge/lib/knowledge/runtime/worker.mjs")),
+		...ancestorNodeModuleWorkerCandidates(process.cwd()),
 	];
 	const found = candidates.find((candidate) => candidate.protocol === "file:" && existsSync(fileURLToPath(candidate)));
 	if (!found) throw new Error("Knowledge worker resource is missing from the installed pi-knowledge package");
 	return found;
+}
+
+function ancestorNodeModuleWorkerCandidates(startDirectory: string): URL[] {
+	const candidates: URL[] = [];
+	let directory = startDirectory;
+	while (true) {
+		candidates.push(pathToFileURL(join(directory, "node_modules/@gyoungwe/pi-knowledge/lib/knowledge/runtime/worker.mjs")));
+		const parent = dirname(directory);
+		if (parent === directory) return candidates;
+		directory = parent;
+	}
 }
 
 /** Resolve the package-owned worker entry for host-side extension adapters. */

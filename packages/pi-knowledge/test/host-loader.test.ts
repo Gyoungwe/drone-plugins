@@ -60,6 +60,7 @@ describe("knowledge host loader", () => {
 		const port = knowledgeHostLoader.load();
 		expect(port.contractVersion).toBe(1);
 		expect(Object.keys(port).sort()).toEqual([
+			"backgroundReviewer",
 			"contractVersion",
 			"dailyDiscovery",
 			"decide",
@@ -99,6 +100,7 @@ describe("knowledge host loader", () => {
 			"maintenance",
 		] as const)
 			expect(typeof port[method]).toBe("function");
+		expect(typeof port.backgroundReviewer).toBe("function");
 		expect(typeof port.researchResource?.resolveContext).toBe("function");
 		expect(typeof port.researchResource?.ingestSnapshot).toBe("function");
 		expect(typeof port.recordTerminalJobExperience).toBe("function");
