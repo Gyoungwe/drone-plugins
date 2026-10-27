@@ -58,7 +58,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 	function base(message, content) {
 		// Preserve the official SDK envelope, including provider metadata and usage.
 		// Only answer content and the provider error text belong to this projection.
-		const { errorMessage: originalError, ...metadata } = message;
+		const { errorMessage: originalError, diagnostics, ...metadata } = message;
 		const errorMessage =
 			message.stopReason === "error" && typeof originalError === "string"
 				? sanitizeError(originalError)
@@ -66,6 +66,12 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 		return {
 			...metadata,
 			content,
+			// Diagnostics do not control provider replay. Keep only safe error text;
+			// arbitrary details and stacks must not enter public/persisted history.
+			...(diagnostics ? { diagnostics: diagnostics.map(({ type, timestamp, error }) => ({
+				type: sanitizeError(type), timestamp,
+				...(error ? { error: { message: sanitizeError(error.message) } } : {}),
+			})) } : {}),
 			...(errorMessage ? { errorMessage } : {}),
 		};
 	}
