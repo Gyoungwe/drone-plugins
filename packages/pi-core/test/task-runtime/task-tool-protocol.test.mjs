@@ -1,5 +1,6 @@
+import { it } from "./scoped-test.mjs";
 import { restoreTaskToolOrder as repair } from "../../src/task-runtime/tool-protocol.mjs";
-import { expect, it } from "vitest";
+import { expect } from "vitest";
 
 const assistant = {
 	role: "assistant",

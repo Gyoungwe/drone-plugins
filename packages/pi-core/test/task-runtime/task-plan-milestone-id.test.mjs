@@ -1,4 +1,5 @@
-import { expect, it } from "vitest";
+import { it } from "./scoped-test.mjs";
+import { expect } from "vitest";
 import { createTaskWorkbench } from "./fixture.mjs";
 
 // 会话 01a1172e：单个里程碑 id "dhx16_plot" 曾被报成 "Milestone IDs must be unique."，模型连续重试 4 次。

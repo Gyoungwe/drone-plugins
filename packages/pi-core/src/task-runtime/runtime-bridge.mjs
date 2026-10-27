@@ -1,7 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 const contexts = new AsyncLocalStorage();
-let installedRuntime = null;
-let standaloneRuntime = null;
 const runtimeBindings = /* @__PURE__ */ new WeakSet();
 const hostRuntimes = /* @__PURE__ */ new WeakMap();
 class KeyedScheduler {
@@ -85,15 +83,6 @@ function createStandaloneRuntime(log = {}) {
   };
   return runtime;
 }
-function setRuntime(runtime) {
-  if (!runtime || typeof runtime !== "object" || !runtime.scheduler)
-    throw new TypeError("A DroneRuntime with a scheduler is required");
-  const previous = installedRuntime;
-  installedRuntime = runtime;
-  return () => {
-    if (installedRuntime === runtime) installedRuntime = previous;
-  };
-}
 function withRuntime(runtime, operation) {
   if (!runtime || typeof runtime !== "object" || !runtime.scheduler)
     throw new TypeError("A DroneRuntime with a scheduler is required");
@@ -129,12 +118,10 @@ function withHostRuntime(pi, operation) {
 function currentRuntime() {
   const scoped = contexts.getStore();
   if (scoped) return scoped;
-  if (installedRuntime) return installedRuntime;
-  if (!standaloneRuntime) standaloneRuntime = createStandaloneRuntime();
-  return standaloneRuntime;
+  throw new Error("Task runtime is unavailable outside a session owner");
 }
 function hasRuntimeContext() {
-  return Boolean(contexts.getStore() || installedRuntime);
+  return Boolean(contexts.getStore());
 }
 function resolveSlot(domain, slot, create) {
   const runtime = currentRuntime();
@@ -186,7 +173,6 @@ export {
   runRuntimeExclusive,
   runtimeForHost,
   runtimeSlot,
-  setRuntime,
   withHostRuntime,
   withRuntime
 };

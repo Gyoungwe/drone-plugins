@@ -1,3 +1,4 @@
+import { it } from "./scoped-test.mjs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +7,7 @@ import {
 	findZoteroItemsByIdentity,
 	lookupZoteroByDoi,
 } from "@gyoungwe/pi-research/host";
-import { expect, it, vi } from "vitest";
+import { expect, vi } from "vitest";
 import { createTaskWorkbench, inspectTaskFile, WORKBENCH_ENTRY } from "./fixture.mjs";
 
 vi.setConfig({ testTimeout: 30000 });

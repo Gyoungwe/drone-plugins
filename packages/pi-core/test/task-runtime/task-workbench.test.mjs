@@ -1,8 +1,9 @@
+import { it } from "./scoped-test.mjs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEvidenceRecovery } from "../../src/task-runtime/evidence.mjs";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, vi } from "vitest";
 import { createTaskWorkbench, inspectTaskFile, LIMITS, WORKBENCH_ENTRY } from "./fixture.mjs";
 
 vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 });

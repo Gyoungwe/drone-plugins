@@ -1,7 +1,8 @@
+import { it } from "./scoped-test.mjs";
 import { createTaskAuthorization } from "../../src/task-runtime/ask-authorization.mjs";
 import { createTaskProgression } from "../../src/task-runtime/progress-action.mjs";
 import { remainingExplanation } from "../../src/task-runtime/remaining.mjs";
-import { expect, it, vi } from "vitest";
+import { expect, vi } from "vitest";
 import { createTaskWorkbench } from "./fixture.mjs";
 
 function fixture(approved = true, kind = "file") {

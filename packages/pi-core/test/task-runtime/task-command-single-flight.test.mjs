@@ -1,5 +1,6 @@
+import { it } from "./scoped-test.mjs";
 import { singleFlightCommand } from "../../src/task-runtime/single-flight.mjs";
-import { expect, it, vi } from "vitest";
+import { expect, vi } from "vitest";
 
 const ctx = (id = "session", cwd = "/project") => ({ cwd, sessionManager: { getSessionId: () => id } });
 it("coalesces only in-flight identical commands, never caches authorization outcomes", async () => {

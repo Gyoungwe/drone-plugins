@@ -1,9 +1,10 @@
+import { it } from "./scoped-test.mjs";
 import { createEventBus } from "@earendil-works/pi-coding-agent";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { continuesTask, createTaskJournal, registerTaskRuntime, TASK_ENTRY } from "../../src/task-runtime/runtime.mjs";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, vi } from "vitest";
 
 let dirs = [];
 afterEach(async () => {

@@ -1,4 +1,5 @@
-import { expect, it } from "vitest";
+import { it } from "./scoped-test.mjs";
+import { expect } from "vitest";
 import { createTaskWorkbench, LIMITS } from "./fixture.mjs";
 
 function setup() {

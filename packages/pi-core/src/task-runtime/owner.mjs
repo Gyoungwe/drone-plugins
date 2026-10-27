@@ -15,7 +15,6 @@ export function createTaskRuntimeOwner(definitions = []) {
   let unbind;
   let unlisten;
   let linkedOwner;
-  let registry;
   const eventCleanups = new Set();
   const requireActive = () => {
     if (!active) throw new Error("Task plugin session is unavailable: owner disposed");
@@ -99,7 +98,7 @@ export function createTaskRuntimeOwner(definitions = []) {
           return withRuntime(current, () => method(...args));
         };
       }
-      registry = requestSharedTaskRuntime(pi);
+      const registry = requestSharedTaskRuntime(pi);
       registry.owner = this;
       pi.on("session_shutdown", () => this.dispose());
       return journal;
@@ -112,7 +111,6 @@ export function createTaskRuntimeOwner(definitions = []) {
       unbind?.();
       for (const cleanup of eventCleanups) cleanup();
       eventCleanups.clear();
-      registry?.unsubscribe?.();
       await linkedOwner?.dispose();
       await runtime.dispose();
     }

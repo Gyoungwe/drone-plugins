@@ -1,5 +1,6 @@
+import { it } from "./scoped-test.mjs";
 import { createTaskProgression } from "../../src/task-runtime/progress-action.mjs";
-import { expect, it, vi } from "vitest";
+import { expect, vi } from "vitest";
 
 it.each(["generation", "task", "binding", "abort"])(
 	"%s changing during readback cancels the old continuation",

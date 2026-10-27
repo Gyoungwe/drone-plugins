@@ -1,15 +1,14 @@
+import { it } from "./scoped-test.mjs";
 import {
 	effectiveAcceptance,
 	registerAcceptanceVerifier,
-	resetAcceptanceVerifiers,
 } from "../../src/task-runtime/acceptance.mjs";
 import { createTaskAuthorization } from "../../src/task-runtime/ask-authorization.mjs";
 import { remainingExplanation } from "../../src/task-runtime/remaining.mjs";
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, vi } from "vitest";
 import { createTaskWorkbench } from "./fixture.mjs";
 
 vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 });
-afterEach(() => resetAcceptanceVerifiers());
 
 /** 一个 zotero_item 形状的验收器：按 DOI 读回；写入回执经 identify 带回 DOI（挂钩 2）。 */
 function zoteroLike(library) {

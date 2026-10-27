@@ -1,5 +1,6 @@
+import { it } from "./scoped-test.mjs";
 import { createTaskAuthorization } from "../../src/task-runtime/ask-authorization.mjs";
-import { expect, it, vi } from "vitest";
+import { expect, vi } from "vitest";
 import { createTaskWorkbench, WORKBENCH_ENTRY } from "./fixture.mjs";
 
 function fixture(compute) {
