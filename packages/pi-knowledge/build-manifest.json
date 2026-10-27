@@ -23,6 +23,7 @@
 		"src/core/ingest-identity.ts": "7c631e59cb9efc1ee3df05732ee936e934388488979bdf83625b9c5e6432d75d",
 		"src/core/ingest-policy.ts": "c4d9fbae139d14bf1f93e050507a733e903e3b35f0e79b0e54b6b11816616386",
 		"src/core/layout.ts": "f302cd8eca85afbc0aebe35ba92fec75c5adf549ecbdfb122a80e47915a1d587",
+		"src/core/maintenance-topic.ts": "db91af3a1998c1ab3e67a8b7c89aa00f1bdebc9d5317bef67c862eb88c85a9c4",
 		"src/core/maintenance.ts": "1f74c220341bbd1aed9c658a1ef3aef40bdee659bc53449e13c37008b8b16567",
 		"src/core/memory-note.ts": "880b5d183c6522b25527cf6c4597b908d05aac6307cc97b519e355a38f53b3f7",
 		"src/core/metacognitive-policy.ts": "363fd45ab2445e2d564cf010d9eeff53a36af9fc4895d1ab3c137c7773ca81e5",
@@ -51,7 +52,7 @@
 		"src/core/topic-candidate.ts": "f43f25ccb6d757fa97bedacb99e976c225bf665f89c62be2b7694ee540089ba0",
 		"src/core/topic-memory.ts": "ab467d33c7924558f38ee523b29f777eeb2be7eacab8f832b772587de1c5e412",
 		"src/core/topic-probe.ts": "b6b80e8aba33c8319eff5862524d0e54bc0ed70516cc3ef4706999a3f66c3e61",
-		"src/core/ui-service.ts": "d8362921dd67bc94f7ee5137e9fa8a99552e84496974d8dc84bc2b8dcb49ae9d",
+		"src/core/ui-service.ts": "1a81b13c5b28fa02016bc273c207f38cc044ccf6630e5092aca5355cbf6c5d9c",
 		"src/core/ui-state.ts": "9b54f9e406c3287fdae6073b65a1cf361d75185e7f15de77587023e7d1eeec39",
 		"src/core/wiki-model-review.ts": "d7c6d17e218c64ba8040190b8a84595e3411b99195923c46b654b4f9bbb6e719",
 		"src/core/wiki-policy.ts": "ffd5f16638d2f31b49ecbb944683a13b503dac91fd499fb901124dad8cec2ff8",
@@ -67,11 +68,11 @@
 		"src/maintenance/run.ts": "2575e35c4a879955e0e0d6dae32456318a34fef8ea6d19a63797bbd06d2f3460"
 	},
 	"outputs": {
-		"dist/index.mjs": "c933f6fd5e8729c604cf67e302d7aac2ac134ae194b55abefdb0247e629968d4",
-		"dist/host.mjs": "ff2273288359f4ea094d5f72425daa4a39d4bf70e6e3b247ddecb3a21fc84aeb",
+		"dist/index.mjs": "651ac2d67cc4896f1f2f0597270b454a7f13bae161418f45d0dc965490e26cc7",
+		"dist/host.mjs": "429c4ca3069ae49829193ff1088ef60af2b3c01d3784f39ad30aada3ff581618",
 		"dist/host.d.ts": "babe32866311d7f4846e35e05fd440ed40b15d264d5104b217cee520b41d082b",
 		"lib/knowledge/runtime/worker.mjs": "cd5f0d322a88d8d62b82d43643c684d604ed0fc159c68dd2e2503cf2fdfd8eaf",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "e52a373f4376c2e41092651492bfbf8ed90a62555da639550615ae451f49201b"
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "77e216d7ee596d54b53dff24a008dd02e1d23beb973650e2c90fd8bc339985e2"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",

@@ -1,8 +1,10 @@
 {
 	"version": 1,
 	"generator": "packages/pi-discovery/scripts/build.mjs",
-	"inputsSha256": "899dff54dab9456531f371212f6687d0aec57fa6c9316b4a82042cd719bc02ca",
+	"inputs": {
+		"src/host.ts": "3c964a0a9b1a5484d77640041556efb8dc3a2c4387d76c9f93ece69f48a31972"
+	},
 	"outputs": {
-		"dist/host.mjs": "8af36d2d56a08bce6c786c535b6ec8c176f22e7885ee4eb40de1184d79d39187"
+		"dist/host.mjs": "652d720920bdf983cf047aee3a6c70519b80a3983555786a1cac4e502d50bd69"
 	}
 }

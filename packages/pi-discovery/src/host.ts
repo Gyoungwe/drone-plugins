@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
 export interface DiscoveryHostInput {
 	readonly projectId: string;
@@ -23,25 +23,41 @@ export interface DiscoveryHostLoader {
 }
 
 function readInput(input: unknown): DiscoveryHostInput {
-	if (!input || typeof input !== "object") throw new Error("Discovery host input is required");
+	if (!input || typeof input !== "object")
+		throw new Error("Discovery host input is required");
 	const value = input as Record<string, unknown>;
-	if (typeof value.projectId !== "string" || typeof value.projectRoot !== "string")
+	if (
+		typeof value.projectId !== "string" ||
+		typeof value.projectRoot !== "string"
+	)
 		throw new Error("Discovery host input requires projectId and projectRoot");
+	if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(value.projectId))
+		throw new Error("Invalid discovery project id");
+	if (!isAbsolute(value.projectRoot))
+		throw new Error("Discovery projectRoot must be absolute");
 	return {
 		projectId: value.projectId,
-		projectRoot: value.projectRoot,
+		projectRoot: resolve(value.projectRoot),
 		...(typeof value.agentDir === "string" ? { agentDir: value.agentDir } : {}),
 	};
 }
 
 function recordRoot(input: DiscoveryHostInput): string {
-	return input.agentDir ?? join(input.projectRoot, "runs", ".drone-discovery");
+	return resolve(
+		input.agentDir ?? join(input.projectRoot, "runs", ".drone-discovery"),
+	);
 }
 
-async function readRecords(root: string, file: string): Promise<readonly unknown[]> {
+async function readRecords(
+	root: string,
+	file: string,
+): Promise<readonly unknown[]> {
 	try {
-		const parsed: unknown = JSON.parse(await readFile(join(root, file), "utf8"));
-		if (!Array.isArray(parsed)) throw new Error(`Discovery record file is not an array: ${file}`);
+		const parsed: unknown = JSON.parse(
+			await readFile(join(root, file), "utf8"),
+		);
+		if (!Array.isArray(parsed))
+			throw new Error(`Discovery record file is not an array: ${file}`);
 		return parsed;
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
@@ -53,12 +69,32 @@ function createHost(input: DiscoveryHostInput): DiscoveryHostPort {
 	const root = recordRoot(input);
 	return {
 		contractVersion: 1,
-		status: async () => ({ contractVersion: 1, projectId: input.projectId, provider: "pi-discovery", readOnly: true }),
-		listCriticReviews: async () => readRecords(root, "critics.json"),
-		listMultipathAssessments: async () => readRecords(root, "multipath.json"),
+		status: async () => ({
+			contractVersion: 1,
+			projectId: input.projectId,
+			provider: "pi-discovery",
+			readOnly: true,
+		}),
+		listCriticReviews: async () =>
+			withoutRecordedAt(await readRecords(root, "critics.json")),
+		listMultipathAssessments: async () =>
+			withoutRecordedAt(await readRecords(root, "multipath.json")),
 		listExplorationPlans: async () => readRecords(root, "plans.json"),
 		listEvaluations: async () => readRecords(root, "evaluations.json"),
 	};
+}
+
+/** Persistence timestamps are private to the journal, as in DiscoveryService's public projection. */
+function withoutRecordedAt(records: readonly unknown[]): readonly unknown[] {
+	return records.map((record) => {
+		if (!record || typeof record !== "object" || Array.isArray(record))
+			throw new Error("Discovery journal record must be an object");
+		const { recordedAt: _recordedAt, ...projection } = record as Record<
+			string,
+			unknown
+		>;
+		return projection;
+	});
 }
 
 export const discoveryHostLoader: DiscoveryHostLoader = {

@@ -6121,6 +6121,14 @@ init_review_policy();
 init_specialist_host();
 init_ui_state();
 init_wiki_review();
+
+// src/core/maintenance-topic.ts
+init_config();
+init_files();
+import { readdir as readdir4 } from "node:fs/promises";
+init_ui_state();
+
+// src/core/ui-service.ts
 var runtimeState = runtimeSlot("knowledge", "uiService", () => ({
   previews: /* @__PURE__ */ new Map(),
   maintenance: /* @__PURE__ */ new Set(),
