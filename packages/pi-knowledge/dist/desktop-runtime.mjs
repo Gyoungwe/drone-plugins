@@ -511,17 +511,12 @@ function createKnowledgeRuntimeHost() {
     return workerFactory(url, options);
   }
   function knowledgeWorkerMetadata2() {
-    try {
-      const value = workerMetadataProvider();
-      if (!value || typeof value.version !== "string" || !value.version) return { version: "unknown" };
-      return {
-        version: value.version.slice(0, 200),
-        ...typeof value.source === "string" ? { source: value.source.slice(0, 1e3) } : {},
-        ...typeof value.integrity === "string" ? { integrity: value.integrity.slice(0, 200) } : {}
-      };
-    } catch {
-      return { version: "unknown" };
-    }
+    const value = workerMetadataProvider();
+    return {
+      version: value.version.slice(0, 200),
+      ...value.source === void 0 ? {} : { source: value.source.slice(0, 1e3) },
+      ...value.integrity === void 0 ? {} : { integrity: value.integrity.slice(0, 200) }
+    };
   }
   function emitKnowledgeWorkerLifecycle2(stage, partial) {
     emitProcessEvent2(KNOWLEDGE_WORKER_LIFECYCLE_EVENT, {
@@ -3073,13 +3068,13 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
         emitLegacyPeerEvent?.(SERVICE_EVENT, { action: "request", key, origin: serviceModule });
         service = pool.get(key);
       }
-      const needsReplacement = !service || service.closed || service.closing || service.binding?.revision !== binding.revision || (() => {
-        const hostVersion = transportFactory.metadata().version;
-        return hostVersion !== "unknown" && service?.workerVersion !== "unknown" && service?.workerVersion !== hostVersion;
-      })();
-      if (!needsReplacement) return service;
       let candidate;
+      let selectedMetadata;
       try {
+        selectedMetadata = transportFactory.metadata();
+        const hostVersion = selectedMetadata.version;
+        const needsReplacement = !service || service.closed || service.closing || service.binding?.revision !== binding.revision || hostVersion !== "unknown" && service.workerVersion !== "unknown" && service.workerVersion !== hostVersion;
+        if (!needsReplacement) return service;
         if (service) {
           await service.drain();
           pool.delete(key);
@@ -3112,8 +3107,9 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
         return candidate;
       } catch (error) {
         if (candidate) await candidate.close();
-        emitKnowledgeWorkerLifecycle2("disabled", {
-          version: candidate?.workerVersion || transportFactory.metadata().version,
+        const preserved = service && !service.closed && !service.closing;
+        emitKnowledgeWorkerLifecycle2(preserved ? "rolled_back" : "disabled", {
+          version: preserved ? service.workerVersion : candidate?.workerVersion || selectedMetadata?.version || "unknown",
           previousVersion: service?.workerVersion,
           source: candidate?.workerMetadata?.source,
           integrity: candidate?.workerMetadata?.integrity,
