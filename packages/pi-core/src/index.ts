@@ -1,5 +1,5 @@
 import type { AskQuestion, AskRequest, AskResponse } from "@drone/shared";
-import { registerTaskRuntime } from "@drone/tasks/runtime";
+import { registerTaskRuntime } from "./task-runtime/runtime.mjs";
 import type { DroneHostPort, HostCapabilities } from "@gyoungwe/plugin-api";
 import { registerDroneCommands } from "./drone-commands";
 import { registerNativeTaskReadback } from "./native-task-readback";

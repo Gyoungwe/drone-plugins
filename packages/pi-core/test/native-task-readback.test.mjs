@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { createStandaloneRuntime } from "@drone/tasks/runtime-bridge";
+import { createStandaloneRuntime } from "../src/task-runtime/runtime-bridge.mjs";
 import { registerPiCore } from "../dist/index.mjs";
 
 delete process.env.DRONE_TASK_WORKBENCH;
