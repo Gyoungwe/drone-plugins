@@ -15,6 +15,9 @@ export interface KnowledgeHostPort {
 	read(input: unknown): Promise<unknown>;
 	noteLinks(input: unknown): Promise<unknown>;
 	graph(input: unknown): Promise<unknown>;
+	/** Optional UI operations are exposed incrementally as the host migrates. */
+	jobs?(input: unknown): Promise<unknown>;
+	maintenance?(input: unknown): Promise<unknown>;
 }
 
 export interface KnowledgeHostLoader {
@@ -32,5 +35,8 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 		read: (input) => import("./ui-service.js").then(({ knowledgeReadNote }) => knowledgeReadNote(input as never)),
 		noteLinks: (input) => import("./ui-service.js").then(({ knowledgeNoteLinks }) => knowledgeNoteLinks(input as never)),
 		graph: (input) => import("./ui-service.js").then(({ knowledgeGraph }) => knowledgeGraph(input as never)),
+		jobs: (input) => import("./ui-service.js").then(({ knowledgeJobs }) => knowledgeJobs(input as never)),
+		maintenance: (input) =>
+			import("./ui-service.js").then(({ knowledgeMaintenance }) => knowledgeMaintenance(input as never)),
 	}),
 };
