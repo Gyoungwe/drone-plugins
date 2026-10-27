@@ -11,7 +11,7 @@ export * from "./index.js";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { readKnowledgeBinding } from "./config.js";
 import { readNoteFile } from "./files.js";
 import {
@@ -176,14 +176,35 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 };
 
 function packageKnowledgeWorkerUrl(): URL {
-	// The published host entry is bundled to dist/host.mjs; source tests run
-	// against src/core/host.ts. Both resolve the same package-local lib file.
-	return new URL(
-		import.meta.url.includes("/dist/")
-			? "../lib/knowledge/runtime/worker.mjs"
-			: "../../lib/knowledge/runtime/worker.mjs",
-		import.meta.url,
-	);
+	const candidates = [
+		new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url),
+		new URL("../../lib/knowledge/runtime/worker.mjs", import.meta.url),
+		...(process.env.DRONE_RESEARCH_WORKBENCH_ROOT
+			? [
+					pathToFileURL(
+						join(
+							process.env.DRONE_RESEARCH_WORKBENCH_ROOT,
+							"..",
+							"pi-packages/node_modules/@gyoungwe/pi-knowledge/lib/knowledge/runtime/worker.mjs",
+						),
+					),
+				]
+				: []),
+		pathToFileURL(join(process.cwd(), "node_modules/@gyoungwe/pi-knowledge/lib/knowledge/runtime/worker.mjs")),
+	];
+	const found = candidates.find((candidate) => candidate.protocol === "file:" && existsSync(fileURLToPath(candidate)));
+	if (!found) throw new Error("Knowledge worker resource is missing from the installed pi-knowledge package");
+	return found;
+}
+
+/** Resolve the package-owned worker entry for host-side extension adapters. */
+export function resolveKnowledgePackageWorkerUrl(): URL {
+	return packageKnowledgeWorkerUrl();
+}
+
+/** Verify and return metadata for the package-owned worker artifact. */
+export function resolveKnowledgePackageWorkerMetadata(): KnowledgeWorkerMetadata {
+	return resolvePackageWorkerResource(packageKnowledgeWorkerUrl()).metadata;
 }
 
 function resolvePackageWorkerResource(url: URL): {
