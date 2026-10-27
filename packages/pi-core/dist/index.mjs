@@ -2121,7 +2121,7 @@ function registerWorkbench(pi, options = {}) {
       )
     };
   };
-  let journal = createTaskWorkbench({
+  const journal = createTaskWorkbench({
     requireAuthorization: true,
     // Resolve the effective SDK registration in this session on every call.
     // Native adapters publish an explicit false for write/unknown effects, which
@@ -2136,31 +2136,12 @@ function registerWorkbench(pi, options = {}) {
     // 里程碑验收器（zotero_item / wiki_review / …）由各自的扩展 registerAcceptanceVerifier 登记（挂钩 2）
     inspect
   });
-  const SESSION_WORKBENCH = "__drone_task_workbench_v2";
-  const attachSessionJournal = (ctx) => {
-    const manager = ctx?.sessionManager;
-    if (!manager || typeof manager !== "object" && typeof manager !== "function") return;
-    const attached = manager[SESSION_WORKBENCH];
-    if (attached?.journal && attached.journal !== journal) {
-      journal = attached.journal;
-      askAuthorization = createTaskAuthorization(journal, () => bindingKey());
-      return;
-    }
-    if (!attached && Object.isExtensible(manager))
-      Object.defineProperty(manager, SESSION_WORKBENCH, {
-        value: { version: 2, journal },
-        enumerable: false,
-        configurable: false,
-        writable: false
-      });
-  };
-  let askAuthorization = createTaskAuthorization(journal, () => bindingKey());
+  const askAuthorization = createTaskAuthorization(journal, () => bindingKey());
   const evidence = createEvidenceRecovery({
     authorize,
     persist: (data) => pi.appendEntry("drone-task-evidence-v1", data)
   });
   const attach = (ctx, force = false) => {
-    attachSessionJournal(ctx);
     options.onJournalAttached?.(journal);
     context = ctx;
     activeSessionId = ctx.sessionManager?.getSessionId?.() || ctx.sessionId || void 0;
@@ -2202,6 +2183,7 @@ function registerWorkbench(pi, options = {}) {
     automaticTurn = false;
     continuationToken = null;
   };
+  currentRuntime().registerDisposable({ dispose: cancelHandoff });
   const continueAuthorized = (ctx) => {
     const taskId = journal.snapshot()?.id;
     const generation = ++handoffGeneration;
@@ -2712,30 +2694,21 @@ function registerTaskRuntime(pi, options = {}) {
     hostRuntime.tasks.workbench = { ...hostRuntime.tasks.workbench, ...shared };
     return shared.journal;
   }
-  const registry3 = taskRuntimeRegistry(pi);
-  if (registry3?.journal) {
-    registry3.journal.configure?.(options);
-    return registry3.journal;
-  }
+  const registry3 = { version: 1, journal: null, runtime: hostRuntime };
   const journal = withHostRuntime(pi, () => registerWorkbench(pi, {
     ...options,
     onJournalAttached: (current) => {
-      if (registry3) registry3.journal = current;
+      registry3.journal = current;
       hostRuntime.tasks.workbench.journal = current;
     }
   }));
-  if (registry3) {
-    registry3.journal = journal;
-    registry3.runtime = hostRuntime;
-  }
+  registry3.journal = journal;
   hostRuntime.tasks.workbench = { ...hostRuntime.tasks.workbench, version: 1, journal };
   publishTaskRuntimeRegistry(pi, registry3);
   return journal;
 }
-var TASK_RUNTIME_REGISTRY = "__drone_task_runtime_v1";
 var TASK_RUNTIME_REQUEST = "drone:task-runtime/request/v1";
 var TASK_RUNTIME_RESPONSE = "drone:task-runtime/v1";
-var localTaskRuntimeRegistry = /* @__PURE__ */ new WeakMap();
 function requestSharedTaskRuntime(pi) {
   const events = pi?.events;
   if (!events?.on || !events.emit) return null;
@@ -2754,26 +2727,6 @@ function publishTaskRuntimeRegistry(pi, registry3) {
     if (payload?.version === 1) events.emit(TASK_RUNTIME_RESPONSE, { version: 1, registry: registry3 });
   });
 }
-function taskRuntimeRegistry(pi) {
-  if (!pi || typeof pi !== "object" && typeof pi !== "function") return null;
-  const owner = pi.events && (typeof pi.events === "object" || typeof pi.events === "function") ? pi.events : pi;
-  const attached = owner[TASK_RUNTIME_REGISTRY];
-  if (attached && attached.version === 1) return attached;
-  const local = localTaskRuntimeRegistry.get(owner);
-  if (local) return local;
-  const registry3 = { version: 1, journal: null };
-  if (Object.isExtensible(owner)) {
-    Object.defineProperty(owner, TASK_RUNTIME_REGISTRY, {
-      value: registry3,
-      enumerable: false,
-      configurable: false,
-      writable: false
-    });
-  } else {
-    localTaskRuntimeRegistry.set(owner, registry3);
-  }
-  return registry3;
-}
 
 // src/task-runtime/owner.mjs
 function createTaskRuntimeOwner(definitions = []) {
@@ -2782,6 +2735,8 @@ function createTaskRuntimeOwner(definitions = []) {
     for (const verifier of definitions) registerAcceptanceVerifier(verifier.kind, verifier);
   });
   let active = true;
+  const lifetime = new AbortController();
+  const signalFor = (signal) => signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal;
   let attached;
   let unbind;
   let unlisten;
@@ -2837,14 +2792,15 @@ function createTaskRuntimeOwner(definitions = []) {
       const guarded = new Proxy(pi, {
         get(target, name) {
           if (name === "events") return guardedEvents;
-          if (name === "on") return (event, handler) => target.on(event, (...args) => {
-            if (active) return withHostRuntime(pi, () => handler(...args));
+          if (name === "on") return (event, handler) => target.on(event, (value2, context) => {
+            if (active) return withHostRuntime(pi, () => handler(value2, { ...context, signal: signalFor(context.signal) }));
           });
           if (name === "registerTool") return (tool) => target.registerTool({
             ...tool,
-            execute: (...args) => {
+            execute: (id, input, signal, update, context) => {
               requireActive();
-              return withHostRuntime(pi, () => tool.execute(...args));
+              const scopedSignal = signalFor(signal);
+              return withHostRuntime(pi, () => tool.execute(id, input, scopedSignal, update, { ...context, signal: scopedSignal }));
             }
           });
           if (name === "registerCommand") return (command, definition) => target.registerCommand(command, {
@@ -2865,6 +2821,12 @@ function createTaskRuntimeOwner(definitions = []) {
         unbindGuarded();
         oldUnbind();
       };
+      for (const [name, method] of Object.entries(journal)) {
+        journal[name] = (...args) => {
+          requireActive();
+          return withRuntime(current, () => method(...args));
+        };
+      }
       registry3 = requestSharedTaskRuntime(pi);
       registry3.owner = this;
       pi.on("session_shutdown", () => this.dispose());
@@ -2873,6 +2835,7 @@ function createTaskRuntimeOwner(definitions = []) {
     async dispose() {
       if (!active) return;
       active = false;
+      lifetime.abort(new Error("Task owner disposed"));
       unlisten?.();
       unbind?.();
       for (const cleanup of eventCleanups) cleanup();
