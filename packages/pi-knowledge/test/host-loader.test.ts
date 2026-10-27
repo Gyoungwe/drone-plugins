@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { knowledgeHostLoader } from "../src/core/host.js";
+import { createKnowledgeWorker, knowledgeWorkerMetadata } from "../src/core/runtime-host.js";
 
 describe("knowledge host loader", () => {
 	it("accepts a host-owned worker seam without resolving a resource eagerly", () => {
@@ -15,6 +16,19 @@ describe("knowledge host loader", () => {
 			workerMetadata: () => ({ version: "test" }),
 		});
 		expect(calls).toBe(0);
+	});
+
+	it("selects and verifies the package-local worker when the service requests one", () => {
+		let selected: URL | undefined;
+		knowledgeHostLoader.configureWorker?.({
+			createWorker: (url) => {
+				selected = url;
+				return { url };
+			},
+		});
+		createKnowledgeWorker(new URL("file:///ignored-by-package-loader.mjs"), {});
+		expect(selected?.pathname).toMatch(/\/lib\/knowledge\/runtime\/worker\.mjs$/u);
+		expect(knowledgeWorkerMetadata().integrity).toMatch(/^[a-f0-9]{64}$/u);
 	});
 
 	it("exposes the versioned read port without importing Drone", () => {

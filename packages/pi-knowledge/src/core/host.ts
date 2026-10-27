@@ -8,6 +8,10 @@
  */
 export * from "./index.js";
 
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { readKnowledgeBinding } from "./config.js";
 import { readNoteFile } from "./files.js";
 import {
@@ -104,9 +108,10 @@ export interface KnowledgeHostLoader {
 export const knowledgeHostLoader: KnowledgeHostLoader = {
 	contractVersion: 1,
 	configureWorker: (setup) => {
+		const workerUrl = packageKnowledgeWorkerUrl();
 		configureKnowledgeWorker(
-			setup.createWorker,
-			setup.workerMetadata as (() => KnowledgeWorkerMetadata) | undefined,
+			(_requestedUrl, options) => setup.createWorker(workerUrl, options),
+			() => resolvePackageWorkerResource(workerUrl).metadata,
 		);
 	},
 	load: () => ({
@@ -169,3 +174,37 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			import("./ui-service.js").then(({ knowledgeMaintenance }) => knowledgeMaintenance(input as never)),
 	}),
 };
+
+function packageKnowledgeWorkerUrl(): URL {
+	// The published host entry is bundled to dist/host.mjs; source tests run
+	// against src/core/host.ts. Both resolve the same package-local lib file.
+	return new URL(
+		import.meta.url.includes("/dist/")
+			? "../lib/knowledge/runtime/worker.mjs"
+			: "../../lib/knowledge/runtime/worker.mjs",
+		import.meta.url,
+	);
+}
+
+function resolvePackageWorkerResource(url: URL): {
+	metadata: KnowledgeWorkerMetadata;
+} {
+	if (url.protocol !== "file:") throw new Error(`Knowledge worker URL must use file: protocol: ${url.href}`);
+	const path = fileURLToPath(url);
+	const manifestPath = join(dirname(path), ".knowledge-worker-manifest.json");
+	if (!existsSync(path)) throw new Error(`Knowledge worker resource is missing from the package: ${path}`);
+	if (!existsSync(manifestPath)) throw new Error(`Knowledge worker manifest is missing from the package: ${manifestPath}`);
+	let manifest: Record<string, unknown>;
+	try {
+		manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+	} catch (error) {
+		throw new Error(`Knowledge worker manifest is invalid: ${manifestPath}`, { cause: error });
+	}
+	const expected = typeof manifest.outputSha256 === "string" ? manifest.outputSha256 : "";
+	if (!/^[a-f0-9]{64}$/u.test(expected))
+		throw new Error(`Knowledge worker manifest has no valid output hash: ${manifestPath}`);
+	const actual = createHash("sha256").update(readFileSync(path)).digest("hex");
+	if (actual !== expected) throw new Error(`Knowledge worker resource hash mismatch: ${path}`);
+	const version = `${typeof manifest.version === "number" || typeof manifest.version === "string" ? manifest.version : "1"}:${expected.slice(0, 16)}`;
+	return { metadata: { version, source: path, integrity: expected } };
+}
