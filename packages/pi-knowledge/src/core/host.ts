@@ -192,7 +192,11 @@ function packageKnowledgeWorkerUrl(): URL {
 					),
 				]
 				: []),
-		...ancestorNodeModuleWorkerCandidates(process.cwd()),
+		...new Set(
+			[process.cwd(), process.env.PWD, process.env.INIT_CWD]
+				.filter((directory): directory is string => Boolean(directory))
+			.flatMap((directory) => ancestorNodeModuleWorkerCandidates(directory)),
+		),
 	];
 	const found = candidates.find((candidate) => candidate.protocol === "file:" && existsSync(fileURLToPath(candidate)));
 	if (!found) throw new Error("Knowledge worker resource is missing from the installed pi-knowledge package");
