@@ -4,7 +4,7 @@ import { join, normalize, resolve } from "node:path";
 
 export const CAPABILITIES = new Set([
 	"knowledge", "research", "search", "evidence-context", "analysis", "planning", "files", "evidence",
-	"provenance", "replay", "connectors", "read-only", "provenance-receipts", "ui",
+	"provenance", "replay", "connectors", "read-only", "provenance-receipts", "ui", "core",
 ]);
 const FILESYSTEM_PERMISSIONS = new Set(["workspace-read", "workspace", "configured-vault", "vault-read"]);
 const PERMISSION_KEYS = new Set(["filesystem", "network", "subprocess", "externalWrites", "credentials", "readWrite", "externalSideEffects"]);

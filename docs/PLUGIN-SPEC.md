@@ -116,7 +116,7 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 
 ### 4.1 能力词表
 
-取自现有第一方插件已经在用的值：`knowledge`、`research`、`search`、`evidence-context`、`analysis`、`planning`、`files`、`evidence`、`provenance`、`replay`、`connectors`、`read-only`、`provenance-receipts`、`ui`。新增词条需要同时修改本表和 `scripts/check-manifests.mjs`；检查器会校验能力词表。
+取自现有第一方插件已经在用的值：`knowledge`、`research`、`search`、`evidence-context`、`analysis`、`planning`、`files`、`evidence`、`provenance`、`replay`、`connectors`、`read-only`、`provenance-receipts`、`ui`、`core`。`core` 表示提供通用宿主工具工厂的基础包；新增词条需要同时修改本表和 `scripts/check-manifests.mjs`；检查器会校验能力词表。
 
 ---
 
