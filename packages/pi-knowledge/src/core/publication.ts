@@ -131,8 +131,6 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 			return seal(message, [], { status: "blocked", reason: "model-error", scientificallyVerified: false });
 		if (["aborted", "length", "pending"].includes(message.stopReason) || isUserAbortError(message))
 			return blocked(message, "interrupted");
-		if (message.content.some((block) => block.type === "toolCall"))
-			return seal(message, message.content, { status: "tool-only", scientificallyVerified: false });
 		return blocked(message);
 	}
 	function projectKnowledgeEvent(event) {
@@ -216,10 +214,10 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 			required = true,
 			started = false,
 			protocolBytes = 0,
-			protocolEntries = 0,
 			toolRounds = 0,
 			setupReceipt = null;
-		const deliveries = new Map();
+		const protocol = new Map(),
+			deliveries = new Map();
 		// A nonblocking advisory must not hide host-generated delivery notices
 		// (saved artifacts, pending Wiki candidates) from the published answer.
 		const advisoryFooter = (ctx) => {
@@ -284,6 +282,13 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 				});
 			return evaluation;
 		};
+		// Keep signed model protocol blocks unchanged in live provider context, not in public history.
+		pi.on("context", async (event) => ({
+			messages: event.messages.map((message) => {
+				const original = protocol.get(message[FIELD]?.id);
+				return original ? { ...message, content: original } : message;
+			}),
+		}));
 		const handleMessageEnd = async (event, ctx) => {
 			const message = event.message;
 			if (message.role !== "assistant") return;
@@ -307,7 +312,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 				// 熔断：软预算（tool-budget 的 read/search 上限）只是建议，弱模型会无视并空转。
 				// 这里在本轮工具轮次超过硬上限（或字节/条数兜底）时强制结束本轮——早于旧的 64 轮/4MB，
 				// 把「转几分钟还不作答」压到 ~1 分钟，并给出可操作提示而非「知识库检查未通过」。
-				if (toolRounds > maxToolRounds || protocolBytes + bytes > 4 * 1024 * 1024 || protocolEntries >= 64) {
+				if (toolRounds > maxToolRounds || protocolBytes + bytes > 4 * 1024 * 1024 || protocol.size >= 64) {
 					const limit =
 						toolRounds > maxToolRounds
 							? "tool-round-limit"
@@ -325,15 +330,13 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 						toolRounds,
 						maxToolRounds,
 						protocolBytes,
-						entries: protocolEntries,
+						entries: protocol.size,
 					};
 					denied.stopReason = "stop";
 					return report(denied);
 				}
-				// Text accompanying tool calls is protocol/progress, not a final answer.
-				// Keep the original blocks intact for SDK execution and provider replay.
-				const safe = seal(message, blocks, { status: "tool-only", turnId, scientificallyVerified: false });
-				protocolEntries += 1;
+				const safe = seal(message, tools, { status: "tool-only", turnId, scientificallyVerified: false });
+				protocol.set(safe[FIELD].id, structuredClone(blocks));
 				protocolBytes += bytes;
 				return report(safe);
 			}
@@ -646,7 +649,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 				required = isRequired;
 				if (newTurn) {
 					turnId = randomUUID();
-					protocolEntries = 0;
+					protocol.clear();
 					deliveries.clear();
 					protocolBytes = 0;
 					toolRounds = 0;
@@ -657,7 +660,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 				started = false;
 				required = true;
 				turnId = null;
-				protocolEntries = 0;
+				protocol.clear();
 				deliveries.clear();
 				protocolBytes = 0;
 				toolRounds = 0;
