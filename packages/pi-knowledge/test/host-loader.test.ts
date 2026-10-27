@@ -24,6 +24,7 @@ describe("knowledge host loader", () => {
 			"recordTerminalJobExperience",
 			"registerAnswerPublication",
 			"researchResource",
+			"reviewWikiWithModel",
 			"reviews",
 			"search",
 			"semantic",
@@ -52,6 +53,7 @@ describe("knowledge host loader", () => {
 		expect(typeof port.researchResource?.ingestSnapshot).toBe("function");
 		expect(typeof port.recordTerminalJobExperience).toBe("function");
 		expect(typeof port.registerAnswerPublication).toBe("function");
+		expect(typeof port.reviewWikiWithModel).toBe("function");
 		expect(typeof port.uiState?.subscribe).toBe("function");
 		expect(typeof port.uiState?.notify).toBe("function");
 		expect(port.dailyDiscovery?.systemPrompt).toContain("research colleague");

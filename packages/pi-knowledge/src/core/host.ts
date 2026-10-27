@@ -21,6 +21,7 @@ import { recordTerminalJobExperience } from "./experience-store.js";
 import { notifyKnowledgeUi, subscribeKnowledgeUi } from "./ui-state.js";
 import { registerAnswerPublication } from "./publication.js";
 import { ingestKnowledgeSnapshot, resolveKnowledgeContext } from "./reuse.js";
+import { reviewWikiWithModel } from "./wiki-model-review.js";
 
 export interface KnowledgeDiscoveryNote {
 	path: string;
@@ -80,6 +81,7 @@ export interface KnowledgeHostPort {
 		pi: unknown,
 		options: { getCurrent: () => unknown; evidenceOnly: boolean },
 	) => { begin(required: boolean): unknown };
+	reviewWikiWithModel?: (input: unknown, options: unknown) => Promise<unknown>;
 	/** Optional UI operations are exposed incrementally as the host migrates. */
 	jobs?(input: unknown): Promise<unknown>;
 	maintenance?(input: unknown): Promise<unknown>;
@@ -147,6 +149,7 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			notify: (text, severity, sessionId) => notifyKnowledgeUi(text, severity, sessionId ?? null),
 		},
 		registerAnswerPublication: (pi, options) => registerAnswerPublication(pi, options),
+		reviewWikiWithModel: (input, options) => reviewWikiWithModel(input, options as never),
 		jobs: (input) => import("./ui-service.js").then(({ knowledgeJobs }) => knowledgeJobs(input as never)),
 		maintenance: (input) =>
 			import("./ui-service.js").then(({ knowledgeMaintenance }) => knowledgeMaintenance(input as never)),
