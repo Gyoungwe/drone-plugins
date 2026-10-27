@@ -8,12 +8,15 @@
 		"src/domain/exploration.ts": "c2b96cea5327e0d4f479dc978633731111ef43874d54b416b0d2a0704cd419b5",
 		"src/domain/index.ts": "89efa3feb980c5e58dbc1cacc53575dbb91aa6ffe5d0b90c468554443bf3d5cb",
 		"src/domain/inquiry-port.ts": "0fb5b3ec17da3723f4828105b8c3d0837525e3c06b2fb2cf721335c1b677be43",
-		"src/domain/kernel.ts": "9e26448f941f3094c08998978777a078649f245f448122146ab25b41b73bca26",
+		"src/domain/kernel.ts": "957664f77be9a523322330f52710e7caf2e566422a7f78a340da0114c835f25a",
 		"src/domain/validation.ts": "e957d0827ed49a36fec1dff15e1c08d9387e0a0fa0f6efc00344f041a2c52a0e",
 		"src/host.ts": "bcbb9a28dc53e3216f9b15b5dcf23b199b9edf05cd7816a0a725bb3c044353f9",
-		"src/service.ts": "45e9d5e28c95c1fa4f18c9aea89c4068a6857d1506f72a85948275d2a40609a0"
+		"src/service.ts": "974f14bd6428878f5016412feae579cee5dd333e10581f9c996408e59361a2aa",
+		"src/index.ts": "29819bbbdd9b1ca9152cb5564f4048571a453c7e08be3951211155f2a615bce2",
+		"src/native-records.ts": "f60bd173441c316952018d8f1c5268d40efea4e6ca5218e0f40ba8f9e322ea66"
 	},
 	"outputs": {
-		"dist/host.mjs": "2f09531500087a9ed6517b8782973d734ced4d6e90d5f1a06271cc7e24b45e56"
+		"dist/host.mjs": "1f3e1cc876d02e5aeeab4e6a8648f37aa96cdafef5e3dd2571d46cc283c4ddcc",
+		"dist/index.mjs": "56e16aa800c3ff1f6b8e9fb4e570c41606fc805569f4220c0f4ac8b0c31bcaaf"
 	}
 }

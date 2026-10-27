@@ -40,10 +40,15 @@ try {
 	const installedRoot = join(prefix, "node_modules/@gyoungwe/pi-discovery");
 	const manifest = JSON.parse(await readFile(join(installedRoot, "plugin.manifest.json"), "utf8"));
 	const packageJson = JSON.parse(await readFile(join(installedRoot, "package.json"), "utf8"));
-	assert.deepEqual(manifest.hosts, ["drone-desktop"]);
-	assert.deepEqual(manifest.tools, []);
-	assert.deepEqual(Object.keys(manifest.entrypoints), ["host"]);
-	assert.equal(packageJson.pi, undefined);
+	assert.deepEqual(manifest.hosts, ["native-pi", "drone-desktop"]);
+	assert.deepEqual(packageJson.pi.extensions, ["./dist/index.mjs"]);
+	const extension = await import(pathToFileURL(join(installedRoot, packageJson.pi.extensions[0])).href);
+	const registered = new Map();
+	extension.default({ registerTool: tool => registered.set(tool.name, tool) });
+	assert.deepEqual([...registered.keys()].sort(), [...manifest.tools].sort());
+	assert([...registered.values()].every(tool => tool.drone.readOnly === true));
+	const status = await registered.get("discovery_status").execute("smoke", {}, undefined, undefined, { cwd: root });
+	assert.equal(status.details.status, "unconfigured");
 	const { discoveryHostLoader } = await import(
 		pathToFileURL(
 			join(prefix, "node_modules/@gyoungwe/pi-discovery/dist/host.mjs"),
@@ -69,7 +74,7 @@ try {
 			hostLoaded: true,
 			readOnly: false,
 			hostServices: "in-memory fixture",
-			nativePi: "NOT_PROVIDED",
+			nativeEntry: "registered; empty workspace unconfigured (fixture smoke)",
 			formalGui: "NOT_RUN",
 		}),
 	);
