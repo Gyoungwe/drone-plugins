@@ -18,6 +18,8 @@ import {
 } from "./layout.js";
 import { DAILY_DISCOVERY_SYSTEM, buildDailyDiscoveryMessage, parseDailyIdeas } from "./daily-discovery-prompt.js";
 import { recordTerminalJobExperience } from "./experience-store.js";
+import { notifyKnowledgeUi, subscribeKnowledgeUi } from "./ui-state.js";
+import { registerAnswerPublication } from "./publication.js";
 import { ingestKnowledgeSnapshot, resolveKnowledgeContext } from "./reuse.js";
 
 export interface KnowledgeDiscoveryNote {
@@ -70,6 +72,14 @@ export interface KnowledgeHostPort {
 		input: unknown,
 		expectedRevision?: number,
 	) => Promise<unknown>;
+	uiState?: {
+		subscribe(listener: (event: unknown) => void): () => void;
+		notify(text: string, severity?: "info" | "warning" | "error", sessionId?: string | null): void;
+	};
+	registerAnswerPublication?: (
+		pi: unknown,
+		options: { getCurrent: () => unknown; evidenceOnly: boolean },
+	) => { begin(required: boolean): unknown };
 	/** Optional UI operations are exposed incrementally as the host migrates. */
 	jobs?(input: unknown): Promise<unknown>;
 	maintenance?(input: unknown): Promise<unknown>;
@@ -132,6 +142,11 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 		},
 		recordTerminalJobExperience: (store, input, expectedRevision) =>
 			recordTerminalJobExperience(store as never, input as never, expectedRevision),
+		uiState: {
+			subscribe: (listener) => subscribeKnowledgeUi(listener as never),
+			notify: (text, severity, sessionId) => notifyKnowledgeUi(text, severity, sessionId ?? null),
+		},
+		registerAnswerPublication: (pi, options) => registerAnswerPublication(pi, options),
 		jobs: (input) => import("./ui-service.js").then(({ knowledgeJobs }) => knowledgeJobs(input as never)),
 		maintenance: (input) =>
 			import("./ui-service.js").then(({ knowledgeMaintenance }) => knowledgeMaintenance(input as never)),

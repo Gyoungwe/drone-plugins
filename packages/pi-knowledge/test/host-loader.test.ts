@@ -22,12 +22,14 @@ describe("knowledge host loader", () => {
 			"preview",
 			"read",
 			"recordTerminalJobExperience",
+			"registerAnswerPublication",
 			"researchResource",
 			"reviews",
 			"search",
 			"semantic",
 			"setupPreview",
 			"specialistSettings",
+			"uiState",
 			"vault",
 		]);
 		for (const method of [
@@ -49,6 +51,9 @@ describe("knowledge host loader", () => {
 		expect(typeof port.researchResource?.resolveContext).toBe("function");
 		expect(typeof port.researchResource?.ingestSnapshot).toBe("function");
 		expect(typeof port.recordTerminalJobExperience).toBe("function");
+		expect(typeof port.registerAnswerPublication).toBe("function");
+		expect(typeof port.uiState?.subscribe).toBe("function");
+		expect(typeof port.uiState?.notify).toBe("function");
 		expect(port.dailyDiscovery?.systemPrompt).toContain("research colleague");
 		expect(typeof port.dailyDiscovery?.buildMessage).toBe("function");
 		expect(typeof port.dailyDiscovery?.parseIdeas).toBe("function");
