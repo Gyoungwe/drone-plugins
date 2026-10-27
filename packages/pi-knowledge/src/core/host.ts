@@ -17,6 +17,8 @@ import {
 	VaultFileConflictError,
 } from "./layout.js";
 import { DAILY_DISCOVERY_SYSTEM, buildDailyDiscoveryMessage, parseDailyIdeas } from "./daily-discovery-prompt.js";
+import { recordTerminalJobExperience } from "./experience-store.js";
+import { ingestKnowledgeSnapshot, resolveKnowledgeContext } from "./reuse.js";
 
 export interface KnowledgeDiscoveryNote {
 	path: string;
@@ -59,6 +61,15 @@ export interface KnowledgeHostPort {
 		index(input: unknown): Promise<unknown>;
 		cancelIndex(input: unknown): Promise<unknown>;
 	};
+	researchResource?: {
+		resolveContext(input: unknown): unknown;
+		ingestSnapshot(input: unknown): unknown;
+	};
+	recordTerminalJobExperience?: (
+		store: unknown,
+		input: unknown,
+		expectedRevision?: number,
+	) => Promise<unknown>;
 	/** Optional UI operations are exposed incrementally as the host migrates. */
 	jobs?(input: unknown): Promise<unknown>;
 	maintenance?(input: unknown): Promise<unknown>;
@@ -115,6 +126,12 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			cancelIndex: (input) =>
 				import("./ui-service.js").then(({ cancelKnowledgeSemanticIndex }) => cancelKnowledgeSemanticIndex(input as never)),
 		},
+		researchResource: {
+			resolveContext: (input) => resolveKnowledgeContext(input as never),
+			ingestSnapshot: (input) => ingestKnowledgeSnapshot(input as never),
+		},
+		recordTerminalJobExperience: (store, input, expectedRevision) =>
+			recordTerminalJobExperience(store as never, input as never, expectedRevision),
 		jobs: (input) => import("./ui-service.js").then(({ knowledgeJobs }) => knowledgeJobs(input as never)),
 		maintenance: (input) =>
 			import("./ui-service.js").then(({ knowledgeMaintenance }) => knowledgeMaintenance(input as never)),

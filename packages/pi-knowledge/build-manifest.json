@@ -17,7 +17,7 @@
 		"src/core/flow-cards.ts": "8cea1019c2c84b9322e45105479526d509fef2a14594b450f07f20cbd789ff0f",
 		"src/core/graph-cache.ts": "69877e42ea611ca0c2a244dd83017ce91de1d511735253bff815e5238e7b78d6",
 		"src/core/graph-retrieval.ts": "ac74005cf7fed222cb0548669608cd65ed3eb320bdef2e8537084d76c0ee8f2c",
-		"src/core/host.ts": "709124a81febed4cfafba9febe6f0f19269d0a9d35ec70044fea5720c5c9e49b",
+		"src/core/host.ts": "efab32960f506aecb414f3e351b56f1e1984610c888a758a88725a10a3f8d8c1",
 		"src/core/index.ts": "06f10be18fef1a4705674d336940e328dad9a5c7a43084f1fd04a64ef323c579",
 		"src/core/ingest-frontmatter.ts": "371fc6970211fd72a0efab65ff07abd1f470066c01e6c3b48c3dd771ee5ba68a",
 		"src/core/ingest-identity.ts": "7c631e59cb9efc1ee3df05732ee936e934388488979bdf83625b9c5e6432d75d",
@@ -68,10 +68,10 @@
 	},
 	"outputs": {
 		"dist/index.mjs": "c933f6fd5e8729c604cf67e302d7aac2ac134ae194b55abefdb0247e629968d4",
-		"dist/host.mjs": "2a23aa0b49cd1eb05388e9bd1d73873bb0d8a2a12260ceba7d427d63d4e24636",
+		"dist/host.mjs": "25b21fdba24acbf0d84b24e7f28121007560f58758b0e1325c185db6ddc30000",
 		"dist/host.d.ts": "babe32866311d7f4846e35e05fd440ed40b15d264d5104b217cee520b41d082b",
 		"lib/knowledge/runtime/worker.mjs": "cd5f0d322a88d8d62b82d43643c684d604ed0fc159c68dd2e2503cf2fdfd8eaf",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "677507652383777b7459fba8f1c355caeafe86250db778108ac54b3fecda4ca0"
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "1e666d1a88680a308b4e4ef7a77832a40de63385c771bd386305408a913775e9"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",
