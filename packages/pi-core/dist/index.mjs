@@ -127,7 +127,14 @@ function bindRuntime(pi) {
     const runtime = event.runtime;
     if (!runtime || typeof runtime !== "object" || !runtime.scheduler) return;
     const previous = hostRuntimes.get(pi);
-    if (previous && previous !== runtime) adoptRuntimeState(previous, runtime);
+    if (previous && previous !== runtime) {
+      adoptRuntimeState(previous, runtime);
+      const acceptance = previous.tasks?.acceptance;
+      if (acceptance) {
+        Object.assign(acceptance.properties, runtime.tasks.acceptance.properties);
+        runtime.tasks.acceptance.properties = acceptance.properties;
+      }
+    }
     hostRuntimes.set(pi, runtime);
     if (previous && previous !== runtime) void previous.dispose();
   };
@@ -177,6 +184,7 @@ function adoptRuntimeState(previous, runtime) {
     targetAcceptance.properties ??= {};
     for (const [key, value] of Object.entries(sourceAcceptance.properties || {}))
       if (!(key in targetAcceptance.properties)) targetAcceptance.properties[key] = value;
+    targetAcceptance.properties.kind = { ...targetAcceptance.properties.kind, enum: targetAcceptance.kinds };
   }
   for (const domain of ["knowledge", "tasks", "tools"]) {
     const source = previous?.[domain];
@@ -2084,6 +2092,9 @@ function shouldAskToContinue(task) {
 
 // src/task-runtime/register.mjs
 function registerWorkbench(pi, options = {}) {
+  const bindCallback = (handler) => (...args) => withHostRuntime(pi, () => handler(...args));
+  const on = (name, handler) => pi.on(name, bindCallback(handler));
+  const onEvent = (name, handler) => pi.events?.on?.(name, bindCallback(handler));
   let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || (() => pi?.drone?.readKnowledgeBinding?.() || null);
   let pendingStatus = null;
   let providerTurnOpen = false;
@@ -2180,6 +2191,7 @@ function registerWorkbench(pi, options = {}) {
   });
   const attach = (ctx, force = false) => {
     attachSessionJournal(ctx);
+    options.onJournalAttached?.(journal);
     context = ctx;
     activeSessionId = ctx.sessionManager?.getSessionId?.() || ctx.sessionId || void 0;
     const scope = createHash3("sha256").update(`${ctx.sessionManager?.getSessionId?.() || ctx.sessionId || "isolated"}\0${resolve4(ctx.cwd)}`).digest("hex");
@@ -2271,12 +2283,12 @@ function registerWorkbench(pi, options = {}) {
     };
     handoffTimer = setTimeout(() => void handoff().catch(cancelHandoff), 0);
   };
-  pi.on("session_shutdown", () => {
+  on("session_shutdown", () => {
     cancelHandoff();
     activeSessionId = void 0;
     context = void 0;
   });
-  pi.events?.on?.("drone:task-write-consent", (request) => {
+  onEvent("drone:task-write-consent", (request) => {
     if (context && request.cwd === context.cwd && request.sessionId === context.sessionManager?.getSessionId?.())
       request.respond?.(journal.authorization(true));
   });
@@ -2289,7 +2301,7 @@ function registerWorkbench(pi, options = {}) {
     halted = false;
     return result;
   };
-  pi.on("session_start", (_event, ctx) => {
+  on("session_start", (_event, ctx) => {
     cancelHandoff();
     providerTurnOpen = false;
     pendingStatus = null;
@@ -2297,7 +2309,7 @@ function registerWorkbench(pi, options = {}) {
     prepared = false;
     awaitingUser = false;
   });
-  pi.on("session_tree", (_event, ctx) => {
+  on("session_tree", (_event, ctx) => {
     cancelHandoff();
     providerTurnOpen = false;
     pendingStatus = null;
@@ -2305,7 +2317,7 @@ function registerWorkbench(pi, options = {}) {
     prepared = false;
     halted = false;
   });
-  pi.on("input", async (event, ctx) => {
+  on("input", async (event, ctx) => {
     cancelHandoff();
     if (ctx.isIdle && !ctx.isIdle()) return { action: "continue" };
     try {
@@ -2332,7 +2344,7 @@ ${journal.render()}`,
     }
     return { action: "continue" };
   });
-  pi.on("before_agent_start", async (event, ctx) => {
+  on("before_agent_start", async (event, ctx) => {
     providerTurnOpen = true;
     if (!prepared) {
       try {
@@ -2358,7 +2370,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       }
     };
   });
-  pi.on("message_start", async (event, ctx) => {
+  on("message_start", async (event, ctx) => {
     if (journal.isAutoContinuation(event.message)) {
       prepared = false;
       automaticTurn = false;
@@ -2383,15 +2395,15 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       halted = true;
     }
   });
-  pi.on("context", async (event) => ({ messages: restoreTaskToolOrder(event.messages) }));
-  pi.on("turn_start", () => {
+  on("context", async (event) => ({ messages: restoreTaskToolOrder(event.messages) }));
+  on("turn_start", () => {
     providerTurnOpen = true;
   });
-  pi.on("turn_end", () => {
+  on("turn_end", () => {
     providerTurnOpen = false;
     if (pendingStatus !== null) send(pendingStatus.content, pendingStatus.command);
   });
-  pi.on("tool_call", (event) => {
+  on("tool_call", (event) => {
     providerTurnOpen = true;
     if (halted && event.toolName !== "task_status")
       return {
@@ -2404,7 +2416,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       return { block: true, reason: clean2(e.message) };
     }
   });
-  pi.on("tool_result", async (event, ctx) => {
+  on("tool_result", async (event, ctx) => {
     await journal.observe(event, ctx.cwd);
     if (event.toolName === "read" && !event.isError)
       await evidence.capture(event, ctx.cwd, await bindingKey());
@@ -2413,10 +2425,10 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       return { content: [...event.content || [], { type: "text", text: context2 }] };
     }
   });
-  pi.events?.on?.("drone:context-evicted", (event) => {
+  onEvent("drone:context-evicted", (event) => {
     if (event.sessionId === activeSessionId) evidence.evict(event.toolCallIds);
   });
-  pi.on("agent_end", async (event, ctx) => {
+  on("agent_end", async (event, ctx) => {
     const turnContext = context;
     const turnSessionId = activeSessionId;
     if (!turnContext || !turnSessionId || turnSessionId !== (ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId))
@@ -2468,14 +2480,14 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     label: name,
     description,
     parameters: { type: "object", properties, required, additionalProperties: false },
-    execute: async (_id, input, _signal, _update, ctx) => {
+    execute: bindCallback(async (_id, input, _signal, _update, ctx) => {
       attach(ctx);
       const result = await execute(input, ctx, _signal);
       return {
         content: [{ type: "text", text: typeof result === "string" ? result : JSON.stringify(result) }],
         details: { operational: true }
       };
-    }
+    })
   });
   const str = { type: "string", minLength: 1, maxLength: 512 };
   tool(
@@ -2618,10 +2630,10 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
   const awaitBinding = () => bindingKey();
   pi.registerCommand("task-status", {
     description: "\u4EFB\u52A1\u5DE5\u4F5C\u53F0\uFF1A\u65E0\u6A21\u578B\u72B6\u6001\u3001\u4EFB\u52A1\u9009\u62E9\u3001\u4EA7\u7269\u4E0E\u4EBA\u5DE5\u52A8\u4F5C",
-    handler: async (_args, ctx) => {
+    handler: bindCallback(async (_args, ctx) => {
       attach(ctx);
       send(void 0, "task-status");
-    }
+    })
   });
   const progressTask = createTaskProgression(journal, {
     getGeneration: () => handoffGeneration,
@@ -2633,7 +2645,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
   });
   pi.registerCommand("task-action", {
     description: "\u4EFB\u52A1\u9762\u677F\u7684\u7248\u672C\u5316\u7528\u6237\u64CD\u4F5C\uFF1B\u4E0D\u6388\u4E88\u65B0\u6743\u9650",
-    handler: singleFlightCommand(async (args, ctx) => {
+    handler: bindCallback(singleFlightCommand(async (args, ctx) => {
       cancelHandoff();
       attach(ctx);
       if (ctx.isIdle && !ctx.isIdle())
@@ -2710,7 +2722,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
         return;
       } else journal.command(input);
       send(void 0, "task-action");
-    })
+    }))
   });
   return journal;
 }
@@ -2735,7 +2747,13 @@ function registerTaskRuntime(pi, options = {}) {
     registry3.journal.configure?.(options);
     return registry3.journal;
   }
-  const journal = registerWorkbench(pi, options);
+  const journal = withHostRuntime(pi, () => registerWorkbench(pi, {
+    ...options,
+    onJournalAttached: (current) => {
+      if (registry3) registry3.journal = current;
+      hostRuntime.tasks.workbench.journal = current;
+    }
+  }));
   if (registry3) registry3.journal = journal;
   hostRuntime.tasks.workbench = { ...hostRuntime.tasks.workbench, version: 1, journal };
   publishTaskRuntimeRegistry(pi, registry3);
