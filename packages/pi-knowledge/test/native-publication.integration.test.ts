@@ -150,6 +150,18 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 			responseModel: "provider-model-version",
 			rawStopReason: "tool_use",
 			endTurn: false,
+			diagnostics: [
+				{
+					type: "provider-warning",
+					timestamp: 123,
+					error: {
+						message:
+							"Retry https://example.test/result?token=query-private Authorization: Bearer header-private",
+						stack: "STACK_PRIVATE",
+					},
+					details: { headers: { authorization: "DETAIL_HEADER_PRIVATE" } },
+				},
+			],
 		},
 	);
 	const providerHistory: any[] = [];
@@ -189,6 +201,15 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 		});
 		expect(toolMessage.usage).toBeDefined();
 		expect(toolMessage.usage.input).toBeGreaterThan(0);
+		expect(toolMessage.diagnostics).toMatchObject([
+			{
+				type: "provider-warning",
+				timestamp: 123,
+				error: {
+					message: expect.stringContaining("https://example.test/result"),
+				},
+			},
+		]);
 		expect(
 			sdk.session.messages.find((message) => message.role === "toolResult"),
 		).toMatchObject({
@@ -215,6 +236,10 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 		expect(persisted).not.toContain(progress);
 		expect(persisted).not.toContain(thinking);
 		expect(persisted).not.toContain(unchecked);
+		for (const visible of [JSON.stringify(sdk.session.messages), persisted])
+			expect(visible).not.toMatch(
+				/query-private|header-private|STACK_PRIVATE|DETAIL_HEADER_PRIVATE/,
+			);
 		const final: any = sdk.session.messages
 			.filter((message) => message.role === "assistant")
 			.at(-1);
