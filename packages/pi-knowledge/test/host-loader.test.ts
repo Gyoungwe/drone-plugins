@@ -72,6 +72,7 @@ describe("knowledge host loader", () => {
 			"noteLinks",
 			"openTarget",
 			"overview",
+			"planMaintenance",
 			"preview",
 			"read",
 			"recordTerminalJobExperience",
@@ -79,6 +80,7 @@ describe("knowledge host loader", () => {
 			"researchResource",
 			"reviewWikiWithModel",
 			"reviews",
+			"runMaintenance",
 			"search",
 			"semantic",
 			"setupPreview",
@@ -137,6 +139,37 @@ describe("knowledge host loader", () => {
 		]);
 		expect(typeof port.topics?.list).toBe("function");
 		expect(typeof port.topics?.archive).toBe("function");
+	});
+
+	it("plans and executes maintenance through the discovered host without a legacy import", async () => {
+		const port = knowledgeHostLoader.load();
+		if (!port.planMaintenance || !port.runMaintenance) throw new Error("Maintenance host operations are missing");
+		const items = port.planMaintenance(null, {
+			nodes: [
+				{ path: "Library/Papers/a.md", title: "PMC123.pdf", kind: "note", degree: 0 },
+				{ path: "Library/Papers/b.md", title: "Independent finding", kind: "note", degree: 0 },
+			],
+			edges: [],
+		}, { enabled: true, maxItems: 5, dailyLimit: 5 });
+		expect(items.map(({ kind }) => kind)).toEqual(["missing-topic", "orphan"]);
+		const calls: string[] = [];
+		const result = await port.runMaintenance(items, {
+			readNote: async (path) => ({ markdown: `# ${path}` }),
+			complete: async (prompt) => prompt.includes("PMC123")
+				? JSON.stringify({ topic: "Verified topic" })
+				: JSON.stringify({ title: "Independent finding", targets: ["Wiki/Methods"], reason: "related" }),
+			setTopic: async (path, topic) => { calls.push(`topic:${path}:${topic}`); },
+			validateWikiLinks: async (proposal) => { calls.push(`validate:${proposal.markdown}`); },
+			proposeWiki: async (item, proposal) => { calls.push(`proposal:${item.path}:${proposal.markdown}`); },
+			budget: { modelCalls: 5 },
+		});
+		expect(result.modelCalls).toBe(2);
+		expect(result.items.map(({ status }) => status)).toEqual(["topic-updated", "candidate-submitted"]);
+		expect(calls).toEqual([
+			"topic:Library/Papers/a.md:Verified topic",
+			"validate:[[Wiki/Methods]]",
+			"proposal:Library/Papers/b.md:[[Wiki/Methods]]",
+		]);
 	});
 
 	it("routes Vault create/read/replace through the host port with CAS", async () => {

@@ -12,6 +12,8 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { planMaintenance } from "../maintenance/plan.js";
+import { runMaintenance } from "../maintenance/run.js";
 import { readKnowledgeBinding } from "./config.js";
 import { readNoteFile } from "./files.js";
 import {
@@ -77,6 +79,8 @@ export interface KnowledgeHostPort {
 		list(input: unknown): Promise<unknown>;
 		archive(input: unknown): Promise<unknown>;
 	};
+	planMaintenance?: typeof planMaintenance;
+	runMaintenance?: typeof runMaintenance;
 	maintenanceTopic?: {
 		setTopic(input: unknown): Promise<unknown>;
 		proposeWiki(input: unknown): Promise<unknown>;
@@ -178,6 +182,8 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			archive: (input) =>
 				import("./ui-service.js").then(({ archiveKnowledgeTopic }) => archiveKnowledgeTopic(input as never)),
 		},
+		planMaintenance,
+		runMaintenance,
 		maintenanceTopic: {
 			setTopic: (input) => import("./ui-service.js").then(({ knowledgeMaintenanceTopic }) => knowledgeMaintenanceTopic(input as never)),
 			proposeWiki: (input) => import("./ui-service.js").then(({ knowledgeMaintenanceWiki }) => knowledgeMaintenanceWiki(input as never)),
