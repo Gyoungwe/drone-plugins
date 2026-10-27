@@ -27,6 +27,7 @@ import { createKnowledgeConfigApi } from "../src/core/config.js";
 import { createKnowledgeRuntime } from "../src/core/knowledge-runtime.js";
 import { createKnowledgePublication } from "../src/core/publication.js";
 import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
+import { createKnowledgeUi } from "../src/core/ui-state.js";
 import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
 import { createNativeSession } from "../src/extension/knowledge-extension.js";
 
@@ -70,6 +71,7 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 		config,
 		native.signal,
 	);
+	const observedPublication: string[] = [];
 	const modelRuntime = await ModelRuntime.create({
 		authPath: join(agentDir, "auth.json"),
 		modelsPath: null,
@@ -96,7 +98,19 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 					noExtensions: true,
 					noSkills: true,
 					noContextFiles: true,
-					extensionFactories: [native.extension],
+					extensionFactories: [
+						native.extension,
+						(pi) => {
+							pi.on("message_end", (event) => {
+								if (event.message.role !== "assistant") return;
+								const { knowledgePublication, ...message } =
+									event.message as any;
+								observedPublication.push(knowledgePublication.status);
+								// An untrusted domain proof is removed by transport; provider replay must survive.
+								return { message };
+							});
+						},
+					],
 				},
 			});
 			const result = await createAgentSessionFromServices({
@@ -204,7 +218,8 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 		const final: any = sdk.session.messages
 			.filter((message) => message.role === "assistant")
 			.at(-1);
-		expect(final.knowledgePublication.status).toBe("blocked");
+		expect(observedPublication).toEqual(["tool-only", "blocked"]);
+		expect(final.knowledgePublication).toBeUndefined();
 		expect(JSON.stringify(final.content)).not.toContain(unchecked);
 		expect(final.responseId).toBe("provider-final-response");
 		expect(final.usage.input).toBeGreaterThan(0);
@@ -214,4 +229,78 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 		await owner.dispose();
 		await rm(root, { recursive: true, force: true });
 	}
+});
+
+it("private protocol replay is isolated per owner and exact SDK identity/toolCall content, then cleared on invalidation", async () => {
+	function publication() {
+		const config = createKnowledgeConfigApi(
+			undefined,
+			"/tmp/knowledge-protocol-owner-test",
+		);
+		const ui = createKnowledgeUi(createKnowledgeRuntimeHost(), config);
+		const api = createKnowledgePublication(
+			ui,
+			{ readReviewMode: async () => "strict" },
+			config,
+			new AbortController().signal,
+		);
+		const hooks = new Map<string, (...args: any[]) => any>();
+		const control = api.registerAnswerPublication(
+			{
+				on: (name: string, hook: (...args: any[]) => any) =>
+					hooks.set(name, hook),
+			},
+			{ getCurrent: () => null },
+		);
+		return { hooks, control, ui };
+	}
+	const a = publication(),
+		b = publication();
+	const call = fauxToolCall("read", { path: "input.txt" });
+	const original = fauxAssistantMessage(
+		[
+			{
+				type: "thinking",
+				thinking: "OWNER_A_PRIVATE",
+				thinkingSignature: "signature-a",
+			},
+			call,
+		],
+		{ stopReason: "toolUse", responseId: "same-response", timestamp: 123 },
+	);
+	const ctx = { cwd: "/tmp", sessionId: "protocol-owner" };
+	const { message } = await a.hooks.get("message_end")!(
+		{ message: original },
+		ctx,
+	);
+	delete message.knowledgePublication;
+	const replay = async (owner: typeof a, current = message) =>
+		(await owner.hooks.get("context")!({ messages: [current] })).messages[0]
+			.content;
+	expect(await replay(a)).toEqual(original.content);
+	expect(await replay(b)).toEqual([call]);
+	const other = {
+		...original,
+		content: [
+			{
+				type: "thinking",
+				thinking: "OWNER_B_PRIVATE",
+				thinkingSignature: "signature-b",
+			},
+			call,
+		],
+	};
+	await b.hooks.get("message_end")!({ message: other }, ctx);
+	expect(await replay(a)).toEqual(original.content);
+	expect(await replay(b)).toEqual(other.content);
+	expect(await replay(a, { ...message, timestamp: 124 })).toEqual([call]);
+	const changedCall = { ...call, arguments: { path: "changed.txt" } };
+	expect(await replay(a, { ...message, content: [changedCall] })).toEqual([
+		changedCall,
+	]);
+	a.control.invalidate();
+	expect(await replay(a)).toEqual([call]);
+	b.control.invalidate();
+	a.ui.dispose();
+	b.ui.dispose();
 });
