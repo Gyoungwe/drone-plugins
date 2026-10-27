@@ -1,104 +1,89 @@
-import { readFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute } from "node:path";
+import type { DiscoveryHostInput, DiscoveryHostPort } from "./ports.js";
+import { DiscoveryService } from "./service.js";
+export type * from "./ports.js";
 
-export interface DiscoveryHostInput {
-	readonly projectId: string;
-	readonly projectRoot: string;
-	readonly agentDir?: string;
-}
-
-export interface DiscoveryHostPort {
-	readonly contractVersion: 1;
-	status(input?: unknown): Promise<unknown>;
-	listCriticReviews(input?: unknown): Promise<readonly unknown[]>;
-	listMultipathAssessments(input?: unknown): Promise<readonly unknown[]>;
-	listExplorationPlans(input?: unknown): Promise<readonly unknown[]>;
-	listEvaluations(input?: unknown): Promise<readonly unknown[]>;
-}
-
-export interface DiscoveryHostLoader {
-	readonly contractVersion: 1;
-	readonly create: (input: unknown) => DiscoveryHostPort;
-	readonly load: () => DiscoveryHostPort;
-}
-
-function readInput(input: unknown): DiscoveryHostInput {
-	if (!input || typeof input !== "object")
-		throw new Error("Discovery host input is required");
-	const value = input as Record<string, unknown>;
+function create(input: DiscoveryHostInput): DiscoveryHostPort {
 	if (
-		typeof value.projectId !== "string" ||
-		typeof value.projectRoot !== "string"
+		!input ||
+		typeof input.projectId !== "string" ||
+		typeof input.projectRoot !== "string" ||
+		!isAbsolute(input.projectRoot)
 	)
-		throw new Error("Discovery host input requires projectId and projectRoot");
-	if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(value.projectId))
-		throw new Error("Invalid discovery project id");
-	if (!isAbsolute(value.projectRoot))
-		throw new Error("Discovery projectRoot must be absolute");
-	return {
-		projectId: value.projectId,
-		projectRoot: resolve(value.projectRoot),
-		...(typeof value.agentDir === "string" ? { agentDir: value.agentDir } : {}),
-	};
-}
-
-function recordRoot(input: DiscoveryHostInput): string {
-	return resolve(
-		input.agentDir ?? join(input.projectRoot, "runs", ".drone-discovery"),
-	);
-}
-
-async function readRecords(
-	root: string,
-	file: string,
-): Promise<readonly unknown[]> {
-	try {
-		const parsed: unknown = JSON.parse(
-			await readFile(join(root, file), "utf8"),
+		throw new Error(
+			"Discovery requires a project identity and absolute project root",
 		);
-		if (!Array.isArray(parsed))
-			throw new Error(`Discovery record file is not an array: ${file}`);
-		return parsed;
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-		throw error;
-	}
-}
-
-function createHost(input: DiscoveryHostInput): DiscoveryHostPort {
-	const root = recordRoot(input);
+	if (!input.services)
+		throw new Error("Discovery requires host-owned services");
+	const service = new DiscoveryService(input);
 	return {
 		contractVersion: 1,
 		status: async () => ({
 			contractVersion: 1,
 			projectId: input.projectId,
 			provider: "pi-discovery",
-			readOnly: true,
+			readOnly: false,
+			legacyJournal: await input.services.legacyJournal(),
 		}),
-		listCriticReviews: async () =>
-			withoutRecordedAt(await readRecords(root, "critics.json")),
-		listMultipathAssessments: async () =>
-			withoutRecordedAt(await readRecords(root, "multipath.json")),
-		listExplorationPlans: async () => readRecords(root, "plans.json"),
-		listEvaluations: async () => readRecords(root, "evaluations.json"),
+		init: () => service.init(),
+		dispose: () => service.dispose(),
+		getCapabilities: (value) =>
+			service.getCapabilities((value as { language: "python" | "r" }).language),
+		listKernelSessions: () => service.listKernelSessions(),
+		getKernelSession: (value) =>
+			service.getKernelSession((value as { sessionId: string }).sessionId),
+		createKernelSession: (value) =>
+			service.createKernelSession(
+				value as Parameters<DiscoveryService["createKernelSession"]>[0],
+			),
+		executeKernel: (value) => {
+			const request = value as { sessionId: string; code: string };
+			return service.executeKernel(request.sessionId, request.code);
+		},
+		exportKernel: (value) =>
+			service.exportKernel((value as { sessionId: string }).sessionId),
+		closeKernelSession: (value) =>
+			service.closeKernelSession((value as { sessionId: string }).sessionId),
+		recordDiscovery: (value) =>
+			service.recordDiscovery(
+				value as Parameters<DiscoveryService["recordDiscovery"]>[0],
+			),
+		listCriticReviews: () => service.listCriticReviews(),
+		listMultipathAssessments: () => service.listMultipathAssessments(),
+		listExplorationPlans: () => service.listExplorationPlans(),
+		listEvaluations: () => service.listEvaluations(),
+		createExplorationPlan: (value) =>
+			service.createExplorationPlan(
+				value as Parameters<DiscoveryService["createExplorationPlan"]>[0],
+			),
+		runCritic: (value) =>
+			service.runCritic(value as Parameters<DiscoveryService["runCritic"]>[0]),
+		runMultipath: (value) => {
+			const { plan, executor } = value as {
+				plan: Parameters<DiscoveryService["runMultipath"]>[0];
+				executor: Parameters<DiscoveryService["runMultipath"]>[1];
+			};
+			return service.runMultipath(plan, executor);
+		},
+		runEvaluation: (value) => {
+			const { cases, evaluator, options } = value as {
+				cases: Parameters<DiscoveryService["runEvaluation"]>[0];
+				evaluator: Parameters<DiscoveryService["runEvaluation"]>[1];
+				options?: Parameters<DiscoveryService["runEvaluation"]>[2];
+			};
+			return service.runEvaluation(cases, evaluator, options);
+		},
+		listBaselines: () => service.listBaselines(),
+		putBaseline: (value) =>
+			service.putBaseline(
+				value as Parameters<DiscoveryService["putBaseline"]>[0],
+			),
 	};
 }
-
-/** Persistence timestamps are private to the journal, as in DiscoveryService's public projection. */
-function withoutRecordedAt(records: readonly unknown[]): readonly unknown[] {
-	return records.map((record) => {
-		if (!record || typeof record !== "object" || Array.isArray(record))
-			throw new Error("Discovery journal record must be an object");
-		const { recordedAt: _recordedAt, ...projection } = record as Record<
-			string,
-			unknown
-		>;
-		return projection;
-	});
-}
-
-export const discoveryHostLoader: DiscoveryHostLoader = {
-	contractVersion: 1,
-	create: (input) => createHost(readInput(input)),
-	load: () => createHost({ projectId: "default", projectRoot: process.cwd() }),
+export const discoveryHostLoader = {
+	contractVersion: 1 as const,
+	create,
+	load(): DiscoveryHostPort {
+		throw new Error("Discovery requires host-owned services");
+	},
 };

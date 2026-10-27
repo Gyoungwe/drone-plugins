@@ -14,7 +14,9 @@ This merge joins scientific `9646a53` and native architecture `e09a6b0` with bot
 
 The [receipt](native-ui-scientific-integration-2026-10-27.json) records the exact local checks and candidate API hash. Tarball installation and official SDK faux-provider sessions are package/runtime evidence; they do not establish formal installed-app GUI acceptance or npm publication.
 
-## Remaining work
+## Remaining work at the first merge
+
+This historical list is superseded by the [core/discovery integration status](native-ui-core-discovery-integration-2026-10-27.md).
 
 - Merge the separately developed pi-core 0.2.0 contract/declarations and new tasks/discovery host ports; rebuild its vendor input, suite and lock rather than overwriting that newer work with this 0.1.9 candidate.
 - Publish/verify the authorized API 1.3 candidate separately before raising package minimums; the current private API override remains explicit.

@@ -1,9 +1,32 @@
 {
 	"version": 1,
 	"generator": "packages/pi-core/scripts/build.mjs",
-	"inputsSha256": "46d6c5cd555fca09ba05a89b6b24a3a1847fde9593078a0435703298e3141766",
+	"inputsSha256": "e6f164b26b79d85dc157d70d14bd8966ed4435f85c1ddcb6102f0567d96be27a",
 	"outputs": {
-		"dist/index.mjs": "f775cd26e5ef680c1e15b601c8f6ddc5fcd636d47926e093707fd1161122ea73",
-		"dist/host.mjs": "fdfca1a7c6f02e9a36c5e6065b2557c49696b6ee2deb13c49a0d71e4ce96de63"
+		"dist/contracts.d.ts": "4977ed343b53826c3be9ff1ea5e064585043c017753ae917eebba189bab2b4cf",
+		"dist/drone-commands.d.ts": "35a67f4528292a38d5de6ec7321e5668dfbecbc9001a7d72132412346998828f",
+		"dist/host.d.ts": "b553f939a8d31d8f6bd01bbb5b2d761bd4d134326abd9181bf2bd374c219e189",
+		"dist/host.mjs": "b952f736c036e9f39ae10b6a4bf4689c77f2f027bcdf425099b882a49f7ec941",
+		"dist/index.d.ts": "9ce5e2c4b1dcd42296a6acbc4e427fa89f303c022cb9114d53b9a34120cd2182",
+		"dist/index.mjs": "d4666643ca270ecc7afb97d46c7003674e43dce440563cf0dc28a3dbecae50dc",
+		"dist/memory.d.ts": "6da36d508d0ade856e7e56e5f4ab5b7ea8153db0d1f7319bc3c6ee33193a6d38",
+		"dist/memory.mjs": "7019a1647fd40b2f446db8f0f20c5f41848dbca92ca8f38964f26a8b050260cf",
+		"dist/milestone-plan.d.ts": "39008645954d801aeefdfef9cde0a0737d679cf7ab02154bc8d25836a8c4fafb",
+		"dist/native-task-readback.d.ts": "f5148055cfc5a2b4efbcc0095e1a19f434e750584bb4cc5599c2b4c3134e71ce",
+		"dist/path.d.ts": "0ef0c3cde6d14bd94bc99e50194a84d4d80637460a8faa0e373ebbf15d36d1e9",
+		"dist/reply-language.d.ts": "29e9b40c707fe3b6a615b4112165d917b8dd8fcbef85e21cbdf46c0a0e572950",
+		"dist/task-runtime/acceptance.d.mts": "4f20ba39269d5f037bf6712fa78aa27ab529ac9e3b36962cee58e4be8aa356a8",
+		"dist/task-runtime/runtime.d.mts": "e91468434fc80dc11a0dd17daa9257b5f7ed1d5392a5e60dd8ad1e791bf67715",
+		"dist/task-runtime/workbench-plugin.d.mts": "962a548b6e67a719b6074b99ccb833a2e317eff2abe628d26fc34671c2ed6789",
+		"dist/tools/ask-user.d.ts": "57474e00405cd9a94c0a7bf516b5c8bb753312baf0ca31e5cce204676a2e970a",
+		"dist/tools/ask-user.mjs": "72a93582bd94dcc934976344cfc261268f2eb585f2472a990a792ba8114b84e7",
+		"dist/tools/deliver-files.d.ts": "8379c11a12888a2984c20a2e5a01d10c080255e8ab51397f43d2483327c92b87",
+		"dist/tools/deliver-files.mjs": "45fbb0951946c31df74bc19704b8def0f1cc241aede442decd8d8e3c929f0c75",
+		"dist/tools/memory-save.d.ts": "56b952cc419d43a81e00f6c71976d4257d504c2daa2f48f6be463c0702990823",
+		"dist/tools/memory-save.mjs": "2c620bde1203d5405e41a8bc8caa251d811e5d5781c05e2503874ee8e7158ea8",
+		"dist/tools/status.d.ts": "64ccddcda422504e88ae2cb01c2ebe943249b21ce194954cf575dcb8a53924d0",
+		"dist/tools/status.mjs": "5ec03b04757fa009704df27d6adc4bab376d72edc2d6ef857f8aa375a97f33c0",
+		"dist/tools/todo.d.ts": "0b21ba3bee3da98959fbd02dc2d5afad1911f69e3549b0ada35258cff37a03af",
+		"dist/tools/todo.mjs": "68a872920fa02fe1a9174ee6c0a1ff0382198473c6b3b06508a75d660fe046b6"
 	}
 }

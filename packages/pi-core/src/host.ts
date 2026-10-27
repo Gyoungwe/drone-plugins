@@ -5,14 +5,22 @@
  * the extension's root implementation path. The implementation remains in
  * pi-core; the host entry is the stable composition boundary.
  */
-import { memoryIndexPrompt as memoryIndexPromptImpl, writeMemory as writeMemoryImpl } from "./memory";
+
 import type { MemoryType } from "./memory";
+import {
+	memoryIndexPrompt as memoryIndexPromptImpl,
+	writeMemory as writeMemoryImpl,
+} from "./memory";
+import { normalizeTaskMilestones } from "./milestone-plan";
+import {
+	acceptanceVerifier,
+	registerAcceptanceVerifier,
+	type TaskAcceptanceVerifier,
+} from "./task-runtime/acceptance.mjs";
 import { makeDeliverFilesTool as makeDeliverFilesToolImpl } from "./tools/deliver-files";
 import { makeMemorySaveTool as makeMemorySaveToolImpl } from "./tools/memory-save";
 import { makeStatusTool as makeStatusToolImpl } from "./tools/status";
 import { makeTodoTool as makeTodoToolImpl } from "./tools/todo";
-import { acceptanceVerifier, registerAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
-import { createWorkbenchPluginPort } from "./task-runtime/workbench-plugin.mjs";
 
 interface CoreMemoryEntry {
 	readonly name: string;
@@ -50,7 +58,10 @@ export {
 	writeMemory,
 } from "./memory";
 export type { DeliverFilesDetails } from "./tools/deliver-files";
-export { deliverFilesParams, makeDeliverFilesTool } from "./tools/deliver-files";
+export {
+	deliverFilesParams,
+	makeDeliverFilesTool,
+} from "./tools/deliver-files";
 // Keep the legacy backend facades on the same versioned entry as memory.  The
 // host entry is bundled and checked as a public package boundary; consumers do
 // not reach through the extension root or private source paths.
@@ -76,7 +87,8 @@ export const coreHostLoader = {
 		makeStatusTool: makeStatusToolImpl,
 		makeTodoTool: makeTodoToolImpl,
 		memoryIndexPrompt: memoryIndexPromptImpl,
-		writeMemory: (cwd: string, entry: CoreMemoryEntry) => writeMemoryImpl(cwd, { ...entry }),
+		writeMemory: (cwd: string, entry: CoreMemoryEntry) =>
+			writeMemoryImpl(cwd, { ...entry }),
 	}),
 } satisfies CoreHostLoaderContract;
 
@@ -84,20 +96,30 @@ interface TaskHostLoaderContract {
 	readonly contractVersion: 1;
 	readonly load: (input?: { readonly workbench?: WorkbenchPluginClient }) => {
 		readonly contractVersion: 1;
-		readonly registerAcceptanceVerifier: (kind: string, definition: Readonly<Record<string, unknown>>) => void;
-		readonly readAcceptanceVerifier: (kind: string) => unknown;
-		readonly workbench?: {
-			readonly status: () => Promise<unknown>;
-			readonly plan: (items: readonly string[]) => Promise<unknown>;
-			readonly todo: (input: unknown) => Promise<unknown>;
-			readonly memorySave: (input: unknown) => Promise<unknown>;
-			readonly persist: () => Promise<unknown>;
-		};
+		readonly registerAcceptanceVerifier: (
+			kind: string,
+			definition: Readonly<Record<string, unknown>>,
+		) => void;
+		readonly readAcceptanceVerifier: (
+			kind: string,
+		) => TaskAcceptanceVerifier | null;
+		readonly normalizeMilestones: typeof normalizeTaskMilestones;
+		readonly workbench?: WorkbenchPluginClient;
 	};
 }
 
 interface WorkbenchPluginClient {
-	readonly invoke: (operation: string, input: unknown, signal?: AbortSignal) => Promise<unknown>;
+	readonly invoke: (
+		operation: string,
+		input: unknown,
+		signal?: AbortSignal,
+	) => Promise<unknown>;
+	readonly subscribe: (
+		listener: (event: {
+			readonly type: "changed";
+			readonly revision: number;
+		}) => void,
+	) => () => void;
 }
 
 /** Optional tasks host discovered by Drone Desktop from the same Pi package. */
@@ -105,10 +127,16 @@ export const taskHostLoader = {
 	contractVersion: 1 as const,
 	load: (input?: { readonly workbench?: WorkbenchPluginClient }) => ({
 		contractVersion: 1 as const,
-		registerAcceptanceVerifier: (kind: string, definition: Readonly<Record<string, unknown>>) => {
+		registerAcceptanceVerifier: (
+			kind: string,
+			definition: Readonly<Record<string, unknown>>,
+		) => {
 			registerAcceptanceVerifier(kind, definition);
 		},
 		readAcceptanceVerifier: (kind: string) => acceptanceVerifier(kind),
-		...(input?.workbench ? { workbench: createWorkbenchPluginPort(input.workbench) } : {}),
+		normalizeMilestones: normalizeTaskMilestones,
+		...(input?.workbench ? { workbench: input.workbench } : {}),
 	}),
 } satisfies TaskHostLoaderContract;
+
+export { normalizeTaskMilestones } from "./milestone-plan";

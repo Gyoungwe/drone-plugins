@@ -48,7 +48,7 @@
     ]
   },
   "dependencies": {
-    "@gyoungwe/pi-core": "0.1.9",
+    "@gyoungwe/pi-core": "0.2.0",
     "@gyoungwe/pi-workbench": "0.1.0",
     "@gyoungwe/pi-knowledge": "0.3.0",
     "@gyoungwe/pi-research": "0.3.2"

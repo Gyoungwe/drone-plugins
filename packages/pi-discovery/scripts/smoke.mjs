@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -37,12 +37,21 @@ try {
 		],
 		{ maxBuffer: 4 * 1024 * 1024 },
 	);
+	const installedRoot = join(prefix, "node_modules/@gyoungwe/pi-discovery");
+	const manifest = JSON.parse(await readFile(join(installedRoot, "plugin.manifest.json"), "utf8"));
+	const packageJson = JSON.parse(await readFile(join(installedRoot, "package.json"), "utf8"));
+	assert.deepEqual(manifest.hosts, ["drone-desktop"]);
+	assert.deepEqual(manifest.tools, []);
+	assert.deepEqual(Object.keys(manifest.entrypoints), ["host"]);
+	assert.equal(packageJson.pi, undefined);
 	const { discoveryHostLoader } = await import(
 		pathToFileURL(
 			join(prefix, "node_modules/@gyoungwe/pi-discovery/dist/host.mjs"),
 		).href
 	);
+	const { memoryServices } = await import("../test/memory-services.mjs");
 	const host = discoveryHostLoader.create({
+		...memoryServices(),
 		projectId: "smoke",
 		projectRoot: root,
 	});
@@ -51,13 +60,17 @@ try {
 	assert.deepEqual(await host.listMultipathAssessments(), []);
 	assert.deepEqual(await host.listExplorationPlans(), []);
 	assert.deepEqual(await host.listEvaluations(), []);
+	await host.dispose();
 	console.log(
 		JSON.stringify({
 			package: "@gyoungwe/pi-discovery",
 			tarball: packed.filename,
 			cleanInstall: true,
 			hostLoaded: true,
-			readOnly: true,
+			readOnly: false,
+			hostServices: "in-memory fixture",
+			nativePi: "NOT_PROVIDED",
+			formalGui: "NOT_RUN",
 		}),
 	);
 } finally {

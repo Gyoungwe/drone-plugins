@@ -1,7 +1,7 @@
 {
 	"name": "@gyoungwe/pi-discovery",
 	"version": "0.1.0",
-	"description": "Read-only discovery records host for Drone",
+	"description": "Host-injected discovery algorithms and journals for Drone",
 	"license": "MIT",
 	"publishConfig": {"access": "public"},
 	"type": "module",
