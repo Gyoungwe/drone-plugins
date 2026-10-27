@@ -5,7 +5,7 @@ import {
 	nativeDiscoveryStatus,
 } from "./native-records.js";
 
-const readMetadata = { drone: { readOnly: true, capabilities: ["discovery"] } };
+const readMetadata = { drone: { readOnly: true, capabilities: ["research", "analysis"] } };
 const journalSchema = { type: "string", enum: JOURNALS } as const;
 
 function result(details: unknown) {

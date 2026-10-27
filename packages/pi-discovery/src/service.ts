@@ -223,6 +223,11 @@ export class DiscoveryService implements DiscoveryServicePort {
 	private readonly evaluations: DiscoveryEvaluation[] = [];
 	private initialized?: Promise<void>;
 	private disposed = false;
+	private readonly executions = new Map<
+		string,
+		Promise<Awaited<ReturnType<KernelSession["execute"]>>>
+	>();
+	private disposal?: Promise<void>;
 
 	constructor(options: DiscoveryServiceOptions) {
 		this.projectId = safeProjectId(options.projectId);
@@ -360,6 +365,7 @@ export class DiscoveryService implements DiscoveryServicePort {
 		const runDirectory = safeRunDirectory(this.projectRoot, input.runDirectory);
 		await this.options.services.files.prepareDirectory(runDirectory);
 		const runner = await this.runnerFor(input.language);
+		if (this.disposed) throw new Error("discovery service is disposed");
 		const options: KernelSessionOptions = {
 			sessionId,
 			runDirectory,
@@ -411,6 +417,23 @@ export class DiscoveryService implements DiscoveryServicePort {
 			projectId: this.projectId,
 			sessionId: id,
 		});
+		if (this.disposed) throw new Error("discovery service is disposed");
+		if (this.executions.has(id))
+			throw new Error("discovery kernel execution is already running");
+		const pending = this.executeSession(id, code, session);
+		this.executions.set(id, pending);
+		try {
+			return await pending;
+		} finally {
+			if (this.executions.get(id) === pending) this.executions.delete(id);
+		}
+	}
+
+	private async executeSession(
+		id: string,
+		code: string,
+		session: KernelSession,
+	): Promise<Awaited<ReturnType<KernelSession["execute"]>>> {
 		const execution = await session.execute(code);
 		const meta = this.sessionMeta.get(id);
 		if (meta)
@@ -455,7 +478,8 @@ export class DiscoveryService implements DiscoveryServicePort {
 			sessionId: id,
 		});
 		const session = this.sessions.get(id);
-		session?.close();
+		await session?.close();
+		await this.executions.get(id);
 		const meta = this.sessionMeta.get(id);
 		if (meta)
 			this.sessionMeta.set(id, {
@@ -618,11 +642,27 @@ export class DiscoveryService implements DiscoveryServicePort {
 		await this.init();
 		await this.baselineStore.put(record);
 	}
-	async dispose(): Promise<void> {
-		if (this.disposed) return;
+	dispose(): Promise<void> {
+		if (this.disposal) return this.disposal;
 		this.disposed = true;
+		this.disposal = this.disposeSessions();
+		return this.disposal;
+	}
+
+	private async disposeSessions(): Promise<void> {
+		const settled = await Promise.allSettled([
+			...Array.from(this.sessions.values(), (session) => session.close()),
+			...this.executions.values(),
+		]);
+		const failures = settled.filter(
+			(result): result is PromiseRejectedResult => result.status === "rejected",
+		);
+		if (failures.length)
+			throw new AggregateError(
+				failures.map((result) => result.reason),
+				"Discovery execution cleanup failed",
+			);
 		for (const [id, session] of this.sessions) {
-			session.close();
 			const meta = this.sessionMeta.get(id);
 			if (!meta)
 				throw new Error("Active discovery session has no journal metadata");

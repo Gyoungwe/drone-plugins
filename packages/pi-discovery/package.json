@@ -17,7 +17,7 @@
 		"build": "node scripts/build.mjs",
 		"build:check": "node scripts/build.mjs --check",
 		"typecheck": "tsc --noEmit",
-		"test": "npm run build && node --test test/host.test.mjs test/native.test.mjs",
+		"test": "npm run build && node --test test/host.test.mjs test/native.test.mjs test/lifecycle.test.mjs",
 		"test:sdk": "node scripts/check-sdk-sessions.mjs",
 		"smoke": "node scripts/smoke.mjs",
 		"check": "npm run typecheck && npm run build:check && npm test && npm run smoke"

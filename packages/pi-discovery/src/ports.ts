@@ -134,6 +134,8 @@ export interface DiscoveryRunnerCapabilities {
 	readonly writesOnlyToRunDirectory: boolean;
 }
 export interface DiscoveryRunRequest {
+	/** Abort must settle only after owned execution resources are removed and read back. */
+	readonly signal?: AbortSignal;
 	readonly requestId: string;
 	readonly language: DiscoveryLanguage;
 	readonly code: string;
@@ -154,6 +156,7 @@ export interface DiscoveryRunResult {
 }
 export interface DiscoveryRunner {
 	readonly capabilities: DiscoveryRunnerCapabilities;
+	/** Reject with Error.code=DISCOVERY_CLEANUP_FAILED when resource cleanup cannot be verified; callers must propagate it. */
 	run(request: DiscoveryRunRequest): Promise<DiscoveryRunResult>;
 }
 export interface DiscoveryKernelExecution {

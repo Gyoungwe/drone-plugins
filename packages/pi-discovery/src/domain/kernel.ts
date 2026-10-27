@@ -33,6 +33,8 @@ export interface KernelRunnerCapabilities {
 }
 
 export interface KernelRunRequest {
+	/** Cancellation completes only after the runner verifies resource cleanup. */
+	readonly signal?: AbortSignal;
 	readonly requestId: string;
 	readonly language: KernelLanguage;
 	readonly code: string;
@@ -306,6 +308,10 @@ export class KernelSession {
 	private history: KernelExecution[] = [];
 	private idleTimer?: ReturnType<typeof setTimeout>;
 	private expiresAt?: number;
+	private activeExecution?: Promise<KernelExecution>;
+	private executionController?: AbortController;
+	private closing?: Promise<void>;
+	private cleanupFailure?: Error;
 
 	constructor(options: KernelSessionOptions) {
 		ensureOptions(options);
@@ -355,30 +361,44 @@ export class KernelSession {
 			this.executionCount < this.options.maxExecutions,
 			"kernel execution budget exceeded",
 		);
+		const controller = new AbortController();
+		this.executionController = controller;
+		const execution = this.executeActive(code, controller);
+		this.activeExecution = execution;
+		try {
+			return await execution;
+		} finally {
+			this.activeExecution = undefined;
+			this.executionController = undefined;
+		}
+	}
+
+	private async executeActive(
+		code: string,
+		controller: AbortController,
+	): Promise<KernelExecution> {
 		this.state = "running";
 		this.executionCount += 1;
 		this.armIdleTimer();
 		const id = randomUUID();
 		const startedAt = new Date(this.now()).toISOString();
+		const timer = setTimeout(
+			() => controller.abort(new Error("runner-timeout")),
+			this.options.executionTimeoutMs,
+		);
 		let execution: KernelExecution;
 		try {
-			const result = await Promise.race([
-				this.options.runner.run({
-					requestId: id,
-					language: this.options.language,
-					code,
-					runDirectory: this.options.runDirectory,
-					timeoutMs: this.options.executionTimeoutMs,
-					maxOutputBytes: this.options.maxOutputBytes,
-					dataClassification: this.options.dataClassification,
-				}),
-				new Promise<never>((_, reject) =>
-					setTimeout(
-						() => reject(new Error("runner-timeout")),
-						this.options.executionTimeoutMs,
-					),
-				),
-			]);
+			const result = await this.options.runner.run({
+				signal: controller.signal,
+				requestId: id,
+				language: this.options.language,
+				code,
+				runDirectory: this.options.runDirectory,
+				timeoutMs: this.options.executionTimeoutMs,
+				maxOutputBytes: this.options.maxOutputBytes,
+				dataClassification: this.options.dataClassification,
+			});
+			controller.signal.throwIfAborted();
 			assertValid(
 				result && Number.isInteger(result.exitCode),
 				"runner returned invalid exit status",
@@ -413,6 +433,15 @@ export class KernelSession {
 				...(filtered.blocked ? { blockedReason: "output-policy" } : {}),
 			};
 		} catch (error) {
+			if (
+				error instanceof Error &&
+				"code" in error &&
+				error.code === "DISCOVERY_CLEANUP_FAILED"
+			) {
+				this.cleanupFailure = error;
+				this.state = "closed";
+				throw error;
+			}
 			execution = {
 				id,
 				code,
@@ -425,14 +454,19 @@ export class KernelSession {
 				producedBytes: 0,
 				redactedBytes: 0,
 				blockedReason:
-					error instanceof Error && error.message === "runner-timeout"
+					controller.signal.reason instanceof Error &&
+					controller.signal.reason.message === "runner-timeout"
 						? "timeout"
-						: "runner-failure",
+						: controller.signal.aborted
+							? "cancelled"
+							: "runner-failure",
 			};
+		} finally {
+			clearTimeout(timer);
+			if (this.state === "running") this.state = "ready";
+			this.armIdleTimer();
 		}
 		this.history.push(execution);
-		this.state = "ready";
-		this.armIdleTimer();
 		return execution;
 	}
 
@@ -458,10 +492,16 @@ export class KernelSession {
 		]).then(() => ({ scriptPath, notebookPath, script, notebook }));
 	}
 
-	close(reason: "closed" | "idle-timeout" = "closed"): void {
-		if (this.state === "closed" || this.state === "idle-timeout") return;
+	close(reason: "closed" | "idle-timeout" = "closed"): Promise<void> {
+		if (this.closing) return this.closing;
+		if (this.cleanupFailure) return Promise.reject(this.cleanupFailure);
 		if (this.idleTimer) clearTimeout(this.idleTimer);
 		this.state = reason;
+		this.executionController?.abort(new Error("kernel-closed"));
+		this.closing = this.activeExecution
+			? this.activeExecution.then(() => undefined)
+			: Promise.resolve();
+		return this.closing;
 	}
 
 	private now(): number {
