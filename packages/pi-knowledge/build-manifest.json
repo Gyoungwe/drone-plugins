@@ -38,7 +38,7 @@
 		"src/core/owner-lifecycle.ts": "7af6913f7ca047a78e987adcae68ad49d26b9bff2afd66ee7fd936d7dba33dfc",
 		"src/core/project-identity.ts": "23910fc249949d2fca61533e304834822f381a255bcfccf09b46cc9ce0a659d9",
 		"src/core/publication-policy.ts": "41dbd70baffa78b01e4578c110a18b9c79bdab5416c9a5f03c945a2adc351cda",
-		"src/core/publication.ts": "48a9ef13f4ceb932a9bdf1fdf31fcd3b0dd2701a7b655945b685750528383966",
+		"src/core/publication.ts": "763db2a20806690d563458591fd952b615ef29b184e50f87c1c28cddc0241dfa",
 		"src/core/recent-by-category.ts": "7a45ff17f0696250e5a397120f1c8ddf51d202b03c3a85890f2381e59af3f018",
 		"src/core/related-notes.ts": "616e05ab52b901ef4bcc20e7e309f0b018f4c9f71c3eda7fa3d9ad264f1382d6",
 		"src/core/reuse.ts": "31c85260b7d0357e2cfe9e568739631d10b14fa9be544e8b1b26c3e6d3954864",
@@ -96,13 +96,13 @@
 		"src/maintenance/run.ts": "2575e35c4a879955e0e0d6dae32456318a34fef8ea6d19a63797bbd06d2f3460"
 	},
 	"outputs": {
-		"dist/index.mjs": "fcfefb362b1261bf7456344d7f2d58591340c968228bf2c126de8e4daa4193eb",
-		"dist/host.mjs": "10343f00df44c7206ab054f5aa2f98cd27be7f153f04d9a42fb37a85f58d3559",
+		"dist/index.mjs": "5fb092cfde622913ef115db654f7710b1ea1f06b0fa987e954d70424b3772317",
+		"dist/host.mjs": "58e6eaacd4408c696f1cf78c012c2dab13a49adcae35286ec014d17d0d723b3b",
 		"dist/host.d.ts": "f0adedba8cffd2a68e3a8767923e75bb52ea01e530848e446483e4bef735463f",
 		"dist/desktop-runtime.mjs": "e49529cbfe6e73899212ce55b7383e96db6a7fb8ad30dc3805749719b6dff265",
 		"lib/knowledge/runtime/desktop-index.mjs": "becaf424e993e4b6efd096ce6c52d8be660b50d986c6f6857bd8d08e25446e22",
 		"lib/knowledge/runtime/worker.mjs": "72c809b9d15e7d8b57d695c0a0b62aec2b101e0986f0a04627b913867e2d7f0c",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "a924ada08739e7ace373f2de8dcd83463bc745218eac26645ea908071c5d1a68",
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "2011b70e76fcaba1d26b847ddaad40f6d0709a8b64fb5c19ab2eef3d06c94ad4",
 		"ui/bundle.js": "b457ce61c111b668458edef3ba73483c23c763954beb9c74d02b3d95950b99e7",
 		"ui/build-manifest.json": "44216717b036ddc9f623c569da6cd8c515d90bf6f13ddbffffec394c098884fe"
 	},

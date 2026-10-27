@@ -6058,17 +6058,11 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
     return /was aborted|request aborted/i.test(String(message?.errorMessage || ""));
   }
   function base(message, content) {
-    const errorMessage2 = message.stopReason === "error" && typeof message.errorMessage === "string" ? sanitizeError(message.errorMessage) : "";
+    const { errorMessage: originalError, ...metadata } = message;
+    const errorMessage2 = message.stopReason === "error" && typeof originalError === "string" ? sanitizeError(originalError) : "";
     return {
-      role: "assistant",
+      ...metadata,
       content,
-      api: message.api,
-      provider: message.provider,
-      model: message.model,
-      usage: message.usage,
-      timestamp: message.timestamp,
-      stopReason: message.stopReason,
-      ...message.responseId ? { responseId: message.responseId } : {},
       ...errorMessage2 ? { errorMessage: errorMessage2 } : {}
     };
   }
@@ -6130,6 +6124,8 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
       return seal(message, [], { status: "blocked", reason: "model-error", scientificallyVerified: false });
     if (["aborted", "length", "pending"].includes(message.stopReason) || isUserAbortError(message))
       return blocked(message, "interrupted");
+    if (message.content.some((block) => block.type === "toolCall"))
+      return seal(message, message.content, { status: "tool-only", scientificallyVerified: false });
     return blocked(message);
   }
   function projectKnowledgeEvent2(event) {
@@ -6199,8 +6195,8 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
       }
     };
     if (runtime) attachRuntime(runtime);
-    let turnId = null, required = true, started = false, protocolBytes = 0, toolRounds = 0, setupReceipt = null;
-    const protocol = /* @__PURE__ */ new Map(), deliveries = /* @__PURE__ */ new Map();
+    let turnId = null, required = true, started = false, protocolBytes = 0, protocolEntries = 0, toolRounds = 0, setupReceipt = null;
+    const deliveries = /* @__PURE__ */ new Map();
     const advisoryFooter = (ctx) => {
       const footer = typeof getDeliveryFooter === "function" ? getDeliveryFooter(ctx) : null;
       return footer ? [{ type: "text", text: `
@@ -6257,12 +6253,6 @@ ${String(footer).slice(0, 2e3)}` }] : [];
         });
       return evaluation;
     };
-    pi.on("context", async (event) => ({
-      messages: event.messages.map((message) => {
-        const original = protocol.get(message[FIELD]?.id);
-        return original ? { ...message, content: original } : message;
-      })
-    }));
     const handleMessageEnd = async (event, ctx) => {
       const message = event.message;
       if (message.role !== "assistant") return;
@@ -6281,7 +6271,7 @@ ${String(footer).slice(0, 2e3)}` }] : [];
         toolRounds += 1;
         if (toolRounds > maxToolRounds && getTaskRuntime?.()?.advanceStage?.()) toolRounds = 1;
         const bytes = Buffer.byteLength(JSON.stringify(blocks), "utf8");
-        if (toolRounds > maxToolRounds || protocolBytes + bytes > 4 * 1024 * 1024 || protocol.size >= 64) {
+        if (toolRounds > maxToolRounds || protocolBytes + bytes > 4 * 1024 * 1024 || protocolEntries >= 64) {
           const limit = toolRounds > maxToolRounds ? "tool-round-limit" : protocolBytes + bytes > 4 * 1024 * 1024 ? "protocol-byte-limit" : "protocol-entry-limit";
           const task = getTaskRuntime?.();
           task?.pause(limit);
@@ -6292,13 +6282,13 @@ ${String(footer).slice(0, 2e3)}` }] : [];
             toolRounds,
             maxToolRounds,
             protocolBytes,
-            entries: protocol.size
+            entries: protocolEntries
           };
           denied.stopReason = "stop";
           return report(denied);
         }
-        const safe = seal(message, tools, { status: "tool-only", turnId, scientificallyVerified: false });
-        protocol.set(safe[FIELD].id, structuredClone(blocks));
+        const safe = seal(message, blocks, { status: "tool-only", turnId, scientificallyVerified: false });
+        protocolEntries += 1;
         protocolBytes += bytes;
         return report(safe);
       }
@@ -6593,7 +6583,7 @@ ${String(footer).slice(0, 2e3)}` }] : published;
         required = isRequired;
         if (newTurn) {
           turnId = randomUUID9();
-          protocol.clear();
+          protocolEntries = 0;
           deliveries.clear();
           protocolBytes = 0;
           toolRounds = 0;
@@ -6604,7 +6594,7 @@ ${String(footer).slice(0, 2e3)}` }] : published;
         started = false;
         required = true;
         turnId = null;
-        protocol.clear();
+        protocolEntries = 0;
         deliveries.clear();
         protocolBytes = 0;
         toolRounds = 0;
