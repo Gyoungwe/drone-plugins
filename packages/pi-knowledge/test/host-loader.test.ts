@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { knowledgeHostLoader } from "../src/core/host.js";
 import { createKnowledgeWorker, knowledgeWorkerMetadata } from "../src/core/runtime-host.js";
 
@@ -29,6 +30,29 @@ describe("knowledge host loader", () => {
 		createKnowledgeWorker(new URL("file:///ignored-by-package-loader.mjs"), {});
 		expect(selected?.pathname).toMatch(/\/lib\/knowledge\/runtime\/worker\.mjs$/u);
 		expect(knowledgeWorkerMetadata().integrity).toMatch(/^[a-f0-9]{64}$/u);
+	});
+
+	it("resolves the installed worker when a bundled host entry runs outside its package directory", async () => {
+		const originalCwd = process.cwd();
+		const bundleRoot = await mkdtemp(join(tmpdir(), "pi-knowledge-bundled-host-"));
+		const cwdRoot = await mkdtemp(join(originalCwd, ".pi-knowledge-host-cwd-"));
+		try {
+			const bundledHost = join(bundleRoot, "host.mjs");
+			await copyFile(new URL("../dist/host.mjs", import.meta.url), bundledHost);
+			process.chdir(cwdRoot);
+			const bundled = (await import(`${pathToFileURL(bundledHost).href}?test=${Date.now()}`)) as {
+				resolveKnowledgePackageWorkerUrl(): URL;
+			};
+			expect(bundled.resolveKnowledgePackageWorkerUrl().pathname).toMatch(
+				/\/node_modules\/@gyoungwe\/pi-knowledge\/lib\/knowledge\/runtime\/worker\.mjs$/u,
+			);
+		} finally {
+			process.chdir(originalCwd);
+			await Promise.all([
+				rm(bundleRoot, { recursive: true, force: true }),
+				rm(cwdRoot, { recursive: true, force: true }),
+			]);
+		}
 	});
 
 	it("exposes the versioned read port without importing Drone", () => {
