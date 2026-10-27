@@ -19,6 +19,7 @@ describe("knowledge host loader", () => {
 			"read",
 			"reviews",
 			"search",
+			"semantic",
 			"setupPreview",
 			"specialistSettings",
 		]);
@@ -38,5 +39,12 @@ describe("knowledge host loader", () => {
 			"maintenance",
 		] as const)
 			expect(typeof port[method]).toBe("function");
+		expect(Object.keys(port.semantic ?? {}).sort()).toEqual([
+			"cancelIndex",
+			"index",
+			"saveSettings",
+			"status",
+			"testProvider",
+		]);
 	});
 });

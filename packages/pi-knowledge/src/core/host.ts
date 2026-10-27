@@ -22,6 +22,13 @@ export interface KnowledgeHostPort {
 	setupPreview?(input: unknown): Promise<unknown>;
 	specialistSettings?(input: unknown): Promise<unknown>;
 	openTarget?(input: unknown): Promise<unknown>;
+	semantic?: {
+		status(input: unknown): Promise<unknown>;
+		saveSettings(input: unknown): Promise<unknown>;
+		testProvider(input: unknown): Promise<unknown>;
+		index(input: unknown): Promise<unknown>;
+		cancelIndex(input: unknown): Promise<unknown>;
+	};
 	/** Optional UI operations are exposed incrementally as the host migrates. */
 	jobs?(input: unknown): Promise<unknown>;
 	maintenance?(input: unknown): Promise<unknown>;
@@ -53,6 +60,18 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			import("./ui-service.js").then(({ knowledgeSpecialistSettings }) => knowledgeSpecialistSettings(input as never)),
 		openTarget: (input) =>
 			import("./ui-service.js").then(({ knowledgeOpenTarget }) => knowledgeOpenTarget(input as never)),
+		semantic: {
+			status: (input) =>
+				import("./ui-service.js").then(({ knowledgeSemanticStatus }) => knowledgeSemanticStatus(input as never)),
+			saveSettings: (input) =>
+				import("./ui-service.js").then(({ saveKnowledgeSemanticSettings }) => saveKnowledgeSemanticSettings(input as never)),
+			testProvider: (input) =>
+				import("./ui-service.js").then(({ testKnowledgeSemanticProvider }) => testKnowledgeSemanticProvider(input as never)),
+			index: (input) =>
+				import("./ui-service.js").then(({ indexKnowledgeSemantic }) => indexKnowledgeSemantic(input as never)),
+			cancelIndex: (input) =>
+				import("./ui-service.js").then(({ cancelKnowledgeSemanticIndex }) => cancelKnowledgeSemanticIndex(input as never)),
+		},
 		jobs: (input) => import("./ui-service.js").then(({ knowledgeJobs }) => knowledgeJobs(input as never)),
 		maintenance: (input) =>
 			import("./ui-service.js").then(({ knowledgeMaintenance }) => knowledgeMaintenance(input as never)),
