@@ -6113,6 +6113,14 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
   );
   const FIELD = "knowledgePublication";
   const hash3 = (content) => createHash13("sha256").update(JSON.stringify(content ?? [])).digest("hex");
+  const protocolKey = (message) => hash3({
+    timestamp: message.timestamp,
+    api: message.api,
+    provider: message.provider,
+    model: message.model,
+    responseId: message.responseId,
+    calls: message.content.filter((block) => block.type === "toolCall")
+  });
   function sanitizeError(text3) {
     return diagnosticText(text3, 4096).trim();
   }
@@ -6315,7 +6323,8 @@ ${String(footer).slice(0, 2e3)}` }] : [];
     };
     pi.on("context", async (event) => ({
       messages: event.messages.map((message) => {
-        const original = protocol.get(message[FIELD]?.id);
+        if (message.role !== "assistant") return message;
+        const original = protocol.get(protocolKey(message));
         return original ? { ...message, content: original } : message;
       })
     }));
@@ -6354,7 +6363,7 @@ ${String(footer).slice(0, 2e3)}` }] : [];
           return report(denied);
         }
         const safe = seal(message, tools, { status: "tool-only", turnId, scientificallyVerified: false });
-        protocol.set(safe[FIELD].id, structuredClone(blocks));
+        protocol.set(protocolKey(message), structuredClone(blocks));
         protocolBytes += bytes;
         return report(safe);
       }
