@@ -11,6 +11,7 @@ import { makeDeliverFilesTool as makeDeliverFilesToolImpl } from "./tools/delive
 import { makeMemorySaveTool as makeMemorySaveToolImpl } from "./tools/memory-save";
 import { makeStatusTool as makeStatusToolImpl } from "./tools/status";
 import { makeTodoTool as makeTodoToolImpl } from "./tools/todo";
+import { acceptanceVerifier, registerAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
 
 interface CoreMemoryEntry {
 	readonly name: string;
@@ -77,3 +78,24 @@ export const coreHostLoader = {
 		writeMemory: (cwd: string, entry: CoreMemoryEntry) => writeMemoryImpl(cwd, { ...entry }),
 	}),
 } satisfies CoreHostLoaderContract;
+
+interface TaskHostLoaderContract {
+	readonly contractVersion: 1;
+	readonly load: () => {
+		readonly contractVersion: 1;
+		readonly registerAcceptanceVerifier: (kind: string, definition: Readonly<Record<string, unknown>>) => void;
+		readonly readAcceptanceVerifier: (kind: string) => unknown;
+	};
+}
+
+/** Optional tasks host discovered by Drone Desktop from the same Pi package. */
+export const taskHostLoader = {
+	contractVersion: 1 as const,
+	load: () => ({
+		contractVersion: 1 as const,
+		registerAcceptanceVerifier: (kind: string, definition: Readonly<Record<string, unknown>>) => {
+			registerAcceptanceVerifier(kind, definition);
+		},
+		readAcceptanceVerifier: (kind: string) => acceptanceVerifier(kind),
+	}),
+} satisfies TaskHostLoaderContract;

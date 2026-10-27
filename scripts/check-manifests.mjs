@@ -3,7 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, normalize, resolve } from "node:path";
 
 export const CAPABILITIES = new Set([
-	"knowledge", "research", "search", "evidence-context", "analysis", "planning", "files", "evidence",
+	"knowledge", "research", "search", "evidence-context", "analysis", "planning", "tasks", "files", "evidence",
 	"provenance", "replay", "connectors", "read-only", "provenance-receipts", "ui", "core",
 ]);
 const FILESYSTEM_PERMISSIONS = new Set(["workspace-read", "workspace", "configured-vault", "vault-read"]);

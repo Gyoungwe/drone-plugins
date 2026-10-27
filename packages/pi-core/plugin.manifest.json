@@ -12,7 +12,7 @@
 		"resultContract": "drone-result/v3"
 	},
 	"entrypoints": {"extension": "./dist/index.mjs", "host": "./dist/host.mjs"},
-	"capabilities": ["core", "planning", "files", "read-only", "evidence"],
+	"capabilities": ["core", "planning", "tasks", "files", "read-only", "evidence"],
 	"tools": [
 		"ask_user",
 		"set_status",

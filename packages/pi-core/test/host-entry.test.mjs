@@ -31,3 +31,13 @@ test("versioned host entry exports the core host loader contract", () => {
 	}
 	assert.equal(port.contractVersion, 1);
 });
+
+test("versioned host entry exports the optional tasks host loader contract", () => {
+	assert.equal(host.taskHostLoader.contractVersion, 1);
+	const port = host.taskHostLoader.load();
+	assert.equal(port.contractVersion, 1);
+	assert.equal(typeof port.registerAcceptanceVerifier, "function");
+	assert.equal(typeof port.readAcceptanceVerifier, "function");
+	port.registerAcceptanceVerifier("host_test", { fields: ["doi"] });
+	assert.equal(port.readAcceptanceVerifier("host_test").kind, "host_test");
+});
