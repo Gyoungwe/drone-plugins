@@ -156,13 +156,18 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 	}
 
 	function registerKnowledgeInterface(pi, { readOnly = false, runtime = null } = {}) {
-		const declaration = { version: 1, kind: "wiki_review", definition: registerWikiReviewAcceptance() };
-		const publishAcceptance = () => pi.events.emit("drone:acceptance-verifier/v1", declaration);
-		const removeAcceptance = pi.events.on("drone:acceptance-verifier/request/v1", (payload) => {
-			if (payload?.version === 1) publishAcceptance();
-		});
-		pi.on("session_shutdown", removeAcceptance);
-		publishAcceptance();
+		let removeAcceptance: (() => void) | undefined;
+		// The full native/legacy interface requires the official same-session Pi bus.
+		// Managed read-only sessions use a separate two-tool adapter.
+		if (!readOnly) {
+			const declaration = { version: 1, kind: "wiki_review", definition: registerWikiReviewAcceptance() };
+			const publishAcceptance = () => pi.events.emit("drone:acceptance-verifier/v1", declaration);
+			removeAcceptance = pi.events.on("drone:acceptance-verifier/request/v1", (payload) => {
+				if (payload?.version === 1) publishAcceptance();
+			});
+			pi.on("session_shutdown", () => removeAcceptance?.());
+			publishAcceptance();
+		}
 		const getTaskRuntime = () => {
 			if (readOnly || !pi.events) return null;
 			let taskRuntime = null;
@@ -226,7 +231,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				setupCompleted: () => {},
 				beforeStart: async () => ({}),
 				withTurnBinding: async (_ctx, operation) => operation(),
-				dispose: async () => { removeAcceptance(); },
+				dispose: async () => { removeAcceptance?.(); },
 			};
 		let disposed = false;
 		const assertSessionActive = () => { if (disposed) throw new Error("Knowledge session has been disposed"); };
@@ -1363,7 +1368,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 		async function dispose() {
 			if (disposed) return;
 			disposed = true;
-			removeAcceptance();
+			removeAcceptance?.();
 			current = null;
 			bootstrap = null;
 			preparing = null;
