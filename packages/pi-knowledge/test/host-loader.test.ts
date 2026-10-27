@@ -67,6 +67,7 @@ describe("knowledge host loader", () => {
 			"graph",
 			"jobs",
 			"maintenance",
+			"memory",
 			"noteLinks",
 			"openTarget",
 			"overview",
@@ -102,6 +103,10 @@ describe("knowledge host loader", () => {
 		] as const)
 			expect(typeof port[method]).toBe("function");
 		expect(typeof port.backgroundReviewer).toBe("function");
+		expect(typeof port.memory?.dailyContext).toBe("function");
+		expect(typeof port.memory?.saveIdea).toBe("function");
+		expect(typeof port.memory?.relatedForMemory).toBe("function");
+		expect(typeof port.memory?.saveMemory).toBe("function");
 		expect(typeof port.researchResource?.resolveContext).toBe("function");
 		expect(typeof port.researchResource?.ingestSnapshot).toBe("function");
 		expect(typeof port.recordTerminalJobExperience).toBe("function");

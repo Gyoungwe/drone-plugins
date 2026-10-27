@@ -77,6 +77,12 @@ export interface KnowledgeHostPort {
 		list(input: unknown): Promise<unknown>;
 		archive(input: unknown): Promise<unknown>;
 	};
+	memory?: {
+		dailyContext(input: unknown): Promise<unknown>;
+		saveIdea(input: unknown): Promise<unknown>;
+		relatedForMemory(input: unknown): Promise<unknown>;
+		saveMemory(input: unknown): Promise<unknown>;
+	};
 	researchResource?: {
 		resolveContext(input: unknown): unknown;
 		ingestSnapshot(input: unknown): unknown;
@@ -167,6 +173,13 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			list: (input) => import("./ui-service.js").then(({ getKnowledgeTopics }) => getKnowledgeTopics(input as never)),
 			archive: (input) =>
 				import("./ui-service.js").then(({ archiveKnowledgeTopic }) => archiveKnowledgeTopic(input as never)),
+		},
+		memory: {
+			dailyContext: (input) => import("./ui-service.js").then(({ dailyDiscoveryContext }) => dailyDiscoveryContext(input as never)),
+			saveIdea: (input) => import("./ui-service.js").then(({ saveDiscoveryIdea }) => saveDiscoveryIdea(input as never)),
+			relatedForMemory: (input) =>
+				import("./ui-service.js").then(({ memoryRelatedKnowledge }) => memoryRelatedKnowledge(input as never)),
+			saveMemory: (input) => import("./ui-service.js").then(({ saveMemoryNote }) => saveMemoryNote(input as never)),
 		},
 		researchResource: {
 			resolveContext: (input) => resolveKnowledgeContext(input as never),
