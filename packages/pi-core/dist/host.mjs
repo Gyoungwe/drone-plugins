@@ -165,8 +165,6 @@ function normalizeTaskMilestones(input, catalog) {
 // src/task-runtime/runtime-bridge.mjs
 import { AsyncLocalStorage } from "node:async_hooks";
 var contexts = new AsyncLocalStorage();
-var installedRuntime = null;
-var standaloneRuntime = null;
 var runtimeBindings = /* @__PURE__ */ new WeakSet();
 var hostRuntimes = /* @__PURE__ */ new WeakMap();
 var KeyedScheduler = class {
@@ -284,12 +282,10 @@ function withHostRuntime(pi, operation) {
 function currentRuntime() {
   const scoped = contexts.getStore();
   if (scoped) return scoped;
-  if (installedRuntime) return installedRuntime;
-  if (!standaloneRuntime) standaloneRuntime = createStandaloneRuntime();
-  return standaloneRuntime;
+  throw new Error("Task runtime is unavailable outside a session owner");
 }
 function hasRuntimeContext() {
-  return Boolean(contexts.getStore() || installedRuntime);
+  return Boolean(contexts.getStore());
 }
 function resolveSlot(domain, slot, create) {
   const runtime = currentRuntime();
@@ -2837,7 +2833,6 @@ function createTaskRuntimeOwner(definitions = []) {
   let unbind;
   let unlisten;
   let linkedOwner;
-  let registry3;
   const eventCleanups = /* @__PURE__ */ new Set();
   const requireActive = () => {
     if (!active) throw new Error("Task plugin session is unavailable: owner disposed");
@@ -2923,7 +2918,7 @@ function createTaskRuntimeOwner(definitions = []) {
           return withRuntime(current, () => method(...args));
         };
       }
-      registry3 = requestSharedTaskRuntime(pi);
+      const registry3 = requestSharedTaskRuntime(pi);
       registry3.owner = this;
       pi.on("session_shutdown", () => this.dispose());
       return journal;
@@ -2936,7 +2931,6 @@ function createTaskRuntimeOwner(definitions = []) {
       unbind?.();
       for (const cleanup of eventCleanups) cleanup();
       eventCleanups.clear();
-      registry3?.unsubscribe?.();
       await linkedOwner?.dispose();
       await runtime.dispose();
     }

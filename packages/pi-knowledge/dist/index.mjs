@@ -6128,11 +6128,18 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
     return /was aborted|request aborted/i.test(String(message?.errorMessage || ""));
   }
   function base(message, content) {
-    const { errorMessage: originalError, ...metadata } = message;
+    const { errorMessage: originalError, diagnostics, ...metadata } = message;
     const errorMessage2 = message.stopReason === "error" && typeof originalError === "string" ? sanitizeError(originalError) : "";
     return {
       ...metadata,
       content,
+      // Diagnostics do not control provider replay. Keep only safe error text;
+      // arbitrary details and stacks must not enter public/persisted history.
+      ...diagnostics ? { diagnostics: diagnostics.map(({ type, timestamp, error }) => ({
+        type: sanitizeError(type),
+        timestamp,
+        ...error ? { error: { message: sanitizeError(error.message) } } : {}
+      })) } : {},
       ...errorMessage2 ? { errorMessage: errorMessage2 } : {}
     };
   }
