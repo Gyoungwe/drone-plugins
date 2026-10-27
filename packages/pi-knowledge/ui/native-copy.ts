@@ -4,8 +4,15 @@ const zh = {
 	title: "知识库",
 	settings: "设置",
 	reviews: "待审候选",
-	reviewReadOnly:
-		"候选写入需要宿主明确授予状态和知识库写入权限；应用前请核对差异与来源。",
+	history: "审核历史",
+	historyEmpty: "当前课题暂无可撤销的更新。",
+	undoHint: "撤销会恢复保存前的原文；新建页面会被删除。若之后有人编辑，操作将拒绝。",
+	undoReview: "撤销此更新",
+	confirmUndo: "确认撤销",
+	cancelUndo: "取消",
+	undoing: "正在撤销…",
+	reviewPartial: "笔记已写入，但审核记录或索引尚未完成，请核对以下回执：",
+	reviewReadOnly: "候选写入需要宿主明确授予状态和知识库写入权限；应用前请核对差异与来源。",
 	reviewBack: "关闭预览",
 	reviewCount: "条候选",
 	reviewEmpty: "当前课题暂无候选。",
@@ -36,8 +43,7 @@ const zh = {
 	rich: "详细记录",
 	none: "不启用",
 	"read-local": "读取本地资料",
-	bindingEditingUnavailable:
-		"切换目录和初始化尚在迁移，需要单独选择目录、确认写入并等待当前任务关闭。",
+	bindingEditingUnavailable: "切换目录和初始化尚在迁移，需要单独选择目录、确认写入并等待当前任务关闭。",
 	reviewPolicy: "审核策略",
 	effectiveMode: "当前生效",
 	persistedMode: "已保存",
@@ -47,10 +53,8 @@ const zh = {
 	reviewPolicyHint:
 		"此设置控制知识发布检查。自动模式仍保留授权、来源和写入检查；人工 Wiki 内容不因此获得自动修改权限。",
 	policyOverride: "环境策略强制严格审核；此处不能覆盖。",
-	"invalid-json":
-		"审核策略 JSON 已损坏；当前执行严格模式。请修复文件后刷新，界面不会覆盖损坏数据。",
-	"invalid-policy":
-		"审核策略内容无效；当前执行严格模式。请修复文件后刷新，界面不会覆盖无效数据。",
+	"invalid-json": "审核策略 JSON 已损坏；当前执行严格模式。请修复文件后刷新，界面不会覆盖损坏数据。",
+	"invalid-policy": "审核策略内容无效；当前执行严格模式。请修复文件后刷新，界面不会覆盖无效数据。",
 	stateWriteRequired:
 		"当前仅授权读取状态。若需修改，请停用后重新启用插件，并在宿主目录授权中明确选择允许状态写入。",
 	savePolicy: "保存审核策略",
@@ -66,8 +70,7 @@ const zh = {
 	saveSemantic: "保存相似内容设置",
 	semanticSaved: "相似内容设置已保存并回读核对。",
 
-	inlineLinkUnavailable:
-		"此链接暂不能打开。库内笔记请使用下方的双向链接；外部链接需等待受控打开能力。",
+	inlineLinkUnavailable: "此链接暂不能打开。库内笔记请使用下方的双向链接；外部链接需等待受控打开能力。",
 	readingNavigation: "知识阅读视图",
 	reading: "阅读",
 	graph: "图谱",
@@ -100,29 +103,34 @@ const zh = {
 	lines: "行",
 	unsupportedTitle: "其他知识功能暂不可用",
 	unsupported:
-		"当前支持总览、搜索、笔记阅读、链接、图谱、索引任务查询、候选列表和差异预览，以及审核策略和相似内容设置。候选写入审核、绑定编辑、自动发现、云同步及 Zotero 功能仍在迁移中。",
+		"当前支持总览、搜索、笔记阅读、链接、图谱、索引任务查询、候选审核、历史与撤销，以及审核策略和相似内容设置。绑定编辑、自动发现、云同步及 Zotero 功能仍在迁移中。",
 	readOnly: "搜索片段仅供浏览，不代表当前会话已读取原文或完成证据核验。",
 };
 const en: Record<keyof typeof zh, string> = {
 	title: "Knowledge",
 	settings: "Settings",
 	reviews: "Review candidates",
+	history: "Review history",
+	historyEmpty: "This project has no updates available to undo.",
+	undoHint:
+		"Undo restores the saved original; a newly created page is deleted. Later human edits cause the operation to refuse.",
+	undoReview: "Undo this update",
+	confirmUndo: "Confirm undo",
+	cancelUndo: "Cancel",
+	undoing: "Undoing…",
+	reviewPartial: "The note was written, but its review record or index is incomplete. Inspect the receipt:",
 	reviewReadOnly:
 		"Applying a candidate requires explicit host permission for state and Vault writes. Check the diff and sources before applying.",
 	reviewBack: "Close preview",
 	reviewCount: "candidates",
 	reviewEmpty: "This project has no candidates.",
-	reviewProjectRequired:
-		"Select a real project session to view its candidates.",
-	reviewExpired:
-		"This candidate has expired and is available for reading only.",
-	reviewBindingChanged:
-		"The library binding changed. Refresh the candidate list.",
+	reviewProjectRequired: "Select a real project session to view its candidates.",
+	reviewExpired: "This candidate has expired and is available for reading only.",
+	reviewBindingChanged: "The library binding changed. Refresh the candidate list.",
 	reviewTargetChanged:
 		"The target note changed. This view shows the original text and suggestion recorded in the candidate.",
 	reviewVersion: "Candidate version",
-	reviewNotVerified:
-		"A diff is not scientific verification and does not approve or apply a candidate.",
+	reviewNotVerified: "A diff is not scientific verification and does not approve or apply a candidate.",
 	applyReview: "Apply candidate",
 	rejectReview: "Reject candidate",
 	applying: "Applying…",
@@ -154,8 +162,7 @@ const en: Record<keyof typeof zh, string> = {
 	strict: "Strict",
 	reviewPolicyHint:
 		"This setting controls knowledge publication checks. Automatic mode retains permission, source and write checks; it does not authorize automatic changes to human-authored Wiki content.",
-	policyOverride:
-		"The environment enforces strict review and cannot be overridden here.",
+	policyOverride: "The environment enforces strict review and cannot be overridden here.",
 	"invalid-json":
 		"The review policy JSON is corrupt. Strict mode is active; repair the file and refresh. This page will not overwrite corrupt data.",
 	"invalid-policy":
@@ -166,7 +173,8 @@ const en: Record<keyof typeof zh, string> = {
 	saving: "Saving…",
 	policySaved: "The policy was saved and read back successfully.",
 	semanticSettings: "Similarity settings",
-	semanticSettingsHint: "Settings are saved only through the host-authorized application state; model execution is not enabled on this page.",
+	semanticSettingsHint:
+		"Settings are saved only through the host-authorized application state; model execution is not enabled on this page.",
 	semanticEnabled: "Enable similarity search",
 	semanticProvider: "Model service",
 	semanticProviderNone: "No model",
@@ -184,8 +192,7 @@ const en: Record<keyof typeof zh, string> = {
 	jobCount: "jobs",
 	firstPage: "First page",
 	nextPage: "Next page",
-	openUnavailable:
-		"Opening in an external app is unavailable until controlled file opening is migrated.",
+	openUnavailable: "Opening in an external app is unavailable until controlled file opening is migrated.",
 	handoffUnavailable: "Session handoff is still being migrated.",
 	refresh: "Refresh",
 	loading: "Loading…",
@@ -193,8 +200,7 @@ const en: Record<keyof typeof zh, string> = {
 	query: "Search knowledge",
 	searchHint: "Find material in the current knowledge library",
 	unconfigured: "No knowledge library is bound",
-	unconfiguredHint:
-		"Bind a knowledge library to view its overview and search its contents.",
+	unconfiguredHint: "Bind a knowledge library to view its overview and search its contents.",
 	project: "Current project",
 	application: "Shared material",
 	notes: "notes (whole-library index)",
@@ -207,12 +213,11 @@ const en: Record<keyof typeof zh, string> = {
 	ready: "Index ready",
 	results: "Search results",
 	noResults: "No matching results.",
-	incomplete:
-		"The index is incomplete; these results do not represent all material.",
+	incomplete: "The index is incomplete; these results do not represent all material.",
 	lines: "Lines",
 	unsupportedTitle: "Other knowledge features are temporarily unavailable",
 	unsupported:
-	"Overview, search, note reading, links, graphs, index jobs, candidate lists and diff previews are available, along with review policy and similarity settings. Candidate decisions, binding changes, discovery, cloud sync and Zotero are still being migrated.",
+		"Overview, search, note reading, links, graphs, index jobs, candidate review decisions, history and undo are available, along with review policy and similarity settings. Binding changes, discovery, cloud sync and Zotero are still being migrated.",
 	readOnly:
 		"Search excerpts are for browsing. They do not establish that this session read the source or verified its evidence.",
 };

@@ -19,17 +19,12 @@ export function createWikiReviewReader(
 	currentNote: (service: any, path: string) => Promise<{ hash: string } | null>,
 ) {
 	async function loadProposal(service, id, project) {
-		if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id))
-			throw new Error("Invalid Wiki proposal id");
+		if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id)) throw new Error("Invalid Wiki proposal id");
 		const base = `${service.binding.vaultId}/wiki-review`;
 		const pending = await storage.read(`${base}/pending/${id}.json`);
-		const p =
-			pending === undefined
-				? await storage.read(`${base}/reviewed/${id}.json`)
-				: pending;
+		const p = pending === undefined ? await storage.read(`${base}/reviewed/${id}.json`) : pending;
 		if (p === undefined) throw new Error("Wiki proposal does not exist");
-		if (!p || typeof p !== "object" || Array.isArray(p))
-			throw new Error("Invalid Wiki proposal document");
+		if (!p || typeof p !== "object" || Array.isArray(p)) throw new Error("Invalid Wiki proposal document");
 		if (
 			p.id !== id ||
 			p.project !== project ||
@@ -41,9 +36,7 @@ export function createWikiReviewReader(
 		if (
 			immutableHash(p) !== p.proposalHash ||
 			digest(p.after) !== p.afterHash ||
-			(p.before === null
-				? p.beforeHash !== null
-				: digest(p.before) !== p.beforeHash)
+			(p.before === null ? p.beforeHash !== null : digest(p.before) !== p.beforeHash)
 		)
 			throw new Error("Wiki proposal content changed");
 		return p;
@@ -55,8 +48,7 @@ export function createWikiReviewReader(
 		const sources = [];
 		for (const source of p.sources) {
 			validateNote(source.path);
-			if (!canRead(source.path, project))
-				throw new Error("Proposal source is outside the current project");
+			if (!canRead(source.path, project)) throw new Error("Proposal source is outside the current project");
 			const current = await currentNote(service, source.path);
 			sources.push({
 				...source,
@@ -66,7 +58,7 @@ export function createWikiReviewReader(
 			});
 		}
 		const expired = now > p.createdAt + MAX_AGE,
-			targetChanged = (target?.hash ?? null) !== p.beforeHash;
+			targetChanged = (target?.hash ?? null) !== p.beforeHash && target?.hash !== p.afterHash;
 		const protectedText =
 			p.before === null
 				? ""
@@ -88,11 +80,7 @@ export function createWikiReviewReader(
 			protectedText,
 			expired,
 			targetChanged,
-			canApply:
-				p.status === "pending" &&
-				!expired &&
-				!targetChanged &&
-				!sources.some((s) => s.changed),
+			canApply: p.status === "pending" && !expired && !targetChanged && !sources.some((s) => s.changed),
 			expiresAt: p.createdAt + MAX_AGE,
 			scientificallyVerified: false as const,
 		};
@@ -100,9 +88,7 @@ export function createWikiReviewReader(
 	async function listWikiProposals(service, project) {
 		let names;
 		try {
-			names = await storage.list(
-				`${service.binding.vaultId}/wiki-review/pending`,
-			);
+			names = await storage.list(`${service.binding.vaultId}/wiki-review/pending`);
 		} catch (error) {
 			if (error.code === "ENOENT") return { items: [], problems: [] };
 			throw error;
@@ -115,13 +101,10 @@ export function createWikiReviewReader(
 			.slice(0, MAX_PENDING)) {
 			let p;
 			try {
-				p = await storage.read(
-					`${service.binding.vaultId}/wiki-review/pending/${name}`,
-				);
+				p = await storage.read(`${service.binding.vaultId}/wiki-review/pending/${name}`);
 			} catch (error) {
 				// Only corrupt persisted JSON becomes a row diagnostic; revoked authority fails the read.
-				if (!(error instanceof SyntaxError) && error.code !== "ESTATECORRUPTED")
-					throw error;
+				if (!(error instanceof SyntaxError) && error.code !== "ESTATECORRUPTED") throw error;
 				problems.push({
 					id: name.slice(0, -5),
 					error: "Wiki proposal JSON is corrupt",
@@ -129,19 +112,15 @@ export function createWikiReviewReader(
 				continue;
 			}
 			try {
-				if (p === undefined)
-					throw new Error("Wiki proposal disappeared; refresh the list");
+				if (p === undefined) throw new Error("Wiki proposal disappeared; refresh the list");
 				if (!p || typeof p !== "object" || Array.isArray(p))
 					throw new Error("Invalid Wiki proposal document");
 				if (p.status === "rejected" || p.status === "applied") continue;
 				if (p.project !== project) continue;
 				if (p.vaultId !== service.binding.vaultId || p.id !== name.slice(0, -5))
-					throw new Error(
-						"Proposal belongs to a different binding or filename",
-					);
+					throw new Error("Proposal belongs to a different binding or filename");
 				targetPath(p.path, project);
-				if (immutableHash(p) !== p.proposalHash)
-					throw new Error("Wiki proposal content changed");
+				if (immutableHash(p) !== p.proposalHash) throw new Error("Wiki proposal content changed");
 				items.push({
 					id: p.id,
 					path: p.path,

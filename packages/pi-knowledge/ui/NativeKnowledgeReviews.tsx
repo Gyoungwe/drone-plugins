@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type {
 	KnowledgeReviewsResult,
 	KnowledgePreviewReviewResult,
+	KnowledgeApplyReviewResult,
 } from "../src/desktop/contract.js";
 import type { createKnowledgeRuntimeStore } from "./runtime-store";
 import { Button } from "./runtime-api";
@@ -10,8 +11,7 @@ import { WikiReviewContent } from "./knowledge/WikiReviewContent";
 
 type Store = ReturnType<typeof createKnowledgeRuntimeStore>;
 type Selection = { id: string; proposalHash: string };
-const errorText = (error: unknown) =>
-	error instanceof Error ? error.message : String(error);
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 function ReviewPreview({
 	store,
@@ -22,12 +22,10 @@ function ReviewPreview({
 	store: Store;
 	selection: Selection;
 	onClose: () => void;
-	onDecision: () => void;
+	onDecision: (receipt?: KnowledgeApplyReviewResult) => void;
 }) {
 	const t = useNativeKnowledgeText();
-	const [preview, setPreview] = useState<KnowledgePreviewReviewResult | null>(
-		null,
-	);
+	const [preview, setPreview] = useState<KnowledgePreviewReviewResult | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [action, setAction] = useState<"apply" | "reject" | null>(null);
 	useEffect(() => {
@@ -58,10 +56,12 @@ function ReviewPreview({
 		setError(null);
 		try {
 			if (kind === "apply") {
-				await store.applyReview({
+				const receipt = await store.applyReview({
 					id: selection.id,
 					expectedProposalHash: selection.proposalHash,
 				});
+				onDecision(receipt);
+				return;
 			} else {
 				await store.rejectReview({
 					id: selection.id,
@@ -100,10 +100,7 @@ function ReviewPreview({
 						<p className="break-all text-xs text-ink-dim">{preview.path}</p>
 					</header>
 					<p className="whitespace-pre-wrap text-sm">{preview.rationale}</p>
-					<p
-						className="break-all font-mono text-xs text-ink-faint"
-						title={preview.proposalHash}
-					>
+					<p className="break-all font-mono text-xs text-ink-faint" title={preview.proposalHash}>
 						{t.reviewVersion}: {preview.proposalHash.slice(0, 12)}
 					</p>
 					{preview.expired && (
@@ -134,11 +131,7 @@ function ReviewPreview({
 						>
 							{action === "apply" ? t.applying : t.applyReview}
 						</Button>
-						<Button
-							size="sm"
-							disabled={action !== null}
-							onClick={() => void decide("reject")}
-						>
+						<Button size="sm" disabled={action !== null} onClick={() => void decide("reject")}>
 							{action === "reject" ? t.rejecting : t.rejectReview}
 						</Button>
 					</div>
@@ -161,6 +154,7 @@ export function NativeKnowledgeReviews({
 	const [error, setError] = useState<string | null>(null);
 	const [selection, setSelection] = useState<Selection | null>(null);
 	const [decisionRevision, setDecisionRevision] = useState(0);
+	const [receiptError, setReceiptError] = useState<string | null>(null);
 	useEffect(() => {
 		let live = true;
 		setPage(null);
@@ -181,6 +175,11 @@ export function NativeKnowledgeReviews({
 	return (
 		<section aria-label={t.reviews} className="space-y-4">
 			<p className="text-xs text-ink-dim">{t.reviewReadOnly}</p>
+			{receiptError && (
+				<p role="alert" className="text-sm text-err">
+					{receiptError}
+				</p>
+			)}
 			{error && (
 				<p role="alert" className="text-sm text-err">
 					{error}
@@ -197,11 +196,7 @@ export function NativeKnowledgeReviews({
 						{page.total} {t.reviewCount}
 					</p>
 					{page.problems.map((problem) => (
-						<p
-							key={problem.id}
-							role="alert"
-							className="break-words text-xs text-err"
-						>
+						<p key={problem.id} role="alert" className="break-words text-xs text-err">
 							{problem.id}: {problem.error}
 						</p>
 					))}
@@ -224,31 +219,17 @@ export function NativeKnowledgeReviews({
 								>
 									{item.title}
 								</Button>
-								<p className="mt-1 break-all text-xs text-ink-dim">
-									{item.path}
-								</p>
-								{item.expired && (
-									<p className="text-xs text-warn">{t.reviewExpired}</p>
-								)}
-								{item.bindingChanged && (
-									<p className="text-xs text-warn">{t.reviewBindingChanged}</p>
-								)}
+								<p className="mt-1 break-all text-xs text-ink-dim">{item.path}</p>
+								{item.expired && <p className="text-xs text-warn">{t.reviewExpired}</p>}
+								{item.bindingChanged && <p className="text-xs text-warn">{t.reviewBindingChanged}</p>}
 							</li>
 						))}
 					</ul>
 					<div className="flex gap-2">
-						<Button
-							size="sm"
-							disabled={offset === 0}
-							onClick={() => setOffset(0)}
-						>
+						<Button size="sm" disabled={offset === 0} onClick={() => setOffset(0)}>
 							{t.firstPage}
 						</Button>
-						<Button
-							size="sm"
-							disabled={page.nextOffset === null}
-							onClick={() => setOffset(page.nextOffset!)}
-						>
+						<Button size="sm" disabled={page.nextOffset === null} onClick={() => setOffset(page.nextOffset!)}>
 							{t.nextPage}
 						</Button>
 					</div>
@@ -260,7 +241,12 @@ export function NativeKnowledgeReviews({
 					store={store}
 					selection={selection}
 					onClose={() => setSelection(null)}
-					onDecision={() => {
+					onDecision={(receipt) => {
+						setReceiptError(
+							receipt && (!receipt.reviewRecorded || !receipt.indexed)
+								? `${t.reviewPartial} ${receipt.recordError ?? ""} ${receipt.indexError ?? ""}`
+								: null,
+						);
 						setSelection(null);
 						setDecisionRevision((value) => value + 1);
 					}}

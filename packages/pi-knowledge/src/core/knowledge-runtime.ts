@@ -9,6 +9,7 @@ import { createKnowledgeWorkerTransportFactory } from "./worker-transport.js";
 import { createKnowledgeSpecialistHost } from "./specialist-host.js";
 import { createKnowledgeSpecialistTools } from "./specialists.js";
 import { createKnowledgeWikiReview } from "./wiki-review.js";
+import { createLocalWikiReviewPorts } from "./wiki-review-node.js";
 import { createTopicMemoryApi } from "./topic-memory.js";
 import { createSpecialistDelivery } from "./specialist-delivery.js";
 import { acquireKnowledgeWriterLease } from "./writer-lease.js";
@@ -26,26 +27,56 @@ export function createKnowledgeRuntime(
 	const semantic = createSemanticSettingsApi(undefined, config.knowledgeDirectory());
 	const reviewPolicy = createKnowledgeReviewPolicy(config);
 	const writerReservations = createKnowledgeWriterLeaseGroup(acquireWriterLease);
-	const services = createKnowledgeServicePool(host, config, semantic, reviewPolicy,
-		createKnowledgeWorkerTransportFactory(host, config, ui.invalidateKnowledgeUi, writerReservations.acquireWorker));
+	const services = createKnowledgeServicePool(
+		host,
+		config,
+		semantic,
+		reviewPolicy,
+		createKnowledgeWorkerTransportFactory(
+			host,
+			config,
+			ui.invalidateKnowledgeUi,
+			writerReservations.acquireWorker,
+		),
+	);
 	const specialists = createKnowledgeSpecialistHost(host, config, ui);
 	const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
-	const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui);
+	const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui, createLocalWikiReviewPorts(config));
 	const topics = createTopicMemoryApi(host, config);
 	const delivery = createSpecialistDelivery(host, config);
 	const lifecycle = createKnowledgeOwnerLifecycle({
 		beforeDrain: () => specialists.dispose(),
 		async dispose() {
 			const serviceResults = await Promise.allSettled([services.dispose()]);
-			const reservationResults = await Promise.allSettled([Promise.resolve().then(() => writerReservations.dispose())]);
+			const reservationResults = await Promise.allSettled([
+				Promise.resolve().then(() => writerReservations.dispose()),
+			]);
 			ui.dispose();
-			const failures = [...serviceResults, ...reservationResults]
-				.filter((result): result is PromiseRejectedResult => result.status === "rejected");
-			if (failures.length) throw new AggregateError(failures.map(result => result.reason), "Knowledge resources could not be disposed");
+			const failures = [...serviceResults, ...reservationResults].filter(
+				(result): result is PromiseRejectedResult => result.status === "rejected",
+			);
+			if (failures.length)
+				throw new AggregateError(
+					failures.map((result) => result.reason),
+					"Knowledge resources could not be disposed",
+				);
 		},
 	});
-	return { config, host, extensionHost, ui, semantic, reviewPolicy, services, specialists, specialistTools, wiki, topics, delivery,
-		...lifecycle };
+	return {
+		config,
+		host,
+		extensionHost,
+		ui,
+		semantic,
+		reviewPolicy,
+		services,
+		specialists,
+		specialistTools,
+		wiki,
+		topics,
+		delivery,
+		...lifecycle,
+	};
 }
 
 export type KnowledgeRuntime = ReturnType<typeof createKnowledgeRuntime>;
