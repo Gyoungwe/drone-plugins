@@ -252,4 +252,23 @@ export {
 	receiptWithoutUpdate,
 } from "./core/zotero-write-runtime.js";
 export * from "./evidence-gate.js";
-export { researchConnectorHostLoader, researchWriteAdapterHostLoader } from "./research-host.js";
+export {
+	createResearchConnectorHostLoader,
+	researchConnectorHostLoader,
+	researchWriteAdapterHostLoader,
+} from "./research-host.js";
+export type {
+	ResearchConnectorContext,
+	ResearchConnectorDescriptor,
+	ResearchConnectorFailure,
+	ResearchConnectorHit,
+	ResearchConnectorHostAdapter,
+	ResearchConnectorHostLoader,
+	ResearchConnectorHostOptions,
+	ResearchConnectorKind,
+	ResearchConnectorSourceReceipt,
+	ResearchProjectStorageItem,
+	ResearchProjectStoragePort,
+	ResearchSearchRequest,
+	ResearchSearchResponse,
+} from "./research-host.js";

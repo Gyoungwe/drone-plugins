@@ -57,6 +57,13 @@ to these host-mediated operations; loading the native entry does not implicitly
 perform them. Writes require authorization and read-back. Actual Zotero account
 and Protocols.io write acceptance remains separate from isolated unit tests.
 
+For host migration, `/host` also exports `createResearchConnectorHostLoader`.
+The factory accepts host-owned `fetchImpl` and/or project-storage ports and
+exposes read-only Semantic Scholar, arXiv, and project-storage connectors. It
+does not create clients or retain credentials; without an injected transport the
+default loader remains unavailable. Returned hits include hashed, read-only source
+receipts. The write adapter is still fail-closed.
+
 Pi is a peer dependency and is never bundled. There are no `@drone/*`, Electron,
 plugin-to-plugin, or source-checkout dependencies. `migration-sources.json` records
 original paths and reachable Git ancestry. Build with `npm run build`; `npm run

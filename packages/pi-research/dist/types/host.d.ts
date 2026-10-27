@@ -49,4 +49,5 @@ export { assessManualPage } from "./core/source-delivery.js";
 export { zoteroLibraryEnvValue, zoteroLibraryPath } from "./core/zotero-library.js";
 export { describeZoteroUpdatePlan, executeZoteroUpdate, prepareZoteroUpdate, receiptWithoutUpdate, } from "./core/zotero-write-runtime.js";
 export * from "./evidence-gate.js";
-export { researchConnectorHostLoader, researchWriteAdapterHostLoader } from "./research-host.js";
+export { createResearchConnectorHostLoader, researchConnectorHostLoader, researchWriteAdapterHostLoader, } from "./research-host.js";
+export type { ResearchConnectorContext, ResearchConnectorDescriptor, ResearchConnectorFailure, ResearchConnectorHit, ResearchConnectorHostAdapter, ResearchConnectorHostLoader, ResearchConnectorHostOptions, ResearchConnectorKind, ResearchConnectorSourceReceipt, ResearchProjectStorageItem, ResearchProjectStoragePort, ResearchSearchRequest, ResearchSearchResponse, } from "./research-host.js";

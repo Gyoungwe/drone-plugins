@@ -484,7 +484,7 @@ async function verifyLiteratureReceipt({
   const zoteroKey = String(zotero_key || "");
   if (!normalizedDoi || !/^[A-Z0-9]{8}$/.test(zoteroKey))
     throw new Error("Valid DOI and Zotero key required");
-  const receipt = {
+  const receipt2 = {
     doi: normalizedDoi,
     zoteroKey,
     zotero: { status: "unavailable" },
@@ -502,22 +502,22 @@ async function verifyLiteratureReceipt({
   try {
     const item = await get(`items/${zoteroKey}`);
     const data = item?.data || {};
-    receipt.zotero = {
+    receipt2.zotero = {
       status: exactDoiItems([item], normalizedDoi).length ? "verified" : "identity-mismatch",
       title: data.title,
       collections: data.collections || []
     };
-    if (receipt.zotero.status === "verified") {
+    if (receipt2.zotero.status === "verified") {
       try {
         const children = await get(`items/${zoteroKey}/children`);
-        receipt.zotero.pdfAttachmentKeys = children.filter((child) => child.data?.contentType === "application/pdf").map((child) => String(child.data?.key || "")).filter(Boolean);
-        receipt.zotero.fulltextStatus = receipt.zotero.pdfAttachmentKeys.length ? "attachment-indexed-not-read" : "metadata-only";
+        receipt2.zotero.pdfAttachmentKeys = children.filter((child) => child.data?.contentType === "application/pdf").map((child) => String(child.data?.key || "")).filter(Boolean);
+        receipt2.zotero.fulltextStatus = receipt2.zotero.pdfAttachmentKeys.length ? "attachment-indexed-not-read" : "metadata-only";
       } catch {
-        receipt.zotero.fulltextStatus = "unavailable";
+        receipt2.zotero.fulltextStatus = "unavailable";
       }
     }
   } catch (error) {
-    receipt.zotero.error = errorName(error) === "TimeoutError" ? "timeout" : "local-api-unavailable";
+    receipt2.zotero.error = errorName(error) === "TimeoutError" ? "timeout" : "local-api-unavailable";
   }
   let vaultResolved = false;
   try {
@@ -530,29 +530,29 @@ async function verifyLiteratureReceipt({
     const rel = relative(root, file);
     if (isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep}`)) throw new Error("outside-vault");
     if ((await stat(file)).size > 1024 * 1024) throw new Error("note-too-large");
-    const text4 = await readFile2(file, "utf8");
-    const linked = text4.includes(`zotero:${zoteroKey}`) || new RegExp(`zotero://select/library/items/${zoteroKey}(?=[)\\s<>]|$)`).test(text4) || new RegExp(`^zotero_key: *["']?${zoteroKey}["']? *$`, "m").test(text4);
-    const dois = text4.match(/10\.\d{4,9}\/[^\s<>"'\])]+/gi) || [];
-    receipt.obsidian = {
+    const text5 = await readFile2(file, "utf8");
+    const linked = text5.includes(`zotero:${zoteroKey}`) || new RegExp(`zotero://select/library/items/${zoteroKey}(?=[)\\s<>]|$)`).test(text5) || new RegExp(`^zotero_key: *["']?${zoteroKey}["']? *$`, "m").test(text5);
+    const dois = text5.match(/10\.\d{4,9}\/[^\s<>"'\])]+/gi) || [];
+    receipt2.obsidian = {
       status: linked && dois.some((item) => normalizeDoi(item.replace(/[.,;]+$/, "")) === normalizedDoi) ? "verified" : "identity-mismatch",
       path: notePath,
       vault: root,
-      hash: createHash2("sha256").update(text4).digest("hex")
+      hash: createHash2("sha256").update(text5).digest("hex")
     };
   } catch (error) {
     if (vaultResolved && error instanceof Error && "code" in error && error.code === "ENOENT") {
-      receipt.obsidian.status = "missing";
-      receipt.obsidian.error = "note-missing";
-    } else receipt.obsidian.error = "note-unavailable-or-invalid";
+      receipt2.obsidian.status = "missing";
+      receipt2.obsidian.error = "note-missing";
+    } else receipt2.obsidian.error = "note-unavailable-or-invalid";
   }
-  receipt.status = receipt.zotero.status === "verified" && receipt.obsidian.status === "verified" ? "both-verified" : "partial";
-  return receipt;
+  receipt2.status = receipt2.zotero.status === "verified" && receipt2.obsidian.status === "verified" ? "both-verified" : "partial";
+  return receipt2;
 }
 
 // src/core/literature-operations.ts
-function destinationRecovery(receipt = {}) {
-  const zotero = receipt.zotero?.status || "unavailable";
-  const obsidian = receipt.obsidian?.status || "unavailable";
+function destinationRecovery(receipt2 = {}) {
+  const zotero = receipt2.zotero?.status || "unavailable";
+  const obsidian = receipt2.obsidian?.status || "unavailable";
   return {
     zotero: {
       status: zotero,
@@ -590,8 +590,8 @@ function createLiteratureOperations(ports) {
           throw new Error(
             "Operation identity changed; resolve the existing DOI/key/path mapping before retry"
           );
-        const receipt = await verify({ doi: normalized, zotero_key: zoteroKey, note_path: notePath, vault });
-        const destinations = destinationRecovery(receipt);
+        const receipt2 = await verify({ doi: normalized, zotero_key: zoteroKey, note_path: notePath, vault });
+        const destinations = destinationRecovery(receipt2);
         const checkedAt = now();
         const operation = {
           id,
@@ -605,10 +605,10 @@ function createLiteratureOperations(ports) {
           createdAt: previous?.createdAt || checkedAt,
           checkedAt,
           destinations,
-          receipt,
+          receipt: receipt2,
           history: [
             ...previous?.history || [],
-            { at: checkedAt, zotero: receipt.zotero?.status, obsidian: receipt.obsidian?.status }
+            { at: checkedAt, zotero: receipt2.zotero?.status, obsidian: receipt2.obsidian?.status }
           ].slice(-32)
         };
         journal.operations[id] = operation;
@@ -618,7 +618,7 @@ function createLiteratureOperations(ports) {
           log_path: file,
           status: operation.status,
           destinations,
-          receipt,
+          receipt: receipt2,
           attempts: operation.attempts,
           writesToLibraries: 0
         };
@@ -628,9 +628,9 @@ function createLiteratureOperations(ports) {
     async recordZoteroWrite({
       cwd = process.cwd(),
       runDir,
-      receipt
+      receipt: receipt2
     }) {
-      const doi = normalizeDoi(receipt?.doi);
+      const doi = normalizeDoi(receipt2?.doi);
       if (!doi) throw new Error("Valid DOI required");
       const { file } = await ports.resolveRunJournal(cwd, runDir);
       return ports.exclusive(file, async () => {
@@ -638,18 +638,18 @@ function createLiteratureOperations(ports) {
         const entry = {
           id: createId(),
           doi,
-          status: String(receipt.status || "unknown"),
-          reason: receipt.reason || null,
-          channel: receipt.channel || null,
-          zoteroKey: receipt.zoteroKey || null,
-          library: receipt.library || null,
-          collection: receipt.collection || null,
-          attachment: receipt.attachment || null,
-          fulltextStatus: receipt.fulltextStatus || null,
-          readBack: receipt.readBack || null,
-          consent: receipt.consent || null,
-          writesToLibraries: receipt.writesToLibraries || 0,
-          at: receipt.write?.at || now()
+          status: String(receipt2.status || "unknown"),
+          reason: receipt2.reason || null,
+          channel: receipt2.channel || null,
+          zoteroKey: receipt2.zoteroKey || null,
+          library: receipt2.library || null,
+          collection: receipt2.collection || null,
+          attachment: receipt2.attachment || null,
+          fulltextStatus: receipt2.fulltextStatus || null,
+          readBack: receipt2.readBack || null,
+          consent: receipt2.consent || null,
+          writesToLibraries: receipt2.writesToLibraries || 0,
+          at: receipt2.write?.at || now()
         };
         journal.writes = [...Array.isArray(journal.writes) ? journal.writes : [], entry].slice(-64);
         await ports.writeJournal(file, journal);
@@ -709,10 +709,10 @@ function contactEmail(explicit, env = process.env) {
   return null;
 }
 var httpsUrl = (value) => {
-  const text4 = String(value || "").trim();
-  if (!/^https?:\/\//i.test(text4)) return null;
+  const text5 = String(value || "").trim();
+  if (!/^https?:\/\//i.test(text5)) return null;
   try {
-    const url = new URL(text4);
+    const url = new URL(text5);
     if (url.protocol === "ftp:") return null;
     return url.href;
   } catch {
@@ -720,10 +720,10 @@ var httpsUrl = (value) => {
   }
 };
 var pmcCloudHttps = (value) => {
-  const text4 = String(value || "").trim();
-  if (/^s3:\/\/pmc-oa-opendata\//i.test(text4))
-    return `${PMC_CLOUD_BASE}/${text4.replace(/^s3:\/\/pmc-oa-opendata\//i, "")}`;
-  return text4.startsWith(`${PMC_CLOUD_BASE}/`) ? text4 : null;
+  const text5 = String(value || "").trim();
+  if (/^s3:\/\/pmc-oa-opendata\//i.test(text5))
+    return `${PMC_CLOUD_BASE}/${text5.replace(/^s3:\/\/pmc-oa-opendata\//i, "")}`;
+  return text5.startsWith(`${PMC_CLOUD_BASE}/`) ? text5 : null;
 };
 async function fetchJson(fetchImpl, url, {
   timeoutMs,
@@ -740,16 +740,16 @@ async function fetchJson(fetchImpl, url, {
       headers: { accept },
       redirect: "follow"
     });
-    const text4 = await response.text();
+    const text5 = await response.text();
     if (!response.ok) return { ok: false, status: response.status, detail: `HTTP ${response.status}` };
     if (accept === "application/json") {
       try {
-        return { ok: true, status: response.status, body: JSON.parse(text4) };
+        return { ok: true, status: response.status, body: JSON.parse(text5) };
       } catch {
         return { ok: false, status: response.status, detail: "invalid JSON" };
       }
     }
-    return { ok: true, status: response.status, body: text4 };
+    return { ok: true, status: response.status, body: text5 };
   } catch (error) {
     const detail = error instanceof Error ? error.message : "fetch failed";
     return {
@@ -844,14 +844,14 @@ async function resolveOpenAccess({
         if (result.status !== 404 && result.status !== 403) errors += 1;
         continue;
       }
-      const record = result.body || {};
+      const record2 = result.body || {};
       versions.push({
         version: v,
-        manuscript: record.is_manuscript === true,
-        openAccess: record.is_pmc_openaccess === true,
-        license: record.license_code || null,
-        pdf: pmcCloudHttps(record.pdf_url),
-        doi: normalizeDoi(record.doi)
+        manuscript: record2.is_manuscript === true,
+        openAccess: record2.is_pmc_openaccess === true,
+        license: record2.license_code || null,
+        pdf: pmcCloudHttps(record2.pdf_url),
+        doi: normalizeDoi(record2.doi)
       });
     }
     if (!versions.length) {
@@ -864,19 +864,19 @@ async function resolveOpenAccess({
     }
     versions.sort((a, b) => Number(a.manuscript) - Number(b.manuscript) || a.version - b.version);
     let added = 0;
-    for (const record of versions) {
-      if (identity.doi && record.doi && record.doi !== identity.doi) continue;
-      if (record.pdf && collector.add({
-        url: record.pdf,
+    for (const record2 of versions) {
+      if (identity.doi && record2.doi && record2.doi !== identity.doi) continue;
+      if (record2.pdf && collector.add({
+        url: record2.pdf,
         source: "pmc-cloud",
         kind: "pdf",
-        license: record.license,
-        version: record.manuscript ? "acceptedVersion" : "publishedVersion",
+        license: record2.license,
+        version: record2.manuscript ? "acceptedVersion" : "publishedVersion",
         hostType: "repository",
-        note: `PMC article datasets v${record.version}`
+        note: `PMC article datasets v${record2.version}`
       }))
         added += 1;
-      meta.license = meta.license || record.license;
+      meta.license = meta.license || record2.license;
     }
     note("pmc-cloud", "ok", `${versions.length} version(s); ${added} pdf link(s)`);
   };
@@ -1067,15 +1067,15 @@ var ReceiptJournalBuffer = class {
     this.capacity = capacity;
   }
   /** Adds a receipt and returns false for a duplicate tool call id. */
-  add(receipt) {
-    const toolCallId = typeof receipt.toolCallId === "string" ? receipt.toolCallId : null;
+  add(receipt2) {
+    const toolCallId = typeof receipt2.toolCallId === "string" ? receipt2.toolCallId : null;
     if (toolCallId && this.seen.has(toolCallId)) return false;
     if (toolCallId) this.seen.add(toolCallId);
     if (this.entries.length >= this.capacity) {
       this.entries.shift();
       this.evictedCount += 1;
     }
-    this.entries.push(receipt);
+    this.entries.push(receipt2);
     return true;
   }
   values() {
@@ -1097,8 +1097,8 @@ var ReceiptJournalBuffer = class {
     this.evictedCount = 0;
   }
 };
-function receiptBelongsToRun(receipt, cwd, runDir) {
-  const ownedRun = receipt.args?.run_dir || receipt.details?.run_dir;
+function receiptBelongsToRun(receipt2, cwd, runDir) {
+  const ownedRun = receipt2.args?.run_dir || receipt2.details?.run_dir;
   return !ownedRun || resolve2(cwd, String(ownedRun)) === resolve2(cwd, runDir);
 }
 
@@ -1111,7 +1111,7 @@ function createResearchReceiptJournal(cwd, { sessionId = null, ports }) {
   let active = true;
   let currentRun;
   let tail = Promise.resolve();
-  const belongs = (receipt, runDir) => receiptBelongsToRun(receipt, cwd, runDir);
+  const belongs = (receipt2, runDir) => receiptBelongsToRun(receipt2, cwd, runDir);
   const serial = (work) => {
     const next = tail.catch(() => {
     }).then(() => active ? work() : null);
@@ -1129,10 +1129,10 @@ function createResearchReceiptJournal(cwd, { sessionId = null, ports }) {
       await ports.flush(cwd, path);
       ports.reset(cwd, path);
       runs.add(path);
-      for (const receipt of buffer.values()) {
-        if (!belongs(receipt, path)) continue;
-        await ports.observeExecution({ ...receipt, sessionId, cwd, runDir: path });
-        await ports.observeResearch({ ...receipt, sessionId, cwd, runDir: path });
+      for (const receipt2 of buffer.values()) {
+        if (!belongs(receipt2, path)) continue;
+        await ports.observeExecution({ ...receipt2, sessionId, cwd, runDir: path });
+        await ports.observeResearch({ ...receipt2, sessionId, cwd, runDir: path });
       }
     }
     currentRun = path;
@@ -1145,17 +1145,17 @@ function createResearchReceiptJournal(cwd, { sessionId = null, ports }) {
         vault: config.obsidianVault ? await realpath2(config.obsidianVault) : null,
         revision: config.knowledgeBindingRevision || 0
       })).catch(() => ({ vault: null, revision: -1 })) : Promise.resolve(void 0);
-      const receipt = {
+      const receipt2 = {
         ...structuredClone(event),
         sessionId,
         observedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       return serial(async () => {
-        if (buffer.add(receipt) === false) return null;
-        receipt.readBinding = await snapshot;
-        if (currentRun && belongs(receipt, currentRun)) {
-          await ports.observeExecution({ ...receipt, cwd, runDir: currentRun });
-          return ports.observeResearch({ ...receipt, cwd, runDir: currentRun });
+        if (buffer.add(receipt2) === false) return null;
+        receipt2.readBinding = await snapshot;
+        if (currentRun && belongs(receipt2, currentRun)) {
+          await ports.observeExecution({ ...receipt2, cwd, runDir: currentRun });
+          return ports.observeResearch({ ...receipt2, cwd, runDir: currentRun });
         }
         return null;
       });
@@ -1388,7 +1388,7 @@ function createResearchLoop(ports) {
     const metadata = await readJson4(metadataPath);
     if (metadata.revision !== prepared.evidenceRevision)
       throw new Error("Research revision changed during readback");
-    const receipt = {
+    const receipt2 = {
       version: 1,
       receiptScope: "current-session-current-turn",
       id: randomUUID2(),
@@ -1408,17 +1408,17 @@ function createResearchLoop(ports) {
         readReceiptIds: [read.receiptId]
       }))
     };
-    metadata.revision = receipt.committedRevision;
+    metadata.revision = receipt2.committedRevision;
     metadata.summary_status = "written";
     metadata.summary_updated_at = (/* @__PURE__ */ new Date()).toISOString();
-    metadata.delivery_receipt = receipt;
+    metadata.delivery_receipt = receipt2;
     await atomicJson2(metadataPath, metadata);
-    return receipt;
+    return receipt2;
   }
   function safeSlug(value, label) {
-    const text4 = String(value ?? "").trim();
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(text4)) throw new Error(`${label} must be lowercase kebab-case`);
-    return text4;
+    const text5 = String(value ?? "").trim();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(text5)) throw new Error(`${label} must be lowercase kebab-case`);
+    return text5;
   }
   function topicIdFromResultSlug(value) {
     const slug = safeSlug(value || "research-question", "result_slug");
@@ -1492,9 +1492,9 @@ function createResearchLoop(ports) {
       if (selected[index] !== shown || lines.join("\n").length + shown.length > 9e4) break;
       lines.push(shown);
     }
-    const text4 = lines.join("\n");
-    if (!text4.trim()) return false;
-    const read = { hash: fileHash(bytes), text: text4, startLine, endLine: startLine + lines.length - 1 };
+    const text5 = lines.join("\n");
+    if (!text5.trim()) return false;
+    const read = { hash: fileHash(bytes), text: text5, startLine, endLine: startLine + lines.length - 1 };
     const aliases = /* @__PURE__ */ new Set([
       String(path),
       absolute,
@@ -2359,7 +2359,7 @@ async function readObservations(path) {
     }
     const data = JSON.parse(await readFile5(path, "utf8"));
     if (data.version !== 1 || !Array.isArray(data.records) || data.records.length > 256 || data.records.some(
-      (record) => !record || typeof record.toolCallId !== "string"
+      (record2) => !record2 || typeof record2.toolCallId !== "string"
     )) {
       throw new Error("Invalid observation records");
     }
@@ -2400,7 +2400,7 @@ async function observeExecutionReceipt({
     } catch (error) {
       if (!isNodeError(error, "ENOENT")) throw error;
     }
-    if (records.some((record) => record.toolCallId === toolCallId)) return;
+    if (records.some((record2) => record2.toolCallId === toolCallId)) return;
     const code = details.exitCode ?? details.exit_code;
     records.push({
       toolCallId,
@@ -2448,8 +2448,8 @@ async function recordRunProvenance({
     }
     const before = await stat2(path2);
     if (!before.isFile() || before.size > 128 * 1024 * 1024) throw new Error("Not a bounded regular file");
-    const hash = createHash6("sha256");
-    for await (const chunk of createReadStream(path2)) hash.update(chunk);
+    const hash2 = createHash6("sha256");
+    for await (const chunk of createReadStream(path2)) hash2.update(chunk);
     const after = await stat2(path2);
     if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
       throw new Error("File changed while hashing");
@@ -2458,7 +2458,7 @@ async function recordRunProvenance({
       path: relative4(root, path2),
       role: item.role,
       bytes: after.size,
-      sha256: hash.digest("hex"),
+      sha256: hash2.digest("hex"),
       snapshotAt: (/* @__PURE__ */ new Date()).toISOString(),
       basis: "current-file-snapshot-not-execution-time-proof"
     });
@@ -2549,7 +2549,7 @@ async function readMethodsFacts({
     scripts: pick("script"),
     declarations,
     commandsObserved: observations.length,
-    commandsFailed: observations.filter((record) => record.outcome === "failed-or-blocked").length,
+    commandsFailed: observations.filter((record2) => record2.outcome === "failed-or-blocked").length,
     existingMethods,
     gaps
   };
@@ -2748,8 +2748,8 @@ function assessManualPage(bytes, contentType, url) {
     };
   }
   const html = new TextDecoder().decode(bytes).slice(0, 25e4);
-  const text4 = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]*>/g, " ");
-  const flags = [...new Set(text4.match(/(?:^|\s)-{1,2}[a-zA-Z][a-zA-Z0-9_-]{2,}/g) || [])];
+  const text5 = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]*>/g, " ");
+  const flags = [...new Set(text5.match(/(?:^|\s)-{1,2}[a-zA-Z][a-zA-Z0-9_-]{2,}/g) || [])];
   const candidates = [];
   for (const match of html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
     try {
@@ -2783,13 +2783,13 @@ function deliveryContract(prompt, {
   showMeAvailable = false,
   researchContinuation = false
 } = {}) {
-  const text4 = String(prompt || "");
-  const readOnly = /只读|read[- ]only/i.test(text4);
-  const wantsExplainer = !readOnly && /说明书|使用手册|介绍|讲解|解释|图解|show.?me|explainer|explain|summariz/i.test(text4);
-  const manual = /说明书|使用手册|命令|参数|manual|command.line|reference/i.test(text4);
-  const paper = researchContinuation || requiresPaperEvidence(text4) || /文章|article|research/i.test(text4);
-  const software = manual || /软件|程序|software|package/i.test(text4);
-  const requested = manual || researchContinuation || requiresPaperEvidence(text4) || /下载|沉淀|介绍|讲解|解释|download|explain|summariz/i.test(text4) && (paper || software);
+  const text5 = String(prompt || "");
+  const readOnly = /只读|read[- ]only/i.test(text5);
+  const wantsExplainer = !readOnly && /说明书|使用手册|介绍|讲解|解释|图解|show.?me|explainer|explain|summariz/i.test(text5);
+  const manual = /说明书|使用手册|命令|参数|manual|command.line|reference/i.test(text5);
+  const paper = researchContinuation || requiresPaperEvidence(text5) || /文章|article|research/i.test(text5);
+  const software = manual || /软件|程序|software|package/i.test(text5);
+  const requested = manual || researchContinuation || requiresPaperEvidence(text5) || /下载|沉淀|介绍|讲解|解释|download|explain|summariz/i.test(text5) && (paper || software);
   if (!requested) return null;
   return {
     kind: software && paper ? "mixed" : software ? "software" : "research",
@@ -2881,7 +2881,7 @@ async function verifyManifestItems(manifest, runDir) {
   }
   return { ok: items.every((item) => item.ok === true), items };
 }
-async function appendFailure(file, failure) {
+async function appendFailure(file, failure2) {
   let original = "# Source download failures\n\n";
   try {
     original = await readFile6(file, "utf8");
@@ -2889,20 +2889,20 @@ async function appendFailure(file, failure) {
     if (error.code !== "ENOENT") throw error;
   }
   const lines = [
-    `## ${failure.failed_at} \xB7 ${failure.category}`,
-    `- URL: ${failure.url}`,
-    `- Reason: ${failure.reason}`,
-    `- Browser required: ${failure.browser_required ? "yes" : "no"}`
+    `## ${failure2.failed_at} \xB7 ${failure2.category}`,
+    `- URL: ${failure2.url}`,
+    `- Reason: ${failure2.reason}`,
+    `- Browser required: ${failure2.browser_required ? "yes" : "no"}`
   ];
-  if (failure.browser_handoff) lines.push(`- Browser handoff: ${failure.browser_handoff.url}`);
-  if (failure.open_access) {
-    const oa = failure.open_access;
+  if (failure2.browser_handoff) lines.push(`- Browser handoff: ${failure2.browser_handoff.url}`);
+  if (failure2.open_access) {
+    const oa = failure2.open_access;
     lines.push(
       `- Open access: ${oa.doi || oa.pmcid || "?"} \xB7 oa_status=${oa.oa_status || "unknown"} \xB7 sources=${(oa.queried || []).map((q) => `${q.source}:${q.status}`).join(",")}`
     );
     for (const attempt of oa.attempts || [])
       lines.push(`  - tried ${attempt.url} (${attempt.source}): ${attempt.reason}`);
-    if (failure.manual_import) lines.push(`- Manual import: ${failure.manual_import.how}`);
+    if (failure2.manual_import) lines.push(`- Manual import: ${failure2.manual_import.how}`);
   }
   const temp = `${file}.${randomUUID4()}.tmp`;
   await mkdir3(dirname3(file), { recursive: true });
@@ -2912,14 +2912,14 @@ ${lines.join("\n")}
 `, "utf8");
   await rename3(temp, file);
 }
-async function recordFailure(ports, manifestPath, failuresPath, runDir, failure) {
+async function recordFailure(ports, manifestPath, failuresPath, runDir, failure2) {
   return withRunLock(ports, manifestPath, async () => {
     const manifest = await readManifest(manifestPath, runDir);
-    manifest.updated_at = failure.failed_at;
+    manifest.updated_at = failure2.failed_at;
     manifest.failures = Array.isArray(manifest.failures) ? manifest.failures : [];
-    manifest.failures.push(failure);
+    manifest.failures.push(failure2);
     await atomicJson(manifestPath, manifest);
-    await appendFailure(failuresPath, failure);
+    await appendFailure(failuresPath, failure2);
   });
 }
 async function readBody(response, maxBytes) {
@@ -3163,7 +3163,7 @@ async function archiveSource(options = {}, ports) {
         verified: true
       });
     } catch (error) {
-      const failure2 = {
+      const failure3 = {
         url,
         category,
         failed_at: (/* @__PURE__ */ new Date()).toISOString(),
@@ -3171,8 +3171,8 @@ async function archiveSource(options = {}, ports) {
         browser_required: false,
         local_file
       };
-      await recordFailure(ports, manifestPath, failuresPath, runDir, failure2);
-      return { status: "failed", ...failure2, manifest_path: manifestPath, failures_path: failuresPath };
+      await recordFailure(ports, manifestPath, failuresPath, runDir, failure3);
+      return { status: "failed", ...failure3, manifest_path: manifestPath, failures_path: failuresPath };
     }
   }
   const handoff = (target) => ({
@@ -3256,11 +3256,11 @@ async function archiveSource(options = {}, ports) {
     if (retry.kind === "cloudflare" || retry.kind === "challenge") return { ...retry, browserRequired: true };
     return retry;
   }
-  const legacyFailure = async (failure2) => {
-    await recordFailure(ports, manifestPath, failuresPath, runDir, failure2);
+  const legacyFailure = async (failure3) => {
+    await recordFailure(ports, manifestPath, failuresPath, runDir, failure3);
     return {
-      status: failure2.browser_required ? "browser_required" : "failed",
-      ...failure2,
+      status: failure3.browser_required ? "browser_required" : "failed",
+      ...failure3,
       manifest_path: manifestPath,
       failures_path: failuresPath
     };
@@ -3268,7 +3268,7 @@ async function archiveSource(options = {}, ports) {
   const attempts = [];
   if (url != null) {
     const attempt = await resolveAttempt(url);
-    let failure2 = null;
+    let failure3 = null;
     if (attempt.kind === "ok") {
       const outputName = safeFilename(
         filename || filenameFromResponse(attempt.response, attempt.resolvedUrl, category),
@@ -3281,19 +3281,19 @@ async function archiveSource(options = {}, ports) {
           outputName
         });
       } catch (error) {
-        failure2 = failureFor(url, {
+        failure3 = failureFor(url, {
           kind: "error",
           reason: error.message,
           browserRequired: /HTTP (401|403|407|429)|cloudflare|captcha|login|required/i.test(error.message)
         });
       }
-    } else failure2 = failureFor(url, attempt);
-    if (!openAccessWanted) return legacyFailure(failure2);
+    } else failure3 = failureFor(url, attempt);
+    if (!openAccessWanted) return legacyFailure(failure3);
     attempts.push({
       url,
       source: "given",
-      reason: failure2.reason,
-      browser_required: failure2.browser_required
+      reason: failure3.reason,
+      browser_required: failure3.browser_required
     });
   }
   let resolution;
@@ -3506,7 +3506,7 @@ async function archiveSource(options = {}, ports) {
   const institutionalAttempt = attempts.find(
     (a) => (a.source === "ezproxy" || a.source === "institutional_session") && a.cloudflare !== true
   );
-  const failure = {
+  const failure2 = {
     url: url || `https://doi.org/${identity.doi || ""}`.replace(/\/$/, ""),
     category,
     failed_at: (/* @__PURE__ */ new Date()).toISOString(),
@@ -3541,16 +3541,16 @@ async function archiveSource(options = {}, ports) {
       }
     }
   };
-  await recordFailure(ports, manifestPath, failuresPath, runDir, failure);
+  await recordFailure(ports, manifestPath, failuresPath, runDir, failure2);
   if (institutionalConfig?.configured && institutionalAttempt && challenged) {
     return {
       status: "institutional_auth_required",
-      ...failure,
+      ...failure2,
       manifest_path: manifestPath,
       failures_path: failuresPath
     };
   }
-  return { status: "no_open_access", ...failure, manifest_path: manifestPath, failures_path: failuresPath };
+  return { status: "no_open_access", ...failure2, manifest_path: manifestPath, failures_path: failuresPath };
 }
 async function sourceStatus(options = {}, ports) {
   if (!ports) throw new Error("Source archive host ports are required");
@@ -3712,9 +3712,9 @@ __export(zotero_library_exports, {
 });
 function zoteroLibraryPath(value) {
   if (value === void 0 || value === null) return "users";
-  const text4 = String(value).trim().toLowerCase();
-  if (text4 === "" || text4 === "user" || text4 === "users") return "users";
-  if (text4 === "group" || text4 === "groups") return "groups";
+  const text5 = String(value).trim().toLowerCase();
+  if (text5 === "" || text5 === "user" || text5 === "users") return "users";
+  if (text5 === "group" || text5 === "groups") return "groups";
   return null;
 }
 function zoteroLibraryEnvValue(path) {
@@ -3988,8 +3988,8 @@ function agentDir(override) {
 function mcpPath(dir) {
   return join6(agentDir(dir), "mcp.json");
 }
-function clip(text4) {
-  const value = String(text4 || "");
+function clip(text5) {
+  const value = String(text5 || "");
   return value.length <= OUTPUT_LIMIT ? value : `${value.slice(0, OUTPUT_LIMIT)}
 \u2026truncated`;
 }
@@ -4357,9 +4357,9 @@ var isRecord2 = (value) => typeof value === "object" && value !== null && !Array
 function textField(value, max, name) {
   if (value === void 0 || value === null) return "";
   if (typeof value !== "string" && typeof value !== "number") throw new Error(`${name} must be a string`);
-  const text4 = String(value).replace(new RegExp("\\p{Cc}", "gu"), " ").replace(/\s+/g, " ").trim();
-  if (text4.length > max) throw new Error(`${name} exceeds ${max} characters`);
-  return text4;
+  const text5 = String(value).replace(new RegExp("\\p{Cc}", "gu"), " ").replace(/\s+/g, " ").trim();
+  if (text5.length > max) throw new Error(`${name} exceeds ${max} characters`);
+  return text5;
 }
 function normalizeCreators(input) {
   if (input === void 0 || input === null) return [];
@@ -4397,11 +4397,11 @@ function normalizeTags(input) {
   return tags;
 }
 function httpUrl(value, name) {
-  const text4 = textField(value, 2048, name);
-  if (!text4) return "";
+  const text5 = textField(value, 2048, name);
+  if (!text5) return "";
   let url;
   try {
-    url = new URL(text4);
+    url = new URL(text5);
   } catch {
     throw new Error(`${name} must be an absolute http(s) URL`);
   }
@@ -4488,11 +4488,11 @@ function toWebApiItem(item, { collectionKey = null } = {}) {
   return payload;
 }
 function connectorTargetId(value) {
-  const text4 = textField(value, 32, "target");
-  if (!text4) return null;
-  if (!/^[LC]\d{1,12}$/.test(text4))
+  const text5 = textField(value, 32, "target");
+  if (!text5) return null;
+  if (!/^[LC]\d{1,12}$/.test(text5))
     throw new Error('target must look like "L1" (library) or "C123" (collection)');
-  return text4;
+  return text5;
 }
 
 // src/core/zotero-write-runtime.ts
@@ -4899,17 +4899,17 @@ function baseReceipt(plan, at) {
   };
 }
 function receiptWithoutWrite(plan, { now = () => /* @__PURE__ */ new Date() } = {}) {
-  const receipt = baseReceipt(plan, now().toISOString());
+  const receipt2 = baseReceipt(plan, now().toISOString());
   if (plan.action === "reuse") {
-    receipt.status = "reused";
-    receipt.zoteroKey = plan.existing[0].key;
-    receipt.zoteroSelect = selectLink(receipt.zoteroKey);
-    receipt.reason = "existing-item-with-same-doi";
+    receipt2.status = "reused";
+    receipt2.zoteroKey = plan.existing[0].key;
+    receipt2.zoteroSelect = selectLink(receipt2.zoteroKey);
+    receipt2.reason = "existing-item-with-same-doi";
   } else {
-    receipt.status = ["ambiguous", "cancelled"].includes(plan.action) ? plan.action : "blocked";
-    receipt.reason = plan.reason || plan.action;
+    receipt2.status = ["ambiguous", "cancelled"].includes(plan.action) ? plan.action : "blocked";
+    receipt2.reason = plan.reason || plan.action;
   }
-  return receipt;
+  return receipt2;
 }
 async function executeZoteroSave(plan, {
   fetchImpl = fetch,
@@ -4922,9 +4922,9 @@ async function executeZoteroSave(plan, {
 } = {}) {
   if (plan.action !== "create") throw new Error(`Refusing to write: plan action is ${plan.action}`);
   const at = now().toISOString();
-  const receipt = baseReceipt(plan, at);
-  receipt.write = { performed: true, at, httpStatus: null, error: null };
-  receipt.writesToLibraries = 1;
+  const receipt2 = baseReceipt(plan, at);
+  receipt2.write = { performed: true, at, httpStatus: null, error: null };
+  receipt2.writesToLibraries = 1;
   let writtenKey = null;
   try {
     if (plan.channel === "connector") {
@@ -4938,9 +4938,9 @@ async function executeZoteroSave(plan, {
         timeoutMs: 3e4,
         signal
       });
-      receipt.write.httpStatus = response.status;
+      receipt2.write.httpStatus = response.status;
       if (!response.ok)
-        receipt.write.error = `connector HTTP ${response.status}${response.json?.text ? `: ${response.json.text.slice(0, 200)}` : ""}`;
+        receipt2.write.error = `connector HTTP ${response.status}${response.json?.text ? `: ${response.json.text.slice(0, 200)}` : ""}`;
     } else {
       const config = zoteroWebApiConfig(env);
       const created = await webCreateItems({
@@ -4949,10 +4949,10 @@ async function executeZoteroSave(plan, {
         items: [toWebApiItem(plan.item, { collectionKey: plan.target?.collectionKey || null })],
         signal
       });
-      receipt.write.httpStatus = created.status;
+      receipt2.write.httpStatus = created.status;
       writtenKey = created.successful[0]?.key || null;
       if (!created.ok || !writtenKey)
-        receipt.write.error = created.failed[0]?.message || `web api HTTP ${created.status}`;
+        receipt2.write.error = created.failed[0]?.message || `web api HTTP ${created.status}`;
       else if (plan.attachment) {
         const linked = await webCreateItems({
           fetchImpl,
@@ -4970,13 +4970,13 @@ async function executeZoteroSave(plan, {
           ],
           signal
         });
-        receipt.attachment.key = linked.successful[0]?.key || null;
-        if (!receipt.attachment.key)
-          receipt.attachment.error = linked.failed[0]?.message || `web api HTTP ${linked.status}`;
+        receipt2.attachment.key = linked.successful[0]?.key || null;
+        if (!receipt2.attachment.key)
+          receipt2.attachment.error = linked.failed[0]?.message || `web api HTTP ${linked.status}`;
       }
     }
   } catch (error) {
-    receipt.write.error = String(error.message || error).slice(0, 300);
+    receipt2.write.error = String(error.message || error).slice(0, 300);
   }
   const { items: observedItems = [], ...readBack } = await readBackByDoi(plan, {
     fetchImpl,
@@ -4986,25 +4986,25 @@ async function executeZoteroSave(plan, {
     delayMs: readBackDelayMs,
     sleep
   });
-  receipt.readBack = readBack;
+  receipt2.readBack = readBack;
   if (readBack.state === "found") {
     const observed = observedItems[0];
-    receipt.zoteroKey = observed.key;
-    receipt.zoteroSelect = selectLink(observed.key);
-    receipt.fulltextStatus = receipt.readBack.fulltext?.status || "unavailable";
-    receipt.status = writtenKey && writtenKey !== observed.key ? "unverified" : "saved";
-    if (receipt.status === "unverified") receipt.reason = "read-back-key-differs";
-  } else if (receipt.readBack.state === "ambiguous") {
-    receipt.status = "ambiguous";
-    receipt.reason = "multiple-items-share-doi-after-write";
-  } else if (receipt.write.error) {
-    receipt.status = "failed";
-    receipt.reason = receipt.write.error;
+    receipt2.zoteroKey = observed.key;
+    receipt2.zoteroSelect = selectLink(observed.key);
+    receipt2.fulltextStatus = receipt2.readBack.fulltext?.status || "unavailable";
+    receipt2.status = writtenKey && writtenKey !== observed.key ? "unverified" : "saved";
+    if (receipt2.status === "unverified") receipt2.reason = "read-back-key-differs";
+  } else if (receipt2.readBack.state === "ambiguous") {
+    receipt2.status = "ambiguous";
+    receipt2.reason = "multiple-items-share-doi-after-write";
+  } else if (receipt2.write.error) {
+    receipt2.status = "failed";
+    receipt2.reason = receipt2.write.error;
   } else {
-    receipt.status = "unverified";
-    receipt.reason = receipt.readBack.state === "not-found" ? "written-but-not-read-back" : "read-back-unavailable";
+    receipt2.status = "unverified";
+    receipt2.reason = receipt2.readBack.state === "not-found" ? "written-but-not-read-back" : "read-back-unavailable";
   }
-  return receipt;
+  return receipt2;
 }
 function describeZoteroSavePlan(plan) {
   const authors = plan.item.creators.map(
@@ -5097,12 +5097,12 @@ async function inspectLocalPdf(cwd, rawPath) {
   if (!info.isFile()) throw new Error("local_file is not a file");
   if (info.size > MAX_UPLOAD_BYTES) throw new Error("local_file is larger than 100 MB");
   const handle = await open(full, "r");
-  const hash = createHash9("md5");
+  const hash2 = createHash9("md5");
   const head = Buffer.alloc(5);
   try {
     await handle.read(head, 0, 5, 0);
     const stream = handle.createReadStream({ autoClose: false, start: 0 });
-    for await (const chunk of stream) hash.update(chunk);
+    for await (const chunk of stream) hash2.update(chunk);
   } finally {
     await handle.close();
   }
@@ -5113,7 +5113,7 @@ async function inspectLocalPdf(cwd, rawPath) {
     filename: basename4(full),
     size: info.size,
     mtime: Math.round(info.mtimeMs),
-    md5: hash.digest("hex")
+    md5: hash2.digest("hex")
   };
 }
 async function prepareZoteroUpdate(input = {}, { fetchImpl = fetch, env = process.env, cwd = process.cwd(), signal } = {}) {
@@ -5664,9 +5664,9 @@ For substantive research, use research_loop(action=start) when a tracked run is 
         if (current.evidenceRevision !== prepared.evidenceRevision || current.gateSha256 !== prepared.gateSha256 || current.claimsSha256 !== prepared.claimsSha256)
           throw new Error("Research evidence changed during semantic review; no summary was written");
         const written = await writer(prepared);
-        let receipt;
+        let receipt2;
         try {
-          receipt = await loop.commitResearchDelivery({
+          receipt2 = await loop.commitResearchDelivery({
             cwd: ctx.cwd,
             runDir: input.runDir,
             prepared,
@@ -5678,7 +5678,7 @@ For substantive research, use research_loop(action=start) when a tracked run is 
           await written.rollback();
           throw error;
         }
-        return { run_dir: input.runDir, value: written.value, receipt, claims: claims2 };
+        return { run_dir: input.runDir, value: written.value, receipt: receipt2, claims: claims2 };
       })
     )
   };
@@ -5698,7 +5698,7 @@ var TERMINAL_FAILURES = /* @__PURE__ */ new Set(["unavailable", "browser_require
 function createEvidenceGate({ scope = "factual-answer" } = {}) {
   const events = [];
   let stage = "created";
-  const record = (type, details = {}) => {
+  const record2 = (type, details = {}) => {
     events.push({ type, at: (/* @__PURE__ */ new Date()).toISOString(), ...details });
   };
   const snapshot = () => ({
@@ -5714,12 +5714,12 @@ function createEvidenceGate({ scope = "factual-answer" } = {}) {
     const target = EVIDENCE_STAGES.indexOf(next);
     if (target < current) throw new Error(`Evidence stage cannot move backwards: ${stage} -> ${next}`);
     stage = next;
-    record(next, details);
+    record2(next, details);
     return snapshot();
   };
   const fail = (status, details = {}) => {
     if (!TERMINAL_FAILURES.has(status)) throw new Error(`Unknown evidence failure: ${status}`);
-    record(status, details);
+    record2(status, details);
     return { ...snapshot(), status, answerable: false };
   };
   return Object.freeze({ advance, fail, snapshot });
@@ -5734,25 +5734,321 @@ function assertEvidenceAnswerable(gate, { claimBindings = [] } = {}) {
   return state;
 }
 
-// src/research-host.ts
-var UNAVAILABLE_CONNECTOR_MESSAGE = "Research connector transport is unavailable; the host must inject an authorized connector registry";
-var UNAVAILABLE_WRITE_MESSAGE = "Research write adapters are unavailable; the host must inject an authorized write registry";
-var researchConnectorHostLoader = {
-  contractVersion: 1,
-  load() {
+// src/research-connectors.ts
+import { createHash as createHash10 } from "node:crypto";
+var DEFAULT_TIMEOUT_MS2 = 12e3;
+function hash(value) {
+  return createHash10("sha256").update(JSON.stringify(value)).digest("hex");
+}
+function isoNow() {
+  return (/* @__PURE__ */ new Date()).toISOString();
+}
+function clampLimit(value) {
+  return Math.max(1, Math.min(50, Math.trunc(value ?? 10)));
+}
+function text4(value) {
+  return typeof value === "string" ? value.replace(/\s+/gu, " ").trim() : "";
+}
+function record(value) {
+  return value !== null && typeof value === "object" ? value : {};
+}
+function receipt(input) {
+  return {
+    sourceRef: input.sourceRef,
+    locator: input.locator,
+    sourceType: input.kind,
+    title: input.title,
+    accessedAt: isoNow(),
+    contentHash: hash(input.payload),
+    readOnly: true
+  };
+}
+function retryable(error) {
+  const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+  return status === 408 || status === 429 || status >= 500 || status === 0;
+}
+function failure(connectorId, error) {
+  return {
+    connectorId,
+    message: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500),
+    retryable: retryable(error),
+    at: isoNow()
+  };
+}
+async function fetchJson2(fetchImpl, url, options, extraHeaders = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS2);
+  const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+  try {
+    const response = await fetchImpl(url, {
+      headers: {
+        accept: "application/json",
+        "user-agent": "Drone-Research-Workbench/0.33",
+        ...extraHeaders
+      },
+      signal
+    });
+    if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function fetchText(fetchImpl, url, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS2);
+  const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+  try {
+    const response = await fetchImpl(url, {
+      headers: { accept: "application/atom+xml,application/xml,text/xml", "user-agent": "Drone-Research-Workbench/0.33" },
+      signal
+    });
+    if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+    return await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+function bibliographicAuthors(value) {
+  return Array.isArray(value) ? value.flatMap((author) => {
+    const name = text4(record(author).name);
+    return name ? [name] : [];
+  }) : [];
+}
+function semanticScholarHit(item) {
+  const value = record(item);
+  const paperId = text4(value.paperId) || text4(value.corpusId);
+  const title = text4(value.title);
+  if (!paperId || !title) return [];
+  const externalIds = record(value.externalIds);
+  const doi = text4(externalIds.DOI) || void 0;
+  const locator = doi ? `https://doi.org/${doi}` : text4(value.url) || `https://www.semanticscholar.org/paper/${paperId}`;
+  return [
+    {
+      id: `semantic-scholar:${paperId}`,
+      title,
+      summary: text4(value.abstract) || text4(value.venue) || "Semantic Scholar record",
+      locator,
+      sourceType: "literature",
+      authors: bibliographicAuthors(value.authors),
+      year: typeof value.year === "number" ? value.year : void 0,
+      doi,
+      publishedAt: text4(value.publicationDate) || void 0,
+      sourceReceipt: receipt({
+        sourceRef: `semantic-scholar:${paperId}`,
+        locator,
+        kind: "literature",
+        title,
+        payload: item
+      })
+    }
+  ];
+}
+function createSemanticScholarConnector(fetchImpl) {
+  const connector = {
+    descriptor: { id: "semantic-scholar", kind: "literature", label: "Semantic Scholar", enabled: true },
+    async search(query, options) {
+      const limit = clampLimit(options.limit);
+      const config = record(record(options.config).semanticScholar);
+      const apiBase = (text4(config.apiBase) || "https://api.semanticscholar.org").replace(/\/$/u, "");
+      const headers = {};
+      const apiKey = text4(config.apiKey);
+      if (apiKey) headers["x-api-key"] = apiKey;
+      const fields = "title,abstract,authors,year,externalIds,url,venue,publicationDate";
+      const value = record(
+        await fetchJson2(
+          fetchImpl,
+          `${apiBase}/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=${limit}&fields=${fields}`,
+          options,
+          headers
+        )
+      );
+      return (Array.isArray(value.data) ? value.data : []).slice(0, limit).flatMap(semanticScholarHit);
+    },
+    recommend: async (seed, options) => {
+      const limit = clampLimit(options.limit);
+      const config = record(record(options.config).semanticScholar);
+      const apiBase = (text4(config.apiBase) || "https://api.semanticscholar.org").replace(/\/$/u, "");
+      const headers = {};
+      const apiKey = text4(config.apiKey);
+      if (apiKey) headers["x-api-key"] = apiKey;
+      const fields = "title,abstract,authors,year,externalIds,url,venue,publicationDate";
+      const value = record(
+        await fetchJson2(
+          fetchImpl,
+          `${apiBase}/recommendations/v1/papers/for/${encodeURIComponent(seed)}?limit=${limit}&fields=${fields}`,
+          options,
+          headers
+        )
+      );
+      return (Array.isArray(value.recommendedPapers) ? value.recommendedPapers : []).slice(0, limit).flatMap(semanticScholarHit);
+    }
+  };
+  return connector;
+}
+function xmlTag(value, tag) {
+  const match = value.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "iu"));
+  return text4(match?.[1]).replaceAll("&amp;", "&").replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&quot;", '"');
+}
+function createArxivConnector(fetchImpl) {
+  return {
+    descriptor: { id: "arxiv", kind: "literature", label: "arXiv", enabled: true },
+    async search(query, options) {
+      const limit = clampLimit(options.limit);
+      const xml = await fetchText(
+        fetchImpl,
+        `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=${limit}&sortBy=submittedDate&sortOrder=descending`,
+        options
+      );
+      return [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/giu)].slice(0, limit).flatMap((match) => {
+        const entry = match[1] ?? "";
+        const rawId = xmlTag(entry, "id");
+        const arxivId = rawId.match(/arxiv\.org\/(?:abs|pdf)\/([^?#]+?)(?:\.pdf)?$/iu)?.[1];
+        const title = xmlTag(entry, "title");
+        if (!arxivId || !title) return [];
+        const locator = `https://arxiv.org/abs/${arxivId}`;
+        const authors = [...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/giu)].map(
+          (item) => text4(item[1]).replaceAll("&amp;", "&")
+        );
+        const publishedAt = xmlTag(entry, "published") || void 0;
+        return [
+          {
+            id: `arxiv:${arxivId}`,
+            title,
+            summary: xmlTag(entry, "summary") || "arXiv record",
+            locator,
+            sourceType: "literature",
+            authors,
+            publishedAt,
+            arxivId,
+            sourceReceipt: receipt({
+              sourceRef: `arxiv:${arxivId}`,
+              locator,
+              kind: "literature",
+              title,
+              payload: entry
+            })
+          }
+        ];
+      });
+    }
+  };
+}
+function createProjectStorageConnector(projectStorage) {
+  return {
+    descriptor: { id: "project-storage", kind: "project-storage", label: "Project files", enabled: true },
+    async search(query, options) {
+      if (!options.cwd) throw new Error("Project storage connector requires a project root");
+      const limit = clampLimit(options.limit);
+      const items = await projectStorage.search({ cwd: options.cwd, query, limit, signal: options.signal });
+      return items.slice(0, limit).flatMap((item) => {
+        const relativePath = text4(item.relativePath).replaceAll("\\", "/");
+        if (!relativePath || relativePath.endsWith("/")) return [];
+        const sourceRef = `project-storage:${hash({ cwd: options.cwd, relativePath })}`;
+        const title = text4(item.title) || relativePath;
+        return [
+          {
+            id: sourceRef,
+            title,
+            summary: text4(item.summary) || [item.format, item.size == null ? "" : `${item.size} bytes`].filter(Boolean).join(" \xB7 "),
+            locator: relativePath,
+            sourceType: "project-storage",
+            sourceReceipt: {
+              sourceRef,
+              locator: relativePath,
+              sourceType: "project-storage",
+              title,
+              version: item.modifiedAt,
+              accessedAt: isoNow(),
+              contentHash: item.contentHash || hash({ cwd: options.cwd, relativePath, size: item.size, modifiedAt: item.modifiedAt }),
+              readOnly: true
+            }
+          }
+        ];
+      });
+    }
+  };
+}
+function createResearchConnectorHostLoader(options) {
+  const connectors = [
+    ...options.fetchImpl ? [createSemanticScholarConnector(options.fetchImpl), createArxivConnector(options.fetchImpl)] : [],
+    ...options.projectStorage ? [createProjectStorageConnector(options.projectStorage)] : []
+  ];
+  if (!connectors.length) {
     return {
       contractVersion: 1,
-      status: "unavailable",
-      list: () => [],
-      recommend: async (..._args) => {
-        throw new Error(UNAVAILABLE_CONNECTOR_MESSAGE);
-      },
-      search: async (..._args) => {
-        throw new Error(UNAVAILABLE_CONNECTOR_MESSAGE);
-      }
+      load: () => ({
+        contractVersion: 1,
+        status: "unavailable",
+        list: () => [],
+        recommend: async () => {
+          throw new Error("Research connector transport is unavailable; the host must inject an authorized connector registry");
+        },
+        search: async () => {
+          throw new Error("Research connector transport is unavailable; the host must inject an authorized connector registry");
+        }
+      })
     };
   }
-};
+  const byId = new Map(connectors.map((connector) => [connector.descriptor.id, connector]));
+  const list = () => connectors.map((connector) => connector.descriptor);
+  return {
+    contractVersion: 1,
+    load() {
+      return {
+        contractVersion: 1,
+        status: "ready",
+        list,
+        async recommend(seed, connectorId, context = {}, limit = 10) {
+          const connector = byId.get(connectorId);
+          if (!connector) {
+            return {
+              hits: [],
+              failures: [{ connectorId, message: `Unknown research connector: ${connectorId}`, retryable: false, at: isoNow() }]
+            };
+          }
+          if (!connector.recommend) return { hits: [], failures: [] };
+          try {
+            return { hits: await connector.recommend(seed, { ...context, limit }), failures: [] };
+          } catch (error) {
+            return { hits: [], failures: [failure(connectorId, error)] };
+          }
+        },
+        async search(input, context = {}) {
+          const query = input.query.normalize("NFKC").trim();
+          if (!query || query.length > 512) throw new Error("Research search query is required");
+          const requested = input.connectorIds ? [...input.connectorIds] : connectors.map((connector) => connector.descriptor.id);
+          const selected = requested.map((id) => byId.get(id)).filter((connector) => Boolean(connector));
+          const limit = clampLimit(input.limit);
+          const failures = requested.filter((id) => !byId.has(id)).map((connectorId) => ({ connectorId, message: `Unknown research connector: ${connectorId}`, retryable: false, at: isoNow() }));
+          const settled = await Promise.allSettled(
+            selected.map(
+              (connector) => connector.search(query, {
+                ...context,
+                cwd: input.cwd ?? context.cwd,
+                signal: input.signal ?? context.signal,
+                limit
+              })
+            )
+          );
+          const hits = [];
+          settled.forEach((result, index) => {
+            const connector = selected[index];
+            if (!connector) return;
+            if (result.status === "fulfilled") hits.push(...result.value);
+            else failures.push(failure(connector.descriptor.id, result.reason));
+          });
+          const deduped = [...new Map(hits.map((hit) => [hit.id, hit])).values()].slice(0, limit * Math.max(1, selected.length));
+          return { query, hits: deduped, failures, connectors: requested, complete: failures.length === 0 };
+        }
+      };
+    }
+  };
+}
+
+// src/research-host.ts
+var UNAVAILABLE_WRITE_MESSAGE = "Research write adapters are unavailable; the host must inject an authorized write registry";
+var researchConnectorHostLoader = createResearchConnectorHostLoader({});
 var researchWriteAdapterHostLoader = {
   contractVersion: 1,
   load() {
@@ -5807,6 +6103,7 @@ export {
   createEvidenceGate,
   createLiteratureOperations,
   createLocalZoteroReconciler,
+  createResearchConnectorHostLoader,
   createResearchLoop,
   createResearchReceiptJournal,
   createZoteroReconciler,
