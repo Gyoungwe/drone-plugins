@@ -5,9 +5,11 @@
 	"license": "MIT",
 	"publishConfig": {"access": "public"},
 	"type": "module",
-	"main": "./dist/host.mjs",
+	"main": "./dist/index.mjs",
+	"keywords": ["pi-package", "discovery"],
+	"pi": {"extensions": ["./dist/index.mjs"]},
 	"exports": {
-		".": {"types": "./src/host.ts", "import": "./dist/host.mjs", "default": "./dist/host.mjs"},
+		".": {"types": "./src/index.ts", "import": "./dist/index.mjs", "default": "./dist/index.mjs"},
 		"./host": {"types": "./src/host.ts", "import": "./dist/host.mjs", "default": "./dist/host.mjs"}
 	},
 	"files": ["dist", "src", "package.json", "README.md", "build-manifest.json", "plugin.manifest.json"],
@@ -15,10 +17,12 @@
 		"build": "node scripts/build.mjs",
 		"build:check": "node scripts/build.mjs --check",
 		"typecheck": "tsc --noEmit",
-		"test": "npm run build && node --test test/host.test.mjs",
+		"test": "npm run build && node --test test/host.test.mjs test/native.test.mjs",
+		"test:sdk": "node scripts/check-sdk-sessions.mjs",
 		"smoke": "node scripts/smoke.mjs",
 		"check": "npm run typecheck && npm run build:check && npm test && npm run smoke"
 	},
 	"dependencies": {},
+	"peerDependencies": {"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"},
 	"devDependencies": {"@types/node": "^22.19.19", "esbuild": "^0.25.12", "typescript": "^5.9.0"}
 }

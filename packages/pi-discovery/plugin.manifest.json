@@ -15,13 +15,15 @@
     "resultContract": "drone-result/v3"
   },
   "entrypoints": {
+	"extension": "./dist/index.mjs",
     "host": "./dist/host.mjs"
   },
   "capabilities": [
     "discovery"
   ],
-  "tools": [],
+  "tools": ["discovery_status", "discovery_list_records", "discovery_search_records"],
   "hosts": [
+	"native-pi",
     "drone-desktop"
   ],
   "permissions": {
