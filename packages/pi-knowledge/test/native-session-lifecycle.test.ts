@@ -198,3 +198,31 @@ it("scopes native append, messaging, events and branch reads to the owning sessi
 	expect(() => ownedPi.events.emit("late", {})).toThrow("Knowledge session has been disposed");
 	expect(() => command.handler("", { signal: new AbortController().signal, sessionManager: { getBranch: () => branch } })).toThrow("Knowledge session has been disposed");
 });
+
+it("requests the event bus only when the registered native extension uses it", async () => {
+	const { createKnowledgeOwnerLifecycle } = await import("../src/core/owner-lifecycle.js");
+	const owner = createKnowledgeOwnerLifecycle({ dispose: async () => undefined });
+	const tools = new Map<string, any>();
+	let registeredPi: any;
+	const pi = new Proxy({
+		registerTool: (definition: any) => tools.set(definition.name, definition),
+		on: () => () => undefined,
+	}, {
+		get(target, property, receiver) {
+			if (property === "events") throw new Error("Unsupported native Pi API: events");
+			return Reflect.get(target, property, receiver);
+		},
+	});
+	const adapter = createKnowledgeNativeAdapter(owner, new AbortController(), (scoped) => {
+		registeredPi = scoped;
+		scoped.registerTool({ name: "read_probe", execute: async () => "read-ok" });
+	});
+	try {
+		adapter.extension(pi);
+		expect(await tools.get("read_probe").execute("read", {}, undefined, undefined, {})).toBe("read-ok");
+		expect(() => registeredPi.events).toThrow("Unsupported native Pi API: events");
+	} finally {
+		await adapter.dispose();
+		await owner.dispose();
+	}
+});
