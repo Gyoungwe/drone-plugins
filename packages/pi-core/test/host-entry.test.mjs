@@ -41,3 +41,22 @@ test("versioned host entry exports the optional tasks host loader contract", () 
 	port.registerAcceptanceVerifier("host_test", { fields: ["doi"] });
 	assert.equal(port.readAcceptanceVerifier("host_test").kind, "host_test");
 });
+
+test("tasks host loader adapts an injected workbench client", async () => {
+	const calls = [];
+	const port = host.taskHostLoader.load({
+		workbench: {
+			invoke: async (operation, input) => {
+				calls.push({ operation, input });
+				return { operation, input };
+			},
+		},
+	});
+	assert.equal(typeof port.workbench?.status, "function");
+	await port.workbench?.status();
+	await port.workbench?.plan(["one", "two"]);
+	assert.deepEqual(calls, [
+		{ operation: "status", input: {} },
+		{ operation: "plan", input: { items: ["one", "two"] } },
+	]);
+});
