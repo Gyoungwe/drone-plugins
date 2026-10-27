@@ -8409,10 +8409,6 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
   function registerAcceptanceVerifier(name, definition) {
     return extensionHost.registerAcceptanceVerifier?.(name, definition) ?? definition;
   }
-  function registerTaskRuntime(pi, options) {
-    if (extensionHost.registerTaskRuntime) return extensionHost.registerTaskRuntime(pi, options);
-    return null;
-  }
   function registerTool(pi, definition) {
     (extensionHost.registerTool || ((target, value) => target.registerTool(value)))(pi, definition);
   }
@@ -8483,7 +8479,23 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
   function registerKnowledgeInterface2(pi, { readOnly = false, runtime = null } = {}) {
     bindAcceptanceVerifierEvents(pi);
     registerWikiReviewAcceptance2();
-    const taskRuntime = readOnly ? null : registerTaskRuntime(pi, { readKnowledgeBinding: readKnowledgeBinding2 });
+    const getTaskRuntime = () => {
+      if (readOnly || !pi.events) return null;
+      let taskRuntime = null;
+      const unsubscribe = pi.events.on("drone:task-runtime/v1", (payload) => {
+        if (payload?.version === 1 && payload.registry?.journal) taskRuntime = payload.registry.journal;
+      });
+      try {
+        pi.events.emit("drone:task-runtime/request/v1", { version: 1 });
+      } finally {
+        unsubscribe();
+      }
+      taskRuntime?.configure?.({ readKnowledgeBinding: readKnowledgeBinding2 });
+      return taskRuntime;
+    };
+    getTaskRuntime();
+    pi.on("session_start", getTaskRuntime);
+    pi.on("session_tree", getTaskRuntime);
     const recovery = /* @__PURE__ */ new Map();
     let recoveryScope = null;
     const saveRecovery = () => {
@@ -8576,7 +8588,7 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
       evidenceOnly: readOnly,
       getDeliveryFooter: () => deliveryFooter,
       getTaskFeedback: () => feedback,
-      getTaskRuntime: () => taskRuntime,
+      getTaskRuntime,
       // The backend may inject a bounded, host-observed metacognitive snapshot
       // on the current turn. Missing snapshots keep legacy operational turns
       // compatible; when supplied, the publication gate fails closed.
@@ -9015,7 +9027,7 @@ ${JSON.stringify(visible)}`
             recovery.set(_id, {
               id: _id,
               sessionId: sessionIdentity(ctx),
-              taskId: taskRuntime?.snapshot()?.id || null,
+              taskId: getTaskRuntime()?.snapshot()?.id || null,
               path: p.path,
               hash: page.hash,
               startLine: p.start_line || 1,
@@ -9045,7 +9057,7 @@ ${JSON.stringify(visible)}`
       execute: async (_id, input, _s, _u, ctx) => {
         attachRecovery(ctx);
         const r = recovery.get(input.receipt_id), c = await ensureTurn(ctx);
-        if (!r?.evicted || r.used || r.taskId !== (taskRuntime?.snapshot()?.id || null) || r.vaultId !== c.binding.vaultId || r.bindingRevision !== c.binding.revision)
+        if (!r?.evicted || r.used || r.taskId !== (getTaskRuntime()?.snapshot()?.id || null) || r.vaultId !== c.binding.vaultId || r.bindingRevision !== c.binding.revision)
           throw new Error(
             "evidence-recovery-unavailable: current task, evicted window and unchanged binding required"
           );
@@ -9496,6 +9508,7 @@ ${text3}`, [
       });
     }
     pi.on("message_start", async (event, ctx) => {
+      const taskRuntime = getTaskRuntime();
       const automatic = taskRuntime?.isAutoContinuation?.(event.message) === true;
       if (event.message.role !== "user" && !automatic) return;
       if (awaitingUserStart && !automatic) {
