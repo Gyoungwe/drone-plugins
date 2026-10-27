@@ -4,9 +4,9 @@ import { join, normalize, resolve } from "node:path";
 
 export const CAPABILITIES = new Set([
 	"knowledge", "research", "search", "evidence-context", "analysis", "planning", "tasks", "files", "evidence",
-	"provenance", "replay", "connectors", "read-only", "provenance-receipts", "ui", "core",
+	"provenance", "replay", "connectors", "discovery", "read-only", "provenance-receipts", "ui", "core",
 ]);
-const FILESYSTEM_PERMISSIONS = new Set(["workspace-read", "workspace", "configured-vault", "vault-read"]);
+const FILESYSTEM_PERMISSIONS = new Set(["workspace-read", "workspace", "configured-vault", "vault-read", "project-read"]);
 const PERMISSION_KEYS = new Set(["filesystem", "network", "subprocess", "externalWrites", "credentials", "readWrite", "externalSideEffects"]);
 const HOSTS = new Set(["native-pi", "drone-desktop"]);
 const TOOL_RE = /^[a-z][a-z0-9_-]*$/u;

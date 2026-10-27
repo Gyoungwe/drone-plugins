@@ -8,13 +8,14 @@
     "packages/*"
   ],
   "scripts": {
-	"build": "npm run --workspace @gyoungwe/pi-core build && npm run --workspace @gyoungwe/pi-knowledge build && npm run --workspace @gyoungwe/pi-research build && npm run --workspace @gyoungwe/pi-analysis build && npm run --workspace @gyoungwe/pi-evidence build && npm run --workspace @gyoungwe/pi-connectors build && npm run --workspace @gyoungwe/desktop-ui-pack build && npm run --workspace @gyoungwe/research-suite build",
+	"build": "npm run --workspace @gyoungwe/pi-core build && npm run --workspace @gyoungwe/pi-knowledge build && npm run --workspace @gyoungwe/pi-research build && npm run --workspace @gyoungwe/pi-analysis build && npm run --workspace @gyoungwe/pi-evidence build && npm run --workspace @gyoungwe/pi-connectors build && npm run --workspace @gyoungwe/pi-discovery build && npm run --workspace @gyoungwe/desktop-ui-pack build && npm run --workspace @gyoungwe/research-suite build",
     "check:manifests": "node scripts/check-manifests.mjs",
 	"check:pi-core": "npm run --workspace @gyoungwe/pi-core check",
 	"check:pi-knowledge": "npm run --workspace @gyoungwe/pi-knowledge build:check",
     "check:pi-research": "npm run --workspace @gyoungwe/pi-research check",
     "check:research-suite": "npm run --workspace @gyoungwe/research-suite build:check",
     "check:desktop-ui-pack": "npm run --workspace @gyoungwe/desktop-ui-pack build:check",
+    "check:pi-discovery": "npm run --workspace @gyoungwe/pi-discovery build:check",
     "smoke:pi-knowledge": "npm run --workspace @gyoungwe/pi-knowledge smoke",
     "smoke:pi-research": "npm run --workspace @gyoungwe/pi-research smoke",
     "check:pi-analysis": "npm run --workspace @gyoungwe/pi-analysis check",
@@ -28,7 +29,7 @@
     "smoke:pi-cli": "node scripts/pi-cli-regression.mjs",
     "typecheck": "tsc --noEmit",
     "pack:check": "npm pack --workspaces --dry-run",
-	"check": "npm run build && npm run check:manifests && node --test scripts/check-manifests.test.mjs && npm run check:pi-core && npm run typecheck && npm run check:pi-knowledge && npm run check:pi-research && npm run check:research-suite && npm run --workspace @gyoungwe/research-suite test && npm run check:pi-analysis && npm run check:pi-evidence && npm run check:pi-connectors && npm run check:desktop-ui-pack && npm run smoke:install && npm run smoke:pi-research && npm run smoke:desktop-ui-pack && npm run pack:check"
+	"check": "npm run build && npm run check:manifests && node --test scripts/check-manifests.test.mjs && npm run check:pi-core && npm run typecheck && npm run check:pi-knowledge && npm run check:pi-research && npm run check:research-suite && npm run --workspace @gyoungwe/research-suite test && npm run check:pi-analysis && npm run check:pi-evidence && npm run check:pi-connectors && npm run check:pi-discovery && npm run check:desktop-ui-pack && npm run smoke:install && npm run smoke:pi-research && npm run smoke:desktop-ui-pack && npm run --workspace @gyoungwe/pi-discovery test && npm run pack:check"
   },
   "engines": {
     "node": ">=20"

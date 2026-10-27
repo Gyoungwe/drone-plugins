@@ -1,0 +1,24 @@
+{
+	"name": "@gyoungwe/pi-discovery",
+	"version": "0.1.0",
+	"description": "Read-only discovery records host for Drone",
+	"license": "MIT",
+	"publishConfig": {"access": "public"},
+	"type": "module",
+	"main": "./dist/host.mjs",
+	"exports": {
+		".": {"types": "./src/host.ts", "import": "./dist/host.mjs", "default": "./dist/host.mjs"},
+		"./host": {"types": "./src/host.ts", "import": "./dist/host.mjs", "default": "./dist/host.mjs"}
+	},
+	"files": ["dist", "src", "package.json", "README.md", "build-manifest.json", "plugin.manifest.json"],
+	"scripts": {
+		"build": "node scripts/build.mjs",
+		"build:check": "node scripts/build.mjs --check",
+		"typecheck": "tsc --noEmit",
+		"test": "npm run build && node --test test/host.test.mjs",
+		"smoke": "node scripts/smoke.mjs",
+		"check": "npm run typecheck && npm run build:check && npm test && npm run smoke"
+	},
+	"dependencies": {},
+	"devDependencies": {"@types/node": "^22.19.19", "esbuild": "^0.25.12", "typescript": "^5.9.0"}
+}
