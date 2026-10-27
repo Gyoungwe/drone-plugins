@@ -85,8 +85,8 @@ function createStandaloneRuntime(log = {}) {
           resources.map((resource) => {
             try {
               return resource.dispose?.() ?? resource.close?.();
-            } catch (error2) {
-              return Promise.reject(error2);
+            } catch (error3) {
+              return Promise.reject(error3);
             }
           })
         );
@@ -302,20 +302,6 @@ function acceptanceSchema() {
     additionalProperties: false
   };
 }
-function normalizeAcceptance(input, clean2, verifiers) {
-  ensureRegistryShape();
-  const kind = input?.kind;
-  const verifier = (verifiers || registry.verifiers).get(kind) || null;
-  const acceptance = {
-    kind,
-    path: clean2(input.path, 512),
-    sha256: /^[a-f0-9]{64}$/.test(input.sha256 || "") ? input.sha256 : null
-  };
-  if (["workspace", "vault", "research-run"].includes(String(input.rootKind)))
-    acceptance.rootKind = input.rootKind;
-  for (const field of verifier?.fields || []) acceptance[field] = clean2(input[field]);
-  return acceptance;
-}
 function effectiveAcceptance(milestone) {
   const acceptance = milestone?.acceptance || {};
   const bound = milestone?.bound?.fields;
@@ -464,6 +450,67 @@ ${details}`, [deny, allow], { signal });
 // src/task-runtime/evidence.mjs
 import { readFile } from "node:fs/promises";
 import { resolve as resolve3 } from "node:path";
+
+// src/milestone-plan.ts
+var clean = (value, max = 180) => String(value ?? "").replace(
+  /(?:bearer\s+|(?:api[_-]?key|token|password|secret)\s*[=:]\s*)[^\s,;]+/gi,
+  "[redacted]"
+).split("").map(
+  (c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 || "<>".includes(c) ? " " : c
+).join("").slice(0, max);
+var error = (code, message) => Object.assign(new Error(message), { code });
+var MCP_CONFIG_FILE = /(?:^|[\\/])(?:\.?mcp|mcp-adapter)\.json$/i;
+function normalizeTaskMilestones(input, catalog) {
+  if (!Array.isArray(input) || !input.length || input.length > 24)
+    throw error("plan-limit", "Plan needs 1\u201324 milestones.");
+  const badId = input.find((m) => !/^[a-zA-Z0-9_-]{1,40}$/.test(String(m.id)));
+  if (badId)
+    throw error(
+      "plan-id-format",
+      `Milestone ID ${JSON.stringify(String(badId.id).slice(0, 60))} is invalid: use 1\u201340 letters, digits, "-" or "_".`
+    );
+  const ids = new Set(input.map((m) => m.id));
+  if (ids.size !== input.length)
+    throw error("plan-id", "Milestone IDs must be unique.");
+  const seen = /* @__PURE__ */ new Set();
+  return input.map((m) => {
+    if ((m.dependsOn || []).some((id) => !seen.has(id)))
+      throw error(
+        "plan-dependency",
+        "Dependencies must refer to earlier milestones, not cycles or missing IDs."
+      );
+    if (!catalog.kinds.includes(m.acceptance?.kind))
+      throw error(
+        "acceptance-required",
+        `Acceptance must be one of ${catalog.kinds.join(" | ")} (observed by the host or confirmed by the user); model labels cannot complete it.`
+      );
+    if (m.acceptance.kind === "file" && MCP_CONFIG_FILE.test(String(m.acceptance.path || "")))
+      throw error(
+        "acceptance-config-write",
+        "Writing an MCP config file (mcp.json) does not load MCP tools, so it cannot complete a milestone. Use human_review, or finish only after the mcp tool actually ran in a reloaded session; if no MCP tools are available, tell the user instead."
+      );
+    const acceptance = {
+      kind: m.acceptance.kind,
+      path: clean(m.acceptance.path, 512),
+      sha256: /^[a-f0-9]{64}$/.test(String(m.acceptance.sha256 || "")) ? m.acceptance.sha256 : null
+    };
+    if (["workspace", "vault", "research-run"].includes(
+      String(m.acceptance.rootKind)
+    ))
+      acceptance.rootKind = m.acceptance.rootKind;
+    for (const field of catalog.fields[m.acceptance.kind] || [])
+      acceptance[field] = clean(m.acceptance[field]);
+    seen.add(m.id);
+    return {
+      id: m.id,
+      title: clean(m.title),
+      dependsOn: [...m.dependsOn || []],
+      acceptance,
+      state: "pending",
+      evidence: null
+    };
+  });
+}
 
 // src/task-runtime/workbench.mjs
 import { createHash as createHash2, randomUUID } from "node:crypto";
@@ -688,7 +735,6 @@ function isReadOnlyTool(name, args = void 0) {
 }
 
 // src/task-runtime/workbench.mjs
-var MCP_CONFIG_FILE = /(?:^|[\\/])(?:\.?mcp|mcp-adapter)\.json$/i;
 var WORKBENCH_ENTRY = "drone-task-workbench-v2";
 var LIMITS = Object.freeze({
   tasks: 12,
@@ -702,7 +748,7 @@ var LIMITS = Object.freeze({
   retries: 3,
   fileBytes: 8 * 1024 * 1024
 });
-var clean = (value, max = 180) => String(value ?? "").replace(/(?:bearer\s+|(?:api[_-]?key|token|password|secret)\s*[=:]\s*)[^\s,;]+/gi, "[redacted]").split("").map((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 || "<>".includes(c) ? " " : c).join("").slice(0, max);
+var clean2 = (value, max = 180) => String(value ?? "").replace(/(?:bearer\s+|(?:api[_-]?key|token|password|secret)\s*[=:]\s*)[^\s,;]+/gi, "[redacted]").split("").map((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 || "<>".includes(c) ? " " : c).join("").slice(0, max);
 var hash = (value) => createHash2("sha256").update(value).digest("hex");
 var ARTIFACT_ROOT_KINDS = Object.freeze(["workspace", "vault", "research-run"]);
 var clone = (value) => structuredClone(value);
@@ -750,7 +796,7 @@ var explainReason = (code) => code ? REASON_TEXT[code] || code : null;
 var defersPendingReview = (query) => /^(?:继续(?:做完|吧|执行|处理|完成|上一任务)?|接着(?:做|处理)?|continue|resume)[\s,.!？，。！?]*$/i.test(
   String(query ?? "").trim()
 );
-var error = (code, message) => Object.assign(new Error(message), { code });
+var error2 = (code, message) => Object.assign(new Error(message), { code });
 var stable = (value) => JSON.stringify(
   value,
   (_key, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v
@@ -759,10 +805,10 @@ async function inspectTaskFile(cwd, input, expected = {}) {
   const base = await realpath2(cwd), path = await realpath2(resolve2(cwd, input));
   const rel = relative2(base, path);
   if (!rel || isAbsolute2(rel) || rel === ".." || rel.startsWith(`..${sep}`) || rel.split(sep).some((p) => p.startsWith(".") || /^(?:auth|credentials|secrets?|tokens?|password)(?:\.|$)/i.test(p)))
-    throw error("file-scope", "Choose an explicit non-private file within this task workspace.");
+    throw error2("file-scope", "Choose an explicit non-private file within this task workspace.");
   const stat3 = await lstat(path);
   if (!stat3.isFile() || stat3.size > LIMITS.fileBytes)
-    throw error(
+    throw error2(
       "file-limit",
       "Expected a regular file of at most 8 MiB; larger files need a dedicated read-only adapter."
     );
@@ -770,10 +816,10 @@ async function inspectTaskFile(cwd, input, expected = {}) {
   try {
     const opened = await file.stat();
     if (await realpath2(path) !== path || opened.ino !== stat3.ino || opened.dev !== stat3.dev || opened.size > LIMITS.fileBytes)
-      throw error("file-changed", "File scope/version changed before inspection.");
+      throw error2("file-changed", "File scope/version changed before inspection.");
     const bytes = await file.readFile();
     if (bytes.length > LIMITS.fileBytes)
-      throw error("file-limit", "File changed beyond the inspection limit.");
+      throw error2("file-limit", "File changed beyond the inspection limit.");
     const identity = {
       path: rel.split(sep).join("/"),
       absolutePath: path,
@@ -786,7 +832,7 @@ async function inspectTaskFile(cwd, input, expected = {}) {
     };
     if (expected.kind === "pdf") {
       if (!bytes.subarray(0, 1024).includes(Buffer.from("%PDF-")))
-        throw error("not-pdf", "Not a PDF: HTML landing pages and renamed downloads are not accepted.");
+        throw error2("not-pdf", "Not a PDF: HTML landing pages and renamed downloads are not accepted.");
       identity.kind = "pdf";
       if (expected.doi || expected.title) {
         const found = await readPdfIdentity(bytes);
@@ -796,7 +842,7 @@ async function inspectTaskFile(cwd, input, expected = {}) {
         const titleMatch = title.length >= 12 && normalize(found.text).includes(title);
         const doiMatch = !!doi && found.text.toLowerCase().includes(doi);
         if (doi && !doiMatch || title.length >= 12 && !titleMatch)
-          throw error(
+          throw error2(
             "identity-mismatch",
             "Selected PDF does not match the requested title/DOI in the inspected first pages. Choose the correct file or explicitly revise the request; original unchanged."
           );
@@ -805,13 +851,13 @@ async function inspectTaskFile(cwd, input, expected = {}) {
       }
       identity.identity = expected.sha256 ? identity.sha256 === expected.sha256 ? "hash-matched" : "mismatch" : identity.identity === "metadata-matched" ? "metadata-matched" : "needs-review";
       if (identity.identity === "mismatch")
-        throw error(
+        throw error2(
           "identity-mismatch",
           "File hash does not match the requested artifact; original file was not changed."
         );
     }
     if (expected.sha256 && expected.kind !== "pdf" && identity.sha256 !== expected.sha256)
-      throw error("artifact-changed", "File version differs from the expected hash.");
+      throw error2("artifact-changed", "File version differs from the expected hash.");
     return identity;
   } finally {
     await file.close();
@@ -888,10 +934,10 @@ function createTaskWorkbench({
         t.state = "partial";
         t.reason = "legacy-checkpoint-unreviewed";
         t.receipts = (legacy.data.receipts || []).slice(-24).filter((r) => r && typeof r.tool === "string").map((r) => ({
-          id: clean(r.id),
-          tool: clean(r.tool),
+          id: clean2(r.id),
+          tool: clean2(r.tool),
           state: "legacy-unreviewed",
-          at: clean(r.at)
+          at: clean2(r.at)
         }));
         book.tasks.push(t);
         book.activeTaskId = t.id;
@@ -917,7 +963,7 @@ function createTaskWorkbench({
   function make(goal) {
     const t = {
       id: randomUUID(),
-      goal: clean(goal),
+      goal: clean2(goal),
       state: "pending",
       createdAt: now(),
       updatedAt: now(),
@@ -942,7 +988,7 @@ function createTaskWorkbench({
   }
   function requireTask() {
     const t = active();
-    if (!t || book.selectionRequired) throw error("task-selection-required", "Select a task first.");
+    if (!t || book.selectionRequired) throw error2("task-selection-required", "Select a task first.");
     return t;
   }
   function begin(query, capabilities = [], binding = null) {
@@ -1017,7 +1063,7 @@ function createTaskWorkbench({
       if (archived.length) book.tasks.splice(book.tasks.indexOf(archived[0]), 1);
     }
     if (book.tasks.length >= LIMITS.tasks)
-      throw error(
+      throw error2(
         "task-capacity",
         "Task history is full. Archive a finished task from the task panel (export first if needed); no open task is silently discarded."
       );
@@ -1032,50 +1078,18 @@ function createTaskWorkbench({
     return t;
   }
   function plan(input) {
-    if (book.selectionRequired) throw error("task-selection-required", "Select a task first.");
-    if (!Array.isArray(input.milestones) || !input.milestones.length || input.milestones.length > LIMITS.milestones)
-      throw error("plan-limit", "Plan needs 1\u201324 milestones.");
-    const badId = input.milestones.find((m) => !/^[a-zA-Z0-9_-]{1,40}$/.test(String(m.id)));
-    if (badId)
-      throw error(
-        "plan-id-format",
-        `Milestone ID ${JSON.stringify(String(badId.id).slice(0, 60))} is invalid: use 1\u201340 letters, digits, "-" or "_".`
-      );
-    const ids = new Set(input.milestones.map((m) => m.id));
-    if (ids.size !== input.milestones.length) throw error("plan-id", "Milestone IDs must be unique.");
-    const seen = /* @__PURE__ */ new Set();
-    const milestones = input.milestones.map((m) => {
-      if ((m.dependsOn || []).some((id) => !seen.has(id)))
-        throw error(
-          "plan-dependency",
-          "Dependencies must refer to earlier milestones, not cycles or missing IDs."
-        );
-      if (!knownKinds().has(m.acceptance?.kind))
-        throw error(
-          "acceptance-required",
-          `Acceptance must be one of ${[...knownKinds()].join(" | ")} (observed by the host or confirmed by the user); model labels cannot complete it.`
-        );
-      if (m.acceptance.kind === "file" && MCP_CONFIG_FILE.test(String(m.acceptance.path || "")))
-        throw error(
-          "acceptance-config-write",
-          "Writing an MCP config file (mcp.json) does not load MCP tools, so it cannot complete a milestone. Use human_review, or finish only after the mcp tool actually ran in a reloaded session; if no MCP tools are available, tell the user instead."
-        );
-      seen.add(m.id);
-      return {
-        id: m.id,
-        title: clean(m.title),
-        dependsOn: [...m.dependsOn || []],
-        acceptance: normalizeAcceptance(m.acceptance, clean, { get: verifierFor }),
-        state: "pending",
-        evidence: null
-      };
+    if (book.selectionRequired) throw error2("task-selection-required", "Select a task first.");
+    const kinds = [...knownKinds()];
+    const milestones = normalizeTaskMilestones(input.milestones, {
+      kinds,
+      fields: Object.fromEntries(kinds.map((kind) => [kind, verifierFor(kind)?.fields || []]))
     });
     const current = active();
     const t = current && !terminal(current.state) && !current.milestones.length ? current : openTask(input.goal || "\u4EFB\u52A1", turnBinding);
     if (t !== current && current && current.milestones.length && !terminal(current.state))
       current.state = "partial";
-    if (input.goal) t.goal = clean(input.goal);
-    t.authorizationSummary = clean(input.summary || t.goal, 1200);
+    if (input.goal) t.goal = clean2(input.goal);
+    t.authorizationSummary = clean2(input.summary || t.goal, 1200);
     t.writeRoots = [...input.writeRoots || []];
     if (input.compute !== void 0) t.compute = clone(input.compute);
     else delete t.compute;
@@ -1089,52 +1103,52 @@ function createTaskWorkbench({
   function wait(input) {
     const t = requireTask();
     if (!["file", "download", "authorization", "review", "rebind"].includes(input.kind))
-      throw error("action-kind", "Unknown user action.");
+      throw error2("action-kind", "Unknown user action.");
     if (t.actions.filter((a) => a.state === "pending").length >= LIMITS.actions)
-      throw error("action-limit", "Resolve an existing action first.");
+      throw error2("action-limit", "Resolve an existing action first.");
     let rebind = null;
     if (input.kind === "rebind") {
       const m = t.milestones.find((m2) => m2.id === input.milestoneId);
-      if (!m) throw error("rebind-milestone", "Name an existing milestone of this task to rebind.");
+      if (!m) throw error2("rebind-milestone", "Name an existing milestone of this task to rebind.");
       if (!t.planApproved)
-        throw error(
+        throw error2(
           "rebind-plan",
           "Rebind applies to an approved plan; before approval call task_plan with the correct identity."
         );
       const fields = verifierFor(m.acceptance.kind)?.fields || [];
-      const doi = clean(input.doi, 512);
+      const doi = clean2(input.doi, 512);
       if (!fields.includes("doi") || !doi)
-        throw error(
+        throw error2(
           "rebind-identity",
           "Only milestones whose acceptance declares a doi field can be rebound; supply the new doi."
         );
       const current = effectiveAcceptance(m);
       if (sameIdentity(current.doi, doi))
-        throw error(
+        throw error2(
           "rebind-same",
           "This milestone already names that identity; verify it instead of rebinding."
         );
       if (t.actions.some((a) => a.kind === "rebind" && a.state === "pending" && a.milestoneId === m.id))
-        throw error("rebind-pending", "A rebind request for this milestone is already waiting for the user.");
-      rebind = { milestoneId: m.id, doi, previous: clean(current.doi, 512) || null };
+        throw error2("rebind-pending", "A rebind request for this milestone is already waiting for the user.");
+      rebind = { milestoneId: m.id, doi, previous: clean2(current.doi, 512) || null };
     }
     let url = null;
     if (input.url) {
       const parsed = new URL(input.url);
       if (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password || /(?:token|key|secret|auth)=/i.test(parsed.search))
-        throw error("action-url", "Use a public browser link without embedded credentials.");
+        throw error2("action-url", "Use a public browser link without embedded credentials.");
       url = parsed.href;
     }
     const action = {
       id: randomUUID(),
       kind: input.kind,
-      title: clean(input.title),
-      reason: clean(input.reason),
+      title: clean2(input.title),
+      reason: clean2(input.reason),
       url,
       expected: {
         kind: input.kind === "download" ? "pdf" : rebind ? "identity" : "file",
-        doi: rebind ? rebind.doi : clean(input.doi),
-        title: clean(input.title),
+        doi: rebind ? rebind.doi : clean2(input.doi),
+        title: clean2(input.title),
         sha256: /^[a-f0-9]{64}$/.test(input.sha256 || "") ? input.sha256 : null
       },
       ...rebind ? { previous: rebind.previous } : {},
@@ -1152,9 +1166,9 @@ function createTaskWorkbench({
     return clone(action);
   }
   function checkRevision(id, revision) {
-    if (revision !== book.revision) throw error("stale-task-view", "Task changed. Refresh before acting.");
+    if (revision !== book.revision) throw error2("stale-task-view", "Task changed. Refresh before acting.");
     const t = book.tasks.find((t2) => t2.id === id);
-    if (!t) throw error("task-scope", "Task does not belong to this session/branch.");
+    if (!t) throw error2("task-scope", "Task does not belong to this session/branch.");
     return t;
   }
   function settleWait(t) {
@@ -1167,10 +1181,10 @@ function createTaskWorkbench({
   function command(input) {
     const t = checkRevision(input.taskId, input.revision);
     if (book.tasks.some((x) => x.operations.some((o) => o.state === "started")))
-      throw error("task-busy", "Stop the running agent before changing task state.");
+      throw error2("task-busy", "Stop the running agent before changing task state.");
     if (input.action === "authorize-task") {
       if (terminal(t.state) || !t.milestones.length)
-        throw error("plan-required", "Review a non-empty task plan before authorizing execution.");
+        throw error2("plan-required", "Review a non-empty task plan before authorizing execution.");
       if (!hasTaskConsent(t, LIMITS.totalCalls)) {
         t.executionConsent = {
           version: 1,
@@ -1199,21 +1213,21 @@ function createTaskWorkbench({
       pinned = true;
     } else if (input.action === "cancel") {
       if (t.operations.some((o) => o.state === "started"))
-        throw error("task-busy", "Stop the running agent before cancelling this task.");
+        throw error2("task-busy", "Stop the running agent before cancelling this task.");
       t.state = "cancelled";
       t.reason = "user-cancelled";
       for (const a of t.actions) if (a.state === "pending") a.state = "cancelled";
       settleWait(t);
     } else if (input.action === "archive") {
       if (!["completed", "cancelled", "partial", "blocked"].includes(t.state))
-        throw error("archive-state", "Cancel or finish the task before archiving it.");
+        throw error2("archive-state", "Cancel or finish the task before archiving it.");
       if (t.operations.some((o) => ["started", "unknown"].includes(o.state)))
-        throw error(
+        throw error2(
           "archive-unknown",
           "Reconcile unknown effects before archiving; archiving is not confirmation."
         );
       if (t.actions.some((a) => a.state === "pending"))
-        throw error("archive-pending", "Resolve or dismiss pending user actions before archiving.");
+        throw error2("archive-pending", "Resolve or dismiss pending user actions before archiving.");
       t.archivedFrom = t.state;
       t.state = "archived";
       t.reason = "user-archived";
@@ -1225,12 +1239,12 @@ function createTaskWorkbench({
       }
     } else if (input.action === "next-stage") {
       if (t.budget.calls >= LIMITS.totalCalls)
-        throw error(
+        throw error2(
           "total-budget",
           "Absolute task budget reached. Export the checkpoint and explicitly scope a new task; no automatic continuation."
         );
       if (t.operations.some((o) => ["started", "unknown"].includes(o.state)) || t.actions.some((a) => a.state === "pending"))
-        throw error(
+        throw error2(
           "reconcile-before-resume",
           "Resolve unknown effects and pending user actions before another stage."
         );
@@ -1243,13 +1257,13 @@ function createTaskWorkbench({
       t.reason = null;
     } else if (input.action === "acknowledge" || input.action === "dismiss") {
       const a = t.actions.find((a2) => a2.id === input.actionId && a2.state === "pending");
-      if (!a) throw error("action-stale", "Action no longer pending.");
+      if (!a) throw error2("action-stale", "Action no longer pending.");
       if (input.action === "acknowledge" && ["download", "file"].includes(a.kind) && !a.file)
-        throw error("file-required", "Inspect the selected file first.");
+        throw error2("file-required", "Inspect the selected file first.");
       if (input.action === "acknowledge" && a.kind === "review" && a.milestoneId) {
         const kind = t.milestones.find((m2) => m2.id === a.milestoneId)?.acceptance.kind;
         const refusal = verifierFor(kind)?.acknowledgeError;
-        if (refusal) throw error(refusal.code, refusal.message);
+        if (refusal) throw error2(refusal.code, refusal.message);
       }
       a.state = input.action === "dismiss" ? "cancelled" : "acknowledged";
       a.resolvedAt = now();
@@ -1273,24 +1287,24 @@ function createTaskWorkbench({
     } else if (input.action === "confirm-outcome") {
       const op = t.operations.find((o) => o.id === input.operationId);
       if (!op || !["unknown", "returned"].includes(op.state))
-        throw error("operation-stale", "No uncertain operation to confirm.");
+        throw error2("operation-stale", "No uncertain operation to confirm.");
       op.state = "human-confirmed";
       op.checkedAt = now();
       op.verifier = "explicit-user-attestation-not-scientific-proof";
       t.reason = null;
       t.state = "partial";
-    } else throw error("task-command", "Unsupported task action.");
+    } else throw error2("task-command", "Unsupported task action.");
     save();
     return view();
   }
   async function acceptFile(input, cwd) {
     const t = checkRevision(input.taskId, input.revision), a = t.actions.find((a2) => a2.id === input.actionId && a2.state === "pending");
     if (!a || !["file", "download"].includes(a.kind))
-      throw error("action-file", "Select an active file/download action.");
+      throw error2("action-file", "Select an active file/download action.");
     const file = await inspect(cwd, input.path, a.expected);
     checkRevision(input.taskId, input.revision);
     if (t.actions.some((other) => other.id !== a.id && other.file?.sha256 === file.sha256))
-      throw error(
+      throw error2(
         "duplicate-file",
         "This exact file is already associated with another action; original file was not changed."
       );
@@ -1301,9 +1315,9 @@ function createTaskWorkbench({
   }
   function stillCurrent(id, t) {
     const cur = book.tasks.find((x) => x.id === id);
-    if (!cur) throw error("task-scope", "Task does not belong to this session/branch.");
+    if (!cur) throw error2("task-scope", "Task does not belong to this session/branch.");
     if (cur !== t)
-      throw error("stale-task-view", "Task was replaced while reconciling; call task_reconcile again.");
+      throw error2("stale-task-view", "Task was replaced while reconciling; call task_reconcile again.");
   }
   async function reconcile(cwd) {
     const t = requireTask(), id = t.id;
@@ -1317,7 +1331,7 @@ function createTaskWorkbench({
           state: "unknown"
         };
       } catch (e) {
-        result = { state: "unknown", reason: clean(e?.message || "verifier-failed") };
+        result = { state: "unknown", reason: clean2(e?.message || "verifier-failed") };
       }
       stillCurrent(id, t);
       m.state = result.state === "found" && depsDone(t, m) ? "completed" : result.state === "pending" ? "pending" : "blocked";
@@ -1484,7 +1498,7 @@ function createTaskWorkbench({
     return true;
   }
   function guard(event) {
-    if (book.selectionRequired) throw error("task-selection-required", "Select a task first.");
+    if (book.selectionRequired) throw error2("task-selection-required", "Select a task first.");
     if (event.toolName === "task_plan") return null;
     const t = active();
     if (!t || terminal(t.state)) {
@@ -1561,21 +1575,21 @@ function createTaskWorkbench({
     t.budget.stageCalls++;
     if (!controls.has(event.toolName) && event.toolCallId) {
       t.pendingObservations ||= [];
-      t.pendingObservations.push(clean(event.toolCallId, 100));
+      t.pendingObservations.push(clean2(event.toolCallId, 100));
       t.pendingObservations = t.pendingObservations.slice(-LIMITS.totalCalls);
     }
     if (effect) {
       const op = {
-        id: clean(event.toolCallId, 100),
+        id: clean2(event.toolCallId, 100),
         key,
-        tool: clean(event.toolName, 80),
+        tool: clean2(event.toolName, 80),
         state: "started",
         at: now(),
         stage: t.stage
       };
       if (event.toolName === "write" && typeof event.input?.path === "string" && typeof event.input?.content === "string") {
         op.artifact = {
-          path: clean(event.input.path, 512),
+          path: clean2(event.input.path, 512),
           sha256: hash(event.input.content),
           bytes: Buffer.byteLength(event.input.content),
           intentOnly: true
@@ -1597,7 +1611,7 @@ function createTaskWorkbench({
     const fields = {};
     for (const field of verifier.fields || [])
       if (typeof identity[field] === "string" && identity[field].trim())
-        fields[field] = clean(identity[field], 512);
+        fields[field] = clean2(identity[field], 512);
     const keys = Object.keys(fields);
     if (!keys.length) return null;
     const candidates = t.milestones.filter((m) => m.acceptance?.kind === verifier.kind);
@@ -1636,8 +1650,8 @@ function createTaskWorkbench({
       return;
     }
     const bad = toolResultFailed(event);
-    const observedCall = t.pendingObservations?.includes(clean(event.toolCallId, 100));
-    t.pendingObservations = (t.pendingObservations || []).filter((id) => id !== clean(event.toolCallId, 100));
+    const observedCall = t.pendingObservations?.includes(clean2(event.toolCallId, 100));
+    t.pendingObservations = (t.pendingObservations || []).filter((id) => id !== clean2(event.toolCallId, 100));
     if (observedCall && !bad && !controls.has(event.toolName) && event.toolName !== "ask_user") {
       const progressKey = hash(`${event.toolName}\0${stable(event.input || {})}`);
       t.progressKeys ||= [];
@@ -1689,8 +1703,8 @@ function createTaskWorkbench({
         }
         if (!review?.id) continue;
         op.state = "awaiting-review";
-        op.candidateId = clean(review.id);
-        op.review = { kind: verifier.kind, id: clean(review.id), path: clean(review.path, 512) || null };
+        op.candidateId = clean2(review.id);
+        op.review = { kind: verifier.kind, id: clean2(review.id), path: clean2(review.path, 512) || null };
         break;
       }
       for (const verifier of allVerifiers()) {
@@ -1731,7 +1745,7 @@ function createTaskWorkbench({
     const t = active();
     if (t) {
       t.state = "partial";
-      t.reason = clean(reason);
+      t.reason = clean2(reason);
       for (const op of t.operations) if (op.state === "started") op.state = "unknown";
       save();
     }
@@ -1857,7 +1871,7 @@ function createEvidenceRecovery({ authorize, persist = () => {
         const offset = Math.max(1, Math.floor(event.input.offset || event.input.start_line || 1));
         const limit = Math.min(120, Math.max(1, Math.floor(event.input.limit || 120)));
         records.push({
-          id: clean(event.toolCallId, 100),
+          id: clean2(event.toolCallId, 100),
           path: file.path,
           sha256: file.sha256,
           ...file.rootKind ? { rootKind: file.rootKind } : {},
@@ -2252,7 +2266,7 @@ function registerWorkbench(pi, options = {}) {
         if (generation !== handoffGeneration || context !== ctx || journal.snapshot()?.id !== taskId || ["completed", "cancelled", "archived"].includes(journal.snapshot()?.state))
           return;
         journal.pause("auto-handoff-failed");
-        send(`\u6CA1\u80FD\u81EA\u52A8\u63A5\u7740\u505A\uFF1A${clean(e.message)}\u3002\u5DF2\u6709\u7684\u7ED3\u679C\u90FD\u5728\uFF0C\u6CA1\u6709\u91CD\u590D\u6267\u884C\u4EFB\u4F55\u64CD\u4F5C\u3002`);
+        send(`\u6CA1\u80FD\u81EA\u52A8\u63A5\u7740\u505A\uFF1A${clean2(e.message)}\u3002\u5DF2\u6709\u7684\u7ED3\u679C\u90FD\u5728\uFF0C\u6CA1\u6709\u91CD\u590D\u6267\u884C\u4EFB\u4F55\u64CD\u4F5C\u3002`);
       }
     };
     handoffTimer = setTimeout(() => void handoff().catch(cancelHandoff), 0);
@@ -2308,7 +2322,7 @@ function registerWorkbench(pi, options = {}) {
         {
           customType: "drone-task-status",
           display: true,
-          content: `\u4EFB\u52A1\u672A\u5F00\u59CB\uFF1A${clean(e.message)}
+          content: `\u4EFB\u52A1\u672A\u5F00\u59CB\uFF1A${clean2(e.message)}
 ${journal.render()}`,
           details: { reportId: randomUUID2(), taskView: journal.view() }
         },
@@ -2387,7 +2401,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     try {
       return journal.guard(event) || void 0;
     } catch (e) {
-      return { block: true, reason: clean(e.message) };
+      return { block: true, reason: clean2(e.message) };
     }
   });
   pi.on("tool_result", async (event, ctx) => {
@@ -2776,7 +2790,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 var DRONE_COMMAND_SCHEMA_VERSION = 1;
-var PI_CORE_PACKAGE_VERSION = "0.1.9";
+var PI_CORE_PACKAGE_VERSION = "0.2.0";
 var PI_HOST_RANGE = ">=1.1.0 <2.0.0";
 var CORE_TOOLS = [
   "ask_user",
@@ -3051,8 +3065,8 @@ function registerNativeTaskReadback(pi, journal, currentContext) {
       const canonicalRoot = await realpath4(root);
       return current() && journal.readRoots().includes(root) && canonicalRoot === root;
     };
-    void check().then(request.resolve, (error2) => {
-      console.warn("Native task artifact readback is unavailable.", error2);
+    void check().then(request.resolve, (error3) => {
+      console.warn("Native task artifact readback is unavailable.", error3);
       request.resolve(false);
     });
   });
@@ -4136,11 +4150,11 @@ function RefineAdd(type, refinement) {
   return memory_exports.Update(type, { "~refine": refinements }, {});
 }
 function Refine(...args) {
-  const [type, check, error2] = arguments_exports.Match(args, {
-    3: (type2, check2, error3) => [type2, check2, error3],
+  const [type, check, error3] = arguments_exports.Match(args, {
+    3: (type2, check2, error4) => [type2, check2, error4],
     2: (type2, check2) => [type2, check2, () => "Refine Error"]
   });
-  return RefineAdd(type, { check, error: error2 });
+  return RefineAdd(type, { check, error: error3 });
 }
 function IsRefinement(value) {
   return guard_exports.IsObjectNotArray(value) && guard_exports.HasPropertyKey(value, "check") && guard_exports.HasPropertyKey(value, "error") && guard_exports.IsFunction(value.check) && guard_exports.IsFunction(value.error);

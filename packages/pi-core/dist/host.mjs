@@ -101,6 +101,268 @@ function forgetMemory(cwd, file) {
   return true;
 }
 
+// src/milestone-plan.ts
+var clean = (value, max = 180) => String(value ?? "").replace(
+  /(?:bearer\s+|(?:api[_-]?key|token|password|secret)\s*[=:]\s*)[^\s,;]+/gi,
+  "[redacted]"
+).split("").map(
+  (c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 || "<>".includes(c) ? " " : c
+).join("").slice(0, max);
+var error = (code, message) => Object.assign(new Error(message), { code });
+var MCP_CONFIG_FILE = /(?:^|[\\/])(?:\.?mcp|mcp-adapter)\.json$/i;
+function normalizeTaskMilestones(input, catalog) {
+  if (!Array.isArray(input) || !input.length || input.length > 24)
+    throw error("plan-limit", "Plan needs 1\u201324 milestones.");
+  const badId = input.find((m) => !/^[a-zA-Z0-9_-]{1,40}$/.test(String(m.id)));
+  if (badId)
+    throw error(
+      "plan-id-format",
+      `Milestone ID ${JSON.stringify(String(badId.id).slice(0, 60))} is invalid: use 1\u201340 letters, digits, "-" or "_".`
+    );
+  const ids = new Set(input.map((m) => m.id));
+  if (ids.size !== input.length)
+    throw error("plan-id", "Milestone IDs must be unique.");
+  const seen = /* @__PURE__ */ new Set();
+  return input.map((m) => {
+    if ((m.dependsOn || []).some((id) => !seen.has(id)))
+      throw error(
+        "plan-dependency",
+        "Dependencies must refer to earlier milestones, not cycles or missing IDs."
+      );
+    if (!catalog.kinds.includes(m.acceptance?.kind))
+      throw error(
+        "acceptance-required",
+        `Acceptance must be one of ${catalog.kinds.join(" | ")} (observed by the host or confirmed by the user); model labels cannot complete it.`
+      );
+    if (m.acceptance.kind === "file" && MCP_CONFIG_FILE.test(String(m.acceptance.path || "")))
+      throw error(
+        "acceptance-config-write",
+        "Writing an MCP config file (mcp.json) does not load MCP tools, so it cannot complete a milestone. Use human_review, or finish only after the mcp tool actually ran in a reloaded session; if no MCP tools are available, tell the user instead."
+      );
+    const acceptance = {
+      kind: m.acceptance.kind,
+      path: clean(m.acceptance.path, 512),
+      sha256: /^[a-f0-9]{64}$/.test(String(m.acceptance.sha256 || "")) ? m.acceptance.sha256 : null
+    };
+    if (["workspace", "vault", "research-run"].includes(
+      String(m.acceptance.rootKind)
+    ))
+      acceptance.rootKind = m.acceptance.rootKind;
+    for (const field of catalog.fields[m.acceptance.kind] || [])
+      acceptance[field] = clean(m.acceptance[field]);
+    seen.add(m.id);
+    return {
+      id: m.id,
+      title: clean(m.title),
+      dependsOn: [...m.dependsOn || []],
+      acceptance,
+      state: "pending",
+      evidence: null
+    };
+  });
+}
+
+// src/task-runtime/runtime-bridge.mjs
+import { AsyncLocalStorage } from "node:async_hooks";
+var contexts = new AsyncLocalStorage();
+var installedRuntime = null;
+var standaloneRuntime = null;
+var KeyedScheduler = class {
+  #tails = /* @__PURE__ */ new Map();
+  #disposed = false;
+  async acquire(key) {
+    if (this.#disposed) throw new Error("Runtime scheduler has been disposed");
+    const previous = this.#tails.get(key) || Promise.resolve();
+    let unlock;
+    const gate = new Promise((resolve2) => {
+      unlock = resolve2;
+    });
+    const tail = previous.then(() => gate);
+    this.#tails.set(key, tail);
+    await previous;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      unlock();
+      if (this.#tails.get(key) === tail) this.#tails.delete(key);
+    };
+  }
+  async run(key, task) {
+    const release = await this.acquire(key);
+    try {
+      return await task();
+    } finally {
+      release();
+    }
+  }
+  async dispose() {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#tails.clear();
+  }
+};
+function createStandaloneRuntime(log = {}) {
+  const disposables = /* @__PURE__ */ new Set();
+  let disposed = false;
+  let disposal;
+  const registerDisposable = (resource) => {
+    if (!resource || typeof resource.dispose !== "function" && typeof resource.close !== "function")
+      return () => {
+      };
+    if (disposed) {
+      void (resource.dispose?.() ?? resource.close?.());
+      return () => {
+      };
+    }
+    disposables.add(resource);
+    return () => disposables.delete(resource);
+  };
+  const runtime = {
+    knowledge: {},
+    tasks: {},
+    tools: { tools: /* @__PURE__ */ new Map(), families: /* @__PURE__ */ new Map() },
+    scheduler: new KeyedScheduler(),
+    log,
+    registerDisposable,
+    dispose() {
+      if (disposal) return disposal;
+      disposed = true;
+      disposal = (async () => {
+        const resources = [...disposables];
+        disposables.clear();
+        await Promise.allSettled(
+          resources.map((resource) => {
+            try {
+              return resource.dispose?.() ?? resource.close?.();
+            } catch (error2) {
+              return Promise.reject(error2);
+            }
+          })
+        );
+        await runtime.scheduler.dispose();
+      })();
+      return disposal;
+    }
+  };
+  return runtime;
+}
+function currentRuntime() {
+  const scoped = contexts.getStore();
+  if (scoped) return scoped;
+  if (installedRuntime) return installedRuntime;
+  if (!standaloneRuntime) standaloneRuntime = createStandaloneRuntime();
+  return standaloneRuntime;
+}
+function resolveSlot(domain, slot, create) {
+  const runtime = currentRuntime();
+  let group = runtime[domain];
+  if (!group) {
+    group = {};
+    runtime[domain] = group;
+  }
+  if (!group[slot]) {
+    group[slot] = create();
+    runtime.registerDisposable?.(group[slot]);
+  }
+  return group[slot];
+}
+function runtimeSlot(domain, slot, create) {
+  if (typeof create !== "function") throw new TypeError("runtimeSlot requires a factory");
+  const proxy = new Proxy(
+    {},
+    {
+      get(_target, property) {
+        const value = resolveSlot(domain, slot, create)[property];
+        return typeof value === "function" ? value.bind(resolveSlot(domain, slot, create)) : value;
+      },
+      set(_target, property, value) {
+        resolveSlot(domain, slot, create)[property] = value;
+        return true;
+      },
+      ownKeys() {
+        return Reflect.ownKeys(resolveSlot(domain, slot, create));
+      },
+      getOwnPropertyDescriptor(_target, property) {
+        const descriptor = Object.getOwnPropertyDescriptor(resolveSlot(domain, slot, create), property);
+        return descriptor ? { ...descriptor, configurable: true } : void 0;
+      }
+    }
+  );
+  return proxy;
+}
+
+// src/task-runtime/acceptance.mjs
+var CORE_ACCEPTANCE_KINDS = Object.freeze(["file", "human_review"]);
+var CORE_FIELDS = Object.freeze(["kind", "path", "sha256", "rootKind"]);
+var KIND = /^[a-z][a-z0-9_]{1,40}$/;
+var FIELD = /^[a-zA-Z][a-zA-Z0-9]{0,40}$/;
+var stringField = { type: "string", minLength: 1, maxLength: 512 };
+var eventBridges = runtimeSlot("tasks", "acceptanceEventBridges", () => /* @__PURE__ */ new WeakSet());
+var createRegistry = () => {
+  const kinds = [...CORE_ACCEPTANCE_KINDS];
+  return {
+    verifiers: /* @__PURE__ */ new Map(),
+    kinds,
+    properties: {
+      kind: { type: "string", enum: kinds },
+      path: stringField,
+      sha256: stringField,
+      rootKind: { type: "string", enum: ["workspace", "vault", "research-run"], minLength: 1, maxLength: 32 }
+    }
+  };
+};
+var registry = runtimeSlot("tasks", "acceptance", createRegistry);
+function ensureRegistryShape() {
+  registry.verifiers ??= /* @__PURE__ */ new Map();
+  registry.kinds ??= [...CORE_ACCEPTANCE_KINDS];
+  registry.properties ??= {};
+  registry.properties.kind ??= { type: "string", enum: registry.kinds };
+  registry.properties.path ??= stringField;
+  registry.properties.sha256 ??= stringField;
+  registry.properties.rootKind ??= {
+    type: "string",
+    enum: ["workspace", "vault", "research-run"],
+    minLength: 1,
+    maxLength: 32
+  };
+}
+ensureRegistryShape();
+function registerAcceptanceVerifier(kind, definition = {}) {
+  ensureRegistryShape();
+  if (!KIND.test(kind || "")) throw new Error(`Acceptance kind "${kind}" must match ${KIND}`);
+  if (CORE_ACCEPTANCE_KINDS.includes(kind)) throw new Error(`Acceptance kind "${kind}" is owned by the host`);
+  for (const fn of ["label", "verify", "observe", "resolve", "identify", "consent", "pending"])
+    if (definition[fn] !== void 0 && typeof definition[fn] !== "function")
+      throw new Error(`Acceptance verifier ${kind}.${fn} must be a function`);
+  const fields = [...new Set(definition.fields || [])];
+  for (const field of fields)
+    if (!FIELD.test(field) || CORE_FIELDS.includes(field))
+      throw new Error(`Acceptance verifier ${kind}: invalid field "${field}"`);
+  const verifier = Object.freeze({
+    kind,
+    fields: Object.freeze(fields),
+    evidenceKind: definition.evidenceKind || `${kind}-verified`,
+    operationVerifier: definition.operationVerifier || `${kind}-record-not-scientific-proof`,
+    label: definition.label || (() => kind),
+    verify: definition.verify || null,
+    observe: definition.observe || null,
+    resolve: definition.resolve || null,
+    identify: definition.identify || null,
+    consent: definition.consent || null,
+    pending: definition.pending || null,
+    acknowledgeError: definition.acknowledgeError || null
+  });
+  registry.verifiers.set(kind, verifier);
+  if (!registry.kinds.includes(kind)) registry.kinds.push(kind);
+  for (const field of fields) registry.properties[field] ??= stringField;
+  return verifier;
+}
+function acceptanceVerifier(kind) {
+  ensureRegistryShape();
+  return registry.verifiers.get(kind) || null;
+}
+
 // src/tools/deliver-files.ts
 import { stat } from "node:fs/promises";
 
@@ -1034,11 +1296,11 @@ function RefineAdd(type, refinement) {
   return memory_exports.Update(type, { "~refine": refinements }, {});
 }
 function Refine(...args) {
-  const [type, check, error] = arguments_exports.Match(args, {
-    3: (type2, check2, error2) => [type2, check2, error2],
+  const [type, check, error2] = arguments_exports.Match(args, {
+    3: (type2, check2, error3) => [type2, check2, error3],
     2: (type2, check2) => [type2, check2, () => "Refine Error"]
   });
-  return RefineAdd(type, { check, error });
+  return RefineAdd(type, { check, error: error2 });
 }
 function IsRefinement(value) {
   return guard_exports.IsObjectNotArray(value) && guard_exports.HasPropertyKey(value, "check") && guard_exports.HasPropertyKey(value, "error") && guard_exports.IsFunction(value.check) && guard_exports.IsFunction(value.error);
@@ -4772,207 +5034,6 @@ ${formatTodoList(todos)}`;
   };
 }
 
-// src/task-runtime/runtime-bridge.mjs
-import { AsyncLocalStorage } from "node:async_hooks";
-var contexts = new AsyncLocalStorage();
-var installedRuntime = null;
-var standaloneRuntime = null;
-var KeyedScheduler = class {
-  #tails = /* @__PURE__ */ new Map();
-  #disposed = false;
-  async acquire(key) {
-    if (this.#disposed) throw new Error("Runtime scheduler has been disposed");
-    const previous = this.#tails.get(key) || Promise.resolve();
-    let unlock;
-    const gate = new Promise((resolve2) => {
-      unlock = resolve2;
-    });
-    const tail = previous.then(() => gate);
-    this.#tails.set(key, tail);
-    await previous;
-    let released = false;
-    return () => {
-      if (released) return;
-      released = true;
-      unlock();
-      if (this.#tails.get(key) === tail) this.#tails.delete(key);
-    };
-  }
-  async run(key, task) {
-    const release = await this.acquire(key);
-    try {
-      return await task();
-    } finally {
-      release();
-    }
-  }
-  async dispose() {
-    if (this.#disposed) return;
-    this.#disposed = true;
-    this.#tails.clear();
-  }
-};
-function createStandaloneRuntime(log = {}) {
-  const disposables = /* @__PURE__ */ new Set();
-  let disposed = false;
-  let disposal;
-  const registerDisposable = (resource) => {
-    if (!resource || typeof resource.dispose !== "function" && typeof resource.close !== "function")
-      return () => {
-      };
-    if (disposed) {
-      void (resource.dispose?.() ?? resource.close?.());
-      return () => {
-      };
-    }
-    disposables.add(resource);
-    return () => disposables.delete(resource);
-  };
-  const runtime = {
-    knowledge: {},
-    tasks: {},
-    tools: { tools: /* @__PURE__ */ new Map(), families: /* @__PURE__ */ new Map() },
-    scheduler: new KeyedScheduler(),
-    log,
-    registerDisposable,
-    dispose() {
-      if (disposal) return disposal;
-      disposed = true;
-      disposal = (async () => {
-        const resources = [...disposables];
-        disposables.clear();
-        await Promise.allSettled(
-          resources.map((resource) => {
-            try {
-              return resource.dispose?.() ?? resource.close?.();
-            } catch (error) {
-              return Promise.reject(error);
-            }
-          })
-        );
-        await runtime.scheduler.dispose();
-      })();
-      return disposal;
-    }
-  };
-  return runtime;
-}
-function currentRuntime() {
-  const scoped = contexts.getStore();
-  if (scoped) return scoped;
-  if (installedRuntime) return installedRuntime;
-  if (!standaloneRuntime) standaloneRuntime = createStandaloneRuntime();
-  return standaloneRuntime;
-}
-function resolveSlot(domain, slot, create) {
-  const runtime = currentRuntime();
-  let group = runtime[domain];
-  if (!group) {
-    group = {};
-    runtime[domain] = group;
-  }
-  if (!group[slot]) {
-    group[slot] = create();
-    runtime.registerDisposable?.(group[slot]);
-  }
-  return group[slot];
-}
-function runtimeSlot(domain, slot, create) {
-  if (typeof create !== "function") throw new TypeError("runtimeSlot requires a factory");
-  const proxy = new Proxy(
-    {},
-    {
-      get(_target, property) {
-        const value = resolveSlot(domain, slot, create)[property];
-        return typeof value === "function" ? value.bind(resolveSlot(domain, slot, create)) : value;
-      },
-      set(_target, property, value) {
-        resolveSlot(domain, slot, create)[property] = value;
-        return true;
-      },
-      ownKeys() {
-        return Reflect.ownKeys(resolveSlot(domain, slot, create));
-      },
-      getOwnPropertyDescriptor(_target, property) {
-        const descriptor = Object.getOwnPropertyDescriptor(resolveSlot(domain, slot, create), property);
-        return descriptor ? { ...descriptor, configurable: true } : void 0;
-      }
-    }
-  );
-  return proxy;
-}
-
-// src/task-runtime/acceptance.mjs
-var CORE_ACCEPTANCE_KINDS = Object.freeze(["file", "human_review"]);
-var CORE_FIELDS = Object.freeze(["kind", "path", "sha256", "rootKind"]);
-var KIND = /^[a-z][a-z0-9_]{1,40}$/;
-var FIELD = /^[a-zA-Z][a-zA-Z0-9]{0,40}$/;
-var stringField = { type: "string", minLength: 1, maxLength: 512 };
-var eventBridges = runtimeSlot("tasks", "acceptanceEventBridges", () => /* @__PURE__ */ new WeakSet());
-var createRegistry = () => {
-  const kinds = [...CORE_ACCEPTANCE_KINDS];
-  return {
-    verifiers: /* @__PURE__ */ new Map(),
-    kinds,
-    properties: {
-      kind: { type: "string", enum: kinds },
-      path: stringField,
-      sha256: stringField,
-      rootKind: { type: "string", enum: ["workspace", "vault", "research-run"], minLength: 1, maxLength: 32 }
-    }
-  };
-};
-var registry = runtimeSlot("tasks", "acceptance", createRegistry);
-function ensureRegistryShape() {
-  registry.verifiers ??= /* @__PURE__ */ new Map();
-  registry.kinds ??= [...CORE_ACCEPTANCE_KINDS];
-  registry.properties ??= {};
-  registry.properties.kind ??= { type: "string", enum: registry.kinds };
-  registry.properties.path ??= stringField;
-  registry.properties.sha256 ??= stringField;
-  registry.properties.rootKind ??= {
-    type: "string",
-    enum: ["workspace", "vault", "research-run"],
-    minLength: 1,
-    maxLength: 32
-  };
-}
-ensureRegistryShape();
-function registerAcceptanceVerifier(kind, definition = {}) {
-  ensureRegistryShape();
-  if (!KIND.test(kind || "")) throw new Error(`Acceptance kind "${kind}" must match ${KIND}`);
-  if (CORE_ACCEPTANCE_KINDS.includes(kind)) throw new Error(`Acceptance kind "${kind}" is owned by the host`);
-  for (const fn of ["label", "verify", "observe", "resolve", "identify", "consent", "pending"])
-    if (definition[fn] !== void 0 && typeof definition[fn] !== "function")
-      throw new Error(`Acceptance verifier ${kind}.${fn} must be a function`);
-  const fields = [...new Set(definition.fields || [])];
-  for (const field of fields)
-    if (!FIELD.test(field) || CORE_FIELDS.includes(field))
-      throw new Error(`Acceptance verifier ${kind}: invalid field "${field}"`);
-  const verifier = Object.freeze({
-    kind,
-    fields: Object.freeze(fields),
-    evidenceKind: definition.evidenceKind || `${kind}-verified`,
-    operationVerifier: definition.operationVerifier || `${kind}-record-not-scientific-proof`,
-    label: definition.label || (() => kind),
-    verify: definition.verify || null,
-    observe: definition.observe || null,
-    resolve: definition.resolve || null,
-    identify: definition.identify || null,
-    consent: definition.consent || null,
-    pending: definition.pending || null,
-    acknowledgeError: definition.acknowledgeError || null
-  });
-  registry.verifiers.set(kind, verifier);
-  if (!registry.kinds.includes(kind)) registry.kinds.push(kind);
-  for (const field of fields) registry.properties[field] ??= stringField;
-  return verifier;
-}
-function acceptanceVerifier(kind) {
-  ensureRegistryShape();
-  return registry.verifiers.get(kind) || null;
-}
-
 // src/host.ts
 var coreHostLoader = {
   contractVersion: 1,
@@ -4994,6 +5055,7 @@ var taskHostLoader = {
       registerAcceptanceVerifier(kind, definition);
     },
     readAcceptanceVerifier: (kind) => acceptanceVerifier(kind),
+    normalizeMilestones: normalizeTaskMilestones,
     ...input?.workbench ? { workbench: input.workbench } : {}
   })
 };
@@ -5014,6 +5076,7 @@ export {
   memoryDir,
   memoryIndexPrompt,
   memorySlug,
+  normalizeTaskMilestones,
   normalizeTodos,
   parseMemory,
   renderMemoryIndex,

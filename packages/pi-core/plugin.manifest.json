@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "drone-pi-core",
-	"version": "0.1.9",
+	"version": "0.2.0",
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",
@@ -11,8 +11,18 @@
 		"pluginApi": 1,
 		"resultContract": "drone-result/v3"
 	},
-	"entrypoints": {"extension": "./dist/index.mjs", "host": "./dist/host.mjs"},
-	"capabilities": ["core", "planning", "tasks", "files", "read-only", "evidence"],
+	"entrypoints": {
+		"extension": "./dist/index.mjs",
+		"host": "./dist/host.mjs"
+	},
+	"capabilities": [
+		"core",
+		"planning",
+		"tasks",
+		"files",
+		"read-only",
+		"evidence"
+	],
 	"tools": [
 		"ask_user",
 		"set_status",
