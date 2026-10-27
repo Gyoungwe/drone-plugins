@@ -97,7 +97,7 @@
 	},
 	"outputs": {
 		"dist/index.mjs": "fcfefb362b1261bf7456344d7f2d58591340c968228bf2c126de8e4daa4193eb",
-		"dist/host.mjs": "d9b1531ef0db349825bbf76a6dbf96c23f192b56cfffb42496878056d5d3fc51",
+		"dist/host.mjs": "10343f00df44c7206ab054f5aa2f98cd27be7f153f04d9a42fb37a85f58d3559",
 		"dist/host.d.ts": "f0adedba8cffd2a68e3a8767923e75bb52ea01e530848e446483e4bef735463f",
 		"dist/desktop-runtime.mjs": "e49529cbfe6e73899212ce55b7383e96db6a7fb8ad30dc3805749719b6dff265",
 		"lib/knowledge/runtime/desktop-index.mjs": "becaf424e993e4b6efd096ce6c52d8be660b50d986c6f6857bd8d08e25446e22",
