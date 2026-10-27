@@ -52,17 +52,23 @@ test("packed public entries provide their own declarations to a clean TypeScript
 			`
 import { registerPiCore } from "@gyoungwe/pi-core";
 import { coreHostLoader, taskHostLoader, normalizeTaskMilestones } from "@gyoungwe/pi-core/host";
+import type { TaskHostLoader } from "@gyoungwe/plugin-api/tasks";
+import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
 import { writeMemory } from "@gyoungwe/pi-core/memory";
 import { makeAskUserTool } from "@gyoungwe/pi-core/tools/ask-user";
 import { makeDeliverFilesTool } from "@gyoungwe/pi-core/tools/deliver-files";
 import { makeMemorySaveTool } from "@gyoungwe/pi-core/tools/memory-save";
 import { makeStatusTool } from "@gyoungwe/pi-core/tools/status";
 import { makeTodoTool } from "@gyoungwe/pi-core/tools/todo";
-const verifier = taskHostLoader.load().readAcceptanceVerifier("paper");
+const installedLoader: TaskHostLoader = taskHostLoader;
+const host = installedLoader.load();
+const session: PluginNativeSession | Promise<PluginNativeSession> | undefined = host.createNativeSession?.();
+const disposal: Promise<void> | undefined = host.dispose?.();
+const verifier = host.readAcceptanceVerifier("paper");
 const kind: string | undefined = verifier?.kind;
 const normalized = normalizeTaskMilestones([{ id: "report", title: "Report", acceptance: { kind: "file", path: "report.md" } }], { kinds: ["file"], fields: {} });
 const id: string = normalized[0].id;
-void [registerPiCore, coreHostLoader, writeMemory, makeAskUserTool, makeDeliverFilesTool, makeMemorySaveTool, makeStatusTool, makeTodoTool, kind, id];
+void [registerPiCore, coreHostLoader, writeMemory, makeAskUserTool, makeDeliverFilesTool, makeMemorySaveTool, makeStatusTool, makeTodoTool, kind, id, session, disposal];
 `,
 		);
 		await writeFile(
