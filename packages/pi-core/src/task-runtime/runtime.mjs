@@ -194,30 +194,21 @@ function registerTaskRuntime(pi, options = {}) {
     hostRuntime.tasks.workbench = { ...hostRuntime.tasks.workbench, ...shared };
     return shared.journal;
   }
-  const registry = taskRuntimeRegistry(pi);
-  if (registry?.journal) {
-    registry.journal.configure?.(options);
-    return registry.journal;
-  }
+  const registry = { version: 1, journal: null, runtime: hostRuntime };
   const journal = withHostRuntime(pi, () => registerWorkbench(pi, {
     ...options,
     onJournalAttached: (current) => {
-      if (registry) registry.journal = current;
+      registry.journal = current;
       hostRuntime.tasks.workbench.journal = current;
     }
   }));
-  if (registry) {
-    registry.journal = journal;
-    registry.runtime = hostRuntime;
-  }
+  registry.journal = journal;
   hostRuntime.tasks.workbench = { ...hostRuntime.tasks.workbench, version: 1, journal };
   publishTaskRuntimeRegistry(pi, registry);
   return journal;
 }
-const TASK_RUNTIME_REGISTRY = "__drone_task_runtime_v1";
 const TASK_RUNTIME_REQUEST = "drone:task-runtime/request/v1";
 const TASK_RUNTIME_RESPONSE = "drone:task-runtime/v1";
-const localTaskRuntimeRegistry = /* @__PURE__ */ new WeakMap();
 function requestSharedTaskRuntime(pi) {
   const events = pi?.events;
   if (!events?.on || !events.emit) return null;
@@ -235,26 +226,6 @@ function publishTaskRuntimeRegistry(pi, registry) {
   registry.unsubscribe = events.on(TASK_RUNTIME_REQUEST, (payload) => {
     if (payload?.version === 1) events.emit(TASK_RUNTIME_RESPONSE, { version: 1, registry });
   });
-}
-function taskRuntimeRegistry(pi) {
-  if (!pi || typeof pi !== "object" && typeof pi !== "function") return null;
-  const owner = pi.events && (typeof pi.events === "object" || typeof pi.events === "function") ? pi.events : pi;
-  const attached = owner[TASK_RUNTIME_REGISTRY];
-  if (attached && attached.version === 1) return attached;
-  const local = localTaskRuntimeRegistry.get(owner);
-  if (local) return local;
-  const registry = { version: 1, journal: null };
-  if (Object.isExtensible(owner)) {
-    Object.defineProperty(owner, TASK_RUNTIME_REGISTRY, {
-      value: registry,
-      enumerable: false,
-      configurable: false,
-      writable: false
-    });
-  } else {
-    localTaskRuntimeRegistry.set(owner, registry);
-  }
-  return registry;
 }
 export {
   TASK_DOCUMENT_KIND,

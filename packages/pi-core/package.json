@@ -54,7 +54,7 @@
 		"build": "node scripts/build.mjs",
 		"build:check": "node scripts/build.mjs --check",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
-		"test": "npm run build && node --test test/*.test.mjs",
+		"test": "npm run build && node --test test/*.test.mjs && vitest run test/task-runtime",
 		"smoke": "node scripts/smoke.mjs",
 		"check": "npm run typecheck && npm run build:check && npm run smoke && npm test"
 	},

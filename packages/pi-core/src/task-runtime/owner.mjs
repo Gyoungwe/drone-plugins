@@ -9,6 +9,8 @@ export function createTaskRuntimeOwner(definitions = []) {
     for (const verifier of definitions) registerAcceptanceVerifier(verifier.kind, verifier);
   });
   let active = true;
+  const lifetime = new AbortController();
+  const signalFor = signal => signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal;
   let attached;
   let unbind;
   let unlisten;
@@ -61,14 +63,15 @@ export function createTaskRuntimeOwner(definitions = []) {
       const guarded = new Proxy(pi, {
         get(target, name) {
           if (name === "events") return guardedEvents;
-          if (name === "on") return (event, handler) => target.on(event, (...args) => {
-            if (active) return withHostRuntime(pi, () => handler(...args));
+          if (name === "on") return (event, handler) => target.on(event, (value, context) => {
+            if (active) return withHostRuntime(pi, () => handler(value, { ...context, signal: signalFor(context.signal) }));
           });
           if (name === "registerTool") return (tool) => target.registerTool({
             ...tool,
-            execute: (...args) => {
+            execute: (id, input, signal, update, context) => {
               requireActive();
-              return withHostRuntime(pi, () => tool.execute(...args));
+              const scopedSignal = signalFor(signal);
+              return withHostRuntime(pi, () => tool.execute(id, input, scopedSignal, update, { ...context, signal: scopedSignal }));
             }
           });
           if (name === "registerCommand") return (command, definition) => target.registerCommand(command, {
@@ -88,6 +91,14 @@ export function createTaskRuntimeOwner(definitions = []) {
       const journal = registerTaskRuntime(guarded, { runtime: current });
       const oldUnbind = unbind;
       unbind = () => { unbindGuarded(); oldUnbind(); };
+      // Journal consumers may run from another extension callback. Scope every
+      // operation to this owner, including direct service reads/configuration.
+      for (const [name, method] of Object.entries(journal)) {
+        journal[name] = (...args) => {
+          requireActive();
+          return withRuntime(current, () => method(...args));
+        };
+      }
       registry = requestSharedTaskRuntime(pi);
       registry.owner = this;
       pi.on("session_shutdown", () => this.dispose());
@@ -96,6 +107,7 @@ export function createTaskRuntimeOwner(definitions = []) {
     async dispose() {
       if (!active) return;
       active = false;
+      lifetime.abort(new Error("Task owner disposed"));
       unlisten?.();
       unbind?.();
       for (const cleanup of eventCleanups) cleanup();

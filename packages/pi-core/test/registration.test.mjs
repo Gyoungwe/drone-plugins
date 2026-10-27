@@ -148,7 +148,7 @@ test("native host adapter uses ctx.ui authorization and advertises native Pi", a
 });
 
 
-test("task service responds with the current journal after SDK session attachment switches owners", async () => {
+test("task session attachment never borrows another owner from a session-manager property", async () => {
 	function host() {
 		const emitter = new EventEmitter(), hooks = new Map(), tools = [];
 		const pi = {
@@ -173,7 +173,7 @@ test("task service responds with the current journal after SDK session attachmen
 	const manager = { getSessionId: () => "restored", getBranch: () => [] };
 	Object.defineProperty(manager, "__drone_task_workbench_v2", { value: { version: 2, journal: original } });
 	for (const handler of restored.hooks.get("session_start") || []) await handler({}, { cwd: process.cwd(), sessionManager: manager });
-	assert.equal(restored.readJournal(), original);
+	assert.notEqual(restored.readJournal(), original);
 	for (const handler of restored.hooks.get("session_tree") || []) await handler({}, { cwd: process.cwd(), sessionManager: manager });
-	assert.equal(restored.readJournal(), original);
+	assert.notEqual(restored.readJournal(), original);
 });
