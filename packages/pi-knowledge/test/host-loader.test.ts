@@ -67,6 +67,7 @@ describe("knowledge host loader", () => {
 			"graph",
 			"jobs",
 			"maintenance",
+			"maintenanceTopic",
 			"memory",
 			"noteLinks",
 			"openTarget",
@@ -107,6 +108,8 @@ describe("knowledge host loader", () => {
 		expect(typeof port.memory?.saveIdea).toBe("function");
 		expect(typeof port.memory?.relatedForMemory).toBe("function");
 		expect(typeof port.memory?.saveMemory).toBe("function");
+		expect(typeof port.maintenanceTopic?.setTopic).toBe("function");
+		expect(typeof port.maintenanceTopic?.proposeWiki).toBe("function");
 		expect(typeof port.researchResource?.resolveContext).toBe("function");
 		expect(typeof port.researchResource?.ingestSnapshot).toBe("function");
 		expect(typeof port.recordTerminalJobExperience).toBe("function");

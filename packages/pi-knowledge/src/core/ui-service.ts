@@ -16,7 +16,7 @@ import {
 	withKnowledgeBinding,
 } from "./config.js";
 import { collectRecentNotes, DAILY_DISCOVERY_LIMITS, ideaNoteMarkdown } from "./daily-discovery.js";
-import { safeNotePath } from "./files.js";
+import { readNoteFile, safeNotePath } from "./files.js";
 import { memoryNoteMarkdown, memoryNoteSlug } from "./memory-note.js";
 import { runNavigationMaintenance } from "./maintenance.js";
 import { readReviewMode, saveReviewMode } from "./review-policy.js";
@@ -28,9 +28,11 @@ import {
 	decideWikiProposal,
 	listWikiProposals,
 	previewWikiProposal,
+	stageWikiProposal,
 	undoWikiUpdate,
 	wikiHistory,
 } from "./wiki-review.js";
+import { containedVaultFile, replaceVaultFile } from "./layout.js";
 
 const runtimeState = runtimeSlot("knowledge", "uiService", () => ({
 	previews: new Map(),
@@ -365,6 +367,69 @@ export async function knowledgeMaintenance({ cwd = null, action, revision, id, e
 	} finally {
 		runtimeState.maintenance.delete(key);
 	}
+}
+
+export async function knowledgeMaintenanceTopic({ cwd = process.cwd(), notePath, topic, revision = null }) {
+	const binding = await readKnowledgeBinding({ fresh: true });
+	if (!binding) throw new Error("No application knowledge Vault is bound");
+	if (revision !== null && binding.revision !== revision)
+		throw new Error("Knowledge binding changed; refresh maintenance before writing");
+	const value = String(topic ?? "").replace(/[<>\r\n]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, 120);
+	if (value.length < 4) throw new Error("topic must describe the source in a short phrase");
+	const relativePath = String(notePath ?? "").replaceAll("\\", "/").replace(/^\/+/, "");
+	if (!/^Library\/(?:Papers|Software)\/[^/]+\.md$/u.test(relativePath))
+		throw new Error("note_path must be a Library/Papers or Library/Software note");
+	const fullPath = await containedVaultFile(binding.vault, relativePath);
+	const original = await readNoteFile(binding.vault, relativePath);
+	const line = `topic: ${JSON.stringify(value)}`;
+	let text = original.text;
+	if (text.startsWith("---\n")) {
+		const end = text.indexOf("\n---", 4);
+		if (end < 0) throw new Error(`Invalid frontmatter: ${relativePath}`);
+		const frontmatter = text.slice(4, end);
+		const next = /^topic:.*$/mu.test(frontmatter)
+			? frontmatter.replace(/^topic:.*$/mu, line)
+			: `${frontmatter}\n${line}`;
+		text = `---\n${next}${text.slice(end)}`;
+	} else text = `---\n${line}\n---\n\n${text}`;
+	const heading = text.match(/^#\s+(.+)$/mu)?.[1]?.trim() ?? "";
+	if (heading === relativePath.split("/").at(-1)?.replace(/\.md$/u, ""))
+		text = text.replace(/^#\s+.+$/mu, `# ${value}`);
+	if (text !== original.text)
+		await replaceVaultFile(fullPath, text, { expectedHash: original.hash });
+	return { topic: value, note: relativePath, changed: text !== original.text, updated: [relativePath] };
+}
+
+export async function knowledgeMaintenanceWiki({
+	cwd = process.cwd(),
+	sourcePath,
+	title,
+	markdown,
+	rationale,
+	revision = null,
+}) {
+	const binding = await readKnowledgeBinding({ fresh: true });
+	if (!binding) throw new Error("No application knowledge Vault is bound");
+	if (revision !== null && binding.revision !== revision)
+		throw new Error("Knowledge binding changed; refresh maintenance before review");
+	const { project } = await projectAt(cwd);
+	if (!project) throw new Error("Choose a project workspace first");
+	const service = await getKnowledgeService(binding);
+	const prepared = await service.prepare({ cwd, project, query: title });
+	await service.read(prepared.ticket, cwd, { path: sourcePath, maxChars: 4000 });
+	const slug = String(title ?? "")
+		.toLocaleLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, "-")
+		.replace(/^-+|-+$/gu, "")
+		.slice(0, 120);
+	if (!slug) throw new Error("Wiki candidate title is empty");
+	return stageWikiProposal(service, prepared.ticket, cwd, {
+		path: `Wiki/${slug}.md`,
+		title,
+		markdown,
+		rationale,
+		source_paths: [sourcePath],
+	});
 }
 /** @param {Record<string, any>} options */
 export async function knowledgeOpenTarget({ cwd = null, path = null, revision }) {

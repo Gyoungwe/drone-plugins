@@ -77,6 +77,10 @@ export interface KnowledgeHostPort {
 		list(input: unknown): Promise<unknown>;
 		archive(input: unknown): Promise<unknown>;
 	};
+	maintenanceTopic?: {
+		setTopic(input: unknown): Promise<unknown>;
+		proposeWiki(input: unknown): Promise<unknown>;
+	};
 	memory?: {
 		dailyContext(input: unknown): Promise<unknown>;
 		saveIdea(input: unknown): Promise<unknown>;
@@ -173,6 +177,10 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			list: (input) => import("./ui-service.js").then(({ getKnowledgeTopics }) => getKnowledgeTopics(input as never)),
 			archive: (input) =>
 				import("./ui-service.js").then(({ archiveKnowledgeTopic }) => archiveKnowledgeTopic(input as never)),
+		},
+		maintenanceTopic: {
+			setTopic: (input) => import("./ui-service.js").then(({ knowledgeMaintenanceTopic }) => knowledgeMaintenanceTopic(input as never)),
+			proposeWiki: (input) => import("./ui-service.js").then(({ knowledgeMaintenanceWiki }) => knowledgeMaintenanceWiki(input as never)),
 		},
 		memory: {
 			dailyContext: (input) => import("./ui-service.js").then(({ dailyDiscoveryContext }) => dailyDiscoveryContext(input as never)),
