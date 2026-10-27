@@ -172,20 +172,14 @@ export function createKnowledgeRuntimeHost() {
 		return workerFactory(url, options);
 	}
 	function knowledgeWorkerMetadata(): KnowledgeWorkerMetadata {
-		try {
-			const value = workerMetadataProvider();
-			if (!value || typeof value.version !== "string" || !value.version) return { version: "unknown" };
-			return {
-				version: value.version.slice(0, 200),
-				...(typeof value.source === "string" ? { source: value.source.slice(0, 1000) } : {}),
-				...(typeof value.integrity === "string" ? { integrity: value.integrity.slice(0, 200) } : {}),
-			};
-		} catch {
-			// Metadata is diagnostic only. A host must still fail closed when the
-			// factory cannot load its resource; do not let a broken manifest reader
-			// turn a valid worker into an unhandled startup exception here.
-			return { version: "unknown" };
-		}
+		// Package hosts verify their selected resource here. A failed verification
+		// must reach the pool before it drains the currently usable SQLite writer.
+		const value = workerMetadataProvider();
+		return {
+			version: value.version.slice(0, 200),
+			...(value.source === undefined ? {} : { source: value.source.slice(0, 1000) }),
+			...(value.integrity === undefined ? {} : { integrity: value.integrity.slice(0, 200) }),
+		};
 	}
 	/** Emit bounded, metadata-only lifecycle evidence through the host seam. */
 	function emitKnowledgeWorkerLifecycle(

@@ -952,18 +952,16 @@ function createKnowledgeServicePoolApi(
 			}
 			// A rebound Vault reuses the same database. Worker startup performs SQLite
 			// writes, so the old worker must exit before a replacement can be created.
-			const needsReplacement =
-				!service ||
-				service.closed ||
-				service.closing ||
-				service.binding?.revision !== binding.revision ||
-				(() => {
-					const hostVersion = transportFactory.metadata().version;
-					return hostVersion !== "unknown" && service?.workerVersion !== "unknown" && service?.workerVersion !== hostVersion;
-				})();
-			if (!needsReplacement) return service;
 			let candidate;
+			let selectedMetadata;
 			try {
+				selectedMetadata = transportFactory.metadata();
+				const hostVersion = selectedMetadata.version;
+				const needsReplacement =
+					!service || service.closed || service.closing ||
+					service.binding?.revision !== binding.revision ||
+					(hostVersion !== "unknown" && service.workerVersion !== "unknown" && service.workerVersion !== hostVersion);
+				if (!needsReplacement) return service;
 				if (service) {
 					await service.drain();
 					pool.delete(key);
@@ -997,15 +995,16 @@ function createKnowledgeServicePoolApi(
 				return candidate;
 			} catch (error) {
 				if (candidate) await candidate.close();
-				emitKnowledgeWorkerLifecycle("disabled", {
-					version: candidate?.workerVersion || transportFactory.metadata().version,
+				const preserved = service && !service.closed && !service.closing;
+				emitKnowledgeWorkerLifecycle(preserved ? "rolled_back" : "disabled", {
+					version: preserved ? service.workerVersion : candidate?.workerVersion || selectedMetadata?.version || "unknown",
 					previousVersion: service?.workerVersion,
 					source: candidate?.workerMetadata?.source,
 					integrity: candidate?.workerMetadata?.integrity,
 					reason: String(error?.message || error).slice(0, 400),
 				});
-				// The previous worker has drained. Do not report it as a usable fallback;
-				// the caller sees the startup failure and may retry a verified resource.
+				// Verification can preserve the old worker. Once it has drained, report
+				// disabled rather than pretending a failed startup restored that writer.
 				throw error;
 			}
 		})();
