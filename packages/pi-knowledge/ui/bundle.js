@@ -1,5 +1,5 @@
 // ui/NativeKnowledgePage.tsx
-import { useEffect as useEffect9, useMemo as useMemo5, useSyncExternalStore } from "react";
+import { useEffect as useEffect10, useMemo as useMemo5, useSyncExternalStore } from "react";
 
 // ui/runtime-api.ts
 var host = window.DroneUI;
@@ -12,6 +12,14 @@ var zh = {
   title: "\u77E5\u8BC6\u5E93",
   settings: "\u8BBE\u7F6E",
   reviews: "\u5F85\u5BA1\u5019\u9009",
+  history: "\u5BA1\u6838\u5386\u53F2",
+  historyEmpty: "\u5F53\u524D\u8BFE\u9898\u6682\u65E0\u53EF\u64A4\u9500\u7684\u66F4\u65B0\u3002",
+  undoHint: "\u64A4\u9500\u4F1A\u6062\u590D\u4FDD\u5B58\u524D\u7684\u539F\u6587\uFF1B\u65B0\u5EFA\u9875\u9762\u4F1A\u88AB\u5220\u9664\u3002\u82E5\u4E4B\u540E\u6709\u4EBA\u7F16\u8F91\uFF0C\u64CD\u4F5C\u5C06\u62D2\u7EDD\u3002",
+  undoReview: "\u64A4\u9500\u6B64\u66F4\u65B0",
+  confirmUndo: "\u786E\u8BA4\u64A4\u9500",
+  cancelUndo: "\u53D6\u6D88",
+  undoing: "\u6B63\u5728\u64A4\u9500\u2026",
+  reviewPartial: "\u7B14\u8BB0\u5DF2\u5199\u5165\uFF0C\u4F46\u5BA1\u6838\u8BB0\u5F55\u6216\u7D22\u5F15\u5C1A\u672A\u5B8C\u6210\uFF0C\u8BF7\u6838\u5BF9\u4EE5\u4E0B\u56DE\u6267\uFF1A",
   reviewReadOnly: "\u5019\u9009\u5199\u5165\u9700\u8981\u5BBF\u4E3B\u660E\u786E\u6388\u4E88\u72B6\u6001\u548C\u77E5\u8BC6\u5E93\u5199\u5165\u6743\u9650\uFF1B\u5E94\u7528\u524D\u8BF7\u6838\u5BF9\u5DEE\u5F02\u4E0E\u6765\u6E90\u3002",
   reviewBack: "\u5173\u95ED\u9884\u89C8",
   reviewCount: "\u6761\u5019\u9009",
@@ -99,13 +107,21 @@ var zh = {
   incomplete: "\u7D22\u5F15\u5C1A\u672A\u5B8C\u6574\uFF0C\u5F53\u524D\u7ED3\u679C\u4E0D\u4EE3\u8868\u5168\u90E8\u8D44\u6599\u3002",
   lines: "\u884C",
   unsupportedTitle: "\u5176\u4ED6\u77E5\u8BC6\u529F\u80FD\u6682\u4E0D\u53EF\u7528",
-  unsupported: "\u5F53\u524D\u652F\u6301\u603B\u89C8\u3001\u641C\u7D22\u3001\u7B14\u8BB0\u9605\u8BFB\u3001\u94FE\u63A5\u3001\u56FE\u8C31\u3001\u7D22\u5F15\u4EFB\u52A1\u67E5\u8BE2\u3001\u5019\u9009\u5217\u8868\u548C\u5DEE\u5F02\u9884\u89C8\uFF0C\u4EE5\u53CA\u5BA1\u6838\u7B56\u7565\u548C\u76F8\u4F3C\u5185\u5BB9\u8BBE\u7F6E\u3002\u5019\u9009\u5199\u5165\u5BA1\u6838\u3001\u7ED1\u5B9A\u7F16\u8F91\u3001\u81EA\u52A8\u53D1\u73B0\u3001\u4E91\u540C\u6B65\u53CA Zotero \u529F\u80FD\u4ECD\u5728\u8FC1\u79FB\u4E2D\u3002",
+  unsupported: "\u5F53\u524D\u652F\u6301\u603B\u89C8\u3001\u641C\u7D22\u3001\u7B14\u8BB0\u9605\u8BFB\u3001\u94FE\u63A5\u3001\u56FE\u8C31\u3001\u7D22\u5F15\u4EFB\u52A1\u67E5\u8BE2\u3001\u5019\u9009\u5BA1\u6838\u3001\u5386\u53F2\u4E0E\u64A4\u9500\uFF0C\u4EE5\u53CA\u5BA1\u6838\u7B56\u7565\u548C\u76F8\u4F3C\u5185\u5BB9\u8BBE\u7F6E\u3002\u7ED1\u5B9A\u7F16\u8F91\u3001\u81EA\u52A8\u53D1\u73B0\u3001\u4E91\u540C\u6B65\u53CA Zotero \u529F\u80FD\u4ECD\u5728\u8FC1\u79FB\u4E2D\u3002",
   readOnly: "\u641C\u7D22\u7247\u6BB5\u4EC5\u4F9B\u6D4F\u89C8\uFF0C\u4E0D\u4EE3\u8868\u5F53\u524D\u4F1A\u8BDD\u5DF2\u8BFB\u53D6\u539F\u6587\u6216\u5B8C\u6210\u8BC1\u636E\u6838\u9A8C\u3002"
 };
 var en = {
   title: "Knowledge",
   settings: "Settings",
   reviews: "Review candidates",
+  history: "Review history",
+  historyEmpty: "This project has no updates available to undo.",
+  undoHint: "Undo restores the saved original; a newly created page is deleted. Later human edits cause the operation to refuse.",
+  undoReview: "Undo this update",
+  confirmUndo: "Confirm undo",
+  cancelUndo: "Cancel",
+  undoing: "Undoing\u2026",
+  reviewPartial: "The note was written, but its review record or index is incomplete. Inspect the receipt:",
   reviewReadOnly: "Applying a candidate requires explicit host permission for state and Vault writes. Check the diff and sources before applying.",
   reviewBack: "Close preview",
   reviewCount: "candidates",
@@ -193,7 +209,7 @@ var en = {
   incomplete: "The index is incomplete; these results do not represent all material.",
   lines: "Lines",
   unsupportedTitle: "Other knowledge features are temporarily unavailable",
-  unsupported: "Overview, search, note reading, links, graphs, index jobs, candidate lists and diff previews are available, along with review policy and similarity settings. Candidate decisions, binding changes, discovery, cloud sync and Zotero are still being migrated.",
+  unsupported: "Overview, search, note reading, links, graphs, index jobs, candidate review decisions, history and undo are available, along with review policy and similarity settings. Binding changes, discovery, cloud sync and Zotero are still being migrated.",
   readOnly: "Search excerpts are for browsing. They do not establish that this session read the source or verified its evidence."
 };
 function useNativeKnowledgeText() {
@@ -541,11 +557,70 @@ function NativeKnowledgePreferences({
   );
 }
 
+// ui/NativeKnowledgeHistory.tsx
+import { useEffect as useEffect3, useState as useState3 } from "react";
+import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
+function NativeKnowledgeHistory({
+  store,
+  observationRevision
+}) {
+  const t = useNativeKnowledgeText();
+  const [history, setHistory] = useState3(null);
+  const [error, setError] = useState3(null);
+  const [confirm, setConfirm] = useState3(null);
+  const [busy, setBusy] = useState3(false);
+  const [revision, setRevision] = useState3(0);
+  useEffect3(() => {
+    let live = true;
+    setHistory(null);
+    setError(null);
+    setConfirm(null);
+    void store.reviewHistory().then(
+      (value) => {
+        if (live) setHistory(value);
+      },
+      (cause) => {
+        if (live) setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    );
+    return () => {
+      live = false;
+    };
+  }, [store, observationRevision, revision]);
+  async function undo(item) {
+    setBusy(true);
+    setError(null);
+    try {
+      await store.undoReview({ id: item.id, expectedHash: item.afterHash });
+      setRevision((value) => value + 1);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+      setConfirm(null);
+    }
+  }
+  return /* @__PURE__ */ jsxs3("section", { "aria-label": t.history, className: "space-y-4", children: [
+    /* @__PURE__ */ jsx3("p", { className: "text-xs text-ink-dim", children: t.undoHint }),
+    error && /* @__PURE__ */ jsx3("p", { role: "alert", className: "text-sm text-err", children: error }),
+    !history && !error && /* @__PURE__ */ jsx3("p", { role: "status", children: t.loading }),
+    history && history.items.length === 0 && /* @__PURE__ */ jsx3("p", { children: t.historyEmpty }),
+    /* @__PURE__ */ jsx3("ul", { className: "divide-y divide-border rounded-xl border border-border", children: history?.items.map((item) => /* @__PURE__ */ jsxs3("li", { className: "space-y-2 p-3", children: [
+      /* @__PURE__ */ jsx3("p", { className: "break-all text-sm", children: item.path }),
+      /* @__PURE__ */ jsx3("p", { className: "font-mono text-xs text-ink-dim", children: item.afterHash.slice(0, 12) }),
+      confirm === item.id ? /* @__PURE__ */ jsxs3("div", { className: "flex gap-2", children: [
+        /* @__PURE__ */ jsx3(Button, { size: "sm", disabled: busy, onClick: () => void undo(item), children: busy ? t.undoing : t.confirmUndo }),
+        /* @__PURE__ */ jsx3(Button, { size: "sm", disabled: busy, onClick: () => setConfirm(null), children: t.cancelUndo })
+      ] }) : /* @__PURE__ */ jsx3(Button, { size: "sm", disabled: busy, onClick: () => setConfirm(item.id), children: t.undoReview })
+    ] }, item.id)) })
+  ] });
+}
+
 // ui/NativeKnowledgeReviews.tsx
-import { useEffect as useEffect3, useState as useState4 } from "react";
+import { useEffect as useEffect4, useState as useState5 } from "react";
 
 // ui/knowledge/WikiReviewContent.tsx
-import { useMemo, useState as useState3 } from "react";
+import { useMemo, useState as useState4 } from "react";
 
 // ui/knowledge/copy.ts
 var knowledgeZh = {
@@ -1613,26 +1688,26 @@ function knowledgeLineDiff(before, after) {
 }
 
 // ui/knowledge/WikiReviewContent.tsx
-import { Fragment as Fragment2, jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
+import { Fragment as Fragment2, jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
 function WikiReviewContent({
   preview,
   onOpenSource
 }) {
   const t = useKnowledgeText();
-  const [view, setView] = useState3("diff");
+  const [view, setView] = useState4("diff");
   const lines = useMemo(
     () => knowledgeLineDiff(preview.before, preview.after),
     [preview]
   );
   const visible = lines.slice(0, 200);
-  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
-    /* @__PURE__ */ jsx3(
+  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
+    /* @__PURE__ */ jsx4(
       "div",
       {
         className: "flex flex-wrap gap-1",
         role: "tablist",
         "aria-label": t("reviewTitle"),
-        children: ["diff", "both", "protected"].map((tab) => /* @__PURE__ */ jsx3(
+        children: ["diff", "both", "protected"].map((tab) => /* @__PURE__ */ jsx4(
           "button",
           {
             type: "button",
@@ -1646,49 +1721,49 @@ function WikiReviewContent({
         ))
       }
     ),
-    view === "diff" && /* @__PURE__ */ jsxs3(
+    view === "diff" && /* @__PURE__ */ jsxs4(
       "section",
       {
         className: "max-h-[32vh] overflow-auto rounded-lg border border-border font-mono text-[11px]",
         "aria-label": t("diff"),
         children: [
-          visible.map((row) => /* @__PURE__ */ jsxs3(
+          visible.map((row) => /* @__PURE__ */ jsxs4(
             "div",
             {
               className: `flex gap-2 px-2 leading-6 ${row.kind === "add" ? "bg-ok/10" : row.kind === "remove" ? "bg-err/8" : "text-ink-dim"}`,
               children: [
-                /* @__PURE__ */ jsxs3("span", { className: "w-12 shrink-0 select-none text-right text-ink-faint", children: [
+                /* @__PURE__ */ jsxs4("span", { className: "w-12 shrink-0 select-none text-right text-ink-faint", children: [
                   row.oldLine || "",
                   " ",
                   row.newLine || ""
                 ] }),
-                /* @__PURE__ */ jsx3("span", { title: row.kind, className: "w-3 shrink-0", children: row.kind === "add" ? "+" : row.kind === "remove" ? "\u2212" : " " }),
-                /* @__PURE__ */ jsx3("span", { className: "min-w-0 whitespace-pre-wrap break-words", children: row.text || " " })
+                /* @__PURE__ */ jsx4("span", { title: row.kind, className: "w-3 shrink-0", children: row.kind === "add" ? "+" : row.kind === "remove" ? "\u2212" : " " }),
+                /* @__PURE__ */ jsx4("span", { className: "min-w-0 whitespace-pre-wrap break-words", children: row.text || " " })
               ]
             },
             `${row.kind}:${row.oldLine}:${row.newLine}:${row.text}`
           )),
-          lines.length > 200 && /* @__PURE__ */ jsx3("p", { className: "px-2 py-2 text-[11px] text-ink-faint", children: t("truncated") })
+          lines.length > 200 && /* @__PURE__ */ jsx4("p", { className: "px-2 py-2 text-[11px] text-ink-faint", children: t("truncated") })
         ]
       }
     ),
-    view === "both" && /* @__PURE__ */ jsx3("div", { className: "grid gap-2", children: ["before", "after"].map((side) => /* @__PURE__ */ jsxs3("div", { className: "min-w-0", children: [
-      /* @__PURE__ */ jsx3("p", { className: "mb-1 text-xs font-medium", children: t(side) }),
-      /* @__PURE__ */ jsx3("pre", { className: "max-h-[22vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-hover p-3 text-xs leading-relaxed", children: preview[side] || "\u2014" })
+    view === "both" && /* @__PURE__ */ jsx4("div", { className: "grid gap-2", children: ["before", "after"].map((side) => /* @__PURE__ */ jsxs4("div", { className: "min-w-0", children: [
+      /* @__PURE__ */ jsx4("p", { className: "mb-1 text-xs font-medium", children: t(side) }),
+      /* @__PURE__ */ jsx4("pre", { className: "max-h-[22vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-hover p-3 text-xs leading-relaxed", children: preview[side] || "\u2014" })
     ] }, side)) }),
-    view === "protected" && /* @__PURE__ */ jsx3("pre", { className: "max-h-[32vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-hover p-3 text-xs leading-relaxed", children: preview.protectedText || "\u2014" }),
-    /* @__PURE__ */ jsxs3("div", { children: [
-      /* @__PURE__ */ jsxs3("h4", { className: "mb-2 text-xs font-semibold", children: [
+    view === "protected" && /* @__PURE__ */ jsx4("pre", { className: "max-h-[32vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-hover p-3 text-xs leading-relaxed", children: preview.protectedText || "\u2014" }),
+    /* @__PURE__ */ jsxs4("div", { children: [
+      /* @__PURE__ */ jsxs4("h4", { className: "mb-2 text-xs font-semibold", children: [
         t("sources"),
         " \xB7 ",
         preview.sources.length
       ] }),
-      /* @__PURE__ */ jsx3("div", { className: "max-h-28 space-y-1 overflow-auto", children: preview.sources.map((source) => /* @__PURE__ */ jsxs3(
+      /* @__PURE__ */ jsx4("div", { className: "max-h-28 space-y-1 overflow-auto", children: preview.sources.map((source) => /* @__PURE__ */ jsxs4(
         "div",
         {
           className: "rounded-lg border border-border px-2 py-2",
           children: [
-            onOpenSource ? /* @__PURE__ */ jsx3(
+            onOpenSource ? /* @__PURE__ */ jsx4(
               "button",
               {
                 type: "button",
@@ -1696,16 +1771,16 @@ function WikiReviewContent({
                 onClick: () => onOpenSource(source),
                 children: source.path
               }
-            ) : /* @__PURE__ */ jsx3("p", { className: "break-all text-xs", children: source.path }),
-            /* @__PURE__ */ jsxs3("p", { className: "font-mono text-[11px] text-ink-faint", children: [
+            ) : /* @__PURE__ */ jsx4("p", { className: "break-all text-xs", children: source.path }),
+            /* @__PURE__ */ jsxs4("p", { className: "font-mono text-[11px] text-ink-faint", children: [
               "L",
               source.startLine,
               "\u2013",
               source.endLine,
               source.hash ? ` \xB7 ${source.hash.slice(0, 12)}` : ""
             ] }),
-            source.changed && /* @__PURE__ */ jsx3("p", { className: "text-xs text-warn", children: t("sourceChanged") }),
-            source.error && /* @__PURE__ */ jsx3("p", { role: "alert", className: "text-xs text-err", children: source.error })
+            source.changed && /* @__PURE__ */ jsx4("p", { className: "text-xs text-warn", children: t("sourceChanged") }),
+            source.error && /* @__PURE__ */ jsx4("p", { role: "alert", className: "text-xs text-err", children: source.error })
           ]
         },
         source.path
@@ -1715,7 +1790,7 @@ function WikiReviewContent({
 }
 
 // ui/NativeKnowledgeReviews.tsx
-import { Fragment as Fragment3, jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
+import { Fragment as Fragment3, jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
 var errorText2 = (error) => error instanceof Error ? error.message : String(error);
 function ReviewPreview({
   store,
@@ -1724,12 +1799,10 @@ function ReviewPreview({
   onDecision
 }) {
   const t = useNativeKnowledgeText();
-  const [preview, setPreview] = useState4(
-    null
-  );
-  const [error, setError] = useState4(null);
-  const [action, setAction] = useState4(null);
-  useEffect3(() => {
+  const [preview, setPreview] = useState5(null);
+  const [error, setError] = useState5(null);
+  const [action, setAction] = useState5(null);
+  useEffect4(() => {
     let live = true;
     setPreview(null);
     setError(null);
@@ -1755,10 +1828,12 @@ function ReviewPreview({
     setError(null);
     try {
       if (kind === "apply") {
-        await store.applyReview({
+        const receipt = await store.applyReview({
           id: selection.id,
           expectedProposalHash: selection.proposalHash
         });
+        onDecision(receipt);
+        return;
       } else {
         await store.rejectReview({
           id: selection.id,
@@ -1772,36 +1847,29 @@ function ReviewPreview({
       setAction(null);
     }
   };
-  return /* @__PURE__ */ jsxs4(
+  return /* @__PURE__ */ jsxs5(
     "article",
     {
       className: "space-y-4 rounded-xl border border-border bg-surface p-4",
       "data-testid": "native-review-preview",
       children: [
-        /* @__PURE__ */ jsx4(Button, { size: "sm", onClick: onClose, children: t.reviewBack }),
-        error && /* @__PURE__ */ jsx4("p", { role: "alert", className: "text-sm text-err", children: error }),
-        !error && !preview && /* @__PURE__ */ jsx4("p", { role: "status", className: "text-sm text-ink-dim", children: t.loading }),
-        preview && /* @__PURE__ */ jsxs4(Fragment3, { children: [
-          /* @__PURE__ */ jsxs4("header", { children: [
-            /* @__PURE__ */ jsx4("h2", { className: "text-base font-medium", children: preview.title }),
-            /* @__PURE__ */ jsx4("p", { className: "break-all text-xs text-ink-dim", children: preview.path })
+        /* @__PURE__ */ jsx5(Button, { size: "sm", onClick: onClose, children: t.reviewBack }),
+        error && /* @__PURE__ */ jsx5("p", { role: "alert", className: "text-sm text-err", children: error }),
+        !error && !preview && /* @__PURE__ */ jsx5("p", { role: "status", className: "text-sm text-ink-dim", children: t.loading }),
+        preview && /* @__PURE__ */ jsxs5(Fragment3, { children: [
+          /* @__PURE__ */ jsxs5("header", { children: [
+            /* @__PURE__ */ jsx5("h2", { className: "text-base font-medium", children: preview.title }),
+            /* @__PURE__ */ jsx5("p", { className: "break-all text-xs text-ink-dim", children: preview.path })
           ] }),
-          /* @__PURE__ */ jsx4("p", { className: "whitespace-pre-wrap text-sm", children: preview.rationale }),
-          /* @__PURE__ */ jsxs4(
-            "p",
-            {
-              className: "break-all font-mono text-xs text-ink-faint",
-              title: preview.proposalHash,
-              children: [
-                t.reviewVersion,
-                ": ",
-                preview.proposalHash.slice(0, 12)
-              ]
-            }
-          ),
-          preview.expired && /* @__PURE__ */ jsx4("p", { role: "status", className: "text-xs text-warn", children: t.reviewExpired }),
-          preview.targetChanged && /* @__PURE__ */ jsx4("p", { role: "status", className: "text-xs text-warn", children: t.reviewTargetChanged }),
-          /* @__PURE__ */ jsx4(
+          /* @__PURE__ */ jsx5("p", { className: "whitespace-pre-wrap text-sm", children: preview.rationale }),
+          /* @__PURE__ */ jsxs5("p", { className: "break-all font-mono text-xs text-ink-faint", title: preview.proposalHash, children: [
+            t.reviewVersion,
+            ": ",
+            preview.proposalHash.slice(0, 12)
+          ] }),
+          preview.expired && /* @__PURE__ */ jsx5("p", { role: "status", className: "text-xs text-warn", children: t.reviewExpired }),
+          preview.targetChanged && /* @__PURE__ */ jsx5("p", { role: "status", className: "text-xs text-warn", children: t.reviewTargetChanged }),
+          /* @__PURE__ */ jsx5(
             WikiReviewContent,
             {
               preview,
@@ -1811,9 +1879,9 @@ function ReviewPreview({
               })
             }
           ),
-          /* @__PURE__ */ jsx4("p", { className: "text-xs text-ink-dim", children: t.reviewNotVerified }),
-          /* @__PURE__ */ jsxs4("div", { className: "flex gap-2", children: [
-            /* @__PURE__ */ jsx4(
+          /* @__PURE__ */ jsx5("p", { className: "text-xs text-ink-dim", children: t.reviewNotVerified }),
+          /* @__PURE__ */ jsxs5("div", { className: "flex gap-2", children: [
+            /* @__PURE__ */ jsx5(
               Button,
               {
                 size: "sm",
@@ -1822,15 +1890,7 @@ function ReviewPreview({
                 children: action === "apply" ? t.applying : t.applyReview
               }
             ),
-            /* @__PURE__ */ jsx4(
-              Button,
-              {
-                size: "sm",
-                disabled: action !== null,
-                onClick: () => void decide("reject"),
-                children: action === "reject" ? t.rejecting : t.rejectReview
-              }
-            )
+            /* @__PURE__ */ jsx5(Button, { size: "sm", disabled: action !== null, onClick: () => void decide("reject"), children: action === "reject" ? t.rejecting : t.rejectReview })
           ] })
         ] })
       ]
@@ -1842,12 +1902,13 @@ function NativeKnowledgeReviews({
   observationRevision
 }) {
   const t = useNativeKnowledgeText();
-  const [offset, setOffset] = useState4(0);
-  const [page, setPage] = useState4(null);
-  const [error, setError] = useState4(null);
-  const [selection, setSelection] = useState4(null);
-  const [decisionRevision, setDecisionRevision] = useState4(0);
-  useEffect3(() => {
+  const [offset, setOffset] = useState5(0);
+  const [page, setPage] = useState5(null);
+  const [error, setError] = useState5(null);
+  const [selection, setSelection] = useState5(null);
+  const [decisionRevision, setDecisionRevision] = useState5(0);
+  const [receiptError, setReceiptError] = useState5(null);
+  useEffect4(() => {
     let live = true;
     setPage(null);
     setError(null);
@@ -1864,32 +1925,25 @@ function NativeKnowledgeReviews({
       live = false;
     };
   }, [store, offset, observationRevision, decisionRevision]);
-  return /* @__PURE__ */ jsxs4("section", { "aria-label": t.reviews, className: "space-y-4", children: [
-    /* @__PURE__ */ jsx4("p", { className: "text-xs text-ink-dim", children: t.reviewReadOnly }),
-    error && /* @__PURE__ */ jsx4("p", { role: "alert", className: "text-sm text-err", children: error }),
-    !error && !page && /* @__PURE__ */ jsx4("p", { role: "status", className: "text-sm text-ink-dim", children: t.loading }),
-    page && /* @__PURE__ */ jsxs4(Fragment3, { children: [
-      /* @__PURE__ */ jsxs4("p", { className: "text-xs text-ink-dim", children: [
+  return /* @__PURE__ */ jsxs5("section", { "aria-label": t.reviews, className: "space-y-4", children: [
+    /* @__PURE__ */ jsx5("p", { className: "text-xs text-ink-dim", children: t.reviewReadOnly }),
+    receiptError && /* @__PURE__ */ jsx5("p", { role: "alert", className: "text-sm text-err", children: receiptError }),
+    error && /* @__PURE__ */ jsx5("p", { role: "alert", className: "text-sm text-err", children: error }),
+    !error && !page && /* @__PURE__ */ jsx5("p", { role: "status", className: "text-sm text-ink-dim", children: t.loading }),
+    page && /* @__PURE__ */ jsxs5(Fragment3, { children: [
+      /* @__PURE__ */ jsxs5("p", { className: "text-xs text-ink-dim", children: [
         page.total,
         " ",
         t.reviewCount
       ] }),
-      page.problems.map((problem) => /* @__PURE__ */ jsxs4(
-        "p",
-        {
-          role: "alert",
-          className: "break-words text-xs text-err",
-          children: [
-            problem.id,
-            ": ",
-            problem.error
-          ]
-        },
-        problem.id
-      )),
-      page.items.length === 0 && /* @__PURE__ */ jsx4("p", { className: "text-sm text-ink-dim", children: page.project === null ? t.reviewProjectRequired : t.reviewEmpty }),
-      /* @__PURE__ */ jsx4("ul", { className: "divide-y divide-border rounded-xl border border-border", children: page.items.map((item) => /* @__PURE__ */ jsxs4("li", { className: "p-3", children: [
-        /* @__PURE__ */ jsx4(
+      page.problems.map((problem) => /* @__PURE__ */ jsxs5("p", { role: "alert", className: "break-words text-xs text-err", children: [
+        problem.id,
+        ": ",
+        problem.error
+      ] }, problem.id)),
+      page.items.length === 0 && /* @__PURE__ */ jsx5("p", { className: "text-sm text-ink-dim", children: page.project === null ? t.reviewProjectRequired : t.reviewEmpty }),
+      /* @__PURE__ */ jsx5("ul", { className: "divide-y divide-border rounded-xl border border-border", children: page.items.map((item) => /* @__PURE__ */ jsxs5("li", { className: "p-3", children: [
+        /* @__PURE__ */ jsx5(
           Button,
           {
             size: "sm",
@@ -1900,38 +1954,25 @@ function NativeKnowledgeReviews({
             children: item.title
           }
         ),
-        /* @__PURE__ */ jsx4("p", { className: "mt-1 break-all text-xs text-ink-dim", children: item.path }),
-        item.expired && /* @__PURE__ */ jsx4("p", { className: "text-xs text-warn", children: t.reviewExpired }),
-        item.bindingChanged && /* @__PURE__ */ jsx4("p", { className: "text-xs text-warn", children: t.reviewBindingChanged })
+        /* @__PURE__ */ jsx5("p", { className: "mt-1 break-all text-xs text-ink-dim", children: item.path }),
+        item.expired && /* @__PURE__ */ jsx5("p", { className: "text-xs text-warn", children: t.reviewExpired }),
+        item.bindingChanged && /* @__PURE__ */ jsx5("p", { className: "text-xs text-warn", children: t.reviewBindingChanged })
       ] }, item.id)) }),
-      /* @__PURE__ */ jsxs4("div", { className: "flex gap-2", children: [
-        /* @__PURE__ */ jsx4(
-          Button,
-          {
-            size: "sm",
-            disabled: offset === 0,
-            onClick: () => setOffset(0),
-            children: t.firstPage
-          }
-        ),
-        /* @__PURE__ */ jsx4(
-          Button,
-          {
-            size: "sm",
-            disabled: page.nextOffset === null,
-            onClick: () => setOffset(page.nextOffset),
-            children: t.nextPage
-          }
-        )
+      /* @__PURE__ */ jsxs5("div", { className: "flex gap-2", children: [
+        /* @__PURE__ */ jsx5(Button, { size: "sm", disabled: offset === 0, onClick: () => setOffset(0), children: t.firstPage }),
+        /* @__PURE__ */ jsx5(Button, { size: "sm", disabled: page.nextOffset === null, onClick: () => setOffset(page.nextOffset), children: t.nextPage })
       ] })
     ] }),
-    selection && /* @__PURE__ */ jsx4(
+    selection && /* @__PURE__ */ jsx5(
       ReviewPreview,
       {
         store,
         selection,
         onClose: () => setSelection(null),
-        onDecision: () => {
+        onDecision: (receipt) => {
+          setReceiptError(
+            receipt && (!receipt.reviewRecorded || !receipt.indexed) ? `${t.reviewPartial} ${receipt.recordError ?? ""} ${receipt.indexError ?? ""}` : null
+          );
           setSelection(null);
           setDecisionRevision((value) => value + 1);
         }
@@ -1942,14 +1983,14 @@ function NativeKnowledgeReviews({
 }
 
 // ui/NativeKnowledgeReading.tsx
-import { useEffect as useEffect8, useMemo as useMemo4, useState as useState8 } from "react";
+import { useEffect as useEffect9, useMemo as useMemo4, useState as useState9 } from "react";
 
 // ui/knowledge/KnowledgeNoteView.tsx
-import { useEffect as useEffect5, useState as useState6 } from "react";
+import { useEffect as useEffect6, useState as useState7 } from "react";
 
 // ui/knowledge/KnowledgeLinksView.tsx
-import { useEffect as useEffect4, useState as useState5 } from "react";
-import { jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
+import { useEffect as useEffect5, useState as useState6 } from "react";
+import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
 function KnowledgeLinksView({
   load,
   nonce,
@@ -1958,9 +1999,9 @@ function KnowledgeLinksView({
   revision
 }) {
   const t = useKnowledgeText();
-  const [error, setError] = useState5(null);
-  const [links, setLinks] = useState5(null);
-  useEffect4(() => {
+  const [error, setError] = useState6(null);
+  const [links, setLinks] = useState6(null);
+  useEffect5(() => {
     let live = true;
     setLinks(null);
     setError(null);
@@ -1978,9 +2019,9 @@ function KnowledgeLinksView({
     };
   }, [load, path, revision, nonce]);
   if (error)
-    return /* @__PURE__ */ jsx5("p", { role: "alert", className: "text-xs text-err", children: error });
+    return /* @__PURE__ */ jsx6("p", { role: "alert", className: "text-xs text-err", children: error });
   if (!links) return null;
-  const list = (items, empty) => items.length === 0 ? /* @__PURE__ */ jsx5("p", { className: "text-[11px] text-ink-faint", children: empty }) : /* @__PURE__ */ jsx5("ul", { className: "space-y-0.5", children: items.map((item) => /* @__PURE__ */ jsx5("li", { children: item.exists ? /* @__PURE__ */ jsx5(
+  const list = (items, empty) => items.length === 0 ? /* @__PURE__ */ jsx6("p", { className: "text-[11px] text-ink-faint", children: empty }) : /* @__PURE__ */ jsx6("ul", { className: "space-y-0.5", children: items.map((item) => /* @__PURE__ */ jsx6("li", { children: item.exists ? /* @__PURE__ */ jsx6(
     "button",
     {
       type: "button",
@@ -1989,7 +2030,7 @@ function KnowledgeLinksView({
       onClick: () => onOpenNote(item.path),
       children: item.title
     }
-  ) : /* @__PURE__ */ jsxs5(
+  ) : /* @__PURE__ */ jsxs6(
     "span",
     {
       className: "text-[11px] text-ink-faint",
@@ -2001,22 +2042,22 @@ function KnowledgeLinksView({
       ]
     }
   ) }, item.path)) });
-  return /* @__PURE__ */ jsxs5(
+  return /* @__PURE__ */ jsxs6(
     "div",
     {
       className: "mt-3 grid grid-cols-2 gap-3 rounded-lg border border-border p-3",
       "data-testid": "knowledge-links",
       children: [
-        /* @__PURE__ */ jsxs5("div", { children: [
-          /* @__PURE__ */ jsxs5("h5", { className: "mb-1 text-xs font-semibold", children: [
+        /* @__PURE__ */ jsxs6("div", { children: [
+          /* @__PURE__ */ jsxs6("h5", { className: "mb-1 text-xs font-semibold", children: [
             t("linksIncoming"),
             " \xB7 ",
             links.incoming.length
           ] }),
           list(links.incoming, t("linksIncomingEmpty"))
         ] }),
-        /* @__PURE__ */ jsxs5("div", { children: [
-          /* @__PURE__ */ jsxs5("h5", { className: "mb-1 text-xs font-semibold", children: [
+        /* @__PURE__ */ jsxs6("div", { children: [
+          /* @__PURE__ */ jsxs6("h5", { className: "mb-1 text-xs font-semibold", children: [
             t("linksOutgoing"),
             " \xB7 ",
             links.outgoing.length
@@ -2049,7 +2090,7 @@ ${rest}`;
 }
 
 // ui/knowledge/KnowledgeNoteView.tsx
-import { Fragment as Fragment4, jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
+import { Fragment as Fragment4, jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
 function KnowledgeNoteView({
   api,
   nonce,
@@ -2064,14 +2105,14 @@ function KnowledgeNoteView({
   onClose
 }) {
   const t = useKnowledgeText();
-  const [cursor, setCursor] = useState6(
+  const [cursor, setCursor] = useState7(
     {
       line: initialPage?.startLine ?? 1,
       expectedHash: initialPage?.expectedHash
     }
-  ), [note, setNote] = useState6(null), [error, setError] = useState6(null), [loading, setLoading] = useState6(false);
+  ), [note, setNote] = useState7(null), [error, setError] = useState7(null), [loading, setLoading] = useState7(false);
   const line = cursor.line;
-  useEffect5(() => {
+  useEffect6(() => {
     let live = true;
     setLoading(true);
     setNote(null);
@@ -2095,23 +2136,23 @@ function KnowledgeNoteView({
       live = false;
     };
   }, [api, path, cursor, revision, nonce]);
-  return /* @__PURE__ */ jsxs6(
+  return /* @__PURE__ */ jsxs7(
     "section",
     {
       className: "rounded-xl border border-border bg-surface p-3",
       "aria-label": t("viewNote"),
       "data-testid": "knowledge-note",
       children: [
-        /* @__PURE__ */ jsxs6("div", { className: "flex items-start justify-between gap-2", children: [
-          /* @__PURE__ */ jsxs6("div", { className: "min-w-0", children: [
-            /* @__PURE__ */ jsx6("h4", { className: "text-xs font-semibold", children: t("viewNote") }),
-            /* @__PURE__ */ jsx6("p", { className: "mt-1 break-all font-mono text-[11px] text-ink-dim", children: path })
+        /* @__PURE__ */ jsxs7("div", { className: "flex items-start justify-between gap-2", children: [
+          /* @__PURE__ */ jsxs7("div", { className: "min-w-0", children: [
+            /* @__PURE__ */ jsx7("h4", { className: "text-xs font-semibold", children: t("viewNote") }),
+            /* @__PURE__ */ jsx7("p", { className: "mt-1 break-all font-mono text-[11px] text-ink-dim", children: path })
           ] }),
-          /* @__PURE__ */ jsx6(Button, { size: "sm", onClick: onClose, "aria-label": t("close"), children: "\xD7" })
+          /* @__PURE__ */ jsx7(Button, { size: "sm", onClick: onClose, "aria-label": t("close"), children: "\xD7" })
         ] }),
-        /* @__PURE__ */ jsx6("p", { className: "my-2 text-xs text-ink-dim", children: t("uiRead") }),
-        loading && /* @__PURE__ */ jsx6("p", { role: "status", className: "text-xs", children: t("loading") }),
-        error && /* @__PURE__ */ jsx6(
+        /* @__PURE__ */ jsx7("p", { className: "my-2 text-xs text-ink-dim", children: t("uiRead") }),
+        loading && /* @__PURE__ */ jsx7("p", { role: "status", className: "text-xs", children: t("loading") }),
+        error && /* @__PURE__ */ jsx7(
           "p",
           {
             role: "alert",
@@ -2119,9 +2160,9 @@ function KnowledgeNoteView({
             children: error
           }
         ),
-        note?.missing && /* @__PURE__ */ jsx6("p", { className: "text-xs text-warn", children: t("missing") }),
-        note?.text && /* @__PURE__ */ jsxs6(Fragment4, { children: [
-          /* @__PURE__ */ jsxs6("p", { className: "mb-1 font-mono text-[11px] text-ink-faint", children: [
+        note?.missing && /* @__PURE__ */ jsx7("p", { className: "text-xs text-warn", children: t("missing") }),
+        note?.text && /* @__PURE__ */ jsxs7(Fragment4, { children: [
+          /* @__PURE__ */ jsxs7("p", { className: "mb-1 font-mono text-[11px] text-ink-faint", children: [
             "L",
             note.startLine,
             "\u2013",
@@ -2131,8 +2172,8 @@ function KnowledgeNoteView({
             " ",
             note.truncated ? ` \xB7 ${t("truncated")}` : ""
           ] }),
-          /* @__PURE__ */ jsxs6("div", { className: "max-h-80 overflow-auto rounded-lg bg-hover p-3", children: [
-            evidenceNotice?.(note.text) && /* @__PURE__ */ jsx6(
+          /* @__PURE__ */ jsxs7("div", { className: "max-h-80 overflow-auto rounded-lg bg-hover p-3", children: [
+            evidenceNotice?.(note.text) && /* @__PURE__ */ jsx7(
               "p",
               {
                 "data-testid": "legacy-evidence-status",
@@ -2143,16 +2184,16 @@ function KnowledgeNoteView({
             renderText(noteDisplayText(note.displayText || note.text))
           ] })
         ] }),
-        note?.displayLinkBase && /* @__PURE__ */ jsxs6("p", { className: "my-2 break-words text-[11px] text-ink-faint", children: [
+        note?.displayLinkBase && /* @__PURE__ */ jsxs7("p", { className: "my-2 break-words text-[11px] text-ink-faint", children: [
           t("linkPreviewOnly"),
           " ",
           note.displayLinkBase
         ] }),
-        note?.humanReview?.text && /* @__PURE__ */ jsxs6("details", { className: "mt-2 text-xs", children: [
-          /* @__PURE__ */ jsx6("summary", { className: "cursor-pointer font-medium", children: t("humanReview") }),
-          /* @__PURE__ */ jsx6("pre", { className: "mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-ink-2", children: note.humanReview.text })
+        note?.humanReview?.text && /* @__PURE__ */ jsxs7("details", { className: "mt-2 text-xs", children: [
+          /* @__PURE__ */ jsx7("summary", { className: "cursor-pointer font-medium", children: t("humanReview") }),
+          /* @__PURE__ */ jsx7("pre", { className: "mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-ink-2", children: note.humanReview.text })
         ] }),
-        note && !note.missing && /* @__PURE__ */ jsx6(
+        note && !note.missing && /* @__PURE__ */ jsx7(
           KnowledgeLinksView,
           {
             load: api.links,
@@ -2162,10 +2203,10 @@ function KnowledgeNoteView({
             onOpenNote
           }
         ),
-        unavailableReason && /* @__PURE__ */ jsx6("p", { className: "mt-2 text-xs text-ink-faint", children: unavailableReason }),
-        /* @__PURE__ */ jsxs6("div", { className: "mt-2 flex flex-wrap gap-1", children: [
-          line > 1 && /* @__PURE__ */ jsx6(Button, { size: "sm", onClick: () => setCursor({ line: 1 }), children: t("readBack") }),
-          note?.truncated && note.endLine !== void 0 && note.endLine < (note.totalLines || 0) && note.endLine >= line && /* @__PURE__ */ jsx6(
+        unavailableReason && /* @__PURE__ */ jsx7("p", { className: "mt-2 text-xs text-ink-faint", children: unavailableReason }),
+        /* @__PURE__ */ jsxs7("div", { className: "mt-2 flex flex-wrap gap-1", children: [
+          line > 1 && /* @__PURE__ */ jsx7(Button, { size: "sm", onClick: () => setCursor({ line: 1 }), children: t("readBack") }),
+          note?.truncated && note.endLine !== void 0 && note.endLine < (note.totalLines || 0) && note.endLine >= line && /* @__PURE__ */ jsx7(
             Button,
             {
               size: "sm",
@@ -2176,7 +2217,7 @@ function KnowledgeNoteView({
               children: t("readMore")
             }
           ),
-          /* @__PURE__ */ jsx6(
+          /* @__PURE__ */ jsx7(
             Button,
             {
               size: "sm",
@@ -2195,7 +2236,7 @@ function KnowledgeNoteView({
 }
 
 // ui/knowledge/KnowledgeGraphView.tsx
-import { useEffect as useEffect6, useMemo as useMemo2, useRef as useRef3, useState as useState7 } from "react";
+import { useEffect as useEffect7, useMemo as useMemo2, useRef as useRef3, useState as useState8 } from "react";
 
 // ui/knowledge/graph-layout.ts
 var GRAPH_WIDTH = 720;
@@ -2712,7 +2753,7 @@ function clusterColor(cluster, size) {
 }
 
 // ui/knowledge/KnowledgeGraphView.tsx
-import { Fragment as Fragment5, jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
+import { Fragment as Fragment5, jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
 var GRAPH_LIMIT = 400;
 var MIN_ZOOM = 0.65;
 var MAX_ZOOM = 2.8;
@@ -2843,7 +2884,7 @@ function NodeMark({
   const common = { fill, stroke, strokeWidth, strokeDasharray, fillOpacity };
   if (shape === "square") {
     const side = r * 1.75;
-    return /* @__PURE__ */ jsx7(
+    return /* @__PURE__ */ jsx8(
       "rect",
       {
         x: x - side / 2,
@@ -2857,7 +2898,7 @@ function NodeMark({
   }
   if (shape === "diamond") {
     const d = r * 1.3;
-    return /* @__PURE__ */ jsx7(
+    return /* @__PURE__ */ jsx8(
       "polygon",
       {
         points: `${x},${y - d} ${x + d},${y} ${x},${y + d} ${x - d},${y}`,
@@ -2865,7 +2906,7 @@ function NodeMark({
       }
     );
   }
-  return /* @__PURE__ */ jsx7("circle", { cx: x, cy: y, r, ...common });
+  return /* @__PURE__ */ jsx8("circle", { cx: x, cy: y, r, ...common });
 }
 function KnowledgeGraphView({
   api,
@@ -2879,30 +2920,30 @@ function KnowledgeGraphView({
   const t = useKnowledgeText();
   const language = useLanguage();
   const categoryLabels = language === "zh" ? CATEGORY_LABELS_ZH : CATEGORY_LABELS_EN;
-  const [data, setData] = useState7(null);
-  const [error, setError] = useState7(null);
-  const [selected, setSelected] = useState7(null);
-  const [view, setView] = useState7("semantic");
-  const [mergeMirrors, setMergeMirrors] = useState7(true);
-  const [relationFilter, setRelationFilter] = useState7("all");
-  const [categoryFilter, setCategoryFilter] = useState7(
+  const [data, setData] = useState8(null);
+  const [error, setError] = useState8(null);
+  const [selected, setSelected] = useState8(null);
+  const [view, setView] = useState8("semantic");
+  const [mergeMirrors, setMergeMirrors] = useState8(true);
+  const [relationFilter, setRelationFilter] = useState8("all");
+  const [categoryFilter, setCategoryFilter] = useState8(
     null
   );
-  const [links, setLinks] = useState7(null);
-  const [hovered, setHovered] = useState7(null);
-  const [camera, setCamera] = useState7({ x: 0, y: 0, scale: 1 });
-  const [freshPaths, setFreshPaths] = useState7(() => /* @__PURE__ */ new Set());
-  const [colorMode, setColorMode] = useState7("cluster");
-  const [scope, setScope] = useState7("global");
-  const [hops, setHops] = useState7(1);
-  const [healthOn, setHealthOn] = useState7(false);
+  const [links, setLinks] = useState8(null);
+  const [hovered, setHovered] = useState8(null);
+  const [camera, setCamera] = useState8({ x: 0, y: 0, scale: 1 });
+  const [freshPaths, setFreshPaths] = useState8(() => /* @__PURE__ */ new Set());
+  const [colorMode, setColorMode] = useState8("cluster");
+  const [scope, setScope] = useState8("global");
+  const [hops, setHops] = useState8(1);
+  const [healthOn, setHealthOn] = useState8(false);
   const rootRef = useRef3(null);
   const dragRef = useRef3(null);
   const dragFrameRef = useRef3(null);
   const pendingCameraRef = useRef3(null);
   const previousGraphRef = useRef3(null);
   const graphSignatureRef = useRef3(null);
-  useEffect6(
+  useEffect7(
     () => () => {
       if (dragFrameRef.current !== null)
         cancelAnimationFrame(dragFrameRef.current);
@@ -2910,11 +2951,11 @@ function KnowledgeGraphView({
     []
   );
   const liveKey = `${revision}:${nonce}:${indexKey}`;
-  const [appliedKey, setAppliedKey] = useState7(liveKey);
-  const [paused, setPaused] = useState7(false);
-  const [pendingEvents, setPendingEvents] = useState7(0);
+  const [appliedKey, setAppliedKey] = useState8(liveKey);
+  const [paused, setPaused] = useState8(false);
+  const [pendingEvents, setPendingEvents] = useState8(0);
   const lastKeyRef = useRef3(liveKey);
-  useEffect6(() => {
+  useEffect7(() => {
     if (lastKeyRef.current === liveKey) return;
     lastKeyRef.current = liveKey;
     if (paused) {
@@ -2934,7 +2975,7 @@ function KnowledgeGraphView({
     }
     setPaused(!paused);
   };
-  useEffect6(() => {
+  useEffect7(() => {
     let live = true;
     setError(null);
     void api.getKnowledgeGraph({ revision, limit: GRAPH_LIMIT, view, mergeMirrors }).then(
@@ -2966,11 +3007,11 @@ function KnowledgeGraphView({
     return map;
   }, [findings]);
   const radiusOf = (node) => hubRadius(incoming.get(node.path) ?? 0, node.degree) + (node.isMain ? 3 : 0);
-  useEffect6(() => {
+  useEffect7(() => {
     if (!selected || !nodes.some((node) => node.path === selected))
       setSelected(null);
   }, [nodes, selected]);
-  useEffect6(() => {
+  useEffect7(() => {
     if (!selected) {
       setLinks(null);
       return;
@@ -3123,7 +3164,7 @@ function KnowledgeGraphView({
     ) : /* @__PURE__ */ new Map(),
     [data, viewNodes, viewPoints, labelled, selected]
   );
-  useEffect6(() => {
+  useEffect7(() => {
     setCamera({ x: 0, y: 0, scale: 1 });
   }, [scope, hops, scope === "local" ? selected : null]);
   const fillOf = (node) => {
@@ -3134,7 +3175,7 @@ function KnowledgeGraphView({
     return clusterColor(cluster, clusterSizes.get(cluster) ?? 0);
   };
   const handOff = (path, kind) => onHandoff?.(path, t(HEALTH_COPY[kind].prompt).replace("{path}", path));
-  useEffect6(() => {
+  useEffect7(() => {
     if (!data) return;
     const current = new Map(
       nodes.map((node) => [
@@ -3261,7 +3302,7 @@ function KnowledgeGraphView({
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
   };
-  useEffect6(() => {
+  useEffect7(() => {
     const onKeyDown = (event) => {
       const target = event.target;
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || !rootRef.current?.contains(target))
@@ -3290,12 +3331,12 @@ function KnowledgeGraphView({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [camera, points, selected]);
   if (error)
-    return /* @__PURE__ */ jsx7("p", { className: "knowledge-state-card knowledge-state-card--error rounded-lg border p-3 text-xs text-err", children: error });
+    return /* @__PURE__ */ jsx8("p", { className: "knowledge-state-card knowledge-state-card--error rounded-lg border p-3 text-xs text-err", children: error });
   if (!data || !graph)
-    return /* @__PURE__ */ jsx7("p", { className: "knowledge-state-card rounded-lg border p-3 text-[11px] text-ink-faint", children: t("loading") });
+    return /* @__PURE__ */ jsx8("p", { className: "knowledge-state-card rounded-lg border p-3 text-[11px] text-ink-faint", children: t("loading") });
   if (nodes.length === 0)
-    return /* @__PURE__ */ jsx7("p", { className: "knowledge-state-card rounded-lg border p-4 text-[11px] text-ink-faint", children: t("graphEmpty") });
-  return /* @__PURE__ */ jsxs7(
+    return /* @__PURE__ */ jsx8("p", { className: "knowledge-state-card rounded-lg border p-4 text-[11px] text-ink-faint", children: t("graphEmpty") });
+  return /* @__PURE__ */ jsxs8(
     "div",
     {
       ref: rootRef,
@@ -3303,26 +3344,26 @@ function KnowledgeGraphView({
       className: "knowledge-observatory space-y-3",
       "aria-describedby": "knowledge-graph-summary knowledge-graph-keyboard-help",
       children: [
-        /* @__PURE__ */ jsxs7(
+        /* @__PURE__ */ jsxs8(
           "header",
           {
             className: "knowledge-network-header",
             "data-testid": "knowledge-network-header",
             children: [
-              /* @__PURE__ */ jsx7("h3", { className: "sr-only", children: t("graphTitle") }),
-              /* @__PURE__ */ jsxs7("div", { className: "knowledge-network-stats", children: [
-                /* @__PURE__ */ jsxs7("span", { children: [
-                  /* @__PURE__ */ jsx7("strong", { children: nodes.length }),
+              /* @__PURE__ */ jsx8("h3", { className: "sr-only", children: t("graphTitle") }),
+              /* @__PURE__ */ jsxs8("div", { className: "knowledge-network-stats", children: [
+                /* @__PURE__ */ jsxs8("span", { children: [
+                  /* @__PURE__ */ jsx8("strong", { children: nodes.length }),
                   " ",
                   t("graphLegendNote")
                 ] }),
-                /* @__PURE__ */ jsxs7("span", { children: [
-                  /* @__PURE__ */ jsx7("strong", { children: edges.length }),
+                /* @__PURE__ */ jsxs8("span", { children: [
+                  /* @__PURE__ */ jsx8("strong", { children: edges.length }),
                   " ",
                   t("graphLinks").replace("{count}", "")
                 ] }),
-                /* @__PURE__ */ jsxs7("span", { children: [
-                  /* @__PURE__ */ jsx7("strong", { children: isolated }),
+                /* @__PURE__ */ jsxs8("span", { children: [
+                  /* @__PURE__ */ jsx8("strong", { children: isolated }),
                   " ",
                   t("graphHealthIsolated").replace("{count}", "")
                 ] })
@@ -3330,8 +3371,8 @@ function KnowledgeGraphView({
             ]
           }
         ),
-        /* @__PURE__ */ jsxs7("div", { className: "knowledge-graph-toolbar flex flex-wrap items-center gap-2", children: [
-          /* @__PURE__ */ jsx7(
+        /* @__PURE__ */ jsxs8("div", { className: "knowledge-graph-toolbar flex flex-wrap items-center gap-2", children: [
+          /* @__PURE__ */ jsx8(
             Button,
             {
               size: "sm",
@@ -3340,7 +3381,7 @@ function KnowledgeGraphView({
               children: t("graphSemantic")
             }
           ),
-          /* @__PURE__ */ jsx7(
+          /* @__PURE__ */ jsx8(
             Button,
             {
               size: "sm",
@@ -3349,8 +3390,8 @@ function KnowledgeGraphView({
               children: t("graphAllFiles")
             }
           ),
-          /* @__PURE__ */ jsxs7("label", { className: "ml-1 flex items-center gap-1 text-xs text-ink-dim", children: [
-            /* @__PURE__ */ jsx7(
+          /* @__PURE__ */ jsxs8("label", { className: "ml-1 flex items-center gap-1 text-xs text-ink-dim", children: [
+            /* @__PURE__ */ jsx8(
               "input",
               {
                 type: "checkbox",
@@ -3360,7 +3401,7 @@ function KnowledgeGraphView({
             ),
             t("graphMergeMirrors")
           ] }),
-          /* @__PURE__ */ jsx7("span", { className: "ml-auto flex gap-1", children: ["all", "link", "directory"].map((filter) => /* @__PURE__ */ jsx7(
+          /* @__PURE__ */ jsx8("span", { className: "ml-auto flex gap-1", children: ["all", "link", "directory"].map((filter) => /* @__PURE__ */ jsx8(
             Button,
             {
               size: "sm",
@@ -3371,14 +3412,14 @@ function KnowledgeGraphView({
             filter
           )) })
         ] }),
-        /* @__PURE__ */ jsxs7(
+        /* @__PURE__ */ jsxs8(
           "div",
           {
             className: "knowledge-graph-toolbar flex flex-wrap items-center gap-2",
             "data-testid": "knowledge-graph-modes",
             children: [
-              /* @__PURE__ */ jsxs7("span", { className: "flex gap-1", children: [
-                /* @__PURE__ */ jsx7(
+              /* @__PURE__ */ jsxs8("span", { className: "flex gap-1", children: [
+                /* @__PURE__ */ jsx8(
                   Button,
                   {
                     size: "sm",
@@ -3387,7 +3428,7 @@ function KnowledgeGraphView({
                     children: t("graphColorCluster")
                   }
                 ),
-                /* @__PURE__ */ jsx7(
+                /* @__PURE__ */ jsx8(
                   Button,
                   {
                     size: "sm",
@@ -3397,8 +3438,8 @@ function KnowledgeGraphView({
                   }
                 )
               ] }),
-              /* @__PURE__ */ jsxs7("span", { className: "flex gap-1", children: [
-                /* @__PURE__ */ jsx7(
+              /* @__PURE__ */ jsxs8("span", { className: "flex gap-1", children: [
+                /* @__PURE__ */ jsx8(
                   Button,
                   {
                     size: "sm",
@@ -3407,7 +3448,7 @@ function KnowledgeGraphView({
                     children: t("graphScopeGlobal")
                   }
                 ),
-                /* @__PURE__ */ jsx7(
+                /* @__PURE__ */ jsx8(
                   Button,
                   {
                     size: "sm",
@@ -3416,7 +3457,7 @@ function KnowledgeGraphView({
                     children: t("graphScopeLocal")
                   }
                 ),
-                scope === "local" && [1, 2].map((count) => /* @__PURE__ */ jsx7(
+                scope === "local" && [1, 2].map((count) => /* @__PURE__ */ jsx8(
                   Button,
                   {
                     size: "sm",
@@ -3427,7 +3468,7 @@ function KnowledgeGraphView({
                   count
                 ))
               ] }),
-              /* @__PURE__ */ jsxs7(
+              /* @__PURE__ */ jsxs8(
                 Button,
                 {
                   size: "sm",
@@ -3440,14 +3481,14 @@ function KnowledgeGraphView({
                   ]
                 }
               ),
-              scope === "local" && !selected && /* @__PURE__ */ jsx7("span", { className: "text-[11px] text-ink-faint", children: t("graphLocalHint") })
+              scope === "local" && !selected && /* @__PURE__ */ jsx8("span", { className: "text-[11px] text-ink-faint", children: t("graphLocalHint") })
             ]
           }
         ),
-        /* @__PURE__ */ jsxs7("div", { className: "flex flex-wrap items-center gap-1 text-[11px] text-ink-faint", children: [
-          /* @__PURE__ */ jsx7("span", { className: "mr-1 uppercase tracking-[0.12em]", children: t("graphCategory") }),
+        /* @__PURE__ */ jsxs8("div", { className: "flex flex-wrap items-center gap-1 text-[11px] text-ink-faint", children: [
+          /* @__PURE__ */ jsx8("span", { className: "mr-1 uppercase tracking-[0.12em]", children: t("graphCategory") }),
           [...new Set(nodes.map(categoryOf))].map(
-            (category) => /* @__PURE__ */ jsxs7(
+            (category) => /* @__PURE__ */ jsxs8(
               "button",
               {
                 type: "button",
@@ -3457,7 +3498,7 @@ function KnowledgeGraphView({
                   (current) => current === category ? null : category
                 ),
                 children: [
-                  /* @__PURE__ */ jsx7("i", { style: { backgroundColor: CATEGORY_COLORS[category] } }),
+                  /* @__PURE__ */ jsx8("i", { style: { backgroundColor: CATEGORY_COLORS[category] } }),
                   categoryLabels[category]
                 ]
               },
@@ -3465,8 +3506,8 @@ function KnowledgeGraphView({
             )
           )
         ] }),
-        /* @__PURE__ */ jsxs7("div", { className: "flex flex-wrap gap-1 text-[11px] text-ink-faint", children: [
-          /* @__PURE__ */ jsx7(
+        /* @__PURE__ */ jsxs8("div", { className: "flex flex-wrap gap-1 text-[11px] text-ink-faint", children: [
+          /* @__PURE__ */ jsx8(
             "span",
             {
               id: "knowledge-graph-summary",
@@ -3474,14 +3515,14 @@ function KnowledgeGraphView({
               children: t("graphSummary").replace("{nodes}", String(nodes.length)).replace("{edges}", String(edges.length)).replace("{total}", String(graph.totalNotes)).replace("{limit}", String(GRAPH_LIMIT))
             }
           ),
-          /* @__PURE__ */ jsx7("span", { className: "rounded-full border border-border px-2 py-0.5", children: t("graphHealthIsolated").replace("{count}", String(isolated)) }),
-          /* @__PURE__ */ jsx7("span", { className: "rounded-full border border-border px-2 py-0.5", children: t("graphHealthDuplicates").replace("{count}", String(duplicates)) })
+          /* @__PURE__ */ jsx8("span", { className: "rounded-full border border-border px-2 py-0.5", children: t("graphHealthIsolated").replace("{count}", String(isolated)) }),
+          /* @__PURE__ */ jsx8("span", { className: "rounded-full border border-border px-2 py-0.5", children: t("graphHealthDuplicates").replace("{count}", String(duplicates)) })
         ] }),
-        /* @__PURE__ */ jsx7("p", { id: "knowledge-graph-keyboard-help", className: "sr-only", children: t("graphKeyboardHelp") }),
-        /* @__PURE__ */ jsxs7("div", { className: "relative", children: [
-          /* @__PURE__ */ jsxs7("div", { className: "knowledge-observatory-canvas relative overflow-hidden rounded-xl", children: [
-            /* @__PURE__ */ jsxs7("div", { className: "knowledge-graph-canvas-tools absolute inset-3 z-10", children: [
-              /* @__PURE__ */ jsxs7(
+        /* @__PURE__ */ jsx8("p", { id: "knowledge-graph-keyboard-help", className: "sr-only", children: t("graphKeyboardHelp") }),
+        /* @__PURE__ */ jsxs8("div", { className: "relative", children: [
+          /* @__PURE__ */ jsxs8("div", { className: "knowledge-observatory-canvas relative overflow-hidden rounded-xl", children: [
+            /* @__PURE__ */ jsxs8("div", { className: "knowledge-graph-canvas-tools absolute inset-3 z-10", children: [
+              /* @__PURE__ */ jsxs8(
                 "button",
                 {
                   type: "button",
@@ -3491,7 +3532,7 @@ function KnowledgeGraphView({
                   "data-testid": "knowledge-graph-live-toggle",
                   onClick: togglePaused,
                   children: [
-                    /* @__PURE__ */ jsx7(
+                    /* @__PURE__ */ jsx8(
                       "span",
                       {
                         "aria-hidden": "true",
@@ -3502,8 +3543,8 @@ function KnowledgeGraphView({
                   ]
                 }
               ),
-              /* @__PURE__ */ jsxs7("div", { className: "knowledge-graph-controls absolute bottom-0 right-0 flex items-center gap-1 rounded-lg p-1", children: [
-                /* @__PURE__ */ jsxs7(
+              /* @__PURE__ */ jsxs8("div", { className: "knowledge-graph-controls absolute bottom-0 right-0 flex items-center gap-1 rounded-lg p-1", children: [
+                /* @__PURE__ */ jsxs8(
                   "button",
                   {
                     type: "button",
@@ -3511,16 +3552,16 @@ function KnowledgeGraphView({
                     onClick: () => zoomBy(1.14),
                     title: `${t("graphZoomIn")} (+)`,
                     children: [
-                      /* @__PURE__ */ jsx7("span", { "aria-hidden": "true", children: "\uFF0B" }),
-                      /* @__PURE__ */ jsx7("span", { className: "sr-only", children: t("graphZoomIn") })
+                      /* @__PURE__ */ jsx8("span", { "aria-hidden": "true", children: "\uFF0B" }),
+                      /* @__PURE__ */ jsx8("span", { className: "sr-only", children: t("graphZoomIn") })
                     ]
                   }
                 ),
-                /* @__PURE__ */ jsxs7("span", { className: "knowledge-graph-zoom-value", "aria-live": "polite", children: [
+                /* @__PURE__ */ jsxs8("span", { className: "knowledge-graph-zoom-value", "aria-live": "polite", children: [
                   Math.round(camera.scale * 100),
                   "%"
                 ] }),
-                /* @__PURE__ */ jsxs7(
+                /* @__PURE__ */ jsxs8(
                   "button",
                   {
                     type: "button",
@@ -3528,12 +3569,12 @@ function KnowledgeGraphView({
                     onClick: () => zoomBy(0.88),
                     title: `${t("graphZoomOut")} (-)`,
                     children: [
-                      /* @__PURE__ */ jsx7("span", { "aria-hidden": "true", children: "\uFF0D" }),
-                      /* @__PURE__ */ jsx7("span", { className: "sr-only", children: t("graphZoomOut") })
+                      /* @__PURE__ */ jsx8("span", { "aria-hidden": "true", children: "\uFF0D" }),
+                      /* @__PURE__ */ jsx8("span", { className: "sr-only", children: t("graphZoomOut") })
                     ]
                   }
                 ),
-                /* @__PURE__ */ jsxs7(
+                /* @__PURE__ */ jsxs8(
                   "button",
                   {
                     type: "button",
@@ -3541,12 +3582,12 @@ function KnowledgeGraphView({
                     onClick: resetCamera,
                     title: t("graphResetView"),
                     children: [
-                      /* @__PURE__ */ jsx7("span", { "aria-hidden": "true", children: "\u2302" }),
-                      /* @__PURE__ */ jsx7("span", { className: "sr-only", children: t("graphResetView") })
+                      /* @__PURE__ */ jsx8("span", { "aria-hidden": "true", children: "\u2302" }),
+                      /* @__PURE__ */ jsx8("span", { className: "sr-only", children: t("graphResetView") })
                     ]
                   }
                 ),
-                /* @__PURE__ */ jsx7(
+                /* @__PURE__ */ jsx8(
                   "button",
                   {
                     type: "button",
@@ -3558,7 +3599,7 @@ function KnowledgeGraphView({
                 )
               ] })
             ] }),
-            /* @__PURE__ */ jsxs7(
+            /* @__PURE__ */ jsxs8(
               "svg",
               {
                 viewBox: `0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`,
@@ -3572,16 +3613,16 @@ function KnowledgeGraphView({
                 onPointerUp: onCanvasPointerUp,
                 onPointerCancel: onCanvasPointerUp,
                 children: [
-                  /* @__PURE__ */ jsx7("title", { id: "knowledge-graph-title", children: t("graphTitle") }),
-                  /* @__PURE__ */ jsxs7("defs", { children: [
-                    /* @__PURE__ */ jsx7(
+                  /* @__PURE__ */ jsx8("title", { id: "knowledge-graph-title", children: t("graphTitle") }),
+                  /* @__PURE__ */ jsxs8("defs", { children: [
+                    /* @__PURE__ */ jsx8(
                       "pattern",
                       {
                         id: "knowledge-grid",
                         width: "32",
                         height: "32",
                         patternUnits: "userSpaceOnUse",
-                        children: /* @__PURE__ */ jsx7(
+                        children: /* @__PURE__ */ jsx8(
                           "path",
                           {
                             d: "M 32 0 L 0 0 0 32",
@@ -3593,8 +3634,8 @@ function KnowledgeGraphView({
                         )
                       }
                     ),
-                    /* @__PURE__ */ jsxs7("radialGradient", { id: "knowledge-glow", children: [
-                      /* @__PURE__ */ jsx7(
+                    /* @__PURE__ */ jsxs8("radialGradient", { id: "knowledge-glow", children: [
+                      /* @__PURE__ */ jsx8(
                         "stop",
                         {
                           offset: "0",
@@ -3602,7 +3643,7 @@ function KnowledgeGraphView({
                           stopOpacity: ".2"
                         }
                       ),
-                      /* @__PURE__ */ jsx7(
+                      /* @__PURE__ */ jsx8(
                         "stop",
                         {
                           offset: "1",
@@ -3612,8 +3653,8 @@ function KnowledgeGraphView({
                       )
                     ] })
                   ] }),
-                  /* @__PURE__ */ jsx7("rect", { width: GRAPH_WIDTH, height: GRAPH_HEIGHT, fill: "url(#knowledge-grid)" }),
-                  /* @__PURE__ */ jsx7(
+                  /* @__PURE__ */ jsx8("rect", { width: GRAPH_WIDTH, height: GRAPH_HEIGHT, fill: "url(#knowledge-grid)" }),
+                  /* @__PURE__ */ jsx8(
                     "ellipse",
                     {
                       cx: GRAPH_WIDTH / 2,
@@ -3623,7 +3664,7 @@ function KnowledgeGraphView({
                       fill: "url(#knowledge-glow)"
                     }
                   ),
-                  /* @__PURE__ */ jsxs7(
+                  /* @__PURE__ */ jsxs8(
                     "g",
                     {
                       className: "knowledge-graph-scene",
@@ -3632,7 +3673,7 @@ function KnowledgeGraphView({
                         viewNodes.filter((node) => node.isMain).map((node) => {
                           const point = viewPoints.get(node.path);
                           if (!point) return null;
-                          return /* @__PURE__ */ jsx7(
+                          return /* @__PURE__ */ jsx8(
                             "circle",
                             {
                               cx: point.x,
@@ -3646,7 +3687,7 @@ function KnowledgeGraphView({
                             `main-orbit-${node.path}`
                           );
                         }),
-                        /* @__PURE__ */ jsx7("g", { children: visibleEdges.map((edge) => {
+                        /* @__PURE__ */ jsx8("g", { children: visibleEdges.map((edge) => {
                           const a = viewPoints.get(edge.source), b = viewPoints.get(edge.target);
                           if (!a || !b) return null;
                           const categoryOn = !categoryFilter || categoryOf(
@@ -3656,7 +3697,7 @@ function KnowledgeGraphView({
                           ) === categoryFilter;
                           const on = categoryOn && (!active || active.has(edge.source) && active.has(edge.target));
                           const fresh = freshPaths.has(edge.source) || freshPaths.has(edge.target);
-                          return /* @__PURE__ */ jsx7(
+                          return /* @__PURE__ */ jsx8(
                             "line",
                             {
                               className: `knowledge-graph-edge${on && focusPath ? " knowledge-graph-edge--active" : ""}${fresh ? " knowledge-graph-edge--fresh" : ""}`,
@@ -3687,7 +3728,7 @@ function KnowledgeGraphView({
                           const showMetadata = camera.scale >= 1.15 || selected === node.path || hovered === node.path;
                           return (
                             // biome-ignore lint/a11y/useSemanticElements: SVG nodes do not support native button elements
-                            /* @__PURE__ */ jsxs7(
+                            /* @__PURE__ */ jsxs8(
                               "g",
                               {
                                 role: "button",
@@ -3709,9 +3750,9 @@ function KnowledgeGraphView({
                                   }
                                 },
                                 children: [
-                                  /* @__PURE__ */ jsx7("title", { children: `${node.title}
+                                  /* @__PURE__ */ jsx8("title", { children: `${node.title}
 ${node.path}` }),
-                                  selected === node.path && /* @__PURE__ */ jsx7(
+                                  selected === node.path && /* @__PURE__ */ jsx8(
                                     "circle",
                                     {
                                       className: "knowledge-graph-selection-halo",
@@ -3724,7 +3765,7 @@ ${node.path}` }),
                                       strokeDasharray: "2 3"
                                     }
                                   ),
-                                  /* @__PURE__ */ jsx7(
+                                  /* @__PURE__ */ jsx8(
                                     "circle",
                                     {
                                       className: `knowledge-graph-node-aura${fresh ? " knowledge-graph-node-aura--fresh" : ""}`,
@@ -3735,7 +3776,7 @@ ${node.path}` }),
                                       fillOpacity: ".1"
                                     }
                                   ),
-                                  nodeFindings?.map((kind, index) => /* @__PURE__ */ jsx7(
+                                  nodeFindings?.map((kind, index) => /* @__PURE__ */ jsx8(
                                     "circle",
                                     {
                                       className: "knowledge-graph-health-ring",
@@ -3749,7 +3790,7 @@ ${node.path}` }),
                                     },
                                     `health-${kind}`
                                   )),
-                                  node.isMain && /* @__PURE__ */ jsx7(
+                                  node.isMain && /* @__PURE__ */ jsx8(
                                     "circle",
                                     {
                                       cx: point.x,
@@ -3762,7 +3803,7 @@ ${node.path}` }),
                                       strokeDasharray: "7 4"
                                     }
                                   ),
-                                  (node.sharedWith?.length ?? 0) > 1 && /* @__PURE__ */ jsx7(
+                                  (node.sharedWith?.length ?? 0) > 1 && /* @__PURE__ */ jsx8(
                                     "circle",
                                     {
                                       cx: point.x,
@@ -3775,7 +3816,7 @@ ${node.path}` }),
                                       strokeDasharray: "2 3"
                                     }
                                   ),
-                                  /* @__PURE__ */ jsx7(
+                                  /* @__PURE__ */ jsx8(
                                     NodeMark,
                                     {
                                       shape,
@@ -3787,8 +3828,8 @@ ${node.path}` }),
                                       strokeWidth: "2"
                                     }
                                   ),
-                                  showLabel && placement && /* @__PURE__ */ jsxs7(Fragment5, { children: [
-                                    /* @__PURE__ */ jsx7(
+                                  showLabel && placement && /* @__PURE__ */ jsxs8(Fragment5, { children: [
+                                    /* @__PURE__ */ jsx8(
                                       "rect",
                                       {
                                         x: placement.anchor === "end" ? placement.x - placement.width - 4 : placement.x - 4,
@@ -3802,7 +3843,7 @@ ${node.path}` }),
                                         strokeOpacity: ".7"
                                       }
                                     ),
-                                    /* @__PURE__ */ jsxs7(
+                                    /* @__PURE__ */ jsxs8(
                                       "text",
                                       {
                                         x: placement.x,
@@ -3811,8 +3852,8 @@ ${node.path}` }),
                                         fontSize: "10",
                                         fill: "var(--knowledge-ink)",
                                         children: [
-                                          /* @__PURE__ */ jsx7("tspan", { children: labelText(node) }),
-                                          showMetadata && /* @__PURE__ */ jsxs7(
+                                          /* @__PURE__ */ jsx8("tspan", { children: labelText(node) }),
+                                          showMetadata && /* @__PURE__ */ jsxs8(
                                             "tspan",
                                             {
                                               x: placement.x,
@@ -3846,11 +3887,11 @@ ${node.path}` }),
                 ]
               }
             ),
-            /* @__PURE__ */ jsx7("div", { className: "sr-only", "aria-live": "polite", "aria-atomic": "true", children: selectedNode ? `${selectedNode.title} \xB7 ${selectedNode.path}` : "" }),
-            /* @__PURE__ */ jsxs7("div", { className: "knowledge-graph-legend absolute bottom-2 left-3 flex max-w-[calc(100%-24px)] flex-wrap gap-x-3 gap-y-1 rounded-md px-2 py-2 text-xs", children: [
-              colorMode === "cluster" && /* @__PURE__ */ jsxs7(Fragment5, { children: [
-                [...clusterHeads.entries()].sort((a, b) => a[0] - b[0]).slice(0, 6).map(([cluster, head]) => /* @__PURE__ */ jsxs7("span", { title: head.title, children: [
-                  /* @__PURE__ */ jsx7(
+            /* @__PURE__ */ jsx8("div", { className: "sr-only", "aria-live": "polite", "aria-atomic": "true", children: selectedNode ? `${selectedNode.title} \xB7 ${selectedNode.path}` : "" }),
+            /* @__PURE__ */ jsxs8("div", { className: "knowledge-graph-legend absolute bottom-2 left-3 flex max-w-[calc(100%-24px)] flex-wrap gap-x-3 gap-y-1 rounded-md px-2 py-2 text-xs", children: [
+              colorMode === "cluster" && /* @__PURE__ */ jsxs8(Fragment5, { children: [
+                [...clusterHeads.entries()].sort((a, b) => a[0] - b[0]).slice(0, 6).map(([cluster, head]) => /* @__PURE__ */ jsxs8("span", { title: head.title, children: [
+                  /* @__PURE__ */ jsx8(
                     "i",
                     {
                       className: "mr-1 inline-block h-2 w-2 rounded-full",
@@ -3864,11 +3905,11 @@ ${node.path}` }),
                   ),
                   labelText(head)
                 ] }, `legend-cluster-${cluster}`)),
-                /* @__PURE__ */ jsx7("span", { children: t("graphLegendShapes") })
+                /* @__PURE__ */ jsx8("span", { children: t("graphLegendShapes") })
               ] }),
               colorMode === "type" && [...new Set(nodes.map(categoryOf))].map(
-                (category) => /* @__PURE__ */ jsxs7("span", { children: [
-                  /* @__PURE__ */ jsx7(
+                (category) => /* @__PURE__ */ jsxs8("span", { children: [
+                  /* @__PURE__ */ jsx8(
                     "i",
                     {
                       className: "mr-1 inline-block h-2 w-2 rounded-full",
@@ -3878,32 +3919,32 @@ ${node.path}` }),
                   categoryLabels[category]
                 ] }, `legend-${category}`)
               ),
-              /* @__PURE__ */ jsxs7("span", { children: [
-                /* @__PURE__ */ jsx7("i", { className: "knowledge-graph-legend-main mr-1 inline-block h-2 w-2 rounded-full border" }),
+              /* @__PURE__ */ jsxs8("span", { children: [
+                /* @__PURE__ */ jsx8("i", { className: "knowledge-graph-legend-main mr-1 inline-block h-2 w-2 rounded-full border" }),
                 t("graphLegendMain")
               ] }),
-              /* @__PURE__ */ jsxs7("span", { children: [
-                /* @__PURE__ */ jsx7("i", { className: "mr-1 inline-block h-2 w-2 rounded-full border border-[var(--knowledge-edge)] border-dashed" }),
+              /* @__PURE__ */ jsxs8("span", { children: [
+                /* @__PURE__ */ jsx8("i", { className: "mr-1 inline-block h-2 w-2 rounded-full border border-[var(--knowledge-edge)] border-dashed" }),
                 t("graphLegendShared")
               ] }),
-              /* @__PURE__ */ jsxs7("span", { children: [
-                /* @__PURE__ */ jsx7("i", { className: "mr-1 inline-block h-[1px] w-3 align-middle bg-[var(--knowledge-edge)]" }),
+              /* @__PURE__ */ jsxs8("span", { children: [
+                /* @__PURE__ */ jsx8("i", { className: "mr-1 inline-block h-[1px] w-3 align-middle bg-[var(--knowledge-edge)]" }),
                 t("graphLegendDirect")
               ] }),
-              /* @__PURE__ */ jsxs7("span", { children: [
-                /* @__PURE__ */ jsx7("i", { className: "knowledge-graph-legend-directory mr-1 inline-block w-3 border-t border-dashed align-middle" }),
+              /* @__PURE__ */ jsxs8("span", { children: [
+                /* @__PURE__ */ jsx8("i", { className: "knowledge-graph-legend-directory mr-1 inline-block w-3 border-t border-dashed align-middle" }),
                 t("graphLegendDirectory")
               ] })
             ] })
           ] }),
-          /* @__PURE__ */ jsx7(
+          /* @__PURE__ */ jsx8(
             "aside",
             {
               className: `knowledge-node-drawer absolute right-3 top-16 bottom-12 z-20 w-[min(360px,calc(100%-24px))] overflow-y-auto rounded-xl p-4 transition duration-200 ${selectedNode || healthOn ? "is-open" : ""}`,
               "aria-label": selectedNode || !healthOn ? t("graphNodeCard") : t("graphHealth"),
               "aria-hidden": !selectedNode && !healthOn,
-              children: selectedNode ? /* @__PURE__ */ jsxs7(Fragment5, { children: [
-                /* @__PURE__ */ jsx7(
+              children: selectedNode ? /* @__PURE__ */ jsxs8(Fragment5, { children: [
+                /* @__PURE__ */ jsx8(
                   "button",
                   {
                     type: "button",
@@ -3914,21 +3955,21 @@ ${node.path}` }),
                     children: "\xD7"
                   }
                 ),
-                /* @__PURE__ */ jsx7("p", { className: "text-[11px] uppercase tracking-[0.12em] text-ink-faint", children: t("graphSelectedNode") }),
-                /* @__PURE__ */ jsx7("h4", { className: "mt-1 truncate text-xs font-semibold", children: selectedNode.title }),
-                /* @__PURE__ */ jsx7("p", { className: "mt-1 break-all font-mono text-[11px] text-ink-faint", children: selectedNode.path }),
-                /* @__PURE__ */ jsxs7("div", { className: "mt-2 flex flex-wrap gap-1", children: [
-                  /* @__PURE__ */ jsx7("span", { className: "rounded border border-border px-2 py-0.5 text-xs text-ink-dim", children: categoryLabels[categoryOf(selectedNode)] }),
-                  /* @__PURE__ */ jsx7("span", { className: "rounded border border-border px-2 py-0.5 text-xs text-ink-dim", children: t("graphLinks").replace(
+                /* @__PURE__ */ jsx8("p", { className: "text-[11px] uppercase tracking-[0.12em] text-ink-faint", children: t("graphSelectedNode") }),
+                /* @__PURE__ */ jsx8("h4", { className: "mt-1 truncate text-xs font-semibold", children: selectedNode.title }),
+                /* @__PURE__ */ jsx8("p", { className: "mt-1 break-all font-mono text-[11px] text-ink-faint", children: selectedNode.path }),
+                /* @__PURE__ */ jsxs8("div", { className: "mt-2 flex flex-wrap gap-1", children: [
+                  /* @__PURE__ */ jsx8("span", { className: "rounded border border-border px-2 py-0.5 text-xs text-ink-dim", children: categoryLabels[categoryOf(selectedNode)] }),
+                  /* @__PURE__ */ jsx8("span", { className: "rounded border border-border px-2 py-0.5 text-xs text-ink-dim", children: t("graphLinks").replace(
                     "{count}",
                     String(selectedNode.degree)
                   ) }),
-                  /* @__PURE__ */ jsx7("span", { className: "rounded border border-border px-2 py-0.5 text-xs text-ink-dim", children: t("graphInDegree").replace(
+                  /* @__PURE__ */ jsx8("span", { className: "rounded border border-border px-2 py-0.5 text-xs text-ink-dim", children: t("graphInDegree").replace(
                     "{count}",
                     String(incoming.get(selectedNode.path) ?? 0)
                   ) }),
-                  (clusterSizes.get(clusters.get(selectedNode.path) ?? 0) ?? 0) > 1 && /* @__PURE__ */ jsxs7("span", { className: "flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-ink-dim", children: [
-                    /* @__PURE__ */ jsx7(
+                  (clusterSizes.get(clusters.get(selectedNode.path) ?? 0) ?? 0) > 1 && /* @__PURE__ */ jsxs8("span", { className: "flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-ink-dim", children: [
+                    /* @__PURE__ */ jsx8(
                       "i",
                       {
                         className: "inline-block h-2 w-2 rounded-full",
@@ -3948,13 +3989,13 @@ ${node.path}` }),
                     )
                   ] })
                 ] }),
-                (findingsByPath.get(selectedNode.path) ?? []).map((kind) => /* @__PURE__ */ jsxs7(
+                (findingsByPath.get(selectedNode.path) ?? []).map((kind) => /* @__PURE__ */ jsxs8(
                   "div",
                   {
                     className: "mt-3 rounded border border-border px-2 py-2 text-xs",
                     style: { borderColor: HEALTH_COLORS[kind] },
                     children: [
-                      /* @__PURE__ */ jsx7(
+                      /* @__PURE__ */ jsx8(
                         "p",
                         {
                           className: "font-semibold",
@@ -3962,8 +4003,8 @@ ${node.path}` }),
                           children: t(HEALTH_COPY[kind].label)
                         }
                       ),
-                      /* @__PURE__ */ jsx7("p", { className: "mt-1 text-ink-dim", children: t(HEALTH_COPY[kind].hint) }),
-                      /* @__PURE__ */ jsx7(
+                      /* @__PURE__ */ jsx8("p", { className: "mt-1 text-ink-dim", children: t(HEALTH_COPY[kind].hint) }),
+                      /* @__PURE__ */ jsx8(
                         Button,
                         {
                           className: "mt-2",
@@ -3979,27 +4020,27 @@ ${node.path}` }),
                   },
                   `finding-${kind}`
                 )),
-                /* @__PURE__ */ jsxs7("dl", { className: "mt-3 space-y-2 text-xs text-ink-dim", children: [
-                  /* @__PURE__ */ jsxs7("div", { className: "flex justify-between", children: [
-                    /* @__PURE__ */ jsx7("dt", { children: t("graphOutgoing") }),
-                    /* @__PURE__ */ jsx7("dd", { children: links?.outgoing.length ?? 0 })
+                /* @__PURE__ */ jsxs8("dl", { className: "mt-3 space-y-2 text-xs text-ink-dim", children: [
+                  /* @__PURE__ */ jsxs8("div", { className: "flex justify-between", children: [
+                    /* @__PURE__ */ jsx8("dt", { children: t("graphOutgoing") }),
+                    /* @__PURE__ */ jsx8("dd", { children: links?.outgoing.length ?? 0 })
                   ] }),
-                  /* @__PURE__ */ jsxs7("div", { className: "flex justify-between", children: [
-                    /* @__PURE__ */ jsx7("dt", { children: t("graphIncoming") }),
-                    /* @__PURE__ */ jsx7("dd", { children: links?.incoming.length ?? 0 })
+                  /* @__PURE__ */ jsxs8("div", { className: "flex justify-between", children: [
+                    /* @__PURE__ */ jsx8("dt", { children: t("graphIncoming") }),
+                    /* @__PURE__ */ jsx8("dd", { children: links?.incoming.length ?? 0 })
                   ] }),
-                  /* @__PURE__ */ jsxs7("div", { className: "flex justify-between", children: [
-                    /* @__PURE__ */ jsx7("dt", { children: t("graphHops") }),
-                    /* @__PURE__ */ jsx7("dd", { children: neighbours.get(selected ?? "")?.size ? 1 : 0 })
+                  /* @__PURE__ */ jsxs8("div", { className: "flex justify-between", children: [
+                    /* @__PURE__ */ jsx8("dt", { children: t("graphHops") }),
+                    /* @__PURE__ */ jsx8("dd", { children: neighbours.get(selected ?? "")?.size ? 1 : 0 })
                   ] })
                 ] }),
-                selectedNode.warnings?.length || selectedNode.mirrors?.length ? /* @__PURE__ */ jsx7("p", { className: "mt-3 rounded bg-hover px-2 py-2 text-xs text-warn", children: t("graphMirrorWarning").replace(
+                selectedNode.warnings?.length || selectedNode.mirrors?.length ? /* @__PURE__ */ jsx8("p", { className: "mt-3 rounded bg-hover px-2 py-2 text-xs text-warn", children: t("graphMirrorWarning").replace(
                   "{count}",
                   String(selectedNode.mirrors?.length ?? 0)
                 ) }) : null,
-                links && /* @__PURE__ */ jsxs7("div", { className: "mt-3 border-t border-border pt-2", children: [
-                  /* @__PURE__ */ jsx7("p", { className: "text-xs font-semibold text-ink-dim", children: t("graphRelatedNotes") }),
-                  [...links.outgoing, ...links.incoming].slice(0, 4).map((link) => /* @__PURE__ */ jsxs7(
+                links && /* @__PURE__ */ jsxs8("div", { className: "mt-3 border-t border-border pt-2", children: [
+                  /* @__PURE__ */ jsx8("p", { className: "text-xs font-semibold text-ink-dim", children: t("graphRelatedNotes") }),
+                  [...links.outgoing, ...links.incoming].slice(0, 4).map((link) => /* @__PURE__ */ jsxs8(
                     "button",
                     {
                       type: "button",
@@ -4014,7 +4055,7 @@ ${node.path}` }),
                     `${link.path}-${link.exists}`
                   ))
                 ] }),
-                /* @__PURE__ */ jsx7(
+                /* @__PURE__ */ jsx8(
                   Button,
                   {
                     className: "mt-3 w-full",
@@ -4023,8 +4064,8 @@ ${node.path}` }),
                     children: t("graphOpenNote")
                   }
                 )
-              ] }) : healthOn ? /* @__PURE__ */ jsxs7("div", { "data-testid": "knowledge-graph-health-list", children: [
-                /* @__PURE__ */ jsx7(
+              ] }) : healthOn ? /* @__PURE__ */ jsxs8("div", { "data-testid": "knowledge-graph-health-list", children: [
+                /* @__PURE__ */ jsx8(
                   "button",
                   {
                     type: "button",
@@ -4035,21 +4076,21 @@ ${node.path}` }),
                     children: "\xD7"
                   }
                 ),
-                /* @__PURE__ */ jsx7("p", { className: "text-[11px] uppercase tracking-[0.12em] text-ink-faint", children: t("graphHealth") }),
-                /* @__PURE__ */ jsx7("p", { className: "mt-1 text-[11px] leading-relaxed text-ink-faint", children: t("graphHealthIntro") }),
-                findings.length === 0 && /* @__PURE__ */ jsx7("p", { className: "mt-3 text-xs text-ink-dim", children: t("graphHealthEmpty") }),
+                /* @__PURE__ */ jsx8("p", { className: "text-[11px] uppercase tracking-[0.12em] text-ink-faint", children: t("graphHealth") }),
+                /* @__PURE__ */ jsx8("p", { className: "mt-1 text-[11px] leading-relaxed text-ink-faint", children: t("graphHealthIntro") }),
+                findings.length === 0 && /* @__PURE__ */ jsx8("p", { className: "mt-3 text-xs text-ink-dim", children: t("graphHealthEmpty") }),
                 HEALTH_ORDER.map((kind) => {
                   const rows = findings.filter(
                     (finding) => finding.kind === kind
                   );
                   if (rows.length === 0) return null;
-                  return /* @__PURE__ */ jsxs7(
+                  return /* @__PURE__ */ jsxs8(
                     "section",
                     {
                       className: "mt-3 border-t border-border pt-2",
                       children: [
-                        /* @__PURE__ */ jsxs7("p", { className: "flex items-center gap-2 text-xs font-semibold text-ink-dim", children: [
-                          /* @__PURE__ */ jsx7(
+                        /* @__PURE__ */ jsxs8("p", { className: "flex items-center gap-2 text-xs font-semibold text-ink-dim", children: [
+                          /* @__PURE__ */ jsx8(
                             "i",
                             {
                               className: "inline-block h-2 w-2 rounded-full",
@@ -4057,9 +4098,9 @@ ${node.path}` }),
                             }
                           ),
                           t(HEALTH_COPY[kind].label),
-                          /* @__PURE__ */ jsx7("span", { className: "font-normal text-ink-faint", children: rows.length })
+                          /* @__PURE__ */ jsx8("span", { className: "font-normal text-ink-faint", children: rows.length })
                         ] }),
-                        rows.slice(0, 12).map((finding) => /* @__PURE__ */ jsx7(
+                        rows.slice(0, 12).map((finding) => /* @__PURE__ */ jsx8(
                           "button",
                           {
                             type: "button",
@@ -4073,7 +4114,7 @@ ${node.path}` }),
                           },
                           `${kind}-${finding.path}`
                         )),
-                        rows.length > 12 && /* @__PURE__ */ jsx7("p", { className: "mt-1 text-[11px] text-ink-faint", children: t("graphMore").replace(
+                        rows.length > 12 && /* @__PURE__ */ jsx8("p", { className: "mt-1 text-[11px] text-ink-faint", children: t("graphMore").replace(
                           "{count}",
                           String(rows.length - 12)
                         ) })
@@ -4082,15 +4123,15 @@ ${node.path}` }),
                     `health-${kind}`
                   );
                 })
-              ] }) : /* @__PURE__ */ jsxs7("div", { className: "flex h-full min-h-[220px] flex-col justify-between", children: [
-                /* @__PURE__ */ jsx7("p", { className: "text-[11px] uppercase tracking-[0.12em] text-ink-faint", children: t("graphSelectedNode") }),
-                /* @__PURE__ */ jsx7("p", { className: "mt-3 text-[11px] leading-relaxed text-ink-faint", children: t("graphSelectHint") }),
-                /* @__PURE__ */ jsx7("p", { className: "text-[11px] leading-relaxed text-ink-faint", children: t("graphCollisionHint") })
+              ] }) : /* @__PURE__ */ jsxs8("div", { className: "flex h-full min-h-[220px] flex-col justify-between", children: [
+                /* @__PURE__ */ jsx8("p", { className: "text-[11px] uppercase tracking-[0.12em] text-ink-faint", children: t("graphSelectedNode") }),
+                /* @__PURE__ */ jsx8("p", { className: "mt-3 text-[11px] leading-relaxed text-ink-faint", children: t("graphSelectHint") }),
+                /* @__PURE__ */ jsx8("p", { className: "text-[11px] leading-relaxed text-ink-faint", children: t("graphCollisionHint") })
               ] })
             }
           )
         ] }),
-        /* @__PURE__ */ jsxs7("p", { className: "text-[11px] text-ink-faint", children: [
+        /* @__PURE__ */ jsxs8("p", { className: "text-[11px] text-ink-faint", children: [
           t("graphHint"),
           " \xB7 ",
           t("graphShortcuts")
@@ -4101,7 +4142,7 @@ ${node.path}` }),
 }
 
 // ui/knowledge/KnowledgeSearchView.tsx
-import { useEffect as useEffect7, useMemo as useMemo3, useRef as useRef4 } from "react";
+import { useEffect as useEffect8, useMemo as useMemo3, useRef as useRef4 } from "react";
 
 // ui/knowledge/knowledge-home-model.ts
 function keywordCategory(value) {
@@ -4129,7 +4170,7 @@ function classifyKnowledgeHit(kind, path) {
 }
 
 // ui/knowledge/KnowledgeSearchView.tsx
-import { jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
+import { jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
 var CATEGORY_KEYS = {
   all: "homeCategoryAll",
   paper: "homeCategoryPaper",
@@ -4152,7 +4193,7 @@ function KnowledgeSearchView({
 }) {
   const t = useKnowledgeText();
   const inputRef = useRef4(null);
-  useEffect7(() => {
+  useEffect8(() => {
     const handle = (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -4174,16 +4215,16 @@ function KnowledgeSearchView({
     [result, activeCategory]
   );
   const openHit = onOpenNote;
-  return /* @__PURE__ */ jsxs8("div", { "data-testid": "knowledge-search", children: [
-    /* @__PURE__ */ jsxs8(
+  return /* @__PURE__ */ jsxs9("div", { "data-testid": "knowledge-search", children: [
+    /* @__PURE__ */ jsxs9(
       "form",
       {
         className: "flex h-11 items-center gap-2 rounded-xl border border-border bg-surface px-3 focus-within:border-ink-faint",
         onSubmit: (event) => void submit(event),
         children: [
-          /* @__PURE__ */ jsx8("span", { "aria-hidden": "true", className: "text-sm text-ink-dim", children: "\u2315" }),
-          /* @__PURE__ */ jsx8("label", { htmlFor: "knowledge-search-input", className: "sr-only", children: t("homeSearch") }),
-          /* @__PURE__ */ jsx8(
+          /* @__PURE__ */ jsx9("span", { "aria-hidden": "true", className: "text-sm text-ink-dim", children: "\u2315" }),
+          /* @__PURE__ */ jsx9("label", { htmlFor: "knowledge-search-input", className: "sr-only", children: t("homeSearch") }),
+          /* @__PURE__ */ jsx9(
             "input",
             {
               ref: inputRef,
@@ -4197,8 +4238,8 @@ function KnowledgeSearchView({
               disabled: !bindingRevision
             }
           ),
-          /* @__PURE__ */ jsx8("kbd", { className: "rounded-md bg-hover px-2 py-0.5 text-[11px] text-ink-dim", children: t("homeSearchShortcut") }),
-          /* @__PURE__ */ jsx8(
+          /* @__PURE__ */ jsx9("kbd", { className: "rounded-md bg-hover px-2 py-0.5 text-[11px] text-ink-dim", children: t("homeSearchShortcut") }),
+          /* @__PURE__ */ jsx9(
             Button,
             {
               size: "sm",
@@ -4210,7 +4251,7 @@ function KnowledgeSearchView({
         ]
       }
     ),
-    /* @__PURE__ */ jsx8(
+    /* @__PURE__ */ jsx9(
       "div",
       {
         className: "mt-3 flex flex-wrap items-center gap-1",
@@ -4218,7 +4259,7 @@ function KnowledgeSearchView({
         "aria-label": t("homeCategories"),
         children: Object.keys(CATEGORY_KEYS).map((category) => {
           const count = categoryCounts[category];
-          return /* @__PURE__ */ jsxs8(
+          return /* @__PURE__ */ jsxs9(
             "button",
             {
               type: "button",
@@ -4237,17 +4278,17 @@ function KnowledgeSearchView({
         })
       }
     ),
-    !bindingRevision && /* @__PURE__ */ jsx8("p", { className: "mt-3 text-xs text-ink-faint", children: t("homeSearchUnavailable") }),
-    error && /* @__PURE__ */ jsx8("p", { role: "alert", className: "mt-3 break-words text-xs text-err", children: error }),
-    result && !result.complete && /* @__PURE__ */ jsx8("p", { role: "status", className: "mt-2 text-xs text-ink-dim", children: t("homeSearchPartial") }),
-    result && /* @__PURE__ */ jsx8("div", { className: "mt-3", children: hits.length === 0 ? /* @__PURE__ */ jsx8("p", { className: "text-xs text-ink-faint", children: result.complete ? t("homeSearchEmpty") : t("homeSearchIncomplete") }) : /* @__PURE__ */ jsx8("ul", { className: "divide-y divide-border rounded-xl border border-border bg-surface", children: hits.map((hit) => /* @__PURE__ */ jsx8("li", { children: /* @__PURE__ */ jsxs8(
+    !bindingRevision && /* @__PURE__ */ jsx9("p", { className: "mt-3 text-xs text-ink-faint", children: t("homeSearchUnavailable") }),
+    error && /* @__PURE__ */ jsx9("p", { role: "alert", className: "mt-3 break-words text-xs text-err", children: error }),
+    result && !result.complete && /* @__PURE__ */ jsx9("p", { role: "status", className: "mt-2 text-xs text-ink-dim", children: t("homeSearchPartial") }),
+    result && /* @__PURE__ */ jsx9("div", { className: "mt-3", children: hits.length === 0 ? /* @__PURE__ */ jsx9("p", { className: "text-xs text-ink-faint", children: result.complete ? t("homeSearchEmpty") : t("homeSearchIncomplete") }) : /* @__PURE__ */ jsx9("ul", { className: "divide-y divide-border rounded-xl border border-border bg-surface", children: hits.map((hit) => /* @__PURE__ */ jsx9("li", { children: /* @__PURE__ */ jsxs9(
       "button",
       {
         type: "button",
         className: "w-full px-3 py-3 text-left hover:bg-hover",
         onClick: () => openHit(hit.path, hit),
         children: [
-          /* @__PURE__ */ jsx8(
+          /* @__PURE__ */ jsx9(
             "span",
             {
               className: "block truncate text-xs font-medium",
@@ -4255,8 +4296,8 @@ function KnowledgeSearchView({
               children: hit.title || hit.path
             }
           ),
-          /* @__PURE__ */ jsx8("span", { className: "mt-1 block truncate font-mono text-[11px] text-ink-faint", children: hit.path }),
-          hit.hash && /* @__PURE__ */ jsxs8("span", { className: "block font-mono text-[11px] text-ink-faint", children: [
+          /* @__PURE__ */ jsx9("span", { className: "mt-1 block truncate font-mono text-[11px] text-ink-faint", children: hit.path }),
+          hit.hash && /* @__PURE__ */ jsxs9("span", { className: "block font-mono text-[11px] text-ink-faint", children: [
             "L",
             hit.startLine,
             "\u2013",
@@ -4264,7 +4305,7 @@ function KnowledgeSearchView({
             " \xB7 ",
             hit.hash.slice(0, 12)
           ] }),
-          hit.text && /* @__PURE__ */ jsx8("span", { className: "mt-1 line-clamp-2 block whitespace-pre-wrap text-xs text-ink-dim", children: hit.text })
+          hit.text && /* @__PURE__ */ jsx9("span", { className: "mt-1 line-clamp-2 block whitespace-pre-wrap text-xs text-ink-dim", children: hit.text })
         ]
       }
     ) }, hit.path)) }) })
@@ -4272,22 +4313,22 @@ function KnowledgeSearchView({
 }
 
 // ui/NativeKnowledgeReading.tsx
-import { Fragment as Fragment6, jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
+import { Fragment as Fragment6, jsx as jsx10, jsxs as jsxs10 } from "react/jsx-runtime";
 function NativeKnowledgeReading({
   store,
   state
 }) {
   const t = useNativeKnowledgeText();
-  const [category, setCategory] = useState8("all");
-  const [recent, setRecent] = useState8(
+  const [category, setCategory] = useState9("all");
+  const [recent, setRecent] = useState9(
     null
   );
-  const [linkNotice, setLinkNotice] = useState8(null);
-  const [error, setError] = useState8(null);
-  const [jobs, setJobs] = useState8(null);
-  const [offset, setOffset] = useState8(0);
+  const [linkNotice, setLinkNotice] = useState9(null);
+  const [error, setError] = useState9(null);
+  const [jobs, setJobs] = useState9(null);
+  const [offset, setOffset] = useState9(0);
   const binding = state.overview.binding;
-  useEffect8(() => setLinkNotice(null), [state.selectedNote]);
+  useEffect9(() => setLinkNotice(null), [state.selectedNote]);
   const noteApi = useMemo4(
     () => ({ readNote: store.readNote, links: store.links }),
     [store]
@@ -4299,7 +4340,7 @@ function NativeKnowledgeReading({
     }),
     [store]
   );
-  useEffect8(() => {
+  useEffect9(() => {
     let live = true;
     setError(null);
     setRecent(null);
@@ -4317,7 +4358,7 @@ function NativeKnowledgeReading({
       live = false;
     };
   }, [store, state.view, state.selectedNote, state.observationRevision]);
-  useEffect8(() => {
+  useEffect9(() => {
     let live = true;
     setError(null);
     setJobs(null);
@@ -4340,9 +4381,9 @@ function NativeKnowledgeReading({
     ...recent.counts
   } : { all: null, paper: null, software: null, method: null, idea: null };
   const notes = category === "all" ? state.overview.recentNotes : recent?.groups[category] ?? [];
-  return /* @__PURE__ */ jsxs9(Fragment6, { children: [
-    error && /* @__PURE__ */ jsx9("p", { role: "alert", className: "text-sm text-err", children: error }),
-    state.view === "graph" && /* @__PURE__ */ jsx9(
+  return /* @__PURE__ */ jsxs10(Fragment6, { children: [
+    error && /* @__PURE__ */ jsx10("p", { role: "alert", className: "text-sm text-err", children: error }),
+    state.view === "graph" && /* @__PURE__ */ jsx10(
       KnowledgeGraphView,
       {
         api: graphApi,
@@ -4352,26 +4393,26 @@ function NativeKnowledgeReading({
         unavailableReason: t.handoffUnavailable
       }
     ),
-    state.view === "jobs" && /* @__PURE__ */ jsx9("section", { "aria-label": t.jobs, children: jobs ? /* @__PURE__ */ jsxs9(Fragment6, { children: [
-      /* @__PURE__ */ jsxs9("p", { className: "text-xs text-ink-dim", children: [
+    state.view === "jobs" && /* @__PURE__ */ jsx10("section", { "aria-label": t.jobs, children: jobs ? /* @__PURE__ */ jsxs10(Fragment6, { children: [
+      /* @__PURE__ */ jsxs10("p", { className: "text-xs text-ink-dim", children: [
         jobs.total,
         " ",
         t.jobCount
       ] }),
-      /* @__PURE__ */ jsx9("ul", { className: "divide-y divide-border", children: jobs.items.map((job) => /* @__PURE__ */ jsxs9("li", { className: "py-3 text-sm", children: [
-        /* @__PURE__ */ jsxs9("p", { children: [
+      /* @__PURE__ */ jsx10("ul", { className: "divide-y divide-border", children: jobs.items.map((job) => /* @__PURE__ */ jsxs10("li", { className: "py-3 text-sm", children: [
+        /* @__PURE__ */ jsxs10("p", { children: [
           job.kind,
           " \xB7 ",
           job.path
         ] }),
-        /* @__PURE__ */ jsxs9("p", { className: "text-xs text-ink-faint", children: [
+        /* @__PURE__ */ jsxs10("p", { className: "text-xs text-ink-faint", children: [
           job.scope,
           " \xB7 ",
           job.updated
         ] })
       ] }, job.key)) }),
-      /* @__PURE__ */ jsxs9("div", { className: "flex gap-2", children: [
-        /* @__PURE__ */ jsx9(
+      /* @__PURE__ */ jsxs10("div", { className: "flex gap-2", children: [
+        /* @__PURE__ */ jsx10(
           Button,
           {
             size: "sm",
@@ -4380,7 +4421,7 @@ function NativeKnowledgeReading({
             children: t.firstPage
           }
         ),
-        /* @__PURE__ */ jsx9(
+        /* @__PURE__ */ jsx10(
           Button,
           {
             size: "sm",
@@ -4390,8 +4431,8 @@ function NativeKnowledgeReading({
           }
         )
       ] })
-    ] }) : !error && /* @__PURE__ */ jsx9("p", { role: "status", children: t.loading }) }),
-    state.view === "reading" && (state.selectedNote ? /* @__PURE__ */ jsx9(
+    ] }) : !error && /* @__PURE__ */ jsx10("p", { role: "status", children: t.loading }) }),
+    state.view === "reading" && (state.selectedNote ? /* @__PURE__ */ jsx10(
       KnowledgeNoteView,
       {
         api: noteApi,
@@ -4402,8 +4443,8 @@ function NativeKnowledgeReading({
         onOpenNote: store.openNote,
         onClose: store.closeNote,
         unavailableReason: t.openUnavailable,
-        renderText: (text) => /* @__PURE__ */ jsxs9(Fragment6, { children: [
-          /* @__PURE__ */ jsx9(
+        renderText: (text) => /* @__PURE__ */ jsxs10(Fragment6, { children: [
+          /* @__PURE__ */ jsx10(
             Markdown,
             {
               text,
@@ -4414,12 +4455,12 @@ function NativeKnowledgeReading({
               }
             }
           ),
-          linkNotice && /* @__PURE__ */ jsx9("p", { role: "status", className: "mt-2 text-xs text-ink-dim", children: linkNotice })
+          linkNotice && /* @__PURE__ */ jsx10("p", { role: "status", className: "mt-2 text-xs text-ink-dim", children: linkNotice })
         ] })
       },
       state.selectedNote.path
-    ) : /* @__PURE__ */ jsxs9(Fragment6, { children: [
-      /* @__PURE__ */ jsx9(
+    ) : /* @__PURE__ */ jsxs10(Fragment6, { children: [
+      /* @__PURE__ */ jsx10(
         KnowledgeSearchView,
         {
           query: state.query,
@@ -4435,18 +4476,18 @@ function NativeKnowledgeReading({
           onOpenNote: store.openNote
         }
       ),
-      /* @__PURE__ */ jsx9("p", { className: "text-xs text-ink-dim", children: t.readOnly }),
-      /* @__PURE__ */ jsxs9("section", { "aria-label": t.recent, children: [
-        /* @__PURE__ */ jsx9("h2", { className: "text-sm font-medium", children: t.recent }),
-        notes.length === 0 ? !error && /* @__PURE__ */ jsx9("p", { className: "mt-2 text-sm text-ink-dim", children: category !== "all" && !recent ? t.loading : t.noRecent }) : /* @__PURE__ */ jsx9("ul", { className: "mt-2 divide-y divide-border", children: notes.map((note) => /* @__PURE__ */ jsx9("li", { children: /* @__PURE__ */ jsxs9(
+      /* @__PURE__ */ jsx10("p", { className: "text-xs text-ink-dim", children: t.readOnly }),
+      /* @__PURE__ */ jsxs10("section", { "aria-label": t.recent, children: [
+        /* @__PURE__ */ jsx10("h2", { className: "text-sm font-medium", children: t.recent }),
+        notes.length === 0 ? !error && /* @__PURE__ */ jsx10("p", { className: "mt-2 text-sm text-ink-dim", children: category !== "all" && !recent ? t.loading : t.noRecent }) : /* @__PURE__ */ jsx10("ul", { className: "mt-2 divide-y divide-border", children: notes.map((note) => /* @__PURE__ */ jsx10("li", { children: /* @__PURE__ */ jsxs10(
           "button",
           {
             type: "button",
             className: "w-full py-3 text-left hover:bg-hover",
             onClick: () => store.openNote(note.path),
             children: [
-              /* @__PURE__ */ jsx9("p", { className: "text-sm", children: note.title || note.path }),
-              /* @__PURE__ */ jsx9("p", { className: "mt-1 break-all font-mono text-xs text-ink-faint", children: note.path })
+              /* @__PURE__ */ jsx10("p", { className: "text-sm", children: note.title || note.path }),
+              /* @__PURE__ */ jsx10("p", { className: "mt-1 break-all font-mono text-xs text-ink-faint", children: note.path })
             ]
           }
         ) }, note.path)) })
@@ -4490,13 +4531,9 @@ function createKnowledgeRuntimeStore(client) {
     ++readEpoch;
     update({ overviewLoading: true, overviewError: null });
     try {
-      const overview = await client.invoke(
-        "overview",
-        null
-      );
-      if (!connected || generation !== owner || request !== overviewRequest)
-        return false;
-      if (state.overview?.binding?.vaultId !== overview.binding?.vaultId || state.overview?.binding?.revision !== overview.binding?.revision) {
+      const overview = await client.invoke("overview", null);
+      if (!connected || generation !== owner || request !== overviewRequest) return false;
+      if (state.overview && (state.overview.binding?.vaultId !== overview.binding?.vaultId || state.overview.binding?.revision !== overview.binding?.revision)) {
         currentQuery = null;
         ++searchRequest;
         update({
@@ -4560,6 +4597,16 @@ function createKnowledgeRuntimeStore(client) {
       throw new Error("Knowledge observation was superseded");
     return result;
   }
+  async function mutate(operation, input) {
+    if (!connected) throw new Error("Knowledge caller is disconnected");
+    const binding = state.overview?.binding;
+    if (!binding) throw new Error("Knowledge writing requires a bound Vault");
+    const owner = generation;
+    const result = await client.invoke(operation, { ...input, revision: binding.revision });
+    if (!connected || owner !== generation || state.overview?.binding?.vaultId !== binding.vaultId || state.overview.binding.revision !== binding.revision)
+      throw new Error("Knowledge caller or binding changed during writing");
+    return result;
+  }
   function connect() {
     connected = true;
     const owner = ++generation;
@@ -4567,8 +4614,7 @@ function createKnowledgeRuntimeStore(client) {
     currentQuery = null;
     state = initialState();
     const unsubscribe = client.subscribe((event) => {
-      if (!connected || generation !== owner || event.revision <= eventRevision)
-        return;
+      if (!connected || generation !== owner || event.revision <= eventRevision) return;
       eventRevision = event.revision;
       const query = currentQuery;
       const request = ++searchRequest;
@@ -4624,148 +4670,113 @@ function createKnowledgeRuntimeStore(client) {
     jobs: (input) => read("jobs", input),
     reviews: (input) => read("reviews", input),
     previewReview: (input) => read("previewReview", input),
-    rejectReview: (input) => read("rejectReview", input),
-    applyReview: (input) => read("applyReview", input),
+    rejectReview: (input) => mutate("rejectReview", input),
+    applyReview: (input) => mutate("applyReview", input),
+    reviewHistory: () => read("reviewHistory", {}),
+    undoReview: (input) => mutate("undoReview", input),
     recentByCategory: () => read("recentByCategory", { limit: 8 })
   };
 }
 
 // ui/NativeKnowledgePage.tsx
-import { Fragment as Fragment7, jsx as jsx10, jsxs as jsxs10 } from "react/jsx-runtime";
+import { Fragment as Fragment7, jsx as jsx11, jsxs as jsxs11 } from "react/jsx-runtime";
 function NativeKnowledgeUnavailable() {
   const t = useNativeKnowledgeText();
-  return /* @__PURE__ */ jsxs10(
-    "section",
-    {
-      className: "rounded-xl border border-border bg-surface p-4",
-      "aria-label": t.unsupportedTitle,
-      children: [
-        /* @__PURE__ */ jsx10("h2", { className: "text-sm font-medium text-ink", children: t.unsupportedTitle }),
-        /* @__PURE__ */ jsx10("p", { className: "mt-2 text-xs leading-relaxed text-ink-dim", children: t.unsupported })
-      ]
-    }
-  );
+  return /* @__PURE__ */ jsxs11("section", { className: "rounded-xl border border-border bg-surface p-4", "aria-label": t.unsupportedTitle, children: [
+    /* @__PURE__ */ jsx11("h2", { className: "text-sm font-medium text-ink", children: t.unsupportedTitle }),
+    /* @__PURE__ */ jsx11("p", { className: "mt-2 text-xs leading-relaxed text-ink-dim", children: t.unsupported })
+  ] });
 }
-function CallerKnowledgePage({ client }) {
+function CallerKnowledgePage({
+  client,
+  initialView
+}) {
   const t = useNativeKnowledgeText();
   const store = useMemo5(() => createKnowledgeRuntimeStore(client), [client]);
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
-  useEffect9(() => store.connect(), [store]);
+  useEffect10(() => {
+    const disconnect = store.connect();
+    store.setView(initialView);
+    return disconnect;
+  }, [store, initialView]);
   const overview = state.overview;
-  return /* @__PURE__ */ jsx10(
-    "section",
-    {
-      className: "knowledge-view",
-      "aria-label": t.title,
-      "data-testid": "native-knowledge-page",
-      children: /* @__PURE__ */ jsx10("div", { className: "knowledge-view-body", children: /* @__PURE__ */ jsxs10("div", { className: "mx-auto w-full max-w-5xl space-y-6 p-5 text-ink", children: [
-        /* @__PURE__ */ jsxs10("header", { className: "flex items-center justify-between gap-4", children: [
-          /* @__PURE__ */ jsxs10("div", { children: [
-            /* @__PURE__ */ jsx10("h1", { className: "text-lg font-semibold", children: t.title }),
-            overview?.binding && /* @__PURE__ */ jsxs10("p", { className: "mt-1 text-xs text-ink-dim", children: [
-              overview.binding.label,
-              " \xB7",
-              " ",
-              overview.project ? `${t.project}: ${overview.project}` : t.application
-            ] })
-          ] }),
-          /* @__PURE__ */ jsx10(
-            Button,
-            {
-              size: "sm",
-              disabled: state.overviewLoading,
-              onClick: () => void store.refresh(),
-              children: state.overviewLoading ? t.loading : t.refresh
-            }
-          )
-        ] }),
-        /* @__PURE__ */ jsx10("nav", { className: "flex gap-2", "aria-label": t.readingNavigation, children: ["reading", "graph", "jobs", "reviews", "settings"].map(
-          (view) => /* @__PURE__ */ jsx10(
-            Button,
-            {
-              size: "sm",
-              "aria-pressed": state.view === view,
-              disabled: view !== "settings" && !overview?.binding,
-              onClick: () => store.setView(view),
-              children: t[view]
-            },
-            view
-          )
-        ) }),
-        state.view === "settings" && /* @__PURE__ */ jsx10(
-          NativeKnowledgePreferences,
-          {
-            client,
-            observationRevision: state.observationRevision,
-            refreshing: state.overviewLoading
-          }
-        ),
-        state.overviewError && /* @__PURE__ */ jsx10(
-          "p",
-          {
-            role: "alert",
-            className: "rounded-xl border border-border p-4 text-sm text-err",
-            children: state.overviewError
-          }
-        ),
-        state.overviewLoading && !overview && /* @__PURE__ */ jsx10("p", { role: "status", className: "text-sm text-ink-dim", children: t.loading }),
-        state.view !== "settings" && overview?.state === "unconfigured" && /* @__PURE__ */ jsxs10("div", { className: "rounded-xl border border-dashed border-border p-5", children: [
-          /* @__PURE__ */ jsx10("h2", { className: "font-medium", children: t.unconfigured }),
-          /* @__PURE__ */ jsx10("p", { className: "mt-2 text-sm text-ink-dim", children: t.unconfiguredHint })
-        ] }),
-        state.view !== "settings" && overview?.state === "bound" && /* @__PURE__ */ jsxs10(Fragment7, { children: [
-          /* @__PURE__ */ jsx10("p", { className: "text-sm text-ink-dim", children: overview.index ? `${overview.index.noteCount} ${t.notes} \xB7 ${t[overview.index.coverage]}` : t.indexMissing }),
-          !state.overviewLoading && (state.view === "reviews" ? /* @__PURE__ */ jsx10(
-            NativeKnowledgeReviews,
-            {
-              store,
-              observationRevision: state.observationRevision
-            }
-          ) : /* @__PURE__ */ jsx10(
-            NativeKnowledgeReading,
-            {
-              store,
-              state
-            },
-            state.view
-          ))
-        ] }),
-        /* @__PURE__ */ jsx10(NativeKnowledgeUnavailable, {})
-      ] }) })
-    }
-  );
+  return /* @__PURE__ */ jsx11("section", { className: "knowledge-view", "aria-label": t.title, "data-testid": "native-knowledge-page", children: /* @__PURE__ */ jsx11("div", { className: "knowledge-view-body", children: /* @__PURE__ */ jsxs11("div", { className: "mx-auto w-full max-w-5xl space-y-6 p-5 text-ink", children: [
+    /* @__PURE__ */ jsxs11("header", { className: "flex items-center justify-between gap-4", children: [
+      /* @__PURE__ */ jsxs11("div", { children: [
+        /* @__PURE__ */ jsx11("h1", { className: "text-lg font-semibold", children: t.title }),
+        overview?.binding && /* @__PURE__ */ jsxs11("p", { className: "mt-1 text-xs text-ink-dim", children: [
+          overview.binding.label,
+          " \xB7",
+          " ",
+          overview.project ? `${t.project}: ${overview.project}` : t.application
+        ] })
+      ] }),
+      /* @__PURE__ */ jsx11(Button, { size: "sm", disabled: state.overviewLoading, onClick: () => void store.refresh(), children: state.overviewLoading ? t.loading : t.refresh })
+    ] }),
+    /* @__PURE__ */ jsx11("nav", { className: "flex gap-2", "aria-label": t.readingNavigation, children: ["reading", "graph", "jobs", "reviews", "history", "settings"].map((view) => /* @__PURE__ */ jsx11(
+      Button,
+      {
+        size: "sm",
+        "aria-pressed": state.view === view,
+        disabled: view !== "settings" && !overview?.binding,
+        onClick: () => store.setView(view),
+        children: t[view]
+      },
+      view
+    )) }),
+    state.view === "settings" && /* @__PURE__ */ jsx11(
+      NativeKnowledgePreferences,
+      {
+        client,
+        observationRevision: state.observationRevision,
+        refreshing: state.overviewLoading
+      }
+    ),
+    state.overviewError && /* @__PURE__ */ jsx11("p", { role: "alert", className: "rounded-xl border border-border p-4 text-sm text-err", children: state.overviewError }),
+    state.overviewLoading && !overview && /* @__PURE__ */ jsx11("p", { role: "status", className: "text-sm text-ink-dim", children: t.loading }),
+    state.view !== "settings" && overview?.state === "unconfigured" && /* @__PURE__ */ jsxs11("div", { className: "rounded-xl border border-dashed border-border p-5", children: [
+      /* @__PURE__ */ jsx11("h2", { className: "font-medium", children: t.unconfigured }),
+      /* @__PURE__ */ jsx11("p", { className: "mt-2 text-sm text-ink-dim", children: t.unconfiguredHint })
+    ] }),
+    state.view !== "settings" && overview?.state === "bound" && /* @__PURE__ */ jsxs11(Fragment7, { children: [
+      /* @__PURE__ */ jsx11("p", { className: "text-sm text-ink-dim", children: overview.index ? `${overview.index.noteCount} ${t.notes} \xB7 ${t[overview.index.coverage]}` : t.indexMissing }),
+      !state.overviewLoading && (state.view === "history" ? /* @__PURE__ */ jsx11(NativeKnowledgeHistory, { store, observationRevision: state.observationRevision }) : state.view === "reviews" ? /* @__PURE__ */ jsx11(NativeKnowledgeReviews, { store, observationRevision: state.observationRevision }) : /* @__PURE__ */ jsx11(NativeKnowledgeReading, { store, state }, state.view))
+    ] }),
+    /* @__PURE__ */ jsx11(NativeKnowledgeUnavailable, {})
+  ] }) }) });
 }
-function NativeKnowledgePage() {
+function NativeKnowledgePage({
+  initialView = "reading"
+}) {
   const client = usePluginRuntime();
   const session = useSessionsStore((state) => state.activeSessionId);
-  return /* @__PURE__ */ jsx10(CallerKnowledgePage, { client }, session ?? "application");
+  return /* @__PURE__ */ jsx11(CallerKnowledgePage, { client, initialView }, session ?? "application");
 }
 
 // generated-style:./styles/generated
 var knowledgeStyles = '/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */\n@layer drone-knowledge-properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){:where(.drone-knowledge-ui) *,:where(.drone-knowledge-ui) :before,:where(.drone-knowledge-ui) :after,:where(.drone-knowledge-ui) ::backdrop{--drone-knowledge-tw-rotate-x:initial;--drone-knowledge-tw-rotate-y:initial;--drone-knowledge-tw-rotate-z:initial;--drone-knowledge-tw-skew-x:initial;--drone-knowledge-tw-skew-y:initial;--drone-knowledge-tw-space-y-reverse:0;--drone-knowledge-tw-divide-y-reverse:0;--drone-knowledge-tw-border-style:solid;--drone-knowledge-tw-leading:initial;--drone-knowledge-tw-font-weight:initial;--drone-knowledge-tw-tracking:initial;--drone-knowledge-tw-ordinal:initial;--drone-knowledge-tw-slashed-zero:initial;--drone-knowledge-tw-numeric-figure:initial;--drone-knowledge-tw-numeric-spacing:initial;--drone-knowledge-tw-numeric-fraction:initial;--drone-knowledge-tw-shadow:0 0 #0000;--drone-knowledge-tw-shadow-color:initial;--drone-knowledge-tw-shadow-alpha:100%;--drone-knowledge-tw-inset-shadow:0 0 #0000;--drone-knowledge-tw-inset-shadow-color:initial;--drone-knowledge-tw-inset-shadow-alpha:100%;--drone-knowledge-tw-ring-color:initial;--drone-knowledge-tw-ring-shadow:0 0 #0000;--drone-knowledge-tw-inset-ring-color:initial;--drone-knowledge-tw-inset-ring-shadow:0 0 #0000;--drone-knowledge-tw-ring-inset:initial;--drone-knowledge-tw-ring-offset-width:0px;--drone-knowledge-tw-ring-offset-color:#fff;--drone-knowledge-tw-ring-offset-shadow:0 0 #0000;--drone-knowledge-tw-blur:initial;--drone-knowledge-tw-brightness:initial;--drone-knowledge-tw-contrast:initial;--drone-knowledge-tw-grayscale:initial;--drone-knowledge-tw-hue-rotate:initial;--drone-knowledge-tw-invert:initial;--drone-knowledge-tw-opacity:initial;--drone-knowledge-tw-saturate:initial;--drone-knowledge-tw-sepia:initial;--drone-knowledge-tw-drop-shadow:initial;--drone-knowledge-tw-drop-shadow-color:initial;--drone-knowledge-tw-drop-shadow-alpha:100%;--drone-knowledge-tw-drop-shadow-size:initial;--drone-knowledge-tw-duration:initial}}}@layer drone-knowledge-theme{:where(.drone-knowledge-ui),:where(.drone-knowledge-ui){--color-white:#fff;--spacing:.25rem;--container-2xl:42rem;--container-5xl:64rem;--text-xs:.75rem;--text-xs--line-height:calc(1 / .75);--text-sm:.875rem;--text-sm--line-height:calc(1.25 / .875);--text-base:1rem;--text-base--line-height:calc(1.5 / 1);--text-lg:1.125rem;--text-lg--line-height:calc(1.75 / 1.125);--font-weight-normal:400;--font-weight-medium:500;--font-weight-semibold:600;--tracking-wide:.025em;--leading-relaxed:1.625;--radius-2xl:1rem;--default-transition-duration:.15s;--default-transition-timing-function:cubic-bezier(.4, 0, .2, 1)}}@layer drone-knowledge-utilities{:where(.drone-knowledge-ui) .pointer-events-none{pointer-events:none}:where(.drone-knowledge-ui) .visible{visibility:visible}:where(.drone-knowledge-ui) .sr-only{clip-path:inset(50%);white-space:nowrap;border-width:0;width:1px;height:1px;margin:-1px;padding:0;position:absolute;overflow:hidden}:where(.drone-knowledge-ui) .absolute{position:absolute}:where(.drone-knowledge-ui) .fixed{position:fixed}:where(.drone-knowledge-ui) .relative{position:relative}:where(.drone-knowledge-ui) .sticky{position:sticky}:where(.drone-knowledge-ui) .inset-3{inset:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .top-0{top:0}:where(.drone-knowledge-ui) .top-2{top:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .top-3{top:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .top-16{top:calc(var(--spacing) * 16)}:where(.drone-knowledge-ui) .right-0{right:0}:where(.drone-knowledge-ui) .right-2{right:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .right-3{right:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .right-4{right:calc(var(--spacing) * 4)}:where(.drone-knowledge-ui) .bottom-0{bottom:0}:where(.drone-knowledge-ui) .bottom-2{bottom:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .bottom-5{bottom:calc(var(--spacing) * 5)}:where(.drone-knowledge-ui) .bottom-12{bottom:calc(var(--spacing) * 12)}:where(.drone-knowledge-ui) .left-2{left:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .left-3{left:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .z-\\(--z-toast\\){z-index:var(--z-toast)}:where(.drone-knowledge-ui) .z-10{z-index:10}:where(.drone-knowledge-ui) .z-20{z-index:20}:where(.drone-knowledge-ui) .z-60{z-index:60}:where(.drone-knowledge-ui) .container{width:100%}@media (min-width:40rem){:where(.drone-knowledge-ui) .container{max-width:40rem}}@media (min-width:48rem){:where(.drone-knowledge-ui) .container{max-width:48rem}}@media (min-width:64rem){:where(.drone-knowledge-ui) .container{max-width:64rem}}@media (min-width:80rem){:where(.drone-knowledge-ui) .container{max-width:80rem}}@media (min-width:96rem){:where(.drone-knowledge-ui) .container{max-width:96rem}}:where(.drone-knowledge-ui) .mx-3{margin-inline:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .mx-auto{margin-inline:auto}:where(.drone-knowledge-ui) .my-0\\.5{margin-block:calc(var(--spacing) * .5)}:where(.drone-knowledge-ui) .my-1{margin-block:var(--spacing)}:where(.drone-knowledge-ui) .my-2{margin-block:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .my-3{margin-block:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .my-4{margin-block:calc(var(--spacing) * 4)}:where(.drone-knowledge-ui) .mt-0\\.5{margin-top:calc(var(--spacing) * .5)}:where(.drone-knowledge-ui) .mt-1{margin-top:var(--spacing)}:where(.drone-knowledge-ui) .mt-2{margin-top:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .mt-3{margin-top:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .mt-4{margin-top:calc(var(--spacing) * 4)}:where(.drone-knowledge-ui) .mt-5{margin-top:calc(var(--spacing) * 5)}:where(.drone-knowledge-ui) .mr-1{margin-right:var(--spacing)}:where(.drone-knowledge-ui) .-mb-px{margin-bottom:-1px}:where(.drone-knowledge-ui) .mb-1{margin-bottom:var(--spacing)}:where(.drone-knowledge-ui) .mb-2{margin-bottom:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .mb-3{margin-bottom:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .ml-1{margin-left:var(--spacing)}:where(.drone-knowledge-ui) .ml-2{margin-left:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .ml-auto{margin-left:auto}:where(.drone-knowledge-ui) .line-clamp-2{-webkit-line-clamp:2;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden}:where(.drone-knowledge-ui) .block{display:block}:where(.drone-knowledge-ui) .contents{display:contents}:where(.drone-knowledge-ui) .flex{display:flex}:where(.drone-knowledge-ui) .grid{display:grid}:where(.drone-knowledge-ui) .hidden{display:none}:where(.drone-knowledge-ui) .inline{display:inline}:where(.drone-knowledge-ui) .inline-block{display:inline-block}:where(.drone-knowledge-ui) .h-1\\.5{height:calc(var(--spacing) * 1.5)}:where(.drone-knowledge-ui) .h-2{height:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .h-11{height:calc(var(--spacing) * 11)}:where(.drone-knowledge-ui) .h-\\[1px\\]{height:1px}:where(.drone-knowledge-ui) .h-\\[clamp\\(520px\\,68vh\\,760px\\)\\]{height:clamp(520px,68vh,760px)}:where(.drone-knowledge-ui) .h-full{height:100%}:where(.drone-knowledge-ui) .max-h-28{max-height:calc(var(--spacing) * 28)}:where(.drone-knowledge-ui) .max-h-36{max-height:calc(var(--spacing) * 36)}:where(.drone-knowledge-ui) .max-h-40{max-height:calc(var(--spacing) * 40)}:where(.drone-knowledge-ui) .max-h-44{max-height:calc(var(--spacing) * 44)}:where(.drone-knowledge-ui) .max-h-48{max-height:calc(var(--spacing) * 48)}:where(.drone-knowledge-ui) .max-h-52{max-height:calc(var(--spacing) * 52)}:where(.drone-knowledge-ui) .max-h-60{max-height:calc(var(--spacing) * 60)}:where(.drone-knowledge-ui) .max-h-64{max-height:calc(var(--spacing) * 64)}:where(.drone-knowledge-ui) .max-h-72{max-height:calc(var(--spacing) * 72)}:where(.drone-knowledge-ui) .max-h-80{max-height:calc(var(--spacing) * 80)}:where(.drone-knowledge-ui) .max-h-\\[22vh\\]{max-height:22vh}:where(.drone-knowledge-ui) .max-h-\\[28vh\\]{max-height:28vh}:where(.drone-knowledge-ui) .max-h-\\[32vh\\]{max-height:32vh}:where(.drone-knowledge-ui) .max-h-\\[38vh\\]{max-height:38vh}:where(.drone-knowledge-ui) .min-h-0{min-height:0}:where(.drone-knowledge-ui) .min-h-\\[220px\\]{min-height:220px}:where(.drone-knowledge-ui) .w-1\\.5{width:calc(var(--spacing) * 1.5)}:where(.drone-knowledge-ui) .w-2{width:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .w-3{width:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .w-12{width:calc(var(--spacing) * 12)}:where(.drone-knowledge-ui) .w-16{width:calc(var(--spacing) * 16)}:where(.drone-knowledge-ui) .w-\\[min\\(360px\\,calc\\(100\\%-24px\\)\\)\\]{width:min(360px,100% - 24px)}:where(.drone-knowledge-ui) .w-\\[min\\(420px\\,calc\\(100vw-32px\\)\\)\\]{width:min(420px,100vw - 32px)}:where(.drone-knowledge-ui) .w-full{width:100%}:where(.drone-knowledge-ui) .max-w-2xl{max-width:var(--container-2xl)}:where(.drone-knowledge-ui) .max-w-5xl{max-width:var(--container-5xl)}:where(.drone-knowledge-ui) .max-w-\\[1440px\\]{max-width:1440px}:where(.drone-knowledge-ui) .max-w-\\[calc\\(100\\%-24px\\)\\]{max-width:calc(100% - 24px)}:where(.drone-knowledge-ui) .max-w-full{max-width:100%}:where(.drone-knowledge-ui) .min-w-0{min-width:0}:where(.drone-knowledge-ui) .flex-1{flex:1}:where(.drone-knowledge-ui) .shrink-0{flex-shrink:0}:where(.drone-knowledge-ui) .transform{transform:var(--drone-knowledge-tw-rotate-x,) var(--drone-knowledge-tw-rotate-y,) var(--drone-knowledge-tw-rotate-z,) var(--drone-knowledge-tw-skew-x,) var(--drone-knowledge-tw-skew-y,)}:where(.drone-knowledge-ui) .cursor-pointer{cursor:pointer}:where(.drone-knowledge-ui) .touch-none{touch-action:none}:where(.drone-knowledge-ui) .list-none{list-style-type:none}:where(.drone-knowledge-ui) .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}:where(.drone-knowledge-ui) .grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}:where(.drone-knowledge-ui) .grid-cols-\\[auto_1fr\\]{grid-template-columns:auto 1fr}:where(.drone-knowledge-ui) .grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\]{grid-template-columns:minmax(0,1fr) auto}:where(.drone-knowledge-ui) .flex-col{flex-direction:column}:where(.drone-knowledge-ui) .flex-wrap{flex-wrap:wrap}:where(.drone-knowledge-ui) .items-center{align-items:center}:where(.drone-knowledge-ui) .items-start{align-items:flex-start}:where(.drone-knowledge-ui) .justify-between{justify-content:space-between}:where(.drone-knowledge-ui) .justify-end{justify-content:flex-end}:where(.drone-knowledge-ui) .gap-1{gap:var(--spacing)}:where(.drone-knowledge-ui) .gap-2{gap:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .gap-3{gap:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .gap-4{gap:calc(var(--spacing) * 4)}:where(.drone-knowledge-ui) .gap-8{gap:calc(var(--spacing) * 8)}:where(.drone-knowledge-ui) :where(.space-y-0\\.5>:not(:last-child)){--drone-knowledge-tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * .5) * var(--drone-knowledge-tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * .5) * calc(1 - var(--drone-knowledge-tw-space-y-reverse)))}:where(.drone-knowledge-ui) :where(.space-y-1>:not(:last-child)){--drone-knowledge-tw-space-y-reverse:0;margin-block-start:calc(var(--spacing) * var(--drone-knowledge-tw-space-y-reverse));margin-block-end:calc(var(--spacing) * calc(1 - var(--drone-knowledge-tw-space-y-reverse)))}:where(.drone-knowledge-ui) :where(.space-y-2>:not(:last-child)){--drone-knowledge-tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * 2) * var(--drone-knowledge-tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * 2) * calc(1 - var(--drone-knowledge-tw-space-y-reverse)))}:where(.drone-knowledge-ui) :where(.space-y-3>:not(:last-child)){--drone-knowledge-tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * 3) * var(--drone-knowledge-tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * 3) * calc(1 - var(--drone-knowledge-tw-space-y-reverse)))}:where(.drone-knowledge-ui) :where(.space-y-4>:not(:last-child)){--drone-knowledge-tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * 4) * var(--drone-knowledge-tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * 4) * calc(1 - var(--drone-knowledge-tw-space-y-reverse)))}:where(.drone-knowledge-ui) :where(.space-y-6>:not(:last-child)){--drone-knowledge-tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * 6) * var(--drone-knowledge-tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * 6) * calc(1 - var(--drone-knowledge-tw-space-y-reverse)))}:where(.drone-knowledge-ui) .gap-x-2{column-gap:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .gap-x-3{column-gap:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .gap-y-1{row-gap:var(--spacing)}:where(.drone-knowledge-ui) .gap-y-2{row-gap:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) :where(.divide-y>:not(:last-child)){--drone-knowledge-tw-divide-y-reverse:0;border-bottom-style:var(--drone-knowledge-tw-border-style);border-top-style:var(--drone-knowledge-tw-border-style);border-top-width:calc(1px * var(--drone-knowledge-tw-divide-y-reverse));border-bottom-width:calc(1px * calc(1 - var(--drone-knowledge-tw-divide-y-reverse)))}:where(.drone-knowledge-ui) :where(.divide-border>:not(:last-child)){border-color:var(--color-border)}:where(.drone-knowledge-ui) .truncate{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}:where(.drone-knowledge-ui) .overflow-auto{overflow:auto}:where(.drone-knowledge-ui) .overflow-hidden{overflow:hidden}:where(.drone-knowledge-ui) .overflow-y-auto{overflow-y:auto}:where(.drone-knowledge-ui) .rounded{border-radius:.25rem}:where(.drone-knowledge-ui) .rounded-2xl{border-radius:var(--radius-2xl)}:where(.drone-knowledge-ui) .rounded-full{border-radius:3.40282e38px}:where(.drone-knowledge-ui) .rounded-lg{border-radius:10px}:where(.drone-knowledge-ui) .rounded-md{border-radius:8px}:where(.drone-knowledge-ui) .rounded-xl{border-radius:14px}:where(.drone-knowledge-ui) .border{border-style:var(--drone-knowledge-tw-border-style);border-width:1px}:where(.drone-knowledge-ui) .border-0{border-style:var(--drone-knowledge-tw-border-style);border-width:0}:where(.drone-knowledge-ui) .border-t{border-top-style:var(--drone-knowledge-tw-border-style);border-top-width:1px}:where(.drone-knowledge-ui) .border-b{border-bottom-style:var(--drone-knowledge-tw-border-style);border-bottom-width:1px}:where(.drone-knowledge-ui) .border-b-2{border-bottom-style:var(--drone-knowledge-tw-border-style);border-bottom-width:2px}:where(.drone-knowledge-ui) .border-l{border-left-style:var(--drone-knowledge-tw-border-style);border-left-width:1px}:where(.drone-knowledge-ui) .border-dashed{--drone-knowledge-tw-border-style:dashed;border-style:dashed}:where(.drone-knowledge-ui) .border-\\[var\\(--knowledge-edge\\)\\]{border-color:var(--knowledge-edge)}:where(.drone-knowledge-ui) .border-border{border-color:var(--color-border)}:where(.drone-knowledge-ui) .border-border-strong{border-color:var(--color-border-strong)}:where(.drone-knowledge-ui) .border-ink{border-color:var(--color-ink)}:where(.drone-knowledge-ui) .border-ink-faint{border-color:var(--color-ink-faint)}:where(.drone-knowledge-ui) .border-transparent{border-color:#0000}:where(.drone-knowledge-ui) .border-warn\\/30{border-color:var(--color-warn)}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .border-warn\\/30{border-color:color-mix(in oklab, var(--color-warn) 30%, transparent)}}:where(.drone-knowledge-ui) .bg-\\[var\\(--highlight\\)\\]{background-color:var(--highlight)}:where(.drone-knowledge-ui) .bg-\\[var\\(--knowledge-edge\\)\\]{background-color:var(--knowledge-edge)}:where(.drone-knowledge-ui) .bg-err\\/8{background-color:var(--color-err)}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .bg-err\\/8{background-color:color-mix(in oklab, var(--color-err) 8%, transparent)}}:where(.drone-knowledge-ui) .bg-err\\/10{background-color:var(--color-err)}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .bg-err\\/10{background-color:color-mix(in oklab, var(--color-err) 10%, transparent)}}:where(.drone-knowledge-ui) .bg-hover,:where(.drone-knowledge-ui) .bg-hover\\/30{background-color:var(--color-hover)}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .bg-hover\\/30{background-color:color-mix(in oklab, var(--color-hover) 30%, transparent)}}:where(.drone-knowledge-ui) .bg-ink{background-color:var(--color-ink)}:where(.drone-knowledge-ui) .bg-ok,:where(.drone-knowledge-ui) .bg-ok\\/10{background-color:var(--color-ok)}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .bg-ok\\/10{background-color:color-mix(in oklab, var(--color-ok) 10%, transparent)}}:where(.drone-knowledge-ui) .bg-surface,:where(.drone-knowledge-ui) .bg-surface\\/40{background-color:var(--color-surface)}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .bg-surface\\/40{background-color:color-mix(in oklab, var(--color-surface) 40%, transparent)}}:where(.drone-knowledge-ui) .bg-surface\\/70{background-color:var(--color-surface)}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .bg-surface\\/70{background-color:color-mix(in oklab, var(--color-surface) 70%, transparent)}}:where(.drone-knowledge-ui) .bg-transparent{background-color:#0000}:where(.drone-knowledge-ui) .bg-warn,:where(.drone-knowledge-ui) .bg-warn\\/5{background-color:var(--color-warn)}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .bg-warn\\/5{background-color:color-mix(in oklab, var(--color-warn) 5%, transparent)}}:where(.drone-knowledge-ui) .bg-white\\/10{background-color:#ffffff1a}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .bg-white\\/10{background-color:color-mix(in oklab, var(--color-white) 10%, transparent)}}:where(.drone-knowledge-ui) .p-1{padding:var(--spacing)}:where(.drone-knowledge-ui) .p-2{padding:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .p-3{padding:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .p-4{padding:calc(var(--spacing) * 4)}:where(.drone-knowledge-ui) .p-5{padding:calc(var(--spacing) * 5)}:where(.drone-knowledge-ui) .p-6{padding:calc(var(--spacing) * 6)}:where(.drone-knowledge-ui) .px-1{padding-inline:var(--spacing)}:where(.drone-knowledge-ui) .px-2{padding-inline:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .px-3{padding-inline:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .px-4{padding-inline:calc(var(--spacing) * 4)}:where(.drone-knowledge-ui) .px-5{padding-inline:calc(var(--spacing) * 5)}:where(.drone-knowledge-ui) .py-0\\.5{padding-block:calc(var(--spacing) * .5)}:where(.drone-knowledge-ui) .py-1{padding-block:var(--spacing)}:where(.drone-knowledge-ui) .py-2{padding-block:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .py-3{padding-block:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .py-4{padding-block:calc(var(--spacing) * 4)}:where(.drone-knowledge-ui) .pt-1{padding-top:var(--spacing)}:where(.drone-knowledge-ui) .pt-2{padding-top:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .pt-3{padding-top:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .pt-5{padding-top:calc(var(--spacing) * 5)}:where(.drone-knowledge-ui) .pb-2{padding-bottom:calc(var(--spacing) * 2)}:where(.drone-knowledge-ui) .pl-3{padding-left:calc(var(--spacing) * 3)}:where(.drone-knowledge-ui) .text-center{text-align:center}:where(.drone-knowledge-ui) .text-left{text-align:left}:where(.drone-knowledge-ui) .text-right{text-align:right}:where(.drone-knowledge-ui) .align-middle{vertical-align:middle}:where(.drone-knowledge-ui) .font-mono{font-family:ui-monospace,SF Mono,SFMono-Regular,JetBrains Mono,Menlo,Consolas,Liberation Mono,Noto Sans Mono CJK SC,monospace}:where(.drone-knowledge-ui) .text-base{font-size:var(--text-base);line-height:var(--drone-knowledge-tw-leading,var(--text-base--line-height))}:where(.drone-knowledge-ui) .text-lg{font-size:var(--text-lg);line-height:var(--drone-knowledge-tw-leading,var(--text-lg--line-height))}:where(.drone-knowledge-ui) .text-sm{font-size:var(--text-sm);line-height:var(--drone-knowledge-tw-leading,var(--text-sm--line-height))}:where(.drone-knowledge-ui) .text-xs{font-size:var(--text-xs);line-height:var(--drone-knowledge-tw-leading,var(--text-xs--line-height))}:where(.drone-knowledge-ui) .text-\\[11px\\]{font-size:11px}:where(.drone-knowledge-ui) .text-\\[12px\\]{font-size:12px}:where(.drone-knowledge-ui) .text-\\[13px\\]{font-size:13px}:where(.drone-knowledge-ui) .leading-6{--drone-knowledge-tw-leading:calc(var(--spacing) * 6);line-height:calc(var(--spacing) * 6)}:where(.drone-knowledge-ui) .leading-relaxed{--drone-knowledge-tw-leading:var(--leading-relaxed);line-height:var(--leading-relaxed)}:where(.drone-knowledge-ui) .font-medium{--drone-knowledge-tw-font-weight:var(--font-weight-medium);font-weight:var(--font-weight-medium)}:where(.drone-knowledge-ui) .font-normal{--drone-knowledge-tw-font-weight:var(--font-weight-normal);font-weight:var(--font-weight-normal)}:where(.drone-knowledge-ui) .font-semibold{--drone-knowledge-tw-font-weight:var(--font-weight-semibold);font-weight:var(--font-weight-semibold)}:where(.drone-knowledge-ui) .tracking-\\[0\\.08em\\]{--drone-knowledge-tw-tracking:.08em;letter-spacing:.08em}:where(.drone-knowledge-ui) .tracking-\\[0\\.12em\\]{--drone-knowledge-tw-tracking:.12em;letter-spacing:.12em}:where(.drone-knowledge-ui) .tracking-\\[0\\.16em\\]{--drone-knowledge-tw-tracking:.16em;letter-spacing:.16em}:where(.drone-knowledge-ui) .tracking-wide{--drone-knowledge-tw-tracking:var(--tracking-wide);letter-spacing:var(--tracking-wide)}:where(.drone-knowledge-ui) .break-words{overflow-wrap:break-word}:where(.drone-knowledge-ui) .break-all{word-break:break-all}:where(.drone-knowledge-ui) .whitespace-nowrap{white-space:nowrap}:where(.drone-knowledge-ui) .whitespace-pre-wrap{white-space:pre-wrap}:where(.drone-knowledge-ui) .text-err{color:var(--color-err)}:where(.drone-knowledge-ui) .text-ink{color:var(--color-ink)}:where(.drone-knowledge-ui) .text-ink-2{color:var(--color-ink-2)}:where(.drone-knowledge-ui) .text-ink-dim{color:var(--color-ink-dim)}:where(.drone-knowledge-ui) .text-ink-faint{color:var(--color-ink-faint)}:where(.drone-knowledge-ui) .text-link{color:var(--link)}:where(.drone-knowledge-ui) .text-ok{color:var(--color-ok)}:where(.drone-knowledge-ui) .text-on-ink{color:var(--color-on-ink)}:where(.drone-knowledge-ui) .text-warn{color:var(--color-warn)}:where(.drone-knowledge-ui) .text-white\\/80{color:#fffc}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .text-white\\/80{color:color-mix(in oklab, var(--color-white) 80%, transparent)}}:where(.drone-knowledge-ui) .text-white\\/90{color:#ffffffe6}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .text-white\\/90{color:color-mix(in oklab, var(--color-white) 90%, transparent)}}:where(.drone-knowledge-ui) .uppercase{text-transform:uppercase}:where(.drone-knowledge-ui) .tabular-nums{--drone-knowledge-tw-numeric-spacing:tabular-nums;font-variant-numeric:var(--drone-knowledge-tw-ordinal,) var(--drone-knowledge-tw-slashed-zero,) var(--drone-knowledge-tw-numeric-figure,) var(--drone-knowledge-tw-numeric-spacing,) var(--drone-knowledge-tw-numeric-fraction,)}:where(.drone-knowledge-ui) .underline{text-decoration-line:underline}:where(.drone-knowledge-ui) .underline-offset-2{text-underline-offset:2px}:where(.drone-knowledge-ui) .opacity-60{opacity:.6}:where(.drone-knowledge-ui) .shadow-dialog{--drone-knowledge-tw-shadow:var(--shadow-dialog);box-shadow:var(--drone-knowledge-tw-inset-shadow), var(--drone-knowledge-tw-inset-ring-shadow), var(--drone-knowledge-tw-ring-offset-shadow), var(--drone-knowledge-tw-ring-shadow), var(--drone-knowledge-tw-shadow)}:where(.drone-knowledge-ui) .shadow-none{--drone-knowledge-tw-shadow:0 0 #0000;box-shadow:var(--drone-knowledge-tw-inset-shadow), var(--drone-knowledge-tw-inset-ring-shadow), var(--drone-knowledge-tw-ring-offset-shadow), var(--drone-knowledge-tw-ring-shadow), var(--drone-knowledge-tw-shadow)}:where(.drone-knowledge-ui) .ring{--drone-knowledge-tw-ring-shadow:var(--drone-knowledge-tw-ring-inset,) 0 0 0 calc(1px + var(--drone-knowledge-tw-ring-offset-width)) var(--drone-knowledge-tw-ring-color,currentcolor);box-shadow:var(--drone-knowledge-tw-inset-shadow), var(--drone-knowledge-tw-inset-ring-shadow), var(--drone-knowledge-tw-ring-offset-shadow), var(--drone-knowledge-tw-ring-shadow), var(--drone-knowledge-tw-shadow)}:where(.drone-knowledge-ui) .filter{filter:var(--drone-knowledge-tw-blur,) var(--drone-knowledge-tw-brightness,) var(--drone-knowledge-tw-contrast,) var(--drone-knowledge-tw-grayscale,) var(--drone-knowledge-tw-hue-rotate,) var(--drone-knowledge-tw-invert,) var(--drone-knowledge-tw-saturate,) var(--drone-knowledge-tw-sepia,) var(--drone-knowledge-tw-drop-shadow,)}:where(.drone-knowledge-ui) .transition{transition-property:color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--drone-knowledge-tw-gradient-from,--drone-knowledge-tw-gradient-via,--drone-knowledge-tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;transition-timing-function:var(--drone-knowledge-tw-ease,var(--default-transition-timing-function));transition-duration:var(--drone-knowledge-tw-duration,var(--default-transition-duration))}:where(.drone-knowledge-ui) .transition-colors{transition-property:color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--drone-knowledge-tw-gradient-from,--drone-knowledge-tw-gradient-via,--drone-knowledge-tw-gradient-to;transition-timing-function:var(--drone-knowledge-tw-ease,var(--default-transition-timing-function));transition-duration:var(--drone-knowledge-tw-duration,var(--default-transition-duration))}:where(.drone-knowledge-ui) .duration-200{--drone-knowledge-tw-duration:.2s;transition-duration:.2s}:where(.drone-knowledge-ui) .outline-none{--drone-knowledge-tw-outline-style:none;outline-style:none}:where(.drone-knowledge-ui) .select-none{-webkit-user-select:none;user-select:none}:where(.drone-knowledge-ui) .select-text{-webkit-user-select:text;user-select:text}:where(.drone-knowledge-ui) .focus-within\\:border-ink-faint:focus-within{border-color:var(--color-ink-faint)}@media (hover:hover){:where(.drone-knowledge-ui) .hover\\:bg-hover:hover{background-color:var(--color-hover)}:where(.drone-knowledge-ui) .hover\\:bg-white\\/20:hover{background-color:#fff3}@supports (color:color-mix(in lab, red, red)){:where(.drone-knowledge-ui) .hover\\:bg-white\\/20:hover{background-color:color-mix(in oklab, var(--color-white) 20%, transparent)}}:where(.drone-knowledge-ui) .hover\\:text-ink:hover{color:var(--color-ink)}:where(.drone-knowledge-ui) .hover\\:underline:hover{text-decoration-line:underline}}:where(.drone-knowledge-ui) .focus\\:border-accent:focus{border-color:var(--color-accent)}:where(.drone-knowledge-ui) .disabled\\:opacity-40:disabled{opacity:.4}@media (min-width:950px){:where(.drone-knowledge-ui) .min-\\[950px\\]\\:max-h-\\[52vh\\]{max-height:52vh}:where(.drone-knowledge-ui) .min-\\[950px\\]\\:grid-cols-\\[240px_minmax\\(0\\,1fr\\)\\]{grid-template-columns:240px minmax(0,1fr)}}@media (min-width:1100px){:where(.drone-knowledge-ui) .min-\\[1100px\\]\\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (min-width:40rem){:where(.drone-knowledge-ui) .sm\\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}:where(.drone-knowledge-ui) .sm\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (min-width:48rem){:where(.drone-knowledge-ui) .md\\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (min-width:64rem){:where(.drone-knowledge-ui) .lg\\:grid-cols-\\[minmax\\(0\\,1fr\\)_360px\\]{grid-template-columns:minmax(0,1fr) 360px}:where(.drone-knowledge-ui) .lg\\:grid-cols-\\[minmax\\(180px\\,0\\.35fr\\)_minmax\\(0\\,1fr\\)\\]{grid-template-columns:minmax(180px,.35fr) minmax(0,1fr)}}}@property --drone-knowledge-tw-rotate-x{syntax:"*";inherits:false}@property --drone-knowledge-tw-rotate-y{syntax:"*";inherits:false}@property --drone-knowledge-tw-rotate-z{syntax:"*";inherits:false}@property --drone-knowledge-tw-skew-x{syntax:"*";inherits:false}@property --drone-knowledge-tw-skew-y{syntax:"*";inherits:false}@property --drone-knowledge-tw-space-y-reverse{syntax:"*";inherits:false;initial-value:0}@property --drone-knowledge-tw-divide-y-reverse{syntax:"*";inherits:false;initial-value:0}@property --drone-knowledge-tw-border-style{syntax:"*";inherits:false;initial-value:solid}@property --drone-knowledge-tw-leading{syntax:"*";inherits:false}@property --drone-knowledge-tw-font-weight{syntax:"*";inherits:false}@property --drone-knowledge-tw-tracking{syntax:"*";inherits:false}@property --drone-knowledge-tw-ordinal{syntax:"*";inherits:false}@property --drone-knowledge-tw-slashed-zero{syntax:"*";inherits:false}@property --drone-knowledge-tw-numeric-figure{syntax:"*";inherits:false}@property --drone-knowledge-tw-numeric-spacing{syntax:"*";inherits:false}@property --drone-knowledge-tw-numeric-fraction{syntax:"*";inherits:false}@property --drone-knowledge-tw-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --drone-knowledge-tw-shadow-color{syntax:"*";inherits:false}@property --drone-knowledge-tw-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --drone-knowledge-tw-inset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --drone-knowledge-tw-inset-shadow-color{syntax:"*";inherits:false}@property --drone-knowledge-tw-inset-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --drone-knowledge-tw-ring-color{syntax:"*";inherits:false}@property --drone-knowledge-tw-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --drone-knowledge-tw-inset-ring-color{syntax:"*";inherits:false}@property --drone-knowledge-tw-inset-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --drone-knowledge-tw-ring-inset{syntax:"*";inherits:false}@property --drone-knowledge-tw-ring-offset-width{syntax:"<length>";inherits:false;initial-value:0}@property --drone-knowledge-tw-ring-offset-color{syntax:"*";inherits:false;initial-value:#fff}@property --drone-knowledge-tw-ring-offset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --drone-knowledge-tw-blur{syntax:"*";inherits:false}@property --drone-knowledge-tw-brightness{syntax:"*";inherits:false}@property --drone-knowledge-tw-contrast{syntax:"*";inherits:false}@property --drone-knowledge-tw-grayscale{syntax:"*";inherits:false}@property --drone-knowledge-tw-hue-rotate{syntax:"*";inherits:false}@property --drone-knowledge-tw-invert{syntax:"*";inherits:false}@property --drone-knowledge-tw-opacity{syntax:"*";inherits:false}@property --drone-knowledge-tw-saturate{syntax:"*";inherits:false}@property --drone-knowledge-tw-sepia{syntax:"*";inherits:false}@property --drone-knowledge-tw-drop-shadow{syntax:"*";inherits:false}@property --drone-knowledge-tw-drop-shadow-color{syntax:"*";inherits:false}@property --drone-knowledge-tw-drop-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --drone-knowledge-tw-drop-shadow-size{syntax:"*";inherits:false}@property --drone-knowledge-tw-duration{syntax:"*";inherits:false}\n\n.drone-knowledge-ui {\n--knowledge-canvas: var(--color-canvas);\n--knowledge-surface: var(--color-surface);\n--knowledge-surface-muted: var(--color-hover);\n--knowledge-border: var(--color-border);\n--knowledge-border-strong: var(--color-border-strong);\n--knowledge-ink: var(--color-ink);\n--knowledge-ink-muted: var(--color-ink-dim);\n--knowledge-ink-faint: var(--color-ink-faint);\n--knowledge-accent: #2e6f8e;\n--knowledge-accent-soft: #e8f2f5;\n--knowledge-grid: #e6edf3;\n--knowledge-edge: #9bafbe;\n--knowledge-main: #b88a3a;\n--knowledge-directory: #9b7ac6;\n--knowledge-shadow: 0 10px 28px rgba(35, 58, 78, 0.08);\n--knowledge-shadow-soft: 0 3px 12px rgba(35, 58, 78, 0.07);\n}\n[data-theme="dark"] .drone-knowledge-ui {\n--knowledge-canvas: var(--color-canvas);\n--knowledge-surface: var(--color-surface);\n--knowledge-surface-muted: var(--color-hover);\n--knowledge-border: var(--color-border);\n--knowledge-border-strong: var(--color-border-strong);\n--knowledge-ink: var(--color-ink);\n--knowledge-ink-muted: var(--color-ink-dim);\n--knowledge-ink-faint: var(--color-ink-faint);\n--knowledge-accent: #7eb5c8;\n--knowledge-accent-soft: #263940;\n--knowledge-grid: #39434d;\n--knowledge-edge: #6f8190;\n--knowledge-main: #d4ad68;\n--knowledge-directory: #b899de;\n--knowledge-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);\n--knowledge-shadow-soft: 0 3px 12px rgba(0, 0, 0, 0.22);\n}\n.knowledge-view {\n--knowledge-shadow: 0 1px 2px rgba(35, 58, 78, 0.04);\n--knowledge-shadow-soft: none;\n}\n/* Migrated from Drone renderer styles at e5ec4f01. Domain selectors are owned by this package. */\n.panel-flow > .drone-knowledge-ui > [data-testid="knowledge-flow-card"] {\n	margin: 0 0 var(--space-3);\n	border-radius: var(--radius-lg);\n	box-shadow: var(--shadow-soft);\n}\n.panel-flow > .drone-knowledge-ui > [data-testid="knowledge-flow-card"]:not(.sunburst-flow-card) {\n	padding: var(--space-3) var(--space-3);\n}\n.knowledge-view {\n	display: flex;\n	min-height: 0;\n	min-width: 0;\n	flex: 1;\n	flex-direction: column;\n	background: var(--knowledge-canvas);\n	color: var(--knowledge-ink);\n}\n.knowledge-view-head {\n	flex: none;\n	display: flex;\n	align-items: center;\n	justify-content: space-between;\n	gap: var(--space-3);\n	padding: var(--space-3) var(--space-5);\n	border-bottom: 1px solid var(--knowledge-border);\n	background: color-mix(in srgb, var(--knowledge-surface) 94%, transparent);\n}\n.knowledge-view-close {\n	display: inline-flex;\n	align-items: center;\n	gap: var(--space-2);\n	border-radius: var(--radius-md);\n	padding: 5px 9px;\n	font-size: 12px;\n	color: var(--knowledge-ink-muted);\n	transition:\n		background-color 0.15s,\n		color 0.15s;\n}\n.knowledge-view-close:hover {\n	background: var(--knowledge-accent-soft);\n	color: var(--knowledge-ink);\n}\n.knowledge-view-body {\n	min-height: 0;\n	flex: 1;\n	overflow-y: auto;\n	padding: var(--space-4) var(--space-5) var(--space-10);\n	background:\n		linear-gradient(180deg, color-mix(in srgb, var(--knowledge-surface) 76%, transparent), transparent 190px),\n		var(--knowledge-canvas);\n}\n.knowledge-view-body > div {\n	/* Same content width as PageShell (max-w-5xl). */\n	max-width: 64rem;\n}\n.knowledge-home,\n.knowledge-panel {\n	color: var(--knowledge-ink);\n}\n.knowledge-home > section,\n.knowledge-panel > section,\n.knowledge-panel .knowledge-card {\n	border-color: var(--knowledge-border);\n	background: var(--knowledge-surface);\n	box-shadow: var(--knowledge-shadow);\n}\n.knowledge-home > section,\n.knowledge-panel > section {\n	border-radius: var(--radius-xl);\n}\n.knowledge-home [data-testid="knowledge-graph"] {\n	min-width: 0;\n}\n.knowledge-panel > header {\n	padding: 2px 2px var(--space-2);\n}\n.knowledge-panel [role="tablist"] {\n	border-color: var(--knowledge-border);\n	gap: 3px;\n}\n.knowledge-panel [role="tab"] {\n	border-radius: var(--radius-md);\n	color: var(--knowledge-ink-muted);\n}\n.knowledge-panel [role="tab"][aria-selected="true"] {\n	background: var(--knowledge-accent-soft);\n	color: var(--knowledge-accent);\n}\n.knowledge-panel [role="tab"]:focus-visible,\n.knowledge-home button:focus-visible,\n.knowledge-panel button:focus-visible,\n.knowledge-cloud-section input:focus-visible,\n.knowledge-cloud-section button:focus-visible {\n	outline: 2px solid color-mix(in srgb, var(--knowledge-accent) 72%, white);\n	outline-offset: 2px;\n}\n.knowledge-cloud-section {\n	border: 1px solid var(--knowledge-border);\n	border-radius: var(--radius-xl);\n	background: var(--knowledge-surface);\n	box-shadow: var(--knowledge-shadow);\n	padding: var(--space-4);\n}\n.knowledge-cloud-section input,\n.knowledge-cloud-section select {\n	border-color: var(--knowledge-border);\n	background: var(--knowledge-surface-muted);\n	color: var(--knowledge-ink);\n}\n.knowledge-cloud-section input::placeholder {\n	color: var(--knowledge-ink-faint);\n}\n.knowledge-cloud-section ul,\n.knowledge-cloud-section [class*="rounded-md border"] {\n	border-color: var(--knowledge-border);\n}\n.knowledge-cloud-section pre {\n	border: 1px solid var(--knowledge-border);\n	background: var(--knowledge-surface-muted);\n	color: var(--knowledge-ink-muted);\n}\n.knowledge-cloud-section [role="status"] {\n	font-weight: 600;\n}\n.knowledge-nebula canvas.sigma-nodes {\n	filter: drop-shadow(0 0 3px color-mix(in srgb, var(--knowledge-accent) 55%, transparent))\n		drop-shadow(0 0 8px color-mix(in srgb, var(--knowledge-accent) 25%, transparent));\n}\n.knowledge-observatory {\n	--knowledge-chart-ink: var(--knowledge-ink);\n	--knowledge-chart-muted: var(--knowledge-ink-muted);\n	min-width: 0;\n}\n.knowledge-network-layout {\n	display: grid;\n	grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);\n	gap: var(--space-4);\n	align-items: start;\n}\n.knowledge-network-changes {\n	min-width: 0;\n	border: 1px solid var(--knowledge-border);\n	border-radius: var(--radius-lg);\n	background: var(--knowledge-surface);\n	box-shadow: var(--knowledge-shadow-soft);\n	color: var(--knowledge-ink);\n}\n.knowledge-network-changes-head {\n	display: flex;\n	align-items: center;\n	justify-content: space-between;\n	gap: var(--space-2);\n	border-bottom: 1px solid var(--knowledge-border);\n	padding: var(--space-3) var(--space-4);\n}\n.knowledge-network-changes-head h2 {\n	margin: 0;\n	font-size: 13px;\n	font-weight: 650;\n}\n.knowledge-live-indicator {\n	display: inline-flex;\n	align-items: center;\n	gap: 5px;\n	color: var(--knowledge-ink-muted);\n	font-size: 10px;\n	white-space: nowrap;\n}\n.knowledge-live-indicator i {\n	display: inline-block;\n	width: 7px;\n	height: 7px;\n	border-radius: 999px;\n	background: var(--color-ok);\n}\n.knowledge-network-changes-list {\n	margin: 0;\n	padding: 0 var(--space-4);\n	list-style: none;\n}\n.knowledge-network-change {\n	min-width: 0;\n	padding: var(--space-3) 0;\n	border-bottom: 1px solid var(--knowledge-border);\n}\n.knowledge-network-change:last-child {\n	border-bottom: 0;\n}\n.knowledge-network-change-title,\n.knowledge-network-change-source {\n	display: block;\n	min-width: 0;\n	overflow: hidden;\n	text-overflow: ellipsis;\n	white-space: nowrap;\n}\n.knowledge-network-change-title {\n	font-size: 12px;\n	font-weight: 600;\n}\n.knowledge-network-change-source {\n	margin-top: 4px;\n	color: var(--knowledge-ink-muted);\n	font-size: 10px;\n	line-height: 1.3;\n}\n.knowledge-network-changes-empty {\n	margin: 0;\n	padding: var(--space-4);\n	color: var(--knowledge-ink-muted);\n	font-size: 11px;\n}\n.knowledge-observatory-canvas {\n	min-height: clamp(520px, 68vh, 760px);\n	border: 1px solid var(--knowledge-border);\n	background:\n		linear-gradient(180deg, color-mix(in srgb, var(--knowledge-surface) 85%, transparent), transparent 180px),\n		var(--knowledge-surface);\n	box-shadow: var(--knowledge-shadow);\n}\n.knowledge-graph-canvas-tools {\n	pointer-events: none;\n}\n.knowledge-graph-canvas-tools > * {\n	pointer-events: auto;\n}\n.knowledge-graph-observatory-label,\n.knowledge-graph-controls {\n	border: 1px solid var(--knowledge-border);\n	background: color-mix(in srgb, var(--knowledge-surface) 94%, transparent);\n	box-shadow: var(--knowledge-shadow-soft);\n	backdrop-filter: blur(8px);\n}\n.knowledge-graph-observatory-label {\n	color: var(--knowledge-ink-muted);\n	font-weight: 600;\n	letter-spacing: 0.01em;\n}\n.knowledge-graph-toolbar > button,\n.knowledge-graph-toolbar label,\n.knowledge-graph-toolbar span > button {\n	min-height: 32px;\n}\n.knowledge-graph-zoom-button,\n.knowledge-graph-fit-button {\n	display: inline-flex;\n	min-height: 32px;\n	align-items: center;\n	justify-content: center;\n	border-radius: var(--radius-sm);\n	color: var(--knowledge-ink-muted);\n	font-size: 12px;\n	line-height: 1;\n	transition:\n		background-color 0.15s,\n		color 0.15s,\n		transform 0.15s;\n}\n.knowledge-graph-zoom-button {\n	width: 32px;\n	font-size: 18px;\n}\n.knowledge-graph-fit-button {\n	padding: 0 var(--space-3);\n	font-size: 11px;\n}\n.knowledge-graph-zoom-button:hover,\n.knowledge-graph-fit-button:hover {\n	background: var(--knowledge-accent-soft);\n	color: var(--knowledge-accent);\n}\n.knowledge-graph-zoom-button:active,\n.knowledge-graph-fit-button:active {\n	transform: scale(0.95);\n}\n.knowledge-graph-zoom-value {\n	min-width: 42px;\n	color: var(--knowledge-ink-muted);\n	font:\n		10px ui-monospace,\n		SFMono-Regular,\n		Menlo,\n		monospace;\n	text-align: center;\n}\n.knowledge-graph-scene {\n	transform-box: fill-box;\n	transform-origin: center;\n}\n.knowledge-graph-svg {\n	overscroll-behavior: contain;\n	background: transparent;\n}\n.knowledge-graph-axis-labels {\n	fill: var(--knowledge-ink-faint);\n	font-size: 11px;\n	opacity: 0.85;\n}\n.knowledge-graph-legend {\n	border: 1px solid var(--knowledge-border);\n	background: color-mix(in srgb, var(--knowledge-surface) 94%, transparent);\n	box-shadow: var(--knowledge-shadow-soft);\n	color: var(--knowledge-ink-muted);\n	line-height: 1.2;\n	backdrop-filter: blur(8px);\n}\n.knowledge-graph-legend-main {\n	border-color: var(--knowledge-main);\n}\n.knowledge-graph-legend-directory {\n	border-color: var(--knowledge-directory);\n}\n.knowledge-graph-category-filter {\n	display: inline-flex;\n	align-items: center;\n	gap: var(--space-1);\n	border: 1px solid transparent;\n	border-radius: 999px;\n	padding: 2px 7px;\n	color: var(--knowledge-ink-muted);\n	transition:\n		border-color 160ms ease,\n		background-color 160ms ease,\n		color 160ms ease;\n}\n.knowledge-graph-category-filter i {\n	display: inline-block;\n	height: 7px;\n	width: 7px;\n	border-radius: 999px;\n}\n.knowledge-graph-category-filter:hover,\n.knowledge-graph-category-filter.is-active {\n	border-color: color-mix(in srgb, var(--knowledge-accent) 38%, var(--knowledge-border));\n	background: var(--knowledge-accent-soft);\n	color: var(--knowledge-accent);\n}\n.knowledge-graph-edge {\n	transition:\n		stroke-opacity 0.2s,\n		stroke-width 0.2s;\n}\n.knowledge-graph-edge--active {\n	stroke-dasharray: 3 7;\n	animation: knowledge-graph-flow 1.8s linear infinite;\n}\n.knowledge-graph-edge--fresh {\n	animation: knowledge-graph-fresh 0.7s ease-in-out 3;\n}\n.knowledge-graph-node-aura {\n	animation: knowledge-graph-pulse 3.2s ease-in-out infinite;\n}\n.knowledge-graph-node-aura--fresh {\n	animation: knowledge-graph-fresh 0.7s ease-in-out 3;\n}\n.knowledge-graph-selection-halo {\n	animation: knowledge-graph-selection 1.8s ease-in-out infinite;\n}\n.knowledge-node-drawer {\n	border: 1px solid var(--knowledge-border);\n	background: color-mix(in srgb, var(--knowledge-surface) 96%, transparent);\n	box-shadow: var(--knowledge-shadow);\n	color: var(--knowledge-ink);\n	backdrop-filter: blur(12px);\n	opacity: 0;\n	pointer-events: none;\n	transform: translateX(calc(100% + 24px));\n}\n.knowledge-node-drawer.is-open {\n	opacity: 1;\n	pointer-events: auto;\n	transform: translateX(0);\n}\n@keyframes knowledge-graph-flow {\n	to {\n		stroke-dashoffset: -20;\n	}\n}\n@keyframes knowledge-graph-pulse {\n	0%,\n	100% {\n		opacity: 0.12;\n	}\n	50% {\n		opacity: 0.28;\n	}\n}\n@keyframes knowledge-graph-fresh {\n	0%,\n	100% {\n		opacity: 0.35;\n	}\n	50% {\n		opacity: 0.95;\n	}\n}\n@keyframes knowledge-graph-selection {\n	0%,\n	100% {\n		stroke-opacity: 0.28;\n		transform: scale(1);\n	}\n	50% {\n		stroke-opacity: 0.7;\n		transform: scale(1.12);\n	}\n}\n@media (max-width: 760px) {\n	.knowledge-network-layout {\n		grid-template-columns: minmax(0, 1fr);\n	}\n	.knowledge-node-drawer {\n		top: auto;\n		bottom: 12px;\n		left: 12px;\n		width: calc(100% - 24px);\n		max-height: min(62%, 420px);\n		transform: translateY(calc(100% + 24px));\n	}\n	.knowledge-node-drawer.is-open {\n		transform: translateY(0);\n	}\n}\n@media (prefers-reduced-motion: reduce) {\n	.knowledge-graph-edge--active,\n	.knowledge-graph-edge--fresh,\n	.knowledge-graph-node-aura,\n	.knowledge-graph-node-aura--fresh,\n	.knowledge-graph-selection-halo {\n		animation: none;\n	}\n}\n.knowledge-graph-toolbar > button,\n.knowledge-graph-toolbar label,\n.knowledge-graph-toolbar span > button {\n	min-height: 32px;\n}\n.knowledge-graph-zoom-button,\n.knowledge-graph-fit-button {\n	display: inline-flex;\n	min-height: 32px;\n	align-items: center;\n	justify-content: center;\n	border-radius: var(--radius-sm);\n	color: #dce7ff;\n	font-size: 12px;\n	line-height: 1;\n	transition:\n		background-color 0.15s,\n		color 0.15s,\n		transform 0.15s;\n}\n.knowledge-graph-zoom-button {\n	width: 32px;\n	font-size: 18px;\n}\n.knowledge-graph-fit-button {\n	padding: 0 var(--space-3);\n	font-size: 11px;\n}\n.knowledge-graph-zoom-button:hover,\n.knowledge-graph-fit-button:hover {\n	background: rgba(124, 151, 216, 0.22);\n	color: #fff;\n}\n.knowledge-graph-zoom-button:active,\n.knowledge-graph-fit-button:active {\n	transform: scale(0.95);\n}\n.knowledge-graph-zoom-value {\n	min-width: 42px;\n	color: #aabde6;\n	font:\n		10px ui-monospace,\n		SFMono-Regular,\n		Menlo,\n		monospace;\n	text-align: center;\n}\n.knowledge-graph-scene {\n	transform-box: fill-box;\n	transform-origin: center;\n}\n.knowledge-graph-svg {\n	overscroll-behavior: contain;\n}\n.knowledge-graph-legend {\n	line-height: 1.2;\n}\n.knowledge-graph-category-filter {\n	display: inline-flex;\n	align-items: center;\n	gap: var(--space-1);\n	border: 1px solid transparent;\n	border-radius: 999px;\n	padding: 2px 7px;\n	color: #8494b3;\n	transition:\n		border-color 160ms ease,\n		background-color 160ms ease,\n		color 160ms ease;\n}\n.knowledge-graph-category-filter i {\n	display: inline-block;\n	height: 7px;\n	width: 7px;\n	border-radius: 999px;\n}\n.knowledge-graph-category-filter:hover,\n.knowledge-graph-category-filter.is-active {\n	border-color: #526a9f;\n	background: #192844;\n	color: #dce7ff;\n}\n.knowledge-graph-edge {\n	transition:\n		stroke-opacity 0.2s,\n		stroke-width 0.2s;\n}\n.knowledge-graph-edge--active {\n	stroke-dasharray: 3 7;\n	animation: knowledge-graph-flow 1.8s linear infinite;\n}\n.knowledge-graph-node-aura {\n	animation: knowledge-graph-pulse 3.2s ease-in-out infinite;\n}\n.knowledge-graph-selection-halo {\n	animation: knowledge-graph-selection 1.8s ease-in-out infinite;\n}\n.knowledge-node-drawer {\n	opacity: 0;\n	pointer-events: none;\n	transform: translateX(calc(100% + 24px));\n}\n.knowledge-node-drawer.is-open {\n	opacity: 1;\n	pointer-events: auto;\n	transform: translateX(0);\n}\n@keyframes knowledge-graph-flow {\n	to {\n		stroke-dashoffset: -20;\n	}\n}\n@keyframes knowledge-graph-pulse {\n	0%,\n	100% {\n		opacity: 0.12;\n	}\n	50% {\n		opacity: 0.28;\n	}\n}\n@keyframes knowledge-graph-selection {\n	0%,\n	100% {\n		stroke-opacity: 0.28;\n		transform: scale(1);\n	}\n	50% {\n		stroke-opacity: 0.7;\n		transform: scale(1.12);\n	}\n}\n@media (max-width: 760px) {\n	.knowledge-node-drawer {\n		top: auto;\n		bottom: 12px;\n		left: 12px;\n		width: calc(100% - 24px);\n		max-height: min(62%, 420px);\n		transform: translateY(calc(100% + 24px));\n	}\n	.knowledge-node-drawer.is-open {\n		transform: translateY(0);\n	}\n}\n@media (prefers-reduced-motion: reduce) {\n	.knowledge-graph-edge--active,\n	.knowledge-graph-node-aura,\n	.knowledge-graph-selection-halo {\n		animation: none;\n	}\n}\n.knowledge-state-card {\n	border-color: var(--knowledge-border);\n	background: color-mix(in srgb, var(--knowledge-surface) 92%, transparent);\n	box-shadow: var(--knowledge-shadow-soft);\n}\n.knowledge-state-card--error {\n	border-color: color-mix(in srgb, var(--color-err) 38%, var(--knowledge-border));\n	background: color-mix(in srgb, var(--color-err) 7%, var(--knowledge-surface));\n}\n.knowledge-graph-svg :where(g[role="button"]):focus-visible {\n	outline: 2px solid var(--knowledge-accent);\n	outline-offset: 4px;\n}\n.knowledge-graph-svg :where(g[role="button"]):focus-visible circle:last-of-type {\n	stroke: var(--knowledge-accent);\n	stroke-width: 3;\n}\n.knowledge-observatory-canvas .knowledge-graph-node-aura {\n	animation: none;\n}\n.knowledge-observatory-canvas .knowledge-graph-node-aura--fresh {\n	animation: knowledge-graph-fresh 0.7s ease-in-out 3;\n}\n.knowledge-graph-live-toggle {\n	border: 1px solid var(--knowledge-border);\n	background: color-mix(in srgb, var(--knowledge-surface) 92%, transparent);\n	color: var(--knowledge-ink);\n	pointer-events: auto;\n}\n.knowledge-graph-live-dot {\n	width: 7px;\n	height: 7px;\n	border-radius: 999px;\n	background: #059669;\n	animation: knowledge-graph-live-blink 2s ease-in-out infinite;\n}\n.knowledge-graph-live-dot--paused {\n	background: var(--knowledge-ink-muted);\n	animation: none;\n}\n@keyframes knowledge-graph-live-blink {\n	50% {\n		opacity: 0.35;\n	}\n}\n@media (prefers-reduced-motion: reduce) {\n	.knowledge-observatory-canvas .knowledge-graph-node-aura--fresh,\n	.knowledge-graph-selection-halo,\n	.knowledge-graph-live-dot {\n		animation: none;\n	}\n}\n[data-testid="knowledge-network"] {\n	container-type: inline-size;\n}\n@container (max-width: 1000px) {\n	.knowledge-network-layout {\n		grid-template-columns: minmax(0, 1fr);\n	}\n}\n.knowledge-view-head {\n	border-bottom-color: transparent;\n	background: transparent;\n	padding: var(--space-4) var(--space-6) var(--space-2);\n}\n.knowledge-view-body {\n	/* Same frame as PageShell (px-8 pt-8 pb-12) so first-level pages line up. */\n	padding: 2rem 2rem 3rem;\n	background: var(--knowledge-canvas);\n}\n.knowledge-home > section:first-child {\n	box-shadow: none;\n	border-color: var(--knowledge-border);\n	background: var(--knowledge-surface);\n}\n.knowledge-view {\n	--knowledge-shadow: 0 1px 2px rgba(35, 58, 78, 0.04);\n	--knowledge-shadow-soft: none;\n}\n.knowledge-home :is(section, article) :is(section, article, div).rounded-xl.border,\n.knowledge-home :is(section, article) :is(section, article, div).rounded-lg.border {\n	border-color: transparent;\n	background: var(--knowledge-surface-muted);\n	box-shadow: none;\n}\n.knowledge-network-header {\n	display: flex;\n	align-items: flex-end;\n	justify-content: space-between;\n	gap: var(--space-4);\n	padding: var(--space-1) var(--space-1) var(--space-2);\n}\n.knowledge-network-eyebrow {\n	margin: 0 0 3px;\n	font-size: 10px;\n	font-weight: 600;\n	letter-spacing: 0.14em;\n	text-transform: uppercase;\n	color: var(--knowledge-accent);\n}\n.knowledge-network-title {\n	margin: 0;\n	font-size: 16px;\n	font-weight: 600;\n	letter-spacing: -0.015em;\n	color: var(--knowledge-ink);\n}\n.knowledge-network-hint {\n	max-width: 620px;\n	margin: 4px 0 0;\n	font-size: 11px;\n	line-height: 1.55;\n	color: var(--knowledge-ink-muted);\n}\n.knowledge-network-stats {\n	display: flex;\n	flex-wrap: wrap;\n	justify-content: flex-end;\n	gap: var(--space-2);\n	font-size: 11px;\n	color: var(--knowledge-ink-muted);\n}\n.knowledge-network-header .knowledge-network-stats span {\n	border: 1px solid var(--knowledge-border);\n	border-radius: 999px;\n	background: var(--knowledge-surface-muted);\n	padding: 4px 9px;\n	white-space: nowrap;\n}\n.knowledge-network-stats strong {\n	font-variant-numeric: tabular-nums;\n	color: var(--knowledge-ink);\n}\n.knowledge-observatory-canvas {\n	background:\n		radial-gradient(\n			circle at 18% 16%,\n			color-mix(in srgb, var(--knowledge-accent) 7%, transparent),\n			transparent 32%\n		),\n		linear-gradient(180deg, var(--knowledge-surface), var(--knowledge-canvas));\n}\n.knowledge-graph-controls,\n.knowledge-graph-observatory-label,\n.knowledge-graph-legend {\n	background: color-mix(in srgb, var(--knowledge-surface) 96%, transparent);\n}\n.knowledge-graph-zoom-button,\n.knowledge-graph-fit-button {\n	color: var(--knowledge-ink-muted);\n}\n.knowledge-graph-zoom-button:hover,\n.knowledge-graph-fit-button:hover {\n	background: var(--knowledge-accent-soft);\n	color: var(--knowledge-accent);\n}\n.knowledge-graph-category-filter {\n	color: var(--knowledge-ink-muted);\n}\n.knowledge-graph-category-filter:hover,\n.knowledge-graph-category-filter.is-active {\n	border-color: color-mix(in srgb, var(--knowledge-accent) 38%, var(--knowledge-border));\n	background: var(--knowledge-accent-soft);\n	color: var(--knowledge-accent);\n}\n@media (max-width: 760px) {\n	.knowledge-network-header {\n		align-items: flex-start;\n		flex-direction: column;\n	}\n	.knowledge-network-stats {\n		justify-content: flex-start;\n	}\n}\n';
 
 // ui/entry.tsx
-import { jsx as jsx11, jsxs as jsxs11 } from "react/jsx-runtime";
+import { jsx as jsx12, jsxs as jsxs12 } from "react/jsx-runtime";
 function Styles() {
-  return /* @__PURE__ */ jsx11("style", { "data-drone-knowledge-styles": true, children: knowledgeStyles });
+  return /* @__PURE__ */ jsx12("style", { "data-drone-knowledge-styles": true, children: knowledgeStyles });
 }
 function KnowledgePage() {
-  return /* @__PURE__ */ jsxs11(
-    "div",
-    {
-      className: "drone-knowledge-ui",
-      style: { display: "flex", flex: 1, minWidth: 0, minHeight: 0 },
-      children: [
-        /* @__PURE__ */ jsx11(Styles, {}),
-        /* @__PURE__ */ jsx11(NativeKnowledgePage, {})
-      ]
-    }
-  );
+  return /* @__PURE__ */ jsxs12("div", { className: "drone-knowledge-ui", style: { display: "flex", flex: 1, minWidth: 0, minHeight: 0 }, children: [
+    /* @__PURE__ */ jsx12(Styles, {}),
+    /* @__PURE__ */ jsx12(NativeKnowledgePage, {})
+  ] });
 }
-function KnowledgeSurface() {
-  return /* @__PURE__ */ jsxs11("div", { className: "drone-knowledge-ui", children: [
-    /* @__PURE__ */ jsx11(Styles, {}),
-    /* @__PURE__ */ jsx11(NativeKnowledgeUnavailable, {})
+function KnowledgeSurface(props) {
+  if (props.kind === "settings" && [void 0, "reviews", "settings", "semantic"].includes(props.context?.tab)) {
+    return /* @__PURE__ */ jsxs12("div", { className: "drone-knowledge-ui", children: [
+      /* @__PURE__ */ jsx12(Styles, {}),
+      /* @__PURE__ */ jsx12(NativeKnowledgePage, { initialView: props.context?.tab === "reviews" ? "reviews" : "settings" })
+    ] });
+  }
+  return /* @__PURE__ */ jsxs12("div", { className: "drone-knowledge-ui", children: [
+    /* @__PURE__ */ jsx12(Styles, {}),
+    /* @__PURE__ */ jsx12(NativeKnowledgeUnavailable, {})
   ] });
 }
 export {
