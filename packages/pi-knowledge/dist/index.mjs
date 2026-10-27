@@ -6120,17 +6120,11 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
     return /was aborted|request aborted/i.test(String(message?.errorMessage || ""));
   }
   function base(message, content) {
-    const errorMessage2 = message.stopReason === "error" && typeof message.errorMessage === "string" ? sanitizeError(message.errorMessage) : "";
+    const { errorMessage: originalError, ...metadata } = message;
+    const errorMessage2 = message.stopReason === "error" && typeof originalError === "string" ? sanitizeError(originalError) : "";
     return {
-      role: "assistant",
+      ...metadata,
       content,
-      api: message.api,
-      provider: message.provider,
-      model: message.model,
-      usage: message.usage,
-      timestamp: message.timestamp,
-      stopReason: message.stopReason,
-      ...message.responseId ? { responseId: message.responseId } : {},
       ...errorMessage2 ? { errorMessage: errorMessage2 } : {}
     };
   }
@@ -8406,12 +8400,6 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
   function configureKnowledgeExtensionHost2(host = {}) {
     extensionHost = { ...defaultHost, ...host };
   }
-  function bindAcceptanceVerifierEvents(pi) {
-    extensionHost.bindAcceptanceVerifierEvents?.(pi);
-  }
-  function registerAcceptanceVerifier(name, definition) {
-    return extensionHost.registerAcceptanceVerifier?.(name, definition) ?? definition;
-  }
   function registerTool(pi, definition) {
     (extensionHost.registerTool || ((target, value) => target.registerTool(value)))(pi, definition);
   }
@@ -8423,7 +8411,7 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
     return { ...staged, ...applied, status: "applied", vaultWritten: true };
   }
   function registerWikiReviewAcceptance2() {
-    return registerAcceptanceVerifier("wiki_review", {
+    return {
       evidenceKind: "wiki-applied",
       operationVerifier: "wiki-review-record-not-scientific-proof",
       label: () => "Wiki \u66F4\u65B0\u7ECF\u4F60\u5728\u5BA1\u9605\u9875\u786E\u8BA4",
@@ -8451,7 +8439,7 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
         reason: "Wiki \u4E0A\u7684\u4FEE\u6539\u8FD8\u6CA1\u7ECF\u8FC7\u4F60\u5BA1\u9605\u901A\u8FC7",
         next: "\u53BB Wiki \u5BA1\u9605\u9875\u770B\u4E00\u4E0B\u8FD9\u6B21\u6539\u4E86\u4EC0\u4E48\uFF0C\u901A\u8FC7\u6216\u6253\u56DE\u90FD\u5728\u90A3\u91CC\u64CD\u4F5C"
       })
-    });
+    };
   }
   function wikiProposalCard(event) {
     const d = event.result?.details || {};
@@ -8480,8 +8468,16 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
     });
   }
   function registerKnowledgeInterface2(pi, { readOnly = false, runtime = null } = {}) {
-    bindAcceptanceVerifierEvents(pi);
-    registerWikiReviewAcceptance2();
+    let removeAcceptance;
+    if (!readOnly) {
+      const declaration = { version: 1, kind: "wiki_review", definition: registerWikiReviewAcceptance2() };
+      const publishAcceptance = () => pi.events.emit("drone:acceptance-verifier/v1", declaration);
+      removeAcceptance = pi.events.on("drone:acceptance-verifier/request/v1", (payload) => {
+        if (payload?.version === 1) publishAcceptance();
+      });
+      pi.on("session_shutdown", () => removeAcceptance?.());
+      publishAcceptance();
+    }
     const getTaskRuntime = () => {
       if (readOnly || !pi.events) return null;
       let taskRuntime = null;
@@ -8540,7 +8536,9 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
         },
         beforeStart: async () => ({}),
         withTurnBinding: async (_ctx, operation) => operation(),
-        dispose: async () => void 0
+        dispose: async () => {
+          removeAcceptance?.();
+        }
       };
     let disposed = false;
     const assertSessionActive = () => {
@@ -9555,6 +9553,7 @@ ${text3}`, [
     async function dispose() {
       if (disposed) return;
       disposed = true;
+      removeAcceptance?.();
       current = null;
       bootstrap = null;
       preparing = null;
