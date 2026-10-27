@@ -73,6 +73,10 @@ export interface KnowledgeHostPort {
 		index(input: unknown): Promise<unknown>;
 		cancelIndex(input: unknown): Promise<unknown>;
 	};
+	topics?: {
+		list(input: unknown): Promise<unknown>;
+		archive(input: unknown): Promise<unknown>;
+	};
 	researchResource?: {
 		resolveContext(input: unknown): unknown;
 		ingestSnapshot(input: unknown): unknown;
@@ -91,6 +95,7 @@ export interface KnowledgeHostPort {
 		options: { getCurrent: () => unknown; evidenceOnly: boolean },
 	) => { begin(required: boolean): unknown };
 	reviewWikiWithModel?: (input: unknown, options: unknown) => Promise<unknown>;
+	backgroundReviewer?: (options: unknown) => unknown;
 	/** Optional UI operations are exposed incrementally as the host migrates. */
 	jobs?(input: unknown): Promise<unknown>;
 	maintenance?(input: unknown): Promise<unknown>;
@@ -158,6 +163,11 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 			cancelIndex: (input) =>
 				import("./ui-service.js").then(({ cancelKnowledgeSemanticIndex }) => cancelKnowledgeSemanticIndex(input as never)),
 		},
+		topics: {
+			list: (input) => import("./ui-service.js").then(({ getKnowledgeTopics }) => getKnowledgeTopics(input as never)),
+			archive: (input) =>
+				import("./ui-service.js").then(({ archiveKnowledgeTopic }) => archiveKnowledgeTopic(input as never)),
+		},
 		researchResource: {
 			resolveContext: (input) => resolveKnowledgeContext(input as never),
 			ingestSnapshot: (input) => ingestKnowledgeSnapshot(input as never),
@@ -170,7 +180,7 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 		},
 		registerAnswerPublication: (pi, options) => registerAnswerPublication(pi, options),
 		reviewWikiWithModel: (input, options) => reviewWikiWithModel(input, options as never),
-		backgroundReviewer: (options: BackgroundReviewerOptions) => new BackgroundReviewer(options),
+		backgroundReviewer: (options: unknown) => new BackgroundReviewer(options as BackgroundReviewerOptions),
 		jobs: (input) => import("./ui-service.js").then(({ knowledgeJobs }) => knowledgeJobs(input as never)),
 		maintenance: (input) =>
 			import("./ui-service.js").then(({ knowledgeMaintenance }) => knowledgeMaintenance(input as never)),

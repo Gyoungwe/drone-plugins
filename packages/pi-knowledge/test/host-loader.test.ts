@@ -81,6 +81,7 @@ describe("knowledge host loader", () => {
 			"semantic",
 			"setupPreview",
 			"specialistSettings",
+			"topics",
 			"uiState",
 			"vault",
 		]);
@@ -126,6 +127,8 @@ describe("knowledge host loader", () => {
 			"status",
 			"testProvider",
 		]);
+		expect(typeof port.topics?.list).toBe("function");
+		expect(typeof port.topics?.archive).toBe("function");
 	});
 
 	it("routes Vault create/read/replace through the host port with CAS", async () => {
