@@ -249,3 +249,9 @@ commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpo
 `state.readBinary({root,path})` 返回 missing/version:null 或 value/base64/version:SHA256。`state.writeBinary({root,path,base64,expectedVersion,assertAbsent})` 仅在该文件父目录持有真实 `state.reserve` 独占租约、用户逐次批准、raw-byte CAS 与最多 8 个同根 absence 条件满足后原子替换，并回读确认。decoded 上限固定 4 MiB；超限明确拒绝，不自动转换、拆分或改变原库。二进制内容不透明，批准页展示实际 scope、路径、旧/新 SHA、字节数和 absence 条件，不能冒充逻辑 diff。
 
 提交点前取消保留原字节并清理本次临时文件；提交点后取消/回读失败返回 `EBINARYWRITEOUTCOMEUNKNOWN`，新的合法 caller 须回读 SHA 核对，不能盲目重试。临时文件清理失败保留 writer lease。原 SQLite schema、备份、WAL/SHM/journal 拒绝及领域恢复由插件维护；此合同本身不证明 Inquiry 完整迁移通过。
+
+### 通用已批准文件二进制快照（候选 1.3）
+
+`files.readBinary({root,path})` 仅使用已实际批准的 files root 和受限相对路径，read effect，不新增权限标志，不接受 JSON state / binary-state root。返回完整 `{base64,sha256,bytes,version}`，原字节最多 8 MiB、base64 最多 11184812；超限、文件/目录身份改变或取消明确失败，不截断、不返回迟到快照。hash/version 是数据，不能当作写入/执行/科学证明授权。
+
+插件自己运行 canonical 文件验收算法；当前 magic/hash 读取切片不等于真实 PDF DOI/title 身份验收。`pi-core` 的 PDF Worker/依赖仍需迁到同插件真实 resource 解析器，不能从 guest 开 Node Worker 或从宿主 app.asar 猜依赖；全 managed 文件接受闭环和生产 owner 切换仍未完成。
