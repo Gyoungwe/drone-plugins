@@ -12,7 +12,14 @@
   },
   "drone": {
     "pluginApi": 1,
-    "resultContract": "drone-result/v3"
+    "resultContract": "drone-result/v3",
+    "deliveryProjection": "required",
+    "requires": {
+      "tasks": {
+        "service": "task.runtime",
+        "version": 1
+      }
+    }
   },
   "entrypoints": {
     "extension": "./dist/index.mjs",

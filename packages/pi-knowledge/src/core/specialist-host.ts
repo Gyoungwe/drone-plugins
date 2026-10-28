@@ -8,8 +8,16 @@ import type { KnowledgeConfigApi } from "./config.js";
 import * as compatibilityUi from "./ui-state.js";
 import type { createKnowledgeUi } from "./ui-state.js";
 
+export type KnowledgeSpecialistConfig = Pick<KnowledgeConfigApi, "readKnowledgeBinding" | "withKnowledgeBinding"> &
+	Partial<Pick<KnowledgeConfigApi, "knowledgeDirectory">>;
+
+export interface SpecialistSettingsStorage {
+	read(): Promise<unknown | null>;
+	write(value: unknown, expectedRevision: number): Promise<void>;
+}
+
 /** Explicit owner; constructing this API never installs a process listener. */
-function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config: KnowledgeConfigApi, ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">, emitLegacyPeerEvent: ProcessEventEmitter | null) {
+function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config: KnowledgeSpecialistConfig, ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">, emitLegacyPeerEvent: ProcessEventEmitter | null, storage?: SpecialistSettingsStorage) {
 	const { runtimeSlot } = runtime;
 	const { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } = config;
 	const { invalidateKnowledgeUi } = ui;
@@ -65,13 +73,18 @@ function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config:
 		return state.hosts.get(id);
 	}
 	async function specialistSettings() {
-		const dir = knowledgeDirectory();
-		if (!dir) return { mode: "off", revision: 0, ...SPECIALIST_LIMITS };
 		let data = { mode: "automatic", revision: 0 };
-		try {
-			data = JSON.parse(await readFile(join(dir, "specialists.json"), "utf8"));
-		} catch (e) {
-			if (e.code !== "ENOENT") throw new Error("Knowledge specialist settings cannot be read");
+		if (storage) {
+			const saved = await storage.read();
+			if (saved !== null) data = saved;
+		} else {
+			const dir = knowledgeDirectory();
+			if (!dir) return { mode: "off", revision: 0, ...SPECIALIST_LIMITS };
+			try {
+				data = JSON.parse(await readFile(join(dir, "specialists.json"), "utf8"));
+			} catch (e) {
+				if (e.code !== "ENOENT") throw new Error("Knowledge specialist settings cannot be read");
+			}
 		}
 		if (
 			!["automatic", "manual", "off"].includes(data.mode) ||
@@ -177,6 +190,8 @@ function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config:
 						data[key] = Math.min(data[key] ?? SPECIALIST_LIMITS[key], SPECIALIST_LIMITS[key]);
 					data.mode = mode;
 					data.revision = revision + 1;
+					if (storage) await storage.write(data, revision);
+					else {
 					const dir = knowledgeDirectory(),
 						temp = join(dir, `specialists.${randomUUID()}.tmp`);
 					await mkdir(dir, { recursive: true, mode: 0o700 });
@@ -187,6 +202,7 @@ function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config:
 						await unlink(temp).catch((e) => {
 							if (e.code !== "ENOENT") throw e;
 						});
+					}
 					}
 					invalidateKnowledgeUi();
 					return { ...SPECIALIST_LIMITS, ...data };
@@ -264,8 +280,8 @@ function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config:
 }
 
 /** New owners keep function-valued specialist registrations inside their registry. */
-export function createKnowledgeSpecialistHost(runtime: KnowledgeRuntimeHost, config: KnowledgeConfigApi, ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">) {
-	return createKnowledgeSpecialistHostApi(runtime, config, ui, null);
+export function createKnowledgeSpecialistHost(runtime: KnowledgeRuntimeHost, config: KnowledgeSpecialistConfig, ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">, storage?: SpecialistSettingsStorage) {
+	return createKnowledgeSpecialistHostApi(runtime, config, ui, null, storage);
 }
 
 // pi-knowledge 0.2 compatibility only. Delete when native/Desktop composition

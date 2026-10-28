@@ -7,6 +7,14 @@ import { compareClaimSets } from "./claim-conflicts.js";
 import { knowledgeDirectory, type KnowledgeConfigApi } from "./config.js";
 import { canRead, readNoteFile, validateNote } from "./files.js";
 
+export interface TopicMemoryStorage {
+	readonly key: string;
+	read(): Promise<unknown | null>;
+	write(value: unknown, expectedRevision: number): Promise<void>;
+	readSource(path: string): ReturnType<typeof readNoteFile>;
+}
+export type TopicMemoryStorageFactory = (binding: import("./config.js").KnowledgeBinding, project: string) => TopicMemoryStorage;
+
 export const TOPIC_MEMORY_VERSION = 1;
 export const TOPIC_MEMORY_LIMITS = Object.freeze({
 	maxTopics: 64,
@@ -367,20 +375,27 @@ export function classifyTopic(existing, incoming) {
 function createTopicMemoryWithHost(
 	runtime: Pick<KnowledgeRuntimeHost, "runRuntimeExclusive">,
 	config: Pick<KnowledgeConfigApi, "knowledgeDirectory">,
-	{ binding, project, directory = config.knowledgeDirectory() } = {},
+	{ binding, project, directory = config?.knowledgeDirectory() } = {},
+	storageFactory?: TopicMemoryStorageFactory,
 ) {
 	if (!binding?.vaultId) throw new Error("Topic memory requires a bound Vault");
 	const scope = { vaultId: binding.vaultId, project: projectKey(project) };
-	const path = memoryPath(directory, scope.vaultId, scope.project);
-	const check = async () => ensureWithin(directory, path);
+	const storage = storageFactory?.(binding, scope.project);
+	const path = storage ? storage.key : memoryPath(directory, scope.vaultId, scope.project);
 	const read = async () => {
-		await check();
+		if (storage) {
+			const value = await storage.read();
+			if (value === null) return blank(scope.vaultId, scope.project);
+			if (Buffer.byteLength(JSON.stringify(value)) > TOPIC_MEMORY_LIMITS.maxFileBytes)
+				throw new Error("Topic memory file exceeds size limit");
+			return validateDocument(value, scope.vaultId, scope.project);
+		}
+		await ensureWithin(directory, path);
 		return readDocument(path, scope.vaultId, scope.project);
 	};
 	const mutate = async (expectedRevision, updater) =>
 		runtime.runRuntimeExclusive("topic-memory", path, async () => {
-			await check();
-			const current = await readDocument(path, scope.vaultId, scope.project);
+			const current = await read();
 			if (
 				expectedRevision !== undefined &&
 				expectedRevision !== null &&
@@ -409,7 +424,8 @@ function createTopicMemoryWithHost(
 				const evict = new Set(archived.slice(-remove).map((topic) => topic.id));
 				value.topics = value.topics.filter((topic) => !evict.has(topic.id));
 			}
-			await atomicWrite(path, value);
+			if (storage) await storage.write(value, current.revision);
+			else await atomicWrite(path, value);
 			return value;
 		});
 	const compact = (topic) => ({
@@ -511,7 +527,7 @@ function createTopicMemoryWithHost(
 						stale.push({ path: source.path, reason: "out-of-scope" });
 						continue;
 					}
-					const current = await readNoteFile(binding.vault, source.path);
+					const current = storage ? await storage.readSource(source.path) : await readNoteFile(binding.vault, source.path);
 					if (current.hash !== source.hash) stale.push({ path: source.path, reason: "changed" });
 				} catch {
 					stale.push({ path: source.path, reason: "missing-or-invalid" });
@@ -768,9 +784,10 @@ export function topicRunHash(summary, sources = []) {
 /** Topic state belongs to the composed owner's directory and exclusive-write queue. */
 export function createTopicMemoryApi(
 	runtime: Pick<KnowledgeRuntimeHost, "runRuntimeExclusive">,
-	config: Pick<KnowledgeConfigApi, "knowledgeDirectory">,
+	config: Pick<KnowledgeConfigApi, "knowledgeDirectory"> | undefined,
+	storageFactory?: TopicMemoryStorageFactory,
 ) {
-	const createTopicMemory = (options = {}) => createTopicMemoryWithHost(runtime, config, options);
+	const createTopicMemory = (options = {}) => createTopicMemoryWithHost(runtime, config, options, storageFactory);
 	async function listTopics(options = {}) {
 		return (await createTopicMemory(options).list(options.query || "")).topics;
 	}

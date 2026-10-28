@@ -7,10 +7,15 @@ import type { KnowledgeConfigApi } from "./config.js";
 import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
 import { failureCard, flowCard } from "./flow-cards.js";
 
+export interface AnswerMetricsStorage {
+	read(): Promise<{ value: unknown; version: string } | null>;
+	write(value: unknown, expectedVersion: string | null): Promise<void>;
+}
+
 /** Explicit owner; constructing this API never installs a process listener. */
-export function createKnowledgeUi(runtime: KnowledgeRuntimeHost, config: Pick<KnowledgeConfigApi, "knowledgeDirectory">) {
+export function createKnowledgeUi(runtime: KnowledgeRuntimeHost, config: Pick<KnowledgeConfigApi, "knowledgeDirectory"> | undefined, metrics?: AnswerMetricsStorage) {
 	const { runtimeSlot, emitProcessEvent, flowCardBuilder, toolMeta } = runtime;
-	const { knowledgeDirectory } = config;
+	const knowledgeDirectory = () => config?.knowledgeDirectory() ?? null;
 	const state = runtimeSlot("knowledge", "ui", () => ({
 		listeners: new Set(),
 		flows: new Map(),
@@ -169,7 +174,7 @@ export function createKnowledgeUi(runtime: KnowledgeRuntimeHost, config: Pick<Kn
 		const reads = [...old.reads.filter((x) => x.path !== row.path), row].slice(-MAX_RECORDS);
 		updateKnowledgeFlow(ctx, { reads, phase: row.kind === "wiki" ? "reading-wiki" : "reading-evidence" });
 	}
-	function publicationKnowledgeFlow(ctx, proof) {
+	async function updatePublicationFlow(ctx, proof) {
 		const id = sessionId(ctx);
 		if (!state.flows.has(id)) return;
 		const current = state.flows.get(id);
@@ -178,16 +183,30 @@ export function createKnowledgeUi(runtime: KnowledgeRuntimeHost, config: Pick<Kn
 		// answer. Count each turn once; the metric is deliberately bounded to the
 		// current host process and never inferred from model text.
 		if (completed && !current.localAnswerRecorded) {
-			loadAnswerStats();
+			let version: string | null = null;
+			if (metrics) {
+				const saved = await metrics.read();
+				version = saved?.version ?? null;
+				if (saved === null) state.localAnswerStats = { answered: 0, total: 0, rate: null, updatedAt: null };
+				else {
+					const value = saved.value;
+					if (!value || typeof value !== "object" || !Number.isSafeInteger(value.answered) ||
+						!Number.isSafeInteger(value.total) || value.answered < 0 || value.total < value.answered)
+						throw new Error("Invalid knowledge answer metrics");
+					state.localAnswerStats = { ...value, rate: value.total ? value.answered / value.total : null };
+				}
+			} else loadAnswerStats();
 			const answered = Boolean(current.search && current.search.hits > 0);
-			state.localAnswerStats = {
+			const nextStats = {
 				answered: state.localAnswerStats.answered + (answered ? 1 : 0),
 				total: state.localAnswerStats.total + 1,
 				rate: (state.localAnswerStats.answered + (answered ? 1 : 0)) / (state.localAnswerStats.total + 1),
 				updatedAt: Date.now(),
 			};
+			if (metrics) await metrics.write(nextStats, version);
+			state.localAnswerStats = nextStats;
+			if (!metrics) saveAnswerStats();
 			current.localAnswerRecorded = true;
-			saveAnswerStats();
 		}
 		const phase =
 			proof.status === "setup-complete"
@@ -406,6 +425,12 @@ export function createKnowledgeUi(runtime: KnowledgeRuntimeHost, config: Pick<Kn
 		else specialists[at] = safe;
 		updateKnowledgeFlow(ctx, { specialists: specialists.slice(-8) });
 	}
+	function publicationKnowledgeFlow(ctx, proof) {
+		return metrics
+			? runtime.runRuntimeExclusive("knowledge-ui", "answer-metrics", () => updatePublicationFlow(ctx, proof))
+			: updatePublicationFlow(ctx, proof);
+	}
+
 	return { dispose: () => { state.listeners.clear(); state.flows.clear(); }, subscribeKnowledgeUi, emitKnowledgeUi, flowFor, knowledgeAnswerRate, beginKnowledgeFlow, updateKnowledgeFlow, noteKnowledgeRead, publicationKnowledgeFlow, requestWikiReviewUi, notifyKnowledgeUi, invalidateKnowledgeUi, clearKnowledgeFlow, knowledgeExcerpt, noteKnowledgeSearch, noteKnowledgeOperation, noteKnowledgeSpecialist, receiveCompatibilityEvent };
 }
 
