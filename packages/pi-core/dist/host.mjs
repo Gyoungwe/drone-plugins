@@ -590,6 +590,15 @@ ${details}`, [deny, allow], { signal });
   };
 }
 
+// src/task-runtime/host-language.mjs
+function hostLanguage() {
+  return String(process.env.DRONE_REPLY_LANGUAGE || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+function bilingual(zh, en) {
+  return hostLanguage() === "zh" ? `${zh}
+${en}` : en;
+}
+
 // src/task-runtime/evidence.mjs
 import { resolve as resolve3 } from "node:path";
 
@@ -690,15 +699,6 @@ function failureReceipt(task) {
 }
 var taskProgressContext = (task) => task ? failureContext(task, void 0, true) : "";
 var TASK_HANDOFF_POLICY = `Once the user has authorized a task (the one ask_user authorization card), that authorization covers every listed deliverable: keep working in the same turn until they are all produced, one after another, instead of stopping after each file or command to report or to ask whether to continue. Do not create task_wait for routine decisions; write the judgement call into the deliverable and move on. If you do end a turn early with deliverables remaining, the host hands the task back to you automatically under the same authorization; treat that handoff as a normal continuation, not as new permission. For incomplete task progress, explain each remaining deliverable with its observed evidence, confirmed blocker or explicitly unknown cause, and the smallest next action. Separate agent-owned routine work from genuinely user-owned decisions; do not ask the user to keep saying continue. Never silently weaken acceptance criteria or mark unverified items complete. Point to the workbench ask_user remaining-items entry for user decisions; do not duplicate a pending host question. After substantial execution, including a user's simple "continue", give a natural-language handoff on the user's topic, not a copied task ledger and not a process-error postmortem. Recovered tool failures and host diagnostics stay out of that handoff. Before the final reply, query task_status once for fresh host verification if deliverables changed (do not loop on status). Say what was actually produced or checked, what remains and why, and the next concrete action. Clearly distinguish a generated script from executed analysis and verified scientific results. Provide clickable file links for delivered scripts (including .R/.r and .PY/.py), reports and data. If required counts, sample metadata or design information are missing, name the exact missing input rather than asking the user to keep saying continue. Use granted scope for routine work; do not require a new phase approval or silently expand scope. Stage is an execution checkpoint/budget counter, not milestone progress; do not claim it must increase on every continue. For a missing acceptance file, distinguish workspace-relative and actual returned output/Vault locations: inspect the existing receipt and authorized path before asserting nothing was saved or repeating a write. Do not silently change the agreed acceptance criteria or grant permissions. task_status provides facts to explain; it does not replace your final answer or bypass publication checks.`;
-
-// src/task-runtime/host-language.mjs
-function hostLanguage() {
-  return String(process.env.DRONE_REPLY_LANGUAGE || "").toLowerCase().startsWith("zh") ? "zh" : "en";
-}
-function bilingual(zh, en) {
-  return hostLanguage() === "zh" ? `${zh}
-${en}` : en;
-}
 
 // src/task-runtime/pdf-identity.mjs
 import { Worker } from "node:worker_threads";
@@ -1025,6 +1025,7 @@ function createTaskWorkbench({
       }
     }
     for (const t of book.tasks) {
+      delete t.executionConsent;
       for (const op of t.operations)
         if (op.state === "started") {
           op.state = "unknown";
@@ -2041,12 +2042,12 @@ function createTaskSession({
   evidenceFiles,
   authorize,
   readOnly,
-  onCommitted,
+  onChanged,
   readFailure,
   onPersistenceFailed
 }) {
   const lifetime = new AbortController();
-  let tail = Promise.resolve(), closed = false, dirty = false, checkpointRequested = false, records = [];
+  let tail = Promise.resolve(), closed = false, dirty = false, checkpointRequested = false, records = [], storage = null, lastDurable = null;
   const journal = createTaskWorkbench({
     requireAuthorization: true,
     readOnly,
@@ -2067,14 +2068,15 @@ function createTaskSession({
   });
   const projection = () => ({
     scope: journal.scope(),
-    view: journal.view(),
+    view: { ...journal.view(), storage: structuredClone(storage) },
+    storage: structuredClone(storage),
     snapshot: journal.snapshot(),
     render: journal.render(),
     readRoots: journal.readRoots(),
-    authorization: journal.authorization(),
-    writeAuthorization: journal.authorization(true)
+    authorization: storage?.mode === "memory" || storage?.state === "durable" ? journal.authorization() : null,
+    writeAuthorization: storage?.mode === "memory" || storage?.state === "durable" ? journal.authorization(true) : null
   });
-  let committed = projection(), persistenceFailure;
+  let live = projection(), persistenceFailure;
   const failure = () => persistenceFailure || readFailure();
   const execute = (signal, operation) => {
     const previous = tail;
@@ -2085,7 +2087,7 @@ function createTaskSession({
     const combined = signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal;
     return (async () => {
       await previous;
-      let before, beforeEvidence, beforeRecords, saved = false;
+      let before, beforeEvidence, beforeRecords, accepted = false;
       try {
         if (closed) throw new Error("Task session is closed");
         if (failure())
@@ -2103,7 +2105,7 @@ function createTaskSession({
         combined.throwIfAborted();
         if (dirty) {
           try {
-            await persist(
+            storage = await persist(
               {
                 customType: TASK_SESSION_ENTRY,
                 data: {
@@ -2118,19 +2120,20 @@ function createTaskSession({
             persistenceFailure = {
               state: "needs-reopen",
               message: error3.message,
-              lastCommitted: structuredClone(committed)
+              lastCommitted: structuredClone(lastDurable || live)
             };
             onPersistenceFailed(persistenceFailure);
             throw error3;
           }
         }
-        committed = projection();
-        saved = true;
+        live = projection();
+        if (storage?.state === "durable") lastDurable = structuredClone(live);
+        accepted = true;
         combined.throwIfAborted();
-        if (checkpointRequested) await onCommitted(committed);
+        if (checkpointRequested) await onChanged(live);
         return result;
       } catch (error3) {
-        if (!saved && before) {
+        if (!accepted && before) {
           journal.rollback(before);
           evidence.rollback(beforeEvidence);
           records = beforeRecords;
@@ -2143,10 +2146,18 @@ function createTaskSession({
   };
   const status = () => {
     if (closed) throw new Error("Task session is closed");
-    const result = structuredClone(failure()?.lastCommitted || committed);
+    const result = structuredClone(failure()?.lastCommitted || live);
     if (failure()) {
       result.persistence = { state: failure().state, message: failure().message };
-      result.render += "\nTask storage failed. This is the last committed task state; reopen the application from disk before continuing.";
+      result.storage = { ...result.storage, state: "needs-reopen" };
+      result.view.storage = result.storage;
+      result.authorization = null;
+      result.writeAuthorization = null;
+      result.readRoots = [];
+      result.render += "\nTask storage failed. This is the last confirmed task state; reopen the application from disk before continuing.";
+    }
+    if (!failure() && result.storage?.state === "deferred") {
+      result.render += "\n" + (hostLanguage() === "zh" ? result.storage.mode === "memory" ? "\u5F53\u524D\u4EFB\u52A1\u4EC5\u4FDD\u7559\u5728\u5185\u5B58\u4E2D\uFF0C\u672A\u4FDD\u5B58\u5230\u78C1\u76D8\uFF1B\u91CD\u65B0\u52A0\u8F7D\u4E0D\u4F1A\u6062\u590D\u672C\u8F6E\u6388\u6743\u3002" : "\u4EFB\u52A1\u68C0\u67E5\u70B9\u4ECD\u4E3A deferred\uFF0C\u5C1A\u672A\u4FDD\u5B58\u5230\u78C1\u76D8\uFF1B\u5916\u90E8\u5199\u5165\u987B\u7B49\u5F85\u771F\u5B9E\u843D\u76D8\u56DE\u6267\u3002" : result.storage.mode === "memory" ? "This task is live-only in memory, not saved to disk; reloading does not restore this activation's authorization." : "Task checkpoint durability is deferred; external writes require an actual disk receipt.");
     }
     return result;
   };
@@ -2156,11 +2167,20 @@ function createTaskSession({
     turn: (event, signal) => execute(signal, (journal2, evidence2) => {
       switch (event.kind) {
         case "attach": {
+          storage = { mode: event.storage.mode, state: event.storage.state };
           records = taskEntries(event.entries);
           journal2.attach(event.scope, records, event.force);
           evidence2.attach(event.scope, journal2.snapshot()?.id, records, event.force);
           return;
         }
+        case "storage":
+          storage = { mode: event.storage.mode, state: event.storage.state };
+          if (storage.state === "needs-reopen") {
+            persistenceFailure = { state: "needs-reopen", message: event.storage.code, lastCommitted: structuredClone(lastDurable || live) };
+            onPersistenceFailed(persistenceFailure);
+            throw new Error("Task storage needs-reopen: " + event.storage.code);
+          }
+          return;
         case "pause":
           return journal2.pause(event.reason);
         case "settle":
@@ -2180,7 +2200,11 @@ function createTaskSession({
       }
     }),
     observe: (event, signal) => execute(signal, async (journal2, evidence2) => {
-      if (event.kind === "call") return journal2.guard(event.value);
+      if (event.kind === "call") {
+        if (storage?.mode !== "memory" && storage?.state !== "durable" && !readOnly(event.value.toolName))
+          throw new Error("Task checkpoint is not durable; wait for actual session persistence before external effects.");
+        return journal2.guard(event.value);
+      }
       if (event.kind === "result") return journal2.observe(event.value, event.cwd);
       if (event.kind === "capture")
         return evidence2.capture(event.value, event.cwd, event.binding);
@@ -2251,8 +2275,9 @@ import { readFileSync as readFileSync2 } from "node:fs";
 function readNativeSessionStorage(manager) {
   const branch = manager.getBranch();
   const file = manager.getSessionFile();
-  const deferred = () => ({ state: "deferred", entries: branch, code: null });
-  const failed = (code, entries2 = []) => ({ state: "needs-reopen", entries: entries2, code });
+  const mode = file ? "persistent" : "memory";
+  const deferred = () => ({ mode, state: "deferred", entries: branch, code: null });
+  const failed = (code, entries2 = []) => ({ mode, state: "needs-reopen", entries: entries2, code });
   if (!file) return deferred();
   let content;
   try {
@@ -2280,7 +2305,7 @@ function readNativeSessionStorage(manager) {
     if (JSON.stringify(row) !== JSON.stringify(entry)) return failed("SESSION_BRANCH_NOT_PERSISTED", entries);
     entries.push(row);
   }
-  return { state: "durable", entries, code: null };
+  return { mode, state: "durable", entries, code: null };
 }
 
 // src/task-runtime/progress-action.mjs
@@ -2446,7 +2471,6 @@ function registerWorkbench(pi, options = {}) {
   const onEvent = (name, handler) => pi.events?.on?.(name, bindCallback(handler));
   let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || (() => pi?.drone?.readKnowledgeBinding?.() || null);
   let pendingStatus = null;
-  let storageState = "deferred";
   let providerTurnOpen = false;
   const authorize = async (cwd, path) => {
     const ctx = invocation.getStore() || context;
@@ -2526,25 +2550,18 @@ function registerWorkbench(pi, options = {}) {
       signal.throwIfAborted();
       const ctx = invocation.getStore() || context;
       const before = readNativeSessionStorage(ctx.sessionManager);
-      storageState = before.state;
       if (before.state === "needs-reopen") throw new Error(`Task storage needs-reopen: ${before.code}`);
       await pi.appendEntry(record.customType, record.data);
       signal.throwIfAborted();
       const after = readNativeSessionStorage(ctx.sessionManager);
-      storageState = after.state;
       if (after.state === "needs-reopen") throw new Error(`Task storage needs-reopen: ${after.code}`);
+      return { mode: after.mode, state: after.state };
     },
-    onCommitted: () => send(),
+    onChanged: () => send(),
     inspect,
     authorize
   });
   const { journal, evidence } = createTaskController(session, () => invocation.getStore()?.signal);
-  journal.render = () => {
-    const rendered = session.status().render;
-    if (storageState !== "deferred") return rendered;
-    return `${rendered}
-${hostLanguage() === "zh" ? "\u4EFB\u52A1\u68C0\u67E5\u70B9\u4ECD\u4E3A deferred\uFF0C\u5C1A\u672A\u4FDD\u5B58\u5230\u78C1\u76D8\uFF1B\u8FD9\u4E0D\u662F\u5DF2\u4FDD\u5B58\u56DE\u6267\u3002" : "Task checkpoint durability is deferred; it has not been saved to disk. This is not a saved receipt."}`;
-  };
   const askAuthorization = createTaskAuthorization(journal, () => bindingKey());
   currentRuntime().registerDisposable({ dispose: () => session.close() });
   const attach = async (ctx, force = false) => {
@@ -2553,9 +2570,8 @@ ${hostLanguage() === "zh" ? "\u4EFB\u52A1\u68C0\u67E5\u70B9\u4ECD\u4E3A deferred
     activeSessionId = ctx.sessionManager.getSessionId();
     const scope = createHash3("sha256").update(`${activeSessionId}\0${resolve4(ctx.cwd)}`).digest("hex");
     const storage = readNativeSessionStorage(ctx.sessionManager);
-    storageState = storage.state;
     if (!options.application.readFailure(activeSessionId)) {
-      await session.turn({ kind: "attach", scope, entries: storage.entries, force }, ctx.signal);
+      await session.turn({ kind: "attach", scope, entries: storage.entries, storage, force }, ctx.signal);
       if (storage.state === "needs-reopen") options.application.recordFailure(activeSessionId, {
         state: "needs-reopen",
         message: storage.code,
@@ -2584,7 +2600,7 @@ ${hostLanguage() === "zh" ? "\u4EFB\u52A1\u68C0\u67E5\u70B9\u4ECD\u4E3A deferred
           customType: "drone-task-status",
           display: true,
           content,
-          details: { operational: true, reportId: randomUUID2(), command, taskView: journal.view(), taskStorage: { state: storageState } }
+          details: { operational: true, reportId: randomUUID2(), command, taskView: journal.view(), taskStorage: state.storage }
         },
         { triggerTurn: false }
       );
@@ -2770,7 +2786,11 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       halted = true;
     }
   });
-  on("context", async (event) => ({ messages: restoreTaskToolOrder(event.messages) }));
+  const refreshStorage = (ctx) => session.turn({ kind: "storage", storage: readNativeSessionStorage(ctx.sessionManager) }, ctx.signal);
+  on("context", async (event, ctx) => {
+    await refreshStorage(ctx);
+    return { messages: restoreTaskToolOrder(event.messages) };
+  });
   on("turn_start", () => {
     providerTurnOpen = true;
   });
@@ -2778,8 +2798,9 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     providerTurnOpen = false;
     if (pendingStatus !== null) send(pendingStatus.content, pendingStatus.command);
   });
-  on("tool_call", async (event) => {
+  on("tool_call", async (event, ctx) => {
     providerTurnOpen = true;
+    await refreshStorage(ctx);
     if (halted && event.toolName !== "task_status")
       return {
         block: true,
