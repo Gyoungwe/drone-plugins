@@ -99,7 +99,7 @@
 	},
 	"outputs": {
 		"dist/index.mjs": "fe32b8532ca699be70e079402468300fa7377bf63540681f78b23474226a80b1",
-		"dist/host.mjs": "3bc19a316f2e280c11b4d499a56e42be4b5d0153fb6e6200e27de31d9fed0056",
+		"dist/host.mjs": "36489dda5c11e04bd9d7b7217db83d061fc8b4e49f1b8685a8d932c62e757ee0",
 		"dist/host.d.ts": "f0adedba8cffd2a68e3a8767923e75bb52ea01e530848e446483e4bef735463f",
 		"dist/desktop-runtime.mjs": "aa4304a49fb535bfc166b229f7095ba19eaa6b1c7957b75e6003126b7e596c66",
 		"lib/knowledge/runtime/desktop-index.mjs": "becaf424e993e4b6efd096ce6c52d8be660b50d986c6f6857bd8d08e25446e22",
