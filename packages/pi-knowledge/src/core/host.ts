@@ -1,3 +1,4 @@
+import { runKnowledgeSpecialist } from "./specialist-model-loop.js";
 /**
  * Stable host entry point for the knowledge capability.
  *
@@ -42,6 +43,8 @@ export interface KnowledgeDiscoveryNote {
 }
 
 export interface KnowledgeHostPort {
+	/** Temporary 0.3 adapter for genuine published 1.x callers; remove after native cutover. */
+	runSpecialistModelLoop?: import("@gyoungwe/plugin-api").LegacyKnowledgeSpecialistLoop;
 	readonly contractVersion: 1;
 	overview(input: unknown): Promise<unknown>;
 	search(input: unknown): Promise<unknown>;
@@ -136,6 +139,7 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 	},
 	load: () => ({
 		contractVersion: 1,
+		runSpecialistModelLoop: runKnowledgeSpecialist,
 		overview: (input) => import("./ui-service.js").then(({ knowledgeOverview }) => knowledgeOverview(input as never)),
 		search: (input) => import("./ui-service.js").then(({ searchKnowledge }) => searchKnowledge(input as never)),
 		read: (input) => import("./ui-service.js").then(({ knowledgeReadNote }) => knowledgeReadNote(input as never)),
