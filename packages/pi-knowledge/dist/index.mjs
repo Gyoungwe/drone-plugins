@@ -17878,6 +17878,26 @@ function registerNativeStatusTools(pi, owner, projectFor = currentProject, sessi
     }
   });
 }
+var CHILD_READ_REFUSED = "This knowledge Vault does not allow subagent reads (its subagent policy is not read-local)";
+function childPolicyPi(pi, allowed) {
+  return new Proxy(pi, { get(target, property) {
+    if (property === "registerTool") return (definition) => target.registerTool({
+      ...definition,
+      execute: async (...args) => {
+        if (!await allowed()) throw new Error(CHILD_READ_REFUSED);
+        return definition.execute(...args);
+      }
+    });
+    if (property === "on") return (name, handler) => target.on(
+      name,
+      name === "session_shutdown" ? handler : async (...args) => await allowed() ? handler(...args) : void 0
+    );
+    if (property === "registerCommand") return (name) => {
+      throw new Error(`A read-only child session cannot register the ${name} command`);
+    };
+    return Reflect.get(target, property, target);
+  } });
+}
 function managedDomainPi(pi, session) {
   const contextFor = async (context) => {
     const facts = await session.inspect(context);
@@ -17924,7 +17944,9 @@ function composeNativeSession(owner, managed) {
     ...managed ? { available: () => true, project: managed.project, session: managed.session } : {}
   }, owner.extensionHost);
   let cleanup = null;
-  const adapter = createKnowledgeNativeAdapter(owner, controller, (nativePi) => {
+  if (managed?.child === "read" && !managed.childReadAllowed) throw new Error("A read child session requires the package read policy");
+  const adapter = createKnowledgeNativeAdapter(owner, controller, (sessionPi) => {
+    const nativePi = managed?.child === "read" && managed.childReadAllowed ? childPolicyPi(sessionPi, managed.childReadAllowed) : sessionPi;
     const pi = managed ? managedDomainPi(nativePi, managed.session) : nativePi;
     if (managed?.child === "evidence") {
       publication.registerAnswerPublication(pi, { getCurrent: () => null, evidenceOnly: true }).begin(false);

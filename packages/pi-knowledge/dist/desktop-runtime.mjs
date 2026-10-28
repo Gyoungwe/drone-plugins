@@ -18837,6 +18837,26 @@ function registerNativeStatusTools(pi, owner, projectFor2 = currentProject, sess
     }
   });
 }
+var CHILD_READ_REFUSED = "This knowledge Vault does not allow subagent reads (its subagent policy is not read-local)";
+function childPolicyPi(pi, allowed) {
+  return new Proxy(pi, { get(target, property) {
+    if (property === "registerTool") return (definition) => target.registerTool({
+      ...definition,
+      execute: async (...args) => {
+        if (!await allowed()) throw new Error(CHILD_READ_REFUSED);
+        return definition.execute(...args);
+      }
+    });
+    if (property === "on") return (name, handler) => target.on(
+      name,
+      name === "session_shutdown" ? handler : async (...args) => await allowed() ? handler(...args) : void 0
+    );
+    if (property === "registerCommand") return (name) => {
+      throw new Error(`A read-only child session cannot register the ${name} command`);
+    };
+    return Reflect.get(target, property, target);
+  } });
+}
 function managedDomainPi(pi, session) {
   const contextFor = async (context) => {
     const facts = await session.inspect(context);
@@ -18883,7 +18903,9 @@ function composeNativeSession(owner, managed) {
     ...managed ? { available: () => true, project: managed.project, session: managed.session } : {}
   }, owner.extensionHost);
   let cleanup = null;
-  const adapter = createKnowledgeNativeAdapter(owner, controller, (nativePi) => {
+  if (managed?.child === "read" && !managed.childReadAllowed) throw new Error("A read child session requires the package read policy");
+  const adapter = createKnowledgeNativeAdapter(owner, controller, (sessionPi) => {
+    const nativePi = managed?.child === "read" && managed.childReadAllowed ? childPolicyPi(sessionPi, managed.childReadAllowed) : sessionPi;
     const pi = managed ? managedDomainPi(nativePi, managed.session) : nativePi;
     if (managed?.child === "evidence") {
       publication.registerAnswerPublication(pi, { getCurrent: () => null, evidenceOnly: true }).begin(false);
@@ -19396,6 +19418,7 @@ async function projectFor(capabilities, workspace) {
     throw new Error("Invalid research workspace configuration");
   return projectIdentity(workspace, document.knowledgeProjectId);
 }
+var CHILD_READ_TOOLS = ["knowledge_status", "knowledge_search", "research_check_answer", "research_knowledge_status", "research_prepare_knowledge", "research_read_knowledge", "research_restore_evidence", "research_resume_topic", "research_search_explainers", "research_search_knowledge", "research_task_status", "research_topics"];
 var CHILD_SESSION_EVENTS = ["session_start", "session_tree", "before_agent_start", "context", "message_start", "tool_execution_start", "tool_execution_end", "tool_result"];
 var createDesktopRuntime = async (context) => {
   const states = context.resources.filter((resource) => resource.kind === "state");
@@ -19732,11 +19755,19 @@ var createDesktopRuntime = async (context) => {
         }
       };
       if (facts?.kind === "child") {
-        const readable = facts.files === "read" && (await readKnowledgeBinding2())?.subagentPolicy === "read-local";
-        const child = createManagedNativeSession(owner, { ...composition, child: readable ? "read" : "evidence" });
+        const readable = facts.files === "read";
+        const child = createManagedNativeSession(owner, {
+          ...composition,
+          child: readable ? "read" : "evidence",
+          childReadAllowed: async () => (await readKnowledgeBinding2())?.subagentPolicy === "read-local"
+        });
+        if (!child.projection) throw new Error("Knowledge child session requires its publication projection");
         const session = {
           ...child,
-          toolEffects: readable ? { knowledge_status: "read", knowledge_search: "read" } : {},
+          // A child's answers only take the evidence-only path (label, no task report), so its
+          // finalizer runs with read capabilities; any write it attempted would fail at the broker.
+          projection: { ...child.projection, finalizeEffect: "read" },
+          toolEffects: readable ? Object.fromEntries(CHILD_READ_TOOLS.map((tool) => [tool, "read"])) : {},
           // A child is read-only: its hooks get read capabilities only, so any write attempt fails at the broker.
           eventEffects: Object.fromEntries(CHILD_SESSION_EVENTS.map((event) => [event, "read"])),
           commandEffects: {}
