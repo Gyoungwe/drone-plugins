@@ -97,7 +97,7 @@
 		"src/desktop/specialist-settings-storage.ts": "c6c1139fc6890a085bf24f64e95ccef3d776f9ab014b086680a6fb19cceef9e0",
 		"src/desktop/state-policy.ts": "617f4f2ad6601348e699a1874b74a728ffa1014e5bc434fe055cafe128579a65",
 		"src/desktop/topic-storage.ts": "b38804ad532ee56b04640e763a3cd138be1e9543754d83a5c9863c19304c5dc5",
-		"src/extension/internal-knowledge-extension.ts": "cb37363d7122d9fb6a34e31fd4c8c600d6f897787907e6c551f6d1a61d59aa96",
+		"src/extension/internal-knowledge-extension.ts": "dd0bbdf6796336207ea8992659f4ae34ea79648b8c4590d87c6af36acc481980",
 		"src/extension/knowledge-extension.ts": "a26d73e64c7326e86622f8ab8f1d89bf0b56a03e6feb85530c90e738bf9097fb",
 		"src/extension/knowledge-worker.ts": "bf3bf802e766d34bd01d7d9e2af73dbcd98f2f9afd27f127b4bbf3de9f5015de",
 		"src/extension/read-tools.ts": "11299e876adb55086398168bf41d1284a9a823d7aa7103888ade8837f75e9d80",
@@ -108,13 +108,13 @@
 		"src/maintenance/run.ts": "2575e35c4a879955e0e0d6dae32456318a34fef8ea6d19a63797bbd06d2f3460"
 	},
 	"outputs": {
-		"dist/index.mjs": "bbf1eaa178fda3d0196e633a570f597b07b235c7ba189d4ac040db1e3b723331",
-		"dist/host.mjs": "43e9331f545c738e87adaa2feb676b2a82003d4d4877b2e32d28de0c7cb0902e",
+		"dist/index.mjs": "67769651856503474b1362e8cb90f3a25fdd6fee31c56d69c2d5bd8408a6bb46",
+		"dist/host.mjs": "4742d3bb8e64d6ff409dd9a64e2897acfed7b561c35a072f3bcc3082a1ab2422",
 		"dist/host.d.ts": "f0adedba8cffd2a68e3a8767923e75bb52ea01e530848e446483e4bef735463f",
-		"dist/desktop-runtime.mjs": "a8c456a9b257662b2c384c53bf11fd7603f8bb6944ba5d1610a1988e2b58759f",
+		"dist/desktop-runtime.mjs": "742766d39a70e09519c9ee16f037af30a30d65494786ae4e738098bb93eaa7a1",
 		"lib/knowledge/runtime/desktop-index.mjs": "becaf424e993e4b6efd096ce6c52d8be660b50d986c6f6857bd8d08e25446e22",
 		"lib/knowledge/runtime/worker.mjs": "72c809b9d15e7d8b57d695c0a0b62aec2b101e0986f0a04627b913867e2d7f0c",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "06c9a4422d255052dece5c71d7c69d4d47989a3bf6947ad3933d6a00aa21aeed",
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "55c7b88c317eb47ea8cf3c462f19efad7f095944c1af19ffe26f9621e69b1709",
 		"ui/bundle.js": "5a12240ebdd366b428a5531a7eb5c7ee7fdb1bae33ff4352e3e6495068c5b05b",
 		"ui/build-manifest.json": "da639b26b1a5a34bab7fedd2599be7860b5d6a812fab718e3487c25ae561f1fd"
 	},
