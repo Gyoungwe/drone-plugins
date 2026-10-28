@@ -64,7 +64,7 @@
 		"src/core/ui-service.ts": "1a81b13c5b28fa02016bc273c207f38cc044ccf6630e5092aca5355cbf6c5d9c",
 		"src/core/ui-state.ts": "3f3672fe7d87028b81d290d2e8700a8dacc4da42aff59ac5b0151ba8e72aebc5",
 		"src/core/wiki-model-review-types.ts": "444c233321001527c55aec545ce9fbbcf5921550ee3edfdf87beb077d1ea4f8c",
-		"src/core/wiki-model-review.ts": "20fdb2a8491c095fb2bbebcbd97cfd2e64ab4424dec0500684d5d896f8e9512c",
+		"src/core/wiki-model-review.ts": "8aab2ef1192ff793e4843c84d47cd28f18ed209dbf9b2ebc519872755f21e67a",
 		"src/core/wiki-policy.ts": "ffd5f16638d2f31b49ecbb944683a13b503dac91fd499fb901124dad8cec2ff8",
 		"src/core/wiki-review-node.ts": "9a00fc554d7918a5e6f37511b429c014075294deac397b968687751eb0f19d94",
 		"src/core/wiki-review-ports.ts": "8fcd24be53b64339fead2c92c5dedf542ae6bbd7188e6e16b436c384aa4183a1",
@@ -99,12 +99,12 @@
 	},
 	"outputs": {
 		"dist/index.mjs": "fe32b8532ca699be70e079402468300fa7377bf63540681f78b23474226a80b1",
-		"dist/host.mjs": "be25a92eba96bec3e3b5309fa7ad545c28c37bb5c4cb5e7d98e289652b1ab340",
+		"dist/host.mjs": "3bc19a316f2e280c11b4d499a56e42be4b5d0153fb6e6200e27de31d9fed0056",
 		"dist/host.d.ts": "f0adedba8cffd2a68e3a8767923e75bb52ea01e530848e446483e4bef735463f",
 		"dist/desktop-runtime.mjs": "aa4304a49fb535bfc166b229f7095ba19eaa6b1c7957b75e6003126b7e596c66",
 		"lib/knowledge/runtime/desktop-index.mjs": "becaf424e993e4b6efd096ce6c52d8be660b50d986c6f6857bd8d08e25446e22",
 		"lib/knowledge/runtime/worker.mjs": "72c809b9d15e7d8b57d695c0a0b62aec2b101e0986f0a04627b913867e2d7f0c",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "bb77f75d29510ba5c760c581d7c05837b33a393c115aed8707f9334c665544ee",
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "b69092b11edfd019a7e463f875846b3d72d46d7723ae8477393ec812f91dc7ea",
 		"ui/bundle.js": "5a12240ebdd366b428a5531a7eb5c7ee7fdb1bae33ff4352e3e6495068c5b05b",
 		"ui/build-manifest.json": "9eaa3559b07de784ce7ddb23ff27aae91689c71035fb23b60b6ca03db97510dc"
 	},
