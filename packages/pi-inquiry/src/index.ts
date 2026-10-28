@@ -1,3 +1,4 @@
+export * from "./event-projection.js";
 export * from "./lineage.js";
 export * from "./models.js";
 export * from "./provenance.js";

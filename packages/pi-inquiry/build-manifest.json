@@ -2,7 +2,8 @@
   "version": 1,
   "generator": "packages/pi-inquiry/scripts/build.mjs",
   "inputs": {
-    "src/index.ts": "4353e0beef6ce3bf8883de93c9fcf6d41deaf26bff2b35adf35a8c71e79681e4",
+    "src/event-projection.ts": "24b180f319f628e3e0bd4cd8218d00096d59254cac8f2c0286ffccdfabb6d0a6",
+    "src/index.ts": "c7a6a1c91de5e25d12dcfd58df6b2c8c3267e9c364bf01ae1e24edc04cb1f9eb",
     "src/lineage.ts": "0db629d0ea351928f7f92fc8493e20925b7008e0a32c38d0e21ae4d288f430e1",
     "src/models.ts": "07dcdbbfa44b5676750168a0655f8732abf0e93b42e846c9d48531f6951d8354",
     "src/provenance.ts": "fee1a0cc0ab7d001afc6eab98ccbd54f1fd13051ed36fe536010b382486cb591",
@@ -12,7 +13,7 @@
     "src/storage-contract.ts": "d81d8ba86decabb9b344a7068b5b8d196acc5e75d814c313094b69be248380b7",
     "src/storage.ts": "19d241c3b44b98aab4a9df3123468fa5857f340df40f6cf4f702cafe85b7afef",
     "src/workspace.ts": "caecd0cba9e6637dfc0bad8226343aae6b9fbac1a0d04d47e2c109fe6c9fa075",
-    "src/domain.ts": "6cd4b798712e32abe53f82213afd0a939f556c9230a2003d22467ed15f12397d",
+    "src/domain.ts": "fb77d0e7985faf156b6488b929f0a261fdb5f001bc5d371a630850582f97dc3b",
     "../../node_modules/typebox/build/format/_registry.mjs": "f60d2bf0b9a6e0c7e999123f971694e6e21a048ee7d8da79167b3aa3acb7d86a",
     "../../node_modules/typebox/build/format/date.mjs": "8144db22f2b2ab1b04292cdcabc33c4500777ec4cfa8a5f34f80464122813f96",
     "../../node_modules/typebox/build/format/date_time.mjs": "eba189f6ed086a57087b2bb006a75ef6af3287bb90972b217e90f2fa9d748257",
@@ -687,8 +688,8 @@
     "sql.js/LICENSE": "60a3f6e4d7b29b4321359e683b36cf198d24f58e24582070f56e6fa89d5ee2be"
   },
   "outputs": {
-    "dist/host.mjs": "835535c2ced8d4605ba194e3a8f919246603e51a4a4d5730c16244039ad9ac64",
-    "dist/domain.mjs": "ad12befa223bb0734e4d5cdcb221d31631598f60f2f6f26e8f7a5d7471d5e05f",
+    "dist/host.mjs": "a6035339d3738473f8cb98ebb4d8138b3e59fba3b6ba5afef3bd8cf702a2bb0b",
+    "dist/domain.mjs": "315bb7f374576fa4b1481798e33813bf7e5948c621feef25cfb6c51698dcd2c1",
     "dist/ledger-owner.mjs": "05910c33cea2d8a31881693bff9f8743e216a6e3925edb67601e94cef04b9779",
     "dist/runtime.mjs": "eec507f31238ac9589f92f21020512969a918035812c5b6dc464c7c6ebbfa557",
     "dist/index.mjs": "8cf7a8abd8c14447d101366f76a27cd60812f4ccec792748ad95caa70ffb74df",
