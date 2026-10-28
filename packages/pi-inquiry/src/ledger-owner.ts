@@ -62,8 +62,7 @@ export function parseInquiryBinding(
 		throw new Error("Invalid Inquiry workspace binding");
 	return result.value;
 }
-export const inquiryBindingPath = (workspaceId: string) =>
-	`inquiry-${createHash("sha256").update(workspaceId).digest("hex")}.json`;
+export const inquiryBindingPath = () => "inquiry-binding.json";
 const bytes = (value: string) => new Uint8Array(Buffer.from(value, "base64"));
 const digest = (value: Uint8Array) =>
 	createHash("sha256").update(value).digest("hex");
@@ -87,6 +86,9 @@ export class InquiryLedgerOwner {
 		private binding: InquiryBindingState,
 		private readonly root: PluginRuntimeRootDescription,
 	) {}
+	get bindingVersion(): string {
+		return this.binding.version;
+	}
 	private serialize<T>(operation: () => Promise<T>): Promise<T> {
 		const result = this.pending.then(() => {
 			if (this.stopped) throw new Error("Inquiry owner is disposed");
@@ -298,7 +300,7 @@ export class InquiryLedgerOwner {
 			signal.throwIfAborted();
 			await this.reserve();
 			const intent = this.binding.value.intent;
-			if (!intent || intent.status !== "pending")
+			if (intent?.status !== "pending")
 				return { state: "no-pending-write" as const };
 			const raw = await this.readRaw();
 			const state =

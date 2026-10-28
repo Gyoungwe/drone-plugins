@@ -27,3 +27,11 @@
 `ledger-owner.ts` 复用同一 WASM canonical SQL，并将每个 application/workspace 的事务串行化。实际 host ports 是每次借用的当前 caller 权限，没有 process 全局账本。原库 SHA 命名备份以 expected-null 创建并回读；原 `ledger.sqlite` 的 staged SQL 通过 pending JSON(old/candidate SHA) → binary CAS → terminal JSON 记录提交。取消后不新写 metadata；新合法 caller 显式 reconcile，只有 previous/candidate 两种匹配可收口，其余保持 needs-recovery；恢复原库也在原路径走 pending/CAS/回读。WAL/SHM/journal 存在、外部 SHA 变化、混合 project/schema 均拒绝自动接管。
 
 新增 6 项 owner 回归，连同原 30 项共 36 项通过，TypeScript/build:check 通过，日志 `/tmp/inquiry-owner-final-check.log`。测试使用真实原 SQLite、真实内存 SQL、公共 Node binary IO 和临时目录；JSON metadata port 是测试的原子 Node fixture，**不是宿主 JsonStore/真实 SDK provider 的最终证据**。测试覆盖备份字节、提交/reopen、原路径精确恢复、被拒提交显式 not-committed、实际提交后撤销零新 metadata 与 fresh-caller committed、WAL 拒绝、外部变化和领域失败回滚。provider/native/UI/旧 seam 删除仍未完成，新包继续 private 未发布候选。
+
+## 通用 provider 与真实 SDK 端口切片（2026-10-28）
+
+`runtime.ts` 提供真实 `inquiry.runtime@1`（`inquiry.read` / `inquiry.write`），经当前 `caller.scope`、明确 root handles 和原库目录绑定复用应用内 owner。JSON 与 binary 为独立授权，但两者 canonical 目录必须是同一原库目录；固定 `inquiry-binding.json` 只允许绑定一个实际 workspace，其他 workspace 拒绝覆盖。状态/检查/六 ledger/decision/recovery 操作复用 canonical service，结果明确标作 plugin-asserted/imported，不授 host provenance 权威。通用服务规范复用既有提交 `030bda3`（本分支 `ad2bc35`），没有另造 router。
+
+原 36 项加 provider/显式已有数据绑定/第二 workspace 拒绝共 39 项、类型与 build:check 通过；24 项 manifest 合同通过。候选包仍 private，只声明 Desktop 服务；**native entry、已安装 rendered UI、旧 seam 删除仍未完成**。
+
+不可变 candidate tarball `/tmp/inquiry-provider-bound-original-20261028/gyoungwe-pi-inquiry-0.1.0.tgz` SHA-256 `bb87b1e4dda4bfae2456751853b2b79fdeb959745e89cbd04b810ff4c470034f`，API Node-helper candidate SHA `dd1a78e3fab1d2f6aefdc93e570b6e064f171b573c55e32c94db459678a1fd2f`。实际 npm 安装→installed source catalog→真实 SDK consumer→generic provider→普通受限 worker→生产 Desktop host ports/真实 JsonStore→WASM SQL，通过 `/tmp/inquiry-provider-sdk-3.log`。真实 bridge binding 持有同一 provider factory（计数 1），不是 rendered UI；原 project、原字节备份、原路径 restore、实际旧 SQLite writer 排他与关闭后交接均回读通过。service-only provider 无持久 native/UI attachment 时每次短 lease 会关闭，旧 root handles 正确失效；未用全局 owner 或路径 JSON 复活权限。正式 GUI **NOT_RUN**。

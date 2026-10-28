@@ -25,6 +25,7 @@ for (const [entry, name] of [
 	["index", "host"],
 	["domain", "domain"],
 	["ledger-owner", "ledger-owner"],
+	["runtime", "runtime"],
 	["wasm-storage", "wasm-storage"],
 ]) {
 	const result = await build({

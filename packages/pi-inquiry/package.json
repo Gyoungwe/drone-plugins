@@ -29,6 +29,10 @@
 		"./ledger-owner": {
 			"types": "./src/ledger-owner.ts",
 			"import": "./dist/ledger-owner.mjs"
+		},
+		"./runtime": {
+			"types": "./src/runtime.ts",
+			"import": "./dist/runtime.mjs"
 		}
 	},
 	"scripts": {
@@ -53,6 +57,9 @@
 	"files": [
 		"src",
 		"dist",
-		"build-manifest.json"
-	]
+		"build-manifest.json",
+		"plugin.manifest.json",
+		"README.md"
+	],
+	"license": "MIT"
 }

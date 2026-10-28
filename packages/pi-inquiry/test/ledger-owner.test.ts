@@ -29,6 +29,7 @@ import {
 	inquiryBindingPath,
 	parseInquiryBinding,
 } from "../src/ledger-owner.js";
+import { createInquiryRuntimeWithEngine } from "../src/runtime.js";
 import { InquiryService } from "../src/service.js";
 import { SqliteInquiryStorage } from "../src/storage.js";
 import { createInquiryWasmEngine } from "../src/wasm-storage.js";
@@ -62,6 +63,7 @@ let engine: InquiryWasmEngine,
 	reservations: PluginResourceReservations,
 	owner: InquiryLedgerOwner,
 	ports: PluginRuntimeCapabilities;
+let activeWorkspace: string, activeDirectory: string;
 let controller: AbortController,
 	denyLedgerWrite: boolean,
 	cancelAfterCommit: boolean,
@@ -81,7 +83,7 @@ async function readJson(path: string): Promise<PluginStateReadResult> {
 	}
 }
 async function state(): Promise<InquiryBindingState> {
-	const path = inquiryBindingPath(workspaceId),
+	const path = inquiryBindingPath(),
 		result = await readJson(path);
 	const value = parseInquiryBinding(result, workspaceId);
 	if (result.kind !== "value" || !value)
@@ -102,10 +104,11 @@ function reopened() {
 beforeEach(async () => {
 	directory = await realpath(await mkdtemp(join(tmpdir(), "inquiry-owner-")));
 	binary = join(directory, "ledger");
-	json = join(directory, "metadata");
+	json = binary;
 	await mkdir(binary);
-	await mkdir(json);
 	reservations = new PluginResourceReservations(join(directory, "leases"));
+	activeWorkspace = workspaceId;
+	activeDirectory = directory;
 	controller = new AbortController();
 	denyLedgerWrite = false;
 	cancelAfterCommit = false;
@@ -157,6 +160,23 @@ beforeEach(async () => {
 	ports = {
 		async call(name, input, signal) {
 			controller.signal.throwIfAborted();
+			if (name === "roots.describe")
+				return [
+					{
+						handle: "binary",
+						kind: "binary-state",
+						path: binary,
+						access: "read-write",
+					},
+					{ handle: "json", kind: "state", path: json, access: "read-write" },
+				];
+			if (name === "caller.scope")
+				return {
+					kind: "session",
+					workspaceId: activeWorkspace,
+					workspaceDirectory: activeDirectory,
+					sessionId: "actual-fixture-sdk",
+				};
 			const request = input as {
 				root: string;
 				path: string;
@@ -215,10 +235,7 @@ beforeEach(async () => {
 		backupVersion: null,
 		intent: null,
 	};
-	await writeFile(
-		join(json, inquiryBindingPath(workspaceId)),
-		JSON.stringify(value),
-	);
+	await writeFile(join(json, inquiryBindingPath()), JSON.stringify(value));
 	owner = await reopened();
 });
 afterEach(async () => {
@@ -310,7 +327,7 @@ it("refuses active WAL sidecars before backup, metadata intent or original mutat
 		join(binary, "ledger.sqlite-wal"),
 		"synthetic active sidecar",
 	);
-	const before = await readJson(inquiryBindingPath(workspaceId));
+	const before = await readJson(inquiryBindingPath());
 	await expect(
 		owner.write(
 			"record-question",
@@ -319,7 +336,7 @@ it("refuses active WAL sidecars before backup, metadata intent or original mutat
 		),
 	).rejects.toThrow("active SQLite sidecar");
 	expect(await readFile(join(binary, "ledger.sqlite"))).toEqual(initial);
-	expect(await readJson(inquiryBindingPath(workspaceId))).toEqual(before);
+	expect(await readJson(inquiryBindingPath())).toEqual(before);
 	expect(binaryWrites).toBe(0);
 });
 it("rejects external SHA changes rather than silently adopting or overwriting them", async () => {
@@ -344,4 +361,158 @@ it("rolls back staged invalid domain mutations without creating a pending intent
 	).rejects.toThrow("Invalid question record");
 	expect(await readFile(join(binary, "ledger.sqlite"))).toEqual(initial);
 	expect((await state()).value.intent).toBeNull();
+});
+
+it("serves the generic provider through the same canonical owner and labels JSON as asserted data", async () => {
+	const runtime = await createInquiryRuntimeWithEngine(
+		{
+			applicationId: "app",
+			signal: controller.signal,
+			resources: [],
+			capabilities: ports,
+			events: { changed() {} },
+		},
+		engine,
+	);
+	const context = {
+		scope: {
+			kind: "session" as const,
+			workspaceId,
+			workspaceDirectory: directory,
+			sessionId: "actual-fixture-sdk",
+		},
+		signal: controller.signal,
+		capabilities: ports,
+	};
+	try {
+		const result = await runtime.operations["inquiry.write"].execute(
+			{ action: "recordQuestion", record: question("provider") },
+			context,
+		);
+		expect(result).toMatchObject({
+			value: null,
+			authority: "plugin-asserted-or-imported",
+		});
+		const snapshot = (await runtime.operations["inquiry.read"].execute(
+			{ action: "snapshot" },
+			context,
+		)) as { value: { questions: { id: string }[] } };
+		expect(snapshot.value.questions.map((record) => record.id)).toEqual([
+			"original",
+			"provider",
+		]);
+	} finally {
+		await runtime.dispose();
+	}
+	await expect(
+		runtime.operations["inquiry.read"].execute({ action: "snapshot" }, context),
+	).rejects.toThrow("stopping");
+});
+it("requires explicit existing-data binding through actual root handles without changing original bytes", async () => {
+	await rm(join(json, inquiryBindingPath()));
+	const runtime = await createInquiryRuntimeWithEngine(
+		{
+			applicationId: "app",
+			signal: controller.signal,
+			resources: [],
+			capabilities: ports,
+			events: { changed() {} },
+		},
+		engine,
+	);
+	const context = {
+		scope: {
+			kind: "session" as const,
+			workspaceId,
+			workspaceDirectory: directory,
+			sessionId: "actual-fixture-sdk",
+		},
+		signal: controller.signal,
+		capabilities: ports,
+	};
+	try {
+		expect(
+			await runtime.operations["inquiry.read"].execute(
+				{ action: "status" },
+				context,
+			),
+		).toMatchObject({ state: "needs-binding" });
+		await expect(
+			runtime.operations["inquiry.write"].execute(
+				{
+					action: "bind",
+					root: "binary",
+					metadataRoot: "json",
+					acknowledgeExistingData: false,
+				},
+				context,
+			),
+		).rejects.toThrow("explicit acknowledgment");
+		expect(await readJson(inquiryBindingPath())).toEqual({
+			kind: "missing",
+			version: null,
+		});
+		expect(
+			await runtime.operations["inquiry.write"].execute(
+				{
+					action: "bind",
+					root: "binary",
+					metadataRoot: "json",
+					acknowledgeExistingData: true,
+				},
+				context,
+			),
+		).toMatchObject({ bound: true, existingData: true, projectId });
+		expect(await readFile(join(binary, "ledger.sqlite"))).toEqual(initial);
+	} finally {
+		await runtime.dispose();
+	}
+});
+
+it("refuses a second actual workspace binding to the same original directory within one application", async () => {
+	const runtime = await createInquiryRuntimeWithEngine(
+		{
+			applicationId: "app",
+			signal: controller.signal,
+			resources: [],
+			capabilities: ports,
+			events: { changed() {} },
+		},
+		engine,
+	);
+	const context = {
+		scope: {
+			kind: "session" as const,
+			workspaceId,
+			workspaceDirectory: directory,
+			sessionId: "actual-fixture-sdk",
+		},
+		signal: controller.signal,
+		capabilities: ports,
+	};
+	try {
+		await runtime.operations["inquiry.read"].execute(
+			{ action: "snapshot" },
+			context,
+		);
+		activeWorkspace = "other-workspace";
+		activeDirectory = join(directory, "other-workspace");
+		await mkdir(activeDirectory);
+		await expect(
+			runtime.operations["inquiry.write"].execute(
+				{
+					action: "bind",
+					root: "binary",
+					metadataRoot: "json",
+					acknowledgeExistingData: true,
+				},
+				context,
+			),
+		).rejects.toThrow("workspace binding");
+		expect(await readFile(join(binary, "ledger.sqlite"))).toEqual(initial);
+		expect((await state()).value.workspaceId).toBe(workspaceId);
+		expect(binaryWrites).toBe(0);
+	} finally {
+		await runtime.dispose();
+	}
 });
