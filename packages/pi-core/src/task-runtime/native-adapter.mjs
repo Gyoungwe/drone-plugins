@@ -6,6 +6,7 @@ import { acceptanceSchema } from "./acceptance.mjs";
 import { createTaskAuthorization } from "./ask-authorization.mjs";
 import { resolveWriteRoots } from "./consent.mjs";
 import { createTaskSession } from "./task-session.mjs";
+import { createTaskController } from "./task-controller.mjs";
 import { readNativeSessionStorage } from "./native-storage.mjs";
 import {
   FAILURE_EXPLANATION_POLICY,
@@ -112,41 +113,13 @@ function registerWorkbench(pi, options = {}) {
     },
     onCommitted: () => send(), inspect, authorize,
   });
-  // The native adapter translates the existing task integration contract into
-  // the six behavioral calls. It owns no journal or persistence state.
-  const journal = {
-    scope: () => session.status().scope,
-    view: () => session.status().view,
-    snapshot: () => session.status().snapshot,
-    render: () => {
-      const rendered=session.status().render;
-      if(storageState!=="deferred") return rendered;
-      return `${rendered}\n${hostLanguage()==="zh"?"任务检查点仍为 deferred，尚未保存到磁盘；这不是已保存回执。":"Task checkpoint durability is deferred; it has not been saved to disk. This is not a saved receipt."}`;
-    },
-    readRoots: () => session.status().readRoots,
-    authorization: forWrite => session.status()[forWrite ? "writeAuthorization" : "authorization"],
-    begin: (query, capabilities = [], binding = null) => session.input({query,capabilities,binding}, invocation.getStore()?.signal),
-    plan: input => session.action({kind:"plan",input},invocation.getStore()?.signal),
-    wait: input => session.action({kind:"wait",input},invocation.getStore()?.signal),
-    command: input => session.action({kind:"command",input},invocation.getStore()?.signal),
-    acceptFile: (input,cwd) => session.action({kind:"file",input,cwd},invocation.getStore()?.signal),
-    reconcile: cwd => session.action({kind:"reconcile",cwd},invocation.getStore()?.signal),
-    guard: value => session.observe({kind:"call",value},invocation.getStore()?.signal),
-    observe: (value,cwd) => session.observe({kind:"result",value,cwd},invocation.getStore()?.signal),
-    pause: reason => session.turn({kind:"pause",reason}),
-    settle: () => session.turn({kind:"settle"},invocation.getStore()?.signal),
-    reserveContinuation: reason => session.turn({kind:"reserve-continuation",reason},invocation.getStore()?.signal),
-    reserveHandoff: () => session.turn({kind:"reserve-handoff"},invocation.getStore()?.signal),
-    advanceStage: () => session.turn({kind:"advance-stage"},invocation.getStore()?.signal),
-    requestReport: () => session.turn({kind:"request-report"},invocation.getStore()?.signal),
-    takeReport: () => session.turn({kind:"take-report"},invocation.getStore()?.signal),
+  const { journal, evidence } = createTaskController(session, () => invocation.getStore()?.signal);
+  journal.render = () => {
+    const rendered=session.status().render;
+    if(storageState!=="deferred") return rendered;
+    return `${rendered}\n${hostLanguage()==="zh"?"任务检查点仍为 deferred，尚未保存到磁盘；这不是已保存回执。":"Task checkpoint durability is deferred; it has not been saved to disk. This is not a saved receipt."}`;
   };
   const askAuthorization = createTaskAuthorization(journal, () => bindingKey());
-  const evidence = {
-    capture: (value,cwd,binding) => session.observe({kind:"capture",value,cwd,binding},invocation.getStore()?.signal),
-    evict: ids => session.observe({kind:"evicted",ids},invocation.getStore()?.signal),
-    restore: (input,cwd,binding) => session.action({kind:"evidence-restore",input,cwd,binding},invocation.getStore()?.signal),
-  };
   currentRuntime().registerDisposable({dispose:()=>session.close()});
   const attach = async (ctx, force = false) => {
     options.onJournalAttached?.(journal);
