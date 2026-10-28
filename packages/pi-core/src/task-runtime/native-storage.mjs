@@ -4,8 +4,9 @@ import { readFileSync } from "node:fs";
 export function readNativeSessionStorage(manager) {
   const branch=manager.getBranch();
   const file=manager.getSessionFile();
-  const deferred=()=>({state:"deferred",entries:branch,code:null});
-  const failed=(code,entries=[])=>({state:"needs-reopen",entries,code});
+  const mode=file?"persistent":"memory";
+  const deferred=()=>({mode,state:"deferred",entries:branch,code:null});
+  const failed=(code,entries=[])=>({mode,state:"needs-reopen",entries,code});
   if(!file) return deferred();
   let content;
   try {content=readFileSync(file,"utf8");}
@@ -29,5 +30,5 @@ export function readNativeSessionStorage(manager) {
     if(JSON.stringify(row)!==JSON.stringify(entry)) return failed("SESSION_BRANCH_NOT_PERSISTED",entries);
     entries.push(row);
   }
-  return {state:"durable",entries,code:null};
+  return {mode,state:"durable",entries,code:null};
 }

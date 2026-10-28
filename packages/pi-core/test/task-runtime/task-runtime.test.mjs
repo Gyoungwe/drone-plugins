@@ -120,7 +120,7 @@ it("status command is read-only and never starts a model turn", async () => {
 		expect.objectContaining({
 			customType: "drone-task-status",
 			display: true,
-			details: expect.objectContaining({ command: "task-status",taskStorage:{state:"deferred"} }),
+			details: expect.objectContaining({ command: "task-status",taskStorage:{mode:"memory",state:"deferred"} }),
 		}),
 		{ triggerTurn: false },
 	);
