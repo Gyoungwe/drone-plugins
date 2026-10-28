@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
-import { realpath } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { acceptanceSchema } from "./acceptance.mjs";
 import { createTaskAuthorization } from "./ask-authorization.mjs";
@@ -93,6 +93,7 @@ function registerWorkbench(pi, options = {}) {
     };
   };
   const session = createTaskSession({
+    evidenceFiles: {inspect:inspectTaskFile,readText:path=>readFile(path,"utf8")},
     readFailure: () => options.application.readFailure(activeSessionId),
     onPersistenceFailed: failure => options.application.recordFailure(activeSessionId,failure),
     readOnly: name => {

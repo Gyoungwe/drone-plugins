@@ -1,7 +1,6 @@
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { clean, inspectTaskFile } from "./workbench.mjs";
-function createEvidenceRecovery({ authorize, persist = () => {
+import { clean } from "./workbench.mjs";
+function createEvidenceRecovery({ authorize, files, persist = () => {
 } }) {
   let scope = null, taskId = null, records = [], used = 0;
   const save = () => persist({ version: 1, scope, taskId, records, used });
@@ -25,7 +24,7 @@ function createEvidenceRecovery({ authorize, persist = () => {
       if (!taskId || typeof event.input?.path !== "string" || records.some((r) => r.id === event.toolCallId))
         return;
       try {
-        const file = await inspectTaskFile(cwd, event.input.path);
+        const file = await files.inspect(cwd, event.input.path);
         const offset = Math.max(1, Math.floor(event.input.offset || event.input.start_line || 1));
         const limit = Math.min(120, Math.max(1, Math.floor(event.input.limit || 120)));
         records.push({
@@ -63,12 +62,12 @@ function createEvidenceRecovery({ authorize, persist = () => {
       const binding = await bindingProvider();
       if (binding !== record.binding) throw new Error("recovery-binding-changed");
       await authorize(cwd, record.path);
-      await inspectTaskFile(cwd, record.absolutePath || record.path, {
+      await files.inspect(cwd, record.absolutePath || record.path, {
         sha256: record.sha256,
         rootKind: record.rootKind
       });
-      const text = (await readFile(record.absolutePath || resolve(cwd, record.path), "utf8")).split(/\r?\n/).slice(record.offset - 1, record.offset - 1 + record.limit).join("\n").slice(0, 16e3);
-      await inspectTaskFile(cwd, record.absolutePath || record.path, {
+      const text = (await files.readText(record.absolutePath || resolve(cwd, record.path))).split(/\r?\n/).slice(record.offset - 1, record.offset - 1 + record.limit).join("\n").slice(0, 16e3);
+      await files.inspect(cwd, record.absolutePath || record.path, {
         sha256: record.sha256,
         rootKind: record.rootKind
       });
