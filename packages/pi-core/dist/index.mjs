@@ -2015,6 +2015,11 @@ function singleFlightCommand(handler) {
   };
 }
 
+// src/task-runtime/status-query.mjs
+function isTaskStatusQuery(text2) {
+  return /^(?:完成到哪了|进度(?:如何|怎么样)?|查看(?:任务)?进度|任务状态|task status|what(?:'s| is) the status)[\s.!？，。！?]*$/i.test(text2.trim());
+}
+
 // src/task-runtime/tool-protocol.mjs
 function restoreTaskToolOrder(messages) {
   const output = [];
@@ -2266,6 +2271,11 @@ function registerWorkbench(pi, options = {}) {
     halted = false;
   });
   on("input", async (event, ctx) => {
+    if (!event.images?.length && isTaskStatusQuery(event.text)) {
+      attach(ctx);
+      send(void 0, "task-status");
+      return { action: "handled" };
+    }
     cancelHandoff();
     if (ctx.isIdle && !ctx.isIdle()) return { action: "continue" };
     try {
