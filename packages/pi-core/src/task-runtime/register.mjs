@@ -17,6 +17,7 @@ import { hostLanguage } from "./host-language.mjs";
 import { createTaskProgression } from "./progress-action.mjs";
 import { currentRuntime, withHostRuntime } from "./runtime-bridge.mjs";
 import { singleFlightCommand } from "./single-flight.mjs";
+import { isTaskStatusQuery } from "./status-query.mjs";
 import { isReadOnlyTool } from "./tool-manifest.mjs";
 import { restoreTaskToolOrder } from "./tool-protocol.mjs";
 import { shouldAskToContinue } from "./turn-end-prompt.mjs";
@@ -230,6 +231,11 @@ function registerWorkbench(pi, options = {}) {
     halted = false;
   });
   on("input", async (event, ctx) => {
+    if (!event.images?.length && isTaskStatusQuery(event.text)) {
+      attach(ctx);
+      send(void 0, "task-status");
+      return { action: "handled" };
+    }
     cancelHandoff();
     if (ctx.isIdle && !ctx.isIdle()) return { action: "continue" };
     try {
