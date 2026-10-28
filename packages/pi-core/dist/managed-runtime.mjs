@@ -2087,5 +2087,6 @@ var create = async (context) => {
 var managed_runtime_default = create;
 export {
   createManagedTaskApplication,
-  managed_runtime_default as default
+  managed_runtime_default as default,
+  inspectTaskBytes
 };

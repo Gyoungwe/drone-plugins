@@ -1,7 +1,7 @@
 {
 	"version": 1,
 	"generator": "packages/pi-core/scripts/build.mjs",
-	"inputsSha256": "e16d343eaaf8d76ea54d4bdb1e17cd6ab6852f41706cf3a2369b4bd2e091b06f",
+	"inputsSha256": "a9919470db03ec2aa9f66773b1e14bbd9c76d3cc48964c9c73e1b87135fb8571",
 	"outputs": {
 		"dist/contracts.d.ts": "4977ed343b53826c3be9ff1ea5e064585043c017753ae917eebba189bab2b4cf",
 		"dist/drone-commands.d.ts": "35a67f4528292a38d5de6ec7321e5668dfbecbc9001a7d72132412346998828f",
@@ -9,8 +9,8 @@
 		"dist/host.mjs": "b2b711f2730e645228f5258ce003f2f938fd74494a705c29163bd368c3aea59c",
 		"dist/index.d.ts": "9ce5e2c4b1dcd42296a6acbc4e427fa89f303c022cb9114d53b9a34120cd2182",
 		"dist/index.mjs": "b90b9e2518cf3d42f2c7b8078d11710c5fff103f2d1e92c99db392fa89612d3f",
-		"dist/managed-runtime.d.ts": "ef92b93700290243cfbe350be5a6e498ba1b222cb1b48942aee113e70717aa6e",
-		"dist/managed-runtime.mjs": "57df3e4916e03bc3bf8734505d8500da4981cd6ca31b26c6869a33227eafe354",
+		"dist/managed-runtime.d.ts": "b4d886fefc42322085e7ef3e00102a629372bafb35d6e08695a7e8289b0f9f90",
+		"dist/managed-runtime.mjs": "43571b7f26883ca132793da277501dcb880d5c61dd64d8bdae25bd2b21beaeaa",
 		"dist/memory.d.ts": "6da36d508d0ade856e7e56e5f4ab5b7ea8153db0d1f7319bc3c6ee33193a6d38",
 		"dist/memory.mjs": "7019a1647fd40b2f446db8f0f20c5f41848dbca92ca8f38964f26a8b050260cf",
 		"dist/milestone-plan.d.ts": "39008645954d801aeefdfef9cde0a0737d679cf7ab02154bc8d25836a8c4fafb",
@@ -18,6 +18,7 @@
 		"dist/path.d.ts": "0ef0c3cde6d14bd94bc99e50194a84d4d80637460a8faa0e373ebbf15d36d1e9",
 		"dist/reply-language.d.ts": "29e9b40c707fe3b6a615b4112165d917b8dd8fcbef85e21cbdf46c0a0e572950",
 		"dist/task-runtime/acceptance.d.mts": "4f20ba39269d5f037bf6712fa78aa27ab529ac9e3b36962cee58e4be8aa356a8",
+		"dist/task-runtime/file-inspection.d.mts": "c3d2acfb10649554ea203713191a3f2f297e5df2e153f15916088fb098ced030",
 		"dist/task-runtime/managed-application.d.mts": "77e3bcd6c25de91973d88fd843582a9f25c8d4a7e52012a2db8281c0773fd72b",
 		"dist/task-runtime/owner.d.mts": "d76e138a00b06553ff58680f894de4d7c4fb1148595b845abe48a1f08367f625",
 		"dist/task-runtime/runtime.d.mts": "e91468434fc80dc11a0dd17daa9257b5f7ed1d5392a5e60dd8ad1e791bf67715",
