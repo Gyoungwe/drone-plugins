@@ -159,7 +159,7 @@ test("native task_plan executes the plugin policy before appending task state", 
 	const ctx = {
 		cwd: tmpdir(),
 		sessionManager: {
-			getSessionId: () => "native-plan-policy",
+			getSessionFile: () => undefined, getSessionId: () => "native-plan-policy",
 			getBranch: () => [],
 		},
 	};

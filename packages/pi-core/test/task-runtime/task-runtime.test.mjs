@@ -114,16 +114,17 @@ it("status command is read-only and never starts a model turn", async () => {
 		},
 		sendMessage,
 	});
-	await commands["task-status"].handler("", { cwd: "/fixture", sessionId: "a" });
+	const context={cwd:"/fixture",sessionManager:{getSessionId:()=>"a",getSessionFile:()=>undefined,getBranch:()=>[]}};
+	await commands["task-status"].handler("", context);
 	expect(sendMessage).toHaveBeenCalledWith(
 		expect.objectContaining({
 			customType: "drone-task-status",
 			display: true,
-			details: expect.objectContaining({ command: "task-status" }),
+			details: expect.objectContaining({ command: "task-status",taskStorage:{state:"deferred"} }),
 		}),
 		{ triggerTurn: false },
 	);
-	await commands["task-action"].handler("", { cwd: "/fixture", sessionId: "a" });
+	await commands["task-action"].handler("", context);
 	expect(sendMessage).toHaveBeenLastCalledWith(
 		expect.objectContaining({ details: expect.objectContaining({ command: "task-action" }) }),
 		{ triggerTurn: false },

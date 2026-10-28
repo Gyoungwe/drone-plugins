@@ -50,7 +50,7 @@ async function host(t, { choice = "同意本次请求", ui = true, options = {},
 	registerPiCore(pi, options);
 	const ctx = {
 		cwd,
-		sessionManager: { getSessionId: () => "native-session", getBranch: () => entries },
+		sessionManager: { getSessionFile: () => undefined, getSessionId: () => "native-session", getBranch: () => entries },
 		...(ui
 			? {
 					ui: {
@@ -191,7 +191,7 @@ test("native readback refuses revoked UI and an in-flight session switch", async
 	await current.emit("session_start", {
 		...current.ctx,
 		sessionManager: {
-			getSessionId: () => "new-session",
+			getSessionFile: () => undefined, getSessionId: () => "new-session",
 			getBranch: () => [],
 		},
 	});

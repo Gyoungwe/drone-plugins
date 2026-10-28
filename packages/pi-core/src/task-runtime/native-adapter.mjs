@@ -6,6 +6,7 @@ import { acceptanceSchema } from "./acceptance.mjs";
 import { createTaskAuthorization } from "./ask-authorization.mjs";
 import { resolveWriteRoots } from "./consent.mjs";
 import { createTaskSession } from "./task-session.mjs";
+import { readNativeSessionStorage } from "./native-storage.mjs";
 import {
   FAILURE_EXPLANATION_POLICY,
   failureContext,
@@ -30,6 +31,7 @@ function registerWorkbench(pi, options = {}) {
   const onEvent = (name, handler) => pi.events?.on?.(name, bindCallback(handler));
   let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || (() => pi?.drone?.readKnowledgeBinding?.() || null);
   let pendingStatus = null;
+  let storageState="deferred";
   let providerTurnOpen = false;
   const authorize = async (cwd, path) => {
     const ctx=invocation.getStore() || context;
@@ -96,7 +98,18 @@ function registerWorkbench(pi, options = {}) {
       const declared = pi.getAllTools().find(tool => tool.name === name)?.annotations?.readOnlyHint;
       return declared !== undefined ? declared : withHostRuntime(pi, () => isReadOnlyTool(name));
     },
-    persist: async (record, signal) => { signal.throwIfAborted(); await pi.appendEntry(record.customType, record.data); },
+    persist: async (record, signal) => {
+      signal.throwIfAborted();
+      const ctx=invocation.getStore() || context;
+      const before=readNativeSessionStorage(ctx.sessionManager);
+      storageState=before.state;
+      if(before.state==="needs-reopen") throw new Error(`Task storage needs-reopen: ${before.code}`);
+      await pi.appendEntry(record.customType, record.data);
+      signal.throwIfAborted();
+      const after=readNativeSessionStorage(ctx.sessionManager);
+      storageState=after.state;
+      if(after.state==="needs-reopen") throw new Error(`Task storage needs-reopen: ${after.code}`);
+    },
     onCommitted: () => send(), inspect, authorize,
   });
   // The native adapter translates the existing task integration contract into
@@ -105,7 +118,11 @@ function registerWorkbench(pi, options = {}) {
     scope: () => session.status().scope,
     view: () => session.status().view,
     snapshot: () => session.status().snapshot,
-    render: () => session.status().render,
+    render: () => {
+      const rendered=session.status().render;
+      if(storageState!=="deferred") return rendered;
+      return `${rendered}\n${hostLanguage()==="zh"?"任务检查点仍为 deferred，尚未保存到磁盘；这不是已保存回执。":"Task checkpoint durability is deferred; it has not been saved to disk. This is not a saved receipt."}`;
+    },
     readRoots: () => session.status().readRoots,
     authorization: forWrite => session.status()[forWrite ? "writeAuthorization" : "authorization"],
     begin: (query, capabilities = [], binding = null) => session.input({query,capabilities,binding}, invocation.getStore()?.signal),
@@ -136,8 +153,14 @@ function registerWorkbench(pi, options = {}) {
     context = ctx;
     activeSessionId = ctx.sessionManager?.getSessionId?.() || ctx.sessionId || void 0;
     const scope = createHash("sha256").update(`${ctx.sessionManager?.getSessionId?.() || ctx.sessionId || "isolated"}\0${resolve(ctx.cwd)}`).digest("hex");
-    if (!options.application.readFailure(activeSessionId))
-      await session.turn({kind:"attach",scope,entries:ctx.sessionManager?.getBranch?.() || [],force},ctx.signal);
+    const storage=readNativeSessionStorage(ctx.sessionManager);
+    storageState=storage.state;
+    if (!options.application.readFailure(activeSessionId)) {
+      await session.turn({kind:"attach",scope,entries:storage.entries,force},ctx.signal);
+      if(storage.state==="needs-reopen") options.application.recordFailure(activeSessionId,{
+        state:"needs-reopen",message:storage.code,lastCommitted:session.status(),
+      });
+    }
   };
   journal.configure = (nextOptions = {}) => {
     if (nextOptions.readKnowledgeBinding) readKnowledgeBinding = nextOptions.readKnowledgeBinding;
@@ -160,7 +183,7 @@ function registerWorkbench(pi, options = {}) {
         customType: "drone-task-status",
         display: true,
         content,
-        details: { operational: true, reportId: randomUUID(), command, taskView: journal.view() }
+        details: { operational: true, reportId: randomUUID(), command, taskView: journal.view(), taskStorage:{state:storageState} }
       },
       { triggerTurn: false }
      );
