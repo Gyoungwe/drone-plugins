@@ -1,14 +1,14 @@
 {
 	"version": 1,
 	"generator": "packages/pi-core/scripts/build.mjs",
-	"inputsSha256": "e7d96fce8a4e799f20d52318211e6a83011bea5d757c96a683c1fe01ff6de8b4",
+	"inputsSha256": "b9b809005c120b95ec11d22693d071a57d3bbc392c274e3db5ca712a17307763",
 	"outputs": {
 		"dist/contracts.d.ts": "4977ed343b53826c3be9ff1ea5e064585043c017753ae917eebba189bab2b4cf",
 		"dist/drone-commands.d.ts": "35a67f4528292a38d5de6ec7321e5668dfbecbc9001a7d72132412346998828f",
 		"dist/host.d.ts": "d603a96e29d4979eec4aa82df5b3b6a145c491e5f0546281ec786ab06ea04799",
-		"dist/host.mjs": "cc43ffe24ba066c6c24686138b3cf1683ccf04be458620a4c44ea51e29c2deb4",
+		"dist/host.mjs": "03958e08b4457273ceea41ce15063e1234a1c51f4b9266a15a8461f5becd14e6",
 		"dist/index.d.ts": "9ce5e2c4b1dcd42296a6acbc4e427fa89f303c022cb9114d53b9a34120cd2182",
-		"dist/index.mjs": "3ee91b759dfed5f7b0c03c1a2e76272a3cf31c7339b2707b30a081dddc5cdfdc",
+		"dist/index.mjs": "d869c062e788812daafd684816fb9397c132cb8a3c259221f0b06b19c7d02fea",
 		"dist/memory.d.ts": "6da36d508d0ade856e7e56e5f4ab5b7ea8153db0d1f7319bc3c6ee33193a6d38",
 		"dist/memory.mjs": "7019a1647fd40b2f446db8f0f20c5f41848dbca92ca8f38964f26a8b050260cf",
 		"dist/milestone-plan.d.ts": "39008645954d801aeefdfef9cde0a0737d679cf7ab02154bc8d25836a8c4fafb",

@@ -2113,6 +2113,39 @@ function createTaskSession({
   };
 }
 
+// src/task-runtime/task-controller.mjs
+function createTaskController(session, readSignal) {
+  const journal = {
+    scope: () => session.status().scope,
+    view: () => session.status().view,
+    snapshot: () => session.status().snapshot,
+    render: () => session.status().render,
+    readRoots: () => session.status().readRoots,
+    authorization: (forWrite) => session.status()[forWrite ? "writeAuthorization" : "authorization"],
+    begin: (query, capabilities = [], binding = null) => session.input({ query, capabilities, binding }, readSignal()),
+    plan: (input) => session.action({ kind: "plan", input }, readSignal()),
+    wait: (input) => session.action({ kind: "wait", input }, readSignal()),
+    command: (input) => session.action({ kind: "command", input }, readSignal()),
+    acceptFile: (input, cwd) => session.action({ kind: "file", input, cwd }, readSignal()),
+    reconcile: (cwd) => session.action({ kind: "reconcile", cwd }, readSignal()),
+    guard: (value) => session.observe({ kind: "call", value }, readSignal()),
+    observe: (value, cwd) => session.observe({ kind: "result", value, cwd }, readSignal()),
+    pause: (reason) => session.turn({ kind: "pause", reason }),
+    settle: () => session.turn({ kind: "settle" }, readSignal()),
+    reserveContinuation: (reason) => session.turn({ kind: "reserve-continuation", reason }, readSignal()),
+    reserveHandoff: () => session.turn({ kind: "reserve-handoff" }, readSignal()),
+    advanceStage: () => session.turn({ kind: "advance-stage" }, readSignal()),
+    requestReport: () => session.turn({ kind: "request-report" }, readSignal()),
+    takeReport: () => session.turn({ kind: "take-report" }, readSignal())
+  };
+  const evidence = {
+    capture: (value, cwd, binding) => session.observe({ kind: "capture", value, cwd, binding }, readSignal()),
+    evict: (ids) => session.observe({ kind: "evicted", ids }, readSignal()),
+    restore: (input, cwd, binding) => session.action({ kind: "evidence-restore", input, cwd, binding }, readSignal())
+  };
+  return { journal, evidence };
+}
+
 // src/task-runtime/native-storage.mjs
 import { readFileSync } from "node:fs";
 function readNativeSessionStorage(manager) {
@@ -2404,40 +2437,14 @@ function registerWorkbench(pi, options = {}) {
     inspect,
     authorize
   });
-  const journal = {
-    scope: () => session.status().scope,
-    view: () => session.status().view,
-    snapshot: () => session.status().snapshot,
-    render: () => {
-      const rendered = session.status().render;
-      if (storageState !== "deferred") return rendered;
-      return `${rendered}
+  const { journal, evidence } = createTaskController(session, () => invocation.getStore()?.signal);
+  journal.render = () => {
+    const rendered = session.status().render;
+    if (storageState !== "deferred") return rendered;
+    return `${rendered}
 ${hostLanguage() === "zh" ? "\u4EFB\u52A1\u68C0\u67E5\u70B9\u4ECD\u4E3A deferred\uFF0C\u5C1A\u672A\u4FDD\u5B58\u5230\u78C1\u76D8\uFF1B\u8FD9\u4E0D\u662F\u5DF2\u4FDD\u5B58\u56DE\u6267\u3002" : "Task checkpoint durability is deferred; it has not been saved to disk. This is not a saved receipt."}`;
-    },
-    readRoots: () => session.status().readRoots,
-    authorization: (forWrite) => session.status()[forWrite ? "writeAuthorization" : "authorization"],
-    begin: (query, capabilities = [], binding = null) => session.input({ query, capabilities, binding }, invocation.getStore()?.signal),
-    plan: (input) => session.action({ kind: "plan", input }, invocation.getStore()?.signal),
-    wait: (input) => session.action({ kind: "wait", input }, invocation.getStore()?.signal),
-    command: (input) => session.action({ kind: "command", input }, invocation.getStore()?.signal),
-    acceptFile: (input, cwd) => session.action({ kind: "file", input, cwd }, invocation.getStore()?.signal),
-    reconcile: (cwd) => session.action({ kind: "reconcile", cwd }, invocation.getStore()?.signal),
-    guard: (value) => session.observe({ kind: "call", value }, invocation.getStore()?.signal),
-    observe: (value, cwd) => session.observe({ kind: "result", value, cwd }, invocation.getStore()?.signal),
-    pause: (reason) => session.turn({ kind: "pause", reason }),
-    settle: () => session.turn({ kind: "settle" }, invocation.getStore()?.signal),
-    reserveContinuation: (reason) => session.turn({ kind: "reserve-continuation", reason }, invocation.getStore()?.signal),
-    reserveHandoff: () => session.turn({ kind: "reserve-handoff" }, invocation.getStore()?.signal),
-    advanceStage: () => session.turn({ kind: "advance-stage" }, invocation.getStore()?.signal),
-    requestReport: () => session.turn({ kind: "request-report" }, invocation.getStore()?.signal),
-    takeReport: () => session.turn({ kind: "take-report" }, invocation.getStore()?.signal)
   };
   const askAuthorization = createTaskAuthorization(journal, () => bindingKey());
-  const evidence = {
-    capture: (value, cwd, binding) => session.observe({ kind: "capture", value, cwd, binding }, invocation.getStore()?.signal),
-    evict: (ids) => session.observe({ kind: "evicted", ids }, invocation.getStore()?.signal),
-    restore: (input, cwd, binding) => session.action({ kind: "evidence-restore", input, cwd, binding }, invocation.getStore()?.signal)
-  };
   currentRuntime().registerDisposable({ dispose: () => session.close() });
   const attach = async (ctx, force = false) => {
     options.onJournalAttached?.(journal);
