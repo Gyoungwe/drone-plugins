@@ -199,7 +199,7 @@ async function registered({ withPlan = true } = {}) {
 }
 const readProgress = async (events, ctx, id) => {
 	const input = { path: `${id}.txt` };
-	await events.tool_call({ toolName: "read", toolCallId: id, input });
+	await events.tool_call({ toolName: "read", toolCallId: id, input },ctx);
 	await events.tool_result(
 		{ toolName: "read", toolCallId: id, input, result: { content: [{ type: "text", text: "ok" }] } },
 		ctx,
@@ -255,7 +255,7 @@ it("自动接续用完上限后，回合末改为主动弹窗问去留，而不�
 it("未授权的任务不会在回合结束时被打断", async () => {
 	const { ctx, events } = await registered({ withPlan: true });
 	vi.useFakeTimers();
-	await events.tool_call({ toolName: "read", toolCallId: "call_n", input: { path: "n.txt" } });
+	await events.tool_call({ toolName: "read", toolCallId: "call_n", input: { path: "n.txt" } },ctx);
 	await events.tool_result(
 		{ toolName: "read", toolCallId: "call_n", result: { content: [{ type: "text", text: "ok" }] } },
 		ctx,
@@ -271,7 +271,7 @@ it("回合以错误结束时不弹窗（错误自有反馈路径，不该再要�
 	vi.useFakeTimers();
 	await approve();
 	await vi.runOnlyPendingTimersAsync();
-	await events.tool_call({ toolName: "read", toolCallId: "call_e", input: { path: "e.txt" } });
+	await events.tool_call({ toolName: "read", toolCallId: "call_e", input: { path: "e.txt" } },ctx);
 	await events.tool_result(
 		{ toolName: "read", toolCallId: "call_e", result: { content: [{ type: "text", text: "ok" }] } },
 		ctx,
@@ -306,7 +306,7 @@ it("no status card is injected between tool_calls and their results (400 invalid
 	// 回合执行中：模型已发出 tool_calls，tool 结果尚未写回
 	idle.value = false;
 	// tool_call 钩子内触发阶段推进 → onCheckpoint → send()
-	await events.tool_call({ toolName: "read", toolCallId: "call_a", input: { path: "a.txt" } });
+	await events.tool_call({ toolName: "read", toolCallId: "call_a", input: { path: "a.txt" } },ctx);
 	await events.tool_result(
 		{
 			toolName: "read",
@@ -327,7 +327,7 @@ it("a status card held during the turn is still delivered at agent_end", async (
 	pi.sendMessage.mockClear();
 	idle.value = false;
 	// 执行窗口内触发阶段推进：卡片被挂起，不得注入
-	await events.tool_call({ toolName: "read", toolCallId: "call_h", input: { path: "h.txt" } });
+	await events.tool_call({ toolName: "read", toolCallId: "call_h", input: { path: "h.txt" } },ctx);
 	await events.tool_result(
 		{
 			toolName: "read",
@@ -495,11 +495,11 @@ it.each([false, true])(
 		if (exhausted)
 			for (let i = 0; i < LIMITS.stageCalls; i++)
 				expect(
-					await events.tool_call({ toolName: "set_status", toolCallId: `status-${i}`, input: {} }),
+					await events.tool_call({ toolName: "set_status", toolCallId: `status-${i}`, input: {} },ctx),
 				).toBeUndefined();
 		const previous = j.snapshot();
 		expect(
-			await events.tool_call({ toolName: "task_plan", toolCallId: "plan-b", input: input("Second report") }),
+			await events.tool_call({ toolName: "task_plan", toolCallId: "plan-b", input: input("Second report") },ctx),
 		).toBeUndefined();
 		await tool.execute("plan-b", input("Second report"), undefined, undefined, ctx);
 		const tasks = j.view().tasks;

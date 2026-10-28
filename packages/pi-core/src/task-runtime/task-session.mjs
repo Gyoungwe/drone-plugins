@@ -1,3 +1,4 @@
+import { hostLanguage } from "./host-language.mjs";
 import { createEvidenceRecovery } from "./evidence.mjs";
 import { createTaskWorkbench, WORKBENCH_ENTRY } from "./workbench.mjs";
 
@@ -18,14 +19,14 @@ function taskEntries(entries) {
   );
 }
 
-/** One serial task module. Reads expose only the last committed state. */
+/** One serial task module. Reads expose accepted live state with an explicit storage receipt. */
 export function createTaskSession({
   persist,
   inspect,
   evidenceFiles,
   authorize,
   readOnly,
-  onCommitted,
+  onChanged,
   readFailure,
   onPersistenceFailed,
 }) {
@@ -34,7 +35,9 @@ export function createTaskSession({
     closed = false,
     dirty = false,
     checkpointRequested = false,
-    records = [];
+    records = [],
+    storage = null,
+    lastDurable = null;
   const journal = createTaskWorkbench({
     requireAuthorization: true,
     readOnly,
@@ -55,14 +58,15 @@ export function createTaskSession({
   });
   const projection = () => ({
     scope: journal.scope(),
-    view: journal.view(),
+    view: {...journal.view(),storage:structuredClone(storage)},
+    storage: structuredClone(storage),
     snapshot: journal.snapshot(),
     render: journal.render(),
     readRoots: journal.readRoots(),
-    authorization: journal.authorization(),
-    writeAuthorization: journal.authorization(true),
+    authorization: storage?.mode === "memory" || storage?.state === "durable" ? journal.authorization() : null,
+    writeAuthorization: storage?.mode === "memory" || storage?.state === "durable" ? journal.authorization(true) : null,
   });
-  let committed = projection(),
+  let live = projection(),
     persistenceFailure;
   const failure = () => persistenceFailure || readFailure();
   const execute = (signal, operation) => {
@@ -77,7 +81,7 @@ export function createTaskSession({
       let before,
         beforeEvidence,
         beforeRecords,
-        saved = false;
+        accepted = false;
       try {
         if (closed) throw new Error("Task session is closed");
         if (failure())
@@ -96,7 +100,7 @@ export function createTaskSession({
         combined.throwIfAborted();
         if (dirty) {
           try {
-            await persist(
+            storage = await persist(
               {
                 customType: TASK_SESSION_ENTRY,
                 data: {
@@ -111,19 +115,20 @@ export function createTaskSession({
             persistenceFailure = {
               state: "needs-reopen",
               message: error.message,
-              lastCommitted: structuredClone(committed),
+              lastCommitted: structuredClone(lastDurable || live),
             };
             onPersistenceFailed(persistenceFailure);
             throw error;
           }
         }
-        committed = projection();
-        saved = true;
+        live = projection();
+        if(storage?.state === "durable") lastDurable = structuredClone(live);
+        accepted = true;
         combined.throwIfAborted();
-        if (checkpointRequested) await onCommitted(committed);
+        if (checkpointRequested) await onChanged(live);
         return result;
       } catch (error) {
-        if (!saved && before) {
+        if (!accepted && before) {
           journal.rollback(before);
           evidence.rollback(beforeEvidence);
           records = beforeRecords;
@@ -136,11 +141,21 @@ export function createTaskSession({
   };
   const status = () => {
     if (closed) throw new Error("Task session is closed");
-    const result = structuredClone(failure()?.lastCommitted || committed);
+    const result = structuredClone(failure()?.lastCommitted || live);
     if (failure()) {
       result.persistence = { state: failure().state, message: failure().message };
+      result.storage = {...result.storage,state:"needs-reopen"};
+      result.view.storage = result.storage;
+      result.authorization = null;
+      result.writeAuthorization = null;
+      result.readRoots = [];
       result.render +=
-        "\nTask storage failed. This is the last committed task state; reopen the application from disk before continuing.";
+        "\nTask storage failed. This is the last confirmed task state; reopen the application from disk before continuing.";
+    }
+    if(!failure() && result.storage?.state === "deferred") {
+      result.render += "\n" + (hostLanguage() === "zh"
+        ? result.storage.mode === "memory" ? "当前任务仅保留在内存中，未保存到磁盘；重新加载不会恢复本轮授权。" : "任务检查点仍为 deferred，尚未保存到磁盘；外部写入须等待真实落盘回执。"
+        : result.storage.mode === "memory" ? "This task is live-only in memory, not saved to disk; reloading does not restore this activation's authorization." : "Task checkpoint durability is deferred; external writes require an actual disk receipt.");
     }
     return result;
   };
@@ -152,11 +167,20 @@ export function createTaskSession({
       execute(signal, (journal, evidence) => {
         switch (event.kind) {
           case "attach": {
+            storage = {mode:event.storage.mode,state:event.storage.state};
             records = taskEntries(event.entries);
             journal.attach(event.scope, records, event.force);
             evidence.attach(event.scope, journal.snapshot()?.id, records, event.force);
             return;
           }
+          case "storage":
+            storage = {mode:event.storage.mode,state:event.storage.state};
+            if(storage.state === "needs-reopen") {
+              persistenceFailure = {state:"needs-reopen",message:event.storage.code,lastCommitted:structuredClone(lastDurable || live)};
+              onPersistenceFailed(persistenceFailure);
+              throw new Error("Task storage needs-reopen: " + event.storage.code);
+            }
+            return;
           case "pause":
             return journal.pause(event.reason);
           case "settle":
@@ -177,7 +201,11 @@ export function createTaskSession({
       }),
     observe: (event, signal) =>
       execute(signal, async (journal, evidence) => {
-        if (event.kind === "call") return journal.guard(event.value);
+        if (event.kind === "call") {
+          if(storage?.mode !== "memory" && storage?.state !== "durable" && !readOnly(event.value.toolName))
+            throw new Error("Task checkpoint is not durable; wait for actual session persistence before external effects.");
+          return journal.guard(event.value);
+        }
         if (event.kind === "result") return journal.observe(event.value, event.cwd);
         if (event.kind === "capture")
           return evidence.capture(event.value, event.cwd, event.binding);

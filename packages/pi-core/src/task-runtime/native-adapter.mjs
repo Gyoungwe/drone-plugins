@@ -32,7 +32,6 @@ function registerWorkbench(pi, options = {}) {
   const onEvent = (name, handler) => pi.events?.on?.(name, bindCallback(handler));
   let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || (() => pi?.drone?.readKnowledgeBinding?.() || null);
   let pendingStatus = null;
-  let storageState="deferred";
   let providerTurnOpen = false;
   const authorize = async (cwd, path) => {
     const ctx=invocation.getStore() || context;
@@ -104,22 +103,16 @@ function registerWorkbench(pi, options = {}) {
       signal.throwIfAborted();
       const ctx=invocation.getStore() || context;
       const before=readNativeSessionStorage(ctx.sessionManager);
-      storageState=before.state;
       if(before.state==="needs-reopen") throw new Error(`Task storage needs-reopen: ${before.code}`);
       await pi.appendEntry(record.customType, record.data);
       signal.throwIfAborted();
       const after=readNativeSessionStorage(ctx.sessionManager);
-      storageState=after.state;
       if(after.state==="needs-reopen") throw new Error(`Task storage needs-reopen: ${after.code}`);
+      return {mode:after.mode,state:after.state};
     },
-    onCommitted: () => send(), inspect, authorize,
+    onChanged: () => send(), inspect, authorize,
   });
   const { journal, evidence } = createTaskController(session, () => invocation.getStore()?.signal);
-  journal.render = () => {
-    const rendered=session.status().render;
-    if(storageState!=="deferred") return rendered;
-    return `${rendered}\n${hostLanguage()==="zh"?"任务检查点仍为 deferred，尚未保存到磁盘；这不是已保存回执。":"Task checkpoint durability is deferred; it has not been saved to disk. This is not a saved receipt."}`;
-  };
   const askAuthorization = createTaskAuthorization(journal, () => bindingKey());
   currentRuntime().registerDisposable({dispose:()=>session.close()});
   const attach = async (ctx, force = false) => {
@@ -128,9 +121,8 @@ function registerWorkbench(pi, options = {}) {
     activeSessionId = ctx.sessionManager.getSessionId();
     const scope = createHash("sha256").update(`${activeSessionId}\0${resolve(ctx.cwd)}`).digest("hex");
     const storage=readNativeSessionStorage(ctx.sessionManager);
-    storageState=storage.state;
     if (!options.application.readFailure(activeSessionId)) {
-      await session.turn({kind:"attach",scope,entries:storage.entries,force},ctx.signal);
+      await session.turn({kind:"attach",scope,entries:storage.entries,storage,force},ctx.signal);
       if(storage.state==="needs-reopen") options.application.recordFailure(activeSessionId,{
         state:"needs-reopen",message:storage.code,lastCommitted:session.status(),
       });
@@ -157,7 +149,7 @@ function registerWorkbench(pi, options = {}) {
         customType: "drone-task-status",
         display: true,
         content,
-        details: { operational: true, reportId: randomUUID(), command, taskView: journal.view(), taskStorage:{state:storageState} }
+        details: { operational: true, reportId: randomUUID(), command, taskView: journal.view(), taskStorage:state.storage }
       },
       { triggerTurn: false }
      );
@@ -343,7 +335,11 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       halted = true;
     }
   });
-  on("context", async (event) => ({ messages: restoreTaskToolOrder(event.messages) }));
+  const refreshStorage = ctx => session.turn({kind:"storage",storage:readNativeSessionStorage(ctx.sessionManager)},ctx.signal);
+  on("context", async (event,ctx) => {
+    await refreshStorage(ctx);
+    return { messages: restoreTaskToolOrder(event.messages) };
+  });
   on("turn_start", () => {
     providerTurnOpen = true;
   });
@@ -351,8 +347,9 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     providerTurnOpen = false;
     if (pendingStatus !== null) send(pendingStatus.content, pendingStatus.command);
   });
-  on("tool_call", async (event) => {
+  on("tool_call", async (event,ctx) => {
     providerTurnOpen = true;
+    await refreshStorage(ctx);
     if (halted && event.toolName !== "task_status")
       return {
         block: true,
