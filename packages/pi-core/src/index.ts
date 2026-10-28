@@ -1,5 +1,5 @@
 import type { AskQuestion, AskRequest, AskResponse } from "./contracts";
-import { createTaskRuntimeOwner } from "./task-runtime/owner.mjs";
+import { createTaskApplication } from "./task-runtime/owner.mjs";
 import type { DroneHostPort, HostCapabilities } from "@gyoungwe/plugin-api";
 import { registerDroneCommands } from "./drone-commands";
 import { registerNativeTaskReadback } from "./native-task-readback";
@@ -126,7 +126,7 @@ export function registerPiCore(pi: any, options: PiCoreRegistrationOptions = {})
 		activeContext = undefined;
 	});
 
-	const taskOwner = createTaskRuntimeOwner();
+	const taskOwner = createTaskApplication();
 	const journal = taskOwner.attach(pi);
 	if (options.host?.host !== "drone-desktop" && process.env.DRONE_TASK_WORKBENCH !== "off")
 		registerNativeTaskReadback(pi, journal, () => activeContext);

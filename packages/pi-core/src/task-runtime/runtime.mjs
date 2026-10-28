@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
+import { createTaskApplicationState } from "./application-state.mjs";
 import { registerWorkbench } from "./native-adapter.mjs";
 import { bindRuntime, runtimeForHost, withHostRuntime } from "./runtime-bridge.mjs";
 import { isReadOnlyTool } from "./tool-manifest.mjs";
@@ -197,6 +198,7 @@ function registerTaskRuntime(pi, options = {}) {
   const registry = { version: 1, journal: null, runtime: hostRuntime };
   const journal = withHostRuntime(pi, () => registerWorkbench(pi, {
     ...options,
+    application: options.application || createTaskApplicationState(),
     onJournalAttached: (current) => {
       registry.journal = current;
       hostRuntime.tasks.workbench.journal = current;
@@ -226,6 +228,7 @@ function publishTaskRuntimeRegistry(pi, registry) {
   registry.unsubscribe = events.on(TASK_RUNTIME_REQUEST, (payload) => {
     if (payload?.version === 1) events.emit(TASK_RUNTIME_RESPONSE, { version: 1, registry });
   });
+  registry.runtime.registerDisposable({dispose:registry.unsubscribe});
 }
 export {
   TASK_DOCUMENT_KIND,

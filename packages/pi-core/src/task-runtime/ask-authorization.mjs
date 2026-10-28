@@ -73,7 +73,7 @@ ${details}`, [deny, allow], { signal });
       if (selected !== allow || signal?.aborted) return false;
       if (journal.scope() !== scope || await checkBinding() !== binding)
         throw new Error("Task context or knowledge binding changed; ask again in the current context.");
-      journal.command({ ...input, action: action ? "acknowledge" : input.action });
+      await journal.command({ ...input, action: action ? "acknowledge" : input.action });
       return true;
     })();
     pending.set(key, operation);

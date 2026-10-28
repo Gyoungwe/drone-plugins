@@ -1,9 +1,10 @@
+import { createTaskApplicationState } from "./application-state.mjs";
 import { acceptanceVerifier, acceptanceVerifiers, bindAcceptanceVerifierEvents, registerAcceptanceVerifier } from "./acceptance.mjs";
 import { bindRuntime, createStandaloneRuntime, withHostRuntime, withRuntime } from "./runtime-bridge.mjs";
 import { registerTaskRuntime, requestSharedTaskRuntime } from "./runtime.mjs";
 
 /** One owner per loader/session; both public entrypoints use this constructor. */
-export function createTaskRuntimeOwner(definitions = []) {
+function createTaskRuntimeOwner(definitions = [], application) {
   const runtime = createStandaloneRuntime();
   withRuntime(runtime, () => {
     for (const verifier of definitions) registerAcceptanceVerifier(verifier.kind, verifier);
@@ -11,6 +12,9 @@ export function createTaskRuntimeOwner(definitions = []) {
   let active = true;
   const lifetime = new AbortController();
   const signalFor = signal => signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal;
+  const contextFor = (context, signal) => new Proxy(context, {
+    get(target,name) { return name === "signal" ? signalFor(signal || target.signal) : Reflect.get(target,name); }
+  });
   let attached;
   let unbind;
   let unlisten;
@@ -63,21 +67,21 @@ export function createTaskRuntimeOwner(definitions = []) {
         get(target, name) {
           if (name === "events") return guardedEvents;
           if (name === "on") return (event, handler) => target.on(event, (value, context) => {
-            if (active) return withHostRuntime(pi, () => handler(value, { ...context, signal: signalFor(context.signal) }));
+            if (active) return withHostRuntime(pi, () => handler(value, contextFor(context)));
           });
           if (name === "registerTool") return (tool) => target.registerTool({
             ...tool,
             execute: (id, input, signal, update, context) => {
               requireActive();
               const scopedSignal = signalFor(signal);
-              return withHostRuntime(pi, () => tool.execute(id, input, scopedSignal, update, { ...context, signal: scopedSignal }));
+              return withHostRuntime(pi, () => tool.execute(id, input, scopedSignal, update, contextFor(context, scopedSignal)));
             }
           });
           if (name === "registerCommand") return (command, definition) => target.registerCommand(command, {
             ...definition,
-            handler: (...args) => {
+            handler: (args, context) => {
               requireActive();
-              return withHostRuntime(pi, () => definition.handler(...args));
+              return withHostRuntime(pi, () => definition.handler(args, contextFor(context)));
             }
           });
           const value = target[name];
@@ -87,7 +91,7 @@ export function createTaskRuntimeOwner(definitions = []) {
       // The proxy is scoped to the same explicit runtime. Existing service
       // providers win, so a root entry + host adapter never creates two writers.
       const unbindGuarded = bindRuntime(guarded, current);
-      const journal = registerTaskRuntime(guarded, { runtime: current });
+      const journal = registerTaskRuntime(guarded, { runtime: current, application });
       const oldUnbind = unbind;
       unbind = () => { unbindGuarded(); oldUnbind(); };
       // Journal consumers may run from another extension callback. Scope every
@@ -114,5 +118,40 @@ export function createTaskRuntimeOwner(definitions = []) {
       await linkedOwner?.dispose();
       await runtime.dispose();
     }
+  };
+}
+
+/** The package application owns verifier declarations and real session lifetimes.
+ * Both the official Pi entry and Desktop host loader delegate to this module. */
+export function createTaskApplication(definitions = []) {
+  const application=createTaskApplicationState();
+  const registry=createTaskRuntimeOwner(definitions,application);
+  const sessions=new Set();
+  let active=true;
+  const requireActive=()=>{if(!active) throw new Error("Task application is disposed");};
+  const createSession=()=>{
+    requireActive();
+    const owner=createTaskRuntimeOwner(registry.definitions(),application);
+    const session={
+      attach:pi=>owner.attach(pi),
+      dispose:async()=>{await owner.dispose();sessions.delete(session);},
+    };
+    sessions.add(session);
+    return session;
+  };
+  return {
+    registerAcceptanceVerifier:registry.registerAcceptanceVerifier,
+    readAcceptanceVerifier:registry.readAcceptanceVerifier,
+    attach:pi=>createSession().attach(pi),
+    createNativeSession:()=>{
+      const session=createSession();
+      return {extension:pi=>{session.attach(pi);},dispose:session.dispose};
+    },
+    dispose:async()=>{
+      if(!active) return;
+      active=false;
+      await Promise.all([...sessions].map(session=>session.dispose()));
+      await registry.dispose();
+    },
   };
 }

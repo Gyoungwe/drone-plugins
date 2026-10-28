@@ -1089,6 +1089,8 @@ function createTaskWorkbench({
     ].filter(Boolean).join("\n");
   }
   return {
+    checkpoint: () => clone({ book, requested, pinned, turnCapabilities, turnBinding }),
+    rollback: state => { ({ book, requested, pinned, turnCapabilities, turnBinding } = clone(state)); },
     advanceStage,
     authorization,
     scope: () => book.scope,

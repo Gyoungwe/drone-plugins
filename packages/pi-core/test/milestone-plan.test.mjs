@@ -186,8 +186,8 @@ test("native task_plan executes the plugin policy before appending task state", 
 			ctx,
 		);
 	const task = checkpoints.findLast(
-		(entry) => entry.customType === "drone-task-workbench-v2",
-	).data.tasks[0];
+		(entry) => entry.customType === "drone-task-session-v1",
+	).data.workbench.tasks[0];
 	assert.equal(task.milestones[0].id, "report");
 	assert.equal(task.state, "waiting_user");
 	assert.equal(task.planApproved, false);
