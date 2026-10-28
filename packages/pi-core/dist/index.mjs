@@ -2113,6 +2113,43 @@ function createTaskSession({
   };
 }
 
+// src/task-runtime/native-storage.mjs
+import { readFileSync } from "node:fs";
+function readNativeSessionStorage(manager) {
+  const branch = manager.getBranch();
+  const file = manager.getSessionFile();
+  const deferred = () => ({ state: "deferred", entries: branch, code: null });
+  const failed = (code, entries2 = []) => ({ state: "needs-reopen", entries: entries2, code });
+  if (!file) return deferred();
+  let content;
+  try {
+    content = readFileSync(file, "utf8");
+  } catch (error3) {
+    if (error3.code === "ENOENT" && !branch.some((entry) => entry.type === "message" && ["user", "assistant"].includes(entry.message.role))) return deferred();
+    return failed(error3.code === "ENOENT" ? "SESSION_FILE_MISSING" : "SESSION_FILE_UNREADABLE");
+  }
+  const rows = /* @__PURE__ */ new Map();
+  for (const [index, line] of content.split("\n").entries()) {
+    if (!line.length) continue;
+    let row;
+    try {
+      row = JSON.parse(line);
+    } catch {
+      return failed(`SESSION_JSONL_INVALID_LINE_${index + 1}`);
+    }
+    if (!row || typeof row !== "object" || typeof row.id !== "string") return failed(`SESSION_JSONL_INVALID_LINE_${index + 1}`);
+    rows.set(row.id, row);
+  }
+  if (rows.get(manager.getSessionId())?.type !== "session") return failed("SESSION_FILE_IDENTITY_MISMATCH");
+  const entries = [];
+  for (const entry of branch) {
+    const row = rows.get(entry.id);
+    if (JSON.stringify(row) !== JSON.stringify(entry)) return failed("SESSION_BRANCH_NOT_PERSISTED", entries);
+    entries.push(row);
+  }
+  return { state: "durable", entries, code: null };
+}
+
 // src/task-runtime/progress-action.mjs
 function createTaskProgression(journal, { askAuthorization, checkBinding, continueAuthorized, prepareRemaining, send, getGeneration = () => 0 }) {
   const pending = /* @__PURE__ */ new Map();
@@ -2276,6 +2313,7 @@ function registerWorkbench(pi, options = {}) {
   const onEvent = (name, handler) => pi.events?.on?.(name, bindCallback(handler));
   let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || (() => pi?.drone?.readKnowledgeBinding?.() || null);
   let pendingStatus = null;
+  let storageState = "deferred";
   let providerTurnOpen = false;
   const authorize = async (cwd, path) => {
     const ctx = invocation.getStore() || context;
@@ -2352,7 +2390,15 @@ function registerWorkbench(pi, options = {}) {
     },
     persist: async (record, signal) => {
       signal.throwIfAborted();
+      const ctx = invocation.getStore() || context;
+      const before = readNativeSessionStorage(ctx.sessionManager);
+      storageState = before.state;
+      if (before.state === "needs-reopen") throw new Error(`Task storage needs-reopen: ${before.code}`);
       await pi.appendEntry(record.customType, record.data);
+      signal.throwIfAborted();
+      const after = readNativeSessionStorage(ctx.sessionManager);
+      storageState = after.state;
+      if (after.state === "needs-reopen") throw new Error(`Task storage needs-reopen: ${after.code}`);
     },
     onCommitted: () => send(),
     inspect,
@@ -2362,7 +2408,12 @@ function registerWorkbench(pi, options = {}) {
     scope: () => session.status().scope,
     view: () => session.status().view,
     snapshot: () => session.status().snapshot,
-    render: () => session.status().render,
+    render: () => {
+      const rendered = session.status().render;
+      if (storageState !== "deferred") return rendered;
+      return `${rendered}
+${hostLanguage() === "zh" ? "\u4EFB\u52A1\u68C0\u67E5\u70B9\u4ECD\u4E3A deferred\uFF0C\u5C1A\u672A\u4FDD\u5B58\u5230\u78C1\u76D8\uFF1B\u8FD9\u4E0D\u662F\u5DF2\u4FDD\u5B58\u56DE\u6267\u3002" : "Task checkpoint durability is deferred; it has not been saved to disk. This is not a saved receipt."}`;
+    },
     readRoots: () => session.status().readRoots,
     authorization: (forWrite) => session.status()[forWrite ? "writeAuthorization" : "authorization"],
     begin: (query, capabilities = [], binding = null) => session.input({ query, capabilities, binding }, invocation.getStore()?.signal),
@@ -2393,8 +2444,16 @@ function registerWorkbench(pi, options = {}) {
     context = ctx;
     activeSessionId = ctx.sessionManager?.getSessionId?.() || ctx.sessionId || void 0;
     const scope = createHash3("sha256").update(`${ctx.sessionManager?.getSessionId?.() || ctx.sessionId || "isolated"}\0${resolve4(ctx.cwd)}`).digest("hex");
-    if (!options.application.readFailure(activeSessionId))
-      await session.turn({ kind: "attach", scope, entries: ctx.sessionManager?.getBranch?.() || [], force }, ctx.signal);
+    const storage = readNativeSessionStorage(ctx.sessionManager);
+    storageState = storage.state;
+    if (!options.application.readFailure(activeSessionId)) {
+      await session.turn({ kind: "attach", scope, entries: storage.entries, force }, ctx.signal);
+      if (storage.state === "needs-reopen") options.application.recordFailure(activeSessionId, {
+        state: "needs-reopen",
+        message: storage.code,
+        lastCommitted: session.status()
+      });
+    }
   };
   journal.configure = (nextOptions = {}) => {
     if (nextOptions.readKnowledgeBinding) readKnowledgeBinding = nextOptions.readKnowledgeBinding;
@@ -2417,7 +2476,7 @@ function registerWorkbench(pi, options = {}) {
           customType: "drone-task-status",
           display: true,
           content,
-          details: { operational: true, reportId: randomUUID2(), command, taskView: journal.view() }
+          details: { operational: true, reportId: randomUUID2(), command, taskView: journal.view(), taskStorage: { state: storageState } }
         },
         { triggerTurn: false }
       );
@@ -3135,7 +3194,7 @@ function createTaskApplication(definitions = []) {
 }
 
 // src/drone-commands.ts
-import { readFileSync } from "node:fs";
+import { readFileSync as readFileSync2 } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -3203,7 +3262,7 @@ function packageVersion() {
     for (let depth = 0; depth < 8; depth += 1) {
       const packagePath = join(current, "package.json");
       try {
-        const metadata = JSON.parse(readFileSync(packagePath, "utf8"));
+        const metadata = JSON.parse(readFileSync2(packagePath, "utf8"));
         if (metadata?.name === "@earendil-works/pi-coding-agent" && typeof metadata.version === "string" && metadata.version.length > 0)
           return { version: metadata.version, source: "resolved-package" };
       } catch {
@@ -3226,7 +3285,7 @@ function packageVersion() {
     for (const base of require2.resolve.paths("@earendil-works/pi-coding-agent") ?? []) {
       const packagePath = join(base, "@earendil-works/pi-coding-agent", "package.json");
       try {
-        const metadata = JSON.parse(readFileSync(packagePath, "utf8"));
+        const metadata = JSON.parse(readFileSync2(packagePath, "utf8"));
         if (metadata.name === "@earendil-works/pi-coding-agent" && typeof metadata.version === "string" && metadata.version.length > 0)
           return { version: metadata.version, source: "resolved-package" };
       } catch {
@@ -8272,7 +8331,7 @@ function makeDeliverFilesTool() {
 }
 
 // src/memory.ts
-import { mkdirSync, readdirSync, readFileSync as readFileSync2, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync as readFileSync3, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join as join3 } from "node:path";
 var MEMORY_TYPES = ["user", "feedback", "project", "reference"];
 var MEMORY_INDEX = "MEMORY.md";
@@ -8331,7 +8390,7 @@ function listMemories(cwd) {
   }
   const out = [];
   for (const file of files) {
-    const entry = parseMemory(readFileSync2(join3(dir, file), "utf8"));
+    const entry = parseMemory(readFileSync3(join3(dir, file), "utf8"));
     if (entry) out.push({ ...entry, file });
   }
   return out;
@@ -8347,7 +8406,7 @@ function writeMemory(cwd, entry) {
 function memoryIndexPrompt(cwd) {
   let index;
   try {
-    index = readFileSync2(join3(memoryDir(cwd), MEMORY_INDEX), "utf8");
+    index = readFileSync3(join3(memoryDir(cwd), MEMORY_INDEX), "utf8");
   } catch {
     return [];
   }
