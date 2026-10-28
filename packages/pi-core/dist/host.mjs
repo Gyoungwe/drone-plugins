@@ -247,8 +247,8 @@ function createStandaloneRuntime(log = {}) {
           resources.map((resource) => {
             try {
               return resource.dispose?.() ?? resource.close?.();
-            } catch (error3) {
-              return Promise.reject(error3);
+            } catch (error4) {
+              return Promise.reject(error4);
             }
           })
         );
@@ -459,7 +459,7 @@ function describeAcceptance(acceptance, verifier = acceptanceVerifier(acceptance
 
 // src/task-runtime/native-adapter.mjs
 import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
-import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
+import { createHash as createHash4, randomUUID as randomUUID2 } from "node:crypto";
 import { readFile, realpath as realpath3 } from "node:fs/promises";
 import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve4, sep as sep2 } from "node:path";
 
@@ -603,7 +603,7 @@ ${en}` : en;
 import { resolve as resolve3 } from "node:path";
 
 // src/task-runtime/workbench.mjs
-import { createHash as createHash2, randomUUID } from "node:crypto";
+import { createHash as createHash3, randomUUID } from "node:crypto";
 import { lstat, open, realpath as realpath2 } from "node:fs/promises";
 import { isAbsolute as isAbsolute2, relative as relative2, resolve as resolve2, sep } from "node:path";
 
@@ -700,6 +700,9 @@ function failureReceipt(task) {
 var taskProgressContext = (task) => task ? failureContext(task, void 0, true) : "";
 var TASK_HANDOFF_POLICY = `Once the user has authorized a task (the one ask_user authorization card), that authorization covers every listed deliverable: keep working in the same turn until they are all produced, one after another, instead of stopping after each file or command to report or to ask whether to continue. Do not create task_wait for routine decisions; write the judgement call into the deliverable and move on. If you do end a turn early with deliverables remaining, the host hands the task back to you automatically under the same authorization; treat that handoff as a normal continuation, not as new permission. For incomplete task progress, explain each remaining deliverable with its observed evidence, confirmed blocker or explicitly unknown cause, and the smallest next action. Separate agent-owned routine work from genuinely user-owned decisions; do not ask the user to keep saying continue. Never silently weaken acceptance criteria or mark unverified items complete. Point to the workbench ask_user remaining-items entry for user decisions; do not duplicate a pending host question. After substantial execution, including a user's simple "continue", give a natural-language handoff on the user's topic, not a copied task ledger and not a process-error postmortem. Recovered tool failures and host diagnostics stay out of that handoff. Before the final reply, query task_status once for fresh host verification if deliverables changed (do not loop on status). Say what was actually produced or checked, what remains and why, and the next concrete action. Clearly distinguish a generated script from executed analysis and verified scientific results. Provide clickable file links for delivered scripts (including .R/.r and .PY/.py), reports and data. If required counts, sample metadata or design information are missing, name the exact missing input rather than asking the user to keep saying continue. Use granted scope for routine work; do not require a new phase approval or silently expand scope. Stage is an execution checkpoint/budget counter, not milestone progress; do not claim it must increase on every continue. For a missing acceptance file, distinguish workspace-relative and actual returned output/Vault locations: inspect the existing receipt and authorized path before asserting nothing was saved or repeating a write. Do not silently change the agreed acceptance criteria or grant permissions. task_status provides facts to explain; it does not replace your final answer or bypass publication checks.`;
 
+// src/task-runtime/file-inspection.mjs
+import { createHash as createHash2 } from "node:crypto";
+
 // src/task-runtime/pdf-identity.mjs
 import { Worker } from "node:worker_threads";
 async function readPdfIdentity(bytes) {
@@ -727,6 +730,50 @@ async function readPdfIdentity(bytes) {
       if (code !== 0) reject(new Error("PDF identity worker stopped; no identity claim was made."));
     });
   });
+}
+
+// src/task-runtime/file-inspection.mjs
+var error2 = (code, message) => Object.assign(new Error(message), { code });
+async function inspectTaskBytes(bytes, descriptor, expected = {}) {
+  const identity = {
+    path: descriptor.path,
+    absolutePath: descriptor.absolutePath,
+    rootKind: descriptor.rootKind,
+    bytes: bytes.length,
+    sha256: createHash2("sha256").update(bytes).digest("hex"),
+    observedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    kind: "file",
+    identity: "not-requested"
+  };
+  if (expected.kind === "pdf") {
+    if (!bytes.subarray(0, 1024).includes(Buffer.from("%PDF-")))
+      throw error2("not-pdf", "Not a PDF: HTML landing pages and renamed downloads are not accepted.");
+    identity.kind = "pdf";
+    if (expected.doi || expected.title) {
+      const found = await readPdfIdentity(bytes);
+      const normalize = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]/g, "");
+      const doi = String(expected.doi || "").toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
+      const title = normalize(expected.title);
+      const titleMatch = title.length >= 12 && normalize(found.text).includes(title);
+      const doiMatch = !!doi && found.text.toLowerCase().includes(doi);
+      if (doi && !doiMatch || title.length >= 12 && !titleMatch)
+        throw error2(
+          "identity-mismatch",
+          "Selected PDF does not match the requested title/DOI in the inspected first pages. Choose the correct file or explicitly revise the request; original unchanged."
+        );
+      identity.identity = doiMatch && titleMatch ? "metadata-matched" : "needs-review";
+      identity.extraction = { pages: found.pages, partial: found.partial };
+    }
+    identity.identity = expected.sha256 ? identity.sha256 === expected.sha256 ? "hash-matched" : "mismatch" : identity.identity === "metadata-matched" ? "metadata-matched" : "needs-review";
+    if (identity.identity === "mismatch")
+      throw error2(
+        "identity-mismatch",
+        "File hash does not match the requested artifact; original file was not changed."
+      );
+  }
+  if (expected.sha256 && expected.kind !== "pdf" && identity.sha256 !== expected.sha256)
+    throw error2("artifact-changed", "File version differs from the expected hash.");
+  return identity;
 }
 
 // src/task-runtime/remaining.mjs
@@ -830,7 +877,7 @@ var LIMITS = Object.freeze({
   fileBytes: 8 * 1024 * 1024
 });
 var clean2 = (value, max = 180) => String(value ?? "").replace(/(?:bearer\s+|(?:api[_-]?key|token|password|secret)\s*[=:]\s*)[^\s,;]+/gi, "[redacted]").split("").map((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 || "<>".includes(c) ? " " : c).join("").slice(0, max);
-var hash = (value) => createHash2("sha256").update(value).digest("hex");
+var hash = (value) => createHash3("sha256").update(value).digest("hex");
 var ARTIFACT_ROOT_KINDS = Object.freeze(["workspace", "vault", "research-run"]);
 var clone = (value) => structuredClone(value);
 var controls = /* @__PURE__ */ new Set([
@@ -877,7 +924,7 @@ var explainReason = (code) => code ? REASON_TEXT[code] || code : null;
 var defersPendingReview = (query) => /^(?:继续(?:做完|吧|执行|处理|完成|上一任务)?|接着(?:做|处理)?|continue|resume)[\s,.!？，。！?]*$/i.test(
   String(query ?? "").trim()
 );
-var error2 = (code, message) => Object.assign(new Error(message), { code });
+var error3 = (code, message) => Object.assign(new Error(message), { code });
 var stable = (value) => JSON.stringify(
   value,
   (_key, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v
@@ -886,10 +933,10 @@ async function inspectTaskFile(cwd, input, expected = {}) {
   const base = await realpath2(cwd), path = await realpath2(resolve2(cwd, input));
   const rel = relative2(base, path);
   if (!rel || isAbsolute2(rel) || rel === ".." || rel.startsWith(`..${sep}`) || rel.split(sep).some((p) => p.startsWith(".") || /^(?:auth|credentials|secrets?|tokens?|password)(?:\.|$)/i.test(p)))
-    throw error2("file-scope", "Choose an explicit non-private file within this task workspace.");
+    throw error3("file-scope", "Choose an explicit non-private file within this task workspace.");
   const stat3 = await lstat(path);
   if (!stat3.isFile() || stat3.size > LIMITS.fileBytes)
-    throw error2(
+    throw error3(
       "file-limit",
       "Expected a regular file of at most 8 MiB; larger files need a dedicated read-only adapter."
     );
@@ -897,49 +944,15 @@ async function inspectTaskFile(cwd, input, expected = {}) {
   try {
     const opened = await file.stat();
     if (await realpath2(path) !== path || opened.ino !== stat3.ino || opened.dev !== stat3.dev || opened.size > LIMITS.fileBytes)
-      throw error2("file-changed", "File scope/version changed before inspection.");
+      throw error3("file-changed", "File scope/version changed before inspection.");
     const bytes = await file.readFile();
     if (bytes.length > LIMITS.fileBytes)
-      throw error2("file-limit", "File changed beyond the inspection limit.");
-    const identity = {
+      throw error3("file-limit", "File changed beyond the inspection limit.");
+    return await inspectTaskBytes(bytes, {
       path: rel.split(sep).join("/"),
       absolutePath: path,
-      rootKind: ARTIFACT_ROOT_KINDS.includes(expected.rootKind) ? expected.rootKind : "workspace",
-      bytes: bytes.length,
-      sha256: hash(bytes),
-      observedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      kind: "file",
-      identity: "not-requested"
-    };
-    if (expected.kind === "pdf") {
-      if (!bytes.subarray(0, 1024).includes(Buffer.from("%PDF-")))
-        throw error2("not-pdf", "Not a PDF: HTML landing pages and renamed downloads are not accepted.");
-      identity.kind = "pdf";
-      if (expected.doi || expected.title) {
-        const found = await readPdfIdentity(bytes);
-        const normalize = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]/g, "");
-        const doi = String(expected.doi || "").toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
-        const title = normalize(expected.title);
-        const titleMatch = title.length >= 12 && normalize(found.text).includes(title);
-        const doiMatch = !!doi && found.text.toLowerCase().includes(doi);
-        if (doi && !doiMatch || title.length >= 12 && !titleMatch)
-          throw error2(
-            "identity-mismatch",
-            "Selected PDF does not match the requested title/DOI in the inspected first pages. Choose the correct file or explicitly revise the request; original unchanged."
-          );
-        identity.identity = doiMatch && titleMatch ? "metadata-matched" : "needs-review";
-        identity.extraction = { pages: found.pages, partial: found.partial };
-      }
-      identity.identity = expected.sha256 ? identity.sha256 === expected.sha256 ? "hash-matched" : "mismatch" : identity.identity === "metadata-matched" ? "metadata-matched" : "needs-review";
-      if (identity.identity === "mismatch")
-        throw error2(
-          "identity-mismatch",
-          "File hash does not match the requested artifact; original file was not changed."
-        );
-    }
-    if (expected.sha256 && expected.kind !== "pdf" && identity.sha256 !== expected.sha256)
-      throw error2("artifact-changed", "File version differs from the expected hash.");
-    return identity;
+      rootKind: ARTIFACT_ROOT_KINDS.includes(expected.rootKind) ? expected.rootKind : "workspace"
+    }, expected);
   } finally {
     await file.close();
   }
@@ -1070,7 +1083,7 @@ function createTaskWorkbench({
   }
   function requireTask() {
     const t = active();
-    if (!t || book.selectionRequired) throw error2("task-selection-required", "Select a task first.");
+    if (!t || book.selectionRequired) throw error3("task-selection-required", "Select a task first.");
     return t;
   }
   function begin(query, capabilities = [], binding = null) {
@@ -1145,7 +1158,7 @@ function createTaskWorkbench({
       if (archived.length) book.tasks.splice(book.tasks.indexOf(archived[0]), 1);
     }
     if (book.tasks.length >= LIMITS.tasks)
-      throw error2(
+      throw error3(
         "task-capacity",
         "Task history is full. Archive a finished task from the task panel (export first if needed); no open task is silently discarded."
       );
@@ -1160,7 +1173,7 @@ function createTaskWorkbench({
     return t;
   }
   function plan(input) {
-    if (book.selectionRequired) throw error2("task-selection-required", "Select a task first.");
+    if (book.selectionRequired) throw error3("task-selection-required", "Select a task first.");
     const kinds = [...knownKinds()];
     const milestones = normalizeTaskMilestones(input.milestones, {
       kinds,
@@ -1185,40 +1198,40 @@ function createTaskWorkbench({
   function wait(input) {
     const t = requireTask();
     if (!["file", "download", "authorization", "review", "rebind"].includes(input.kind))
-      throw error2("action-kind", "Unknown user action.");
+      throw error3("action-kind", "Unknown user action.");
     if (t.actions.filter((a) => a.state === "pending").length >= LIMITS.actions)
-      throw error2("action-limit", "Resolve an existing action first.");
+      throw error3("action-limit", "Resolve an existing action first.");
     let rebind = null;
     if (input.kind === "rebind") {
       const m = t.milestones.find((m2) => m2.id === input.milestoneId);
-      if (!m) throw error2("rebind-milestone", "Name an existing milestone of this task to rebind.");
+      if (!m) throw error3("rebind-milestone", "Name an existing milestone of this task to rebind.");
       if (!t.planApproved)
-        throw error2(
+        throw error3(
           "rebind-plan",
           "Rebind applies to an approved plan; before approval call task_plan with the correct identity."
         );
       const fields = verifierFor(m.acceptance.kind)?.fields || [];
       const doi = clean2(input.doi, 512);
       if (!fields.includes("doi") || !doi)
-        throw error2(
+        throw error3(
           "rebind-identity",
           "Only milestones whose acceptance declares a doi field can be rebound; supply the new doi."
         );
       const current = effectiveAcceptance(m);
       if (sameIdentity(current.doi, doi))
-        throw error2(
+        throw error3(
           "rebind-same",
           "This milestone already names that identity; verify it instead of rebinding."
         );
       if (t.actions.some((a) => a.kind === "rebind" && a.state === "pending" && a.milestoneId === m.id))
-        throw error2("rebind-pending", "A rebind request for this milestone is already waiting for the user.");
+        throw error3("rebind-pending", "A rebind request for this milestone is already waiting for the user.");
       rebind = { milestoneId: m.id, doi, previous: clean2(current.doi, 512) || null };
     }
     let url = null;
     if (input.url) {
       const parsed = new URL(input.url);
       if (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password || /(?:token|key|secret|auth)=/i.test(parsed.search))
-        throw error2("action-url", "Use a public browser link without embedded credentials.");
+        throw error3("action-url", "Use a public browser link without embedded credentials.");
       url = parsed.href;
     }
     const action = {
@@ -1248,9 +1261,9 @@ function createTaskWorkbench({
     return clone(action);
   }
   function checkRevision(id, revision) {
-    if (revision !== book.revision) throw error2("stale-task-view", "Task changed. Refresh before acting.");
+    if (revision !== book.revision) throw error3("stale-task-view", "Task changed. Refresh before acting.");
     const t = book.tasks.find((t2) => t2.id === id);
-    if (!t) throw error2("task-scope", "Task does not belong to this session/branch.");
+    if (!t) throw error3("task-scope", "Task does not belong to this session/branch.");
     return t;
   }
   function settleWait(t) {
@@ -1263,10 +1276,10 @@ function createTaskWorkbench({
   function command(input) {
     const t = checkRevision(input.taskId, input.revision);
     if (book.tasks.some((x) => x.operations.some((o) => o.state === "started")))
-      throw error2("task-busy", "Stop the running agent before changing task state.");
+      throw error3("task-busy", "Stop the running agent before changing task state.");
     if (input.action === "authorize-task") {
       if (terminal(t.state) || !t.milestones.length)
-        throw error2("plan-required", "Review a non-empty task plan before authorizing execution.");
+        throw error3("plan-required", "Review a non-empty task plan before authorizing execution.");
       if (!hasTaskConsent(t, LIMITS.totalCalls)) {
         t.executionConsent = {
           version: 1,
@@ -1295,21 +1308,21 @@ function createTaskWorkbench({
       pinned = true;
     } else if (input.action === "cancel") {
       if (t.operations.some((o) => o.state === "started"))
-        throw error2("task-busy", "Stop the running agent before cancelling this task.");
+        throw error3("task-busy", "Stop the running agent before cancelling this task.");
       t.state = "cancelled";
       t.reason = "user-cancelled";
       for (const a of t.actions) if (a.state === "pending") a.state = "cancelled";
       settleWait(t);
     } else if (input.action === "archive") {
       if (!["completed", "cancelled", "partial", "blocked"].includes(t.state))
-        throw error2("archive-state", "Cancel or finish the task before archiving it.");
+        throw error3("archive-state", "Cancel or finish the task before archiving it.");
       if (t.operations.some((o) => ["started", "unknown"].includes(o.state)))
-        throw error2(
+        throw error3(
           "archive-unknown",
           "Reconcile unknown effects before archiving; archiving is not confirmation."
         );
       if (t.actions.some((a) => a.state === "pending"))
-        throw error2("archive-pending", "Resolve or dismiss pending user actions before archiving.");
+        throw error3("archive-pending", "Resolve or dismiss pending user actions before archiving.");
       t.archivedFrom = t.state;
       t.state = "archived";
       t.reason = "user-archived";
@@ -1321,12 +1334,12 @@ function createTaskWorkbench({
       }
     } else if (input.action === "next-stage") {
       if (t.budget.calls >= LIMITS.totalCalls)
-        throw error2(
+        throw error3(
           "total-budget",
           "Absolute task budget reached. Export the checkpoint and explicitly scope a new task; no automatic continuation."
         );
       if (t.operations.some((o) => ["started", "unknown"].includes(o.state)) || t.actions.some((a) => a.state === "pending"))
-        throw error2(
+        throw error3(
           "reconcile-before-resume",
           "Resolve unknown effects and pending user actions before another stage."
         );
@@ -1339,13 +1352,13 @@ function createTaskWorkbench({
       t.reason = null;
     } else if (input.action === "acknowledge" || input.action === "dismiss") {
       const a = t.actions.find((a2) => a2.id === input.actionId && a2.state === "pending");
-      if (!a) throw error2("action-stale", "Action no longer pending.");
+      if (!a) throw error3("action-stale", "Action no longer pending.");
       if (input.action === "acknowledge" && ["download", "file"].includes(a.kind) && !a.file)
-        throw error2("file-required", "Inspect the selected file first.");
+        throw error3("file-required", "Inspect the selected file first.");
       if (input.action === "acknowledge" && a.kind === "review" && a.milestoneId) {
         const kind = t.milestones.find((m2) => m2.id === a.milestoneId)?.acceptance.kind;
         const refusal = verifierFor(kind)?.acknowledgeError;
-        if (refusal) throw error2(refusal.code, refusal.message);
+        if (refusal) throw error3(refusal.code, refusal.message);
       }
       a.state = input.action === "dismiss" ? "cancelled" : "acknowledged";
       a.resolvedAt = now();
@@ -1369,24 +1382,24 @@ function createTaskWorkbench({
     } else if (input.action === "confirm-outcome") {
       const op = t.operations.find((o) => o.id === input.operationId);
       if (!op || !["unknown", "returned"].includes(op.state))
-        throw error2("operation-stale", "No uncertain operation to confirm.");
+        throw error3("operation-stale", "No uncertain operation to confirm.");
       op.state = "human-confirmed";
       op.checkedAt = now();
       op.verifier = "explicit-user-attestation-not-scientific-proof";
       t.reason = null;
       t.state = "partial";
-    } else throw error2("task-command", "Unsupported task action.");
+    } else throw error3("task-command", "Unsupported task action.");
     save();
     return view();
   }
   async function acceptFile(input, cwd) {
     const t = checkRevision(input.taskId, input.revision), a = t.actions.find((a2) => a2.id === input.actionId && a2.state === "pending");
     if (!a || !["file", "download"].includes(a.kind))
-      throw error2("action-file", "Select an active file/download action.");
+      throw error3("action-file", "Select an active file/download action.");
     const file = await inspect(cwd, input.path, a.expected);
     checkRevision(input.taskId, input.revision);
     if (t.actions.some((other) => other.id !== a.id && other.file?.sha256 === file.sha256))
-      throw error2(
+      throw error3(
         "duplicate-file",
         "This exact file is already associated with another action; original file was not changed."
       );
@@ -1397,9 +1410,9 @@ function createTaskWorkbench({
   }
   function stillCurrent(id, t) {
     const cur = book.tasks.find((x) => x.id === id);
-    if (!cur) throw error2("task-scope", "Task does not belong to this session/branch.");
+    if (!cur) throw error3("task-scope", "Task does not belong to this session/branch.");
     if (cur !== t)
-      throw error2("stale-task-view", "Task was replaced while reconciling; call task_reconcile again.");
+      throw error3("stale-task-view", "Task was replaced while reconciling; call task_reconcile again.");
   }
   async function reconcile(cwd) {
     const t = requireTask(), id = t.id;
@@ -1580,7 +1593,7 @@ function createTaskWorkbench({
     return true;
   }
   function guard(event) {
-    if (book.selectionRequired) throw error2("task-selection-required", "Select a task first.");
+    if (book.selectionRequired) throw error3("task-selection-required", "Select a task first.");
     if (event.toolName === "task_plan") return null;
     const t = active();
     if (!t || terminal(t.state)) {
@@ -1959,8 +1972,8 @@ function createEvidenceRecovery({ authorize, files, persist = () => {
       let file;
       try {
         file = await files.inspect(cwd, event.input.path);
-      } catch (error3) {
-        console.warn("Task evidence capture unavailable:", error3.code || "file-unavailable");
+      } catch (error4) {
+        console.warn("Task evidence capture unavailable:", error4.code || "file-unavailable");
         return;
       }
       const offset = Math.max(1, Math.floor(event.input.offset || event.input.start_line || 1));
@@ -2116,14 +2129,14 @@ function createTaskSession({
               },
               combined
             );
-          } catch (error3) {
+          } catch (error4) {
             persistenceFailure = {
               state: "needs-reopen",
-              message: error3.message,
+              message: error4.message,
               lastCommitted: structuredClone(lastDurable || live)
             };
             onPersistenceFailed(persistenceFailure);
-            throw error3;
+            throw error4;
           }
         }
         live = projection();
@@ -2132,13 +2145,13 @@ function createTaskSession({
         combined.throwIfAborted();
         if (checkpointRequested) await onChanged(live);
         return result;
-      } catch (error3) {
+      } catch (error4) {
         if (!accepted && before) {
           journal.rollback(before);
           evidence.rollback(beforeEvidence);
           records = beforeRecords;
         }
-        throw error3;
+        throw error4;
       } finally {
         release();
       }
@@ -2282,9 +2295,9 @@ function readNativeSessionStorage(manager) {
   let content;
   try {
     content = readFileSync2(file, "utf8");
-  } catch (error3) {
-    if (error3.code === "ENOENT" && !branch.some((entry) => entry.type === "message" && ["user", "assistant"].includes(entry.message.role))) return deferred();
-    return failed(error3.code === "ENOENT" ? "SESSION_FILE_MISSING" : "SESSION_FILE_UNREADABLE");
+  } catch (error4) {
+    if (error4.code === "ENOENT" && !branch.some((entry) => entry.type === "message" && ["user", "assistant"].includes(entry.message.role))) return deferred();
+    return failed(error4.code === "ENOENT" ? "SESSION_FILE_MISSING" : "SESSION_FILE_UNREADABLE");
   }
   const rows = /* @__PURE__ */ new Map();
   for (const [index, line] of content.split("\n").entries()) {
@@ -2568,7 +2581,7 @@ function registerWorkbench(pi, options = {}) {
     options.onJournalAttached?.(journal);
     context = ctx;
     activeSessionId = ctx.sessionManager.getSessionId();
-    const scope = createHash3("sha256").update(`${activeSessionId}\0${resolve4(ctx.cwd)}`).digest("hex");
+    const scope = createHash4("sha256").update(`${activeSessionId}\0${resolve4(ctx.cwd)}`).digest("hex");
     const storage = readNativeSessionStorage(ctx.sessionManager);
     if (!options.application.readFailure(activeSessionId)) {
       await session.turn({ kind: "attach", scope, entries: storage.entries, storage, force }, ctx.signal);
@@ -2604,9 +2617,9 @@ function registerWorkbench(pi, options = {}) {
         },
         { triggerTurn: false }
       );
-    } catch (error3) {
-      options.application.recordFailure(activeSessionId, { state: "needs-reopen", message: error3.message, lastCommitted: state });
-      throw error3;
+    } catch (error4) {
+      options.application.recordFailure(activeSessionId, { state: "needs-reopen", message: error4.message, lastCommitted: state });
+      throw error4;
     }
   };
   let handoffGeneration = 0;
@@ -4235,11 +4248,11 @@ function RefineAdd(type, refinement) {
   return memory_exports.Update(type, { "~refine": refinements }, {});
 }
 function Refine(...args) {
-  const [type, check, error3] = arguments_exports.Match(args, {
-    3: (type2, check2, error4) => [type2, check2, error4],
+  const [type, check, error4] = arguments_exports.Match(args, {
+    3: (type2, check2, error5) => [type2, check2, error5],
     2: (type2, check2) => [type2, check2, () => "Refine Error"]
   });
-  return RefineAdd(type, { check, error: error3 });
+  return RefineAdd(type, { check, error: error4 });
 }
 function IsRefinement(value) {
   return guard_exports.IsObjectNotArray(value) && guard_exports.HasPropertyKey(value, "check") && guard_exports.HasPropertyKey(value, "error") && guard_exports.IsFunction(value.check) && guard_exports.IsFunction(value.error);
