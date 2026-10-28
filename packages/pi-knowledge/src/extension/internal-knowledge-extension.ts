@@ -295,23 +295,24 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			/^research_/.test(String(name || "")) && !OPERATIONAL_RESEARCH_TOOLS.has(String(name));
 		let turnKnowledgeRequested = false;
 		// Promote an ordinary-looking turn only when it names an existing Wiki topic.
-		// Bounded so a cold worker never delays the turn; any failure keeps plain chat.
+		// The optional search deadline keeps plain chat; actual failures remain diagnostic.
 		const probeNamedTopic = async (ctx, binding, prompt) => {
 			if (!binding || !String(prompt || "").trim()) return null;
+			const service = await getKnowledgeService(binding);
+			const project = await currentProject(ctx.cwd, ctx);
+			let timer: ReturnType<typeof setTimeout> | undefined;
 			try {
-				const service = await getKnowledgeService(binding);
-				const project = await currentProject(ctx.cwd, ctx);
-				let timer: ReturnType<typeof setTimeout> | undefined;
-				try {
-					return await Promise.race([
-						service.probeTopic({ query: prompt, project }),
-						new Promise((resolveProbe) => { timer = setTimeout(() => resolveProbe(null), 600); }),
-					]);
-				} finally {
-					clearTimeout(timer);
-				}
-			} catch {
-				return null;
+				return await Promise.race([
+					service.probeTopic({ query: prompt, project }),
+					new Promise((resolveProbe) => { timer = setTimeout(() => {
+						// This optional slow search keeps ordinary chat; configuration and
+						// internal failures still propagate through the SDK hook diagnostics.
+						console.warn("[knowledge] Optional topic probe exceeded its deadline; continuing ordinary chat.");
+						resolveProbe(null);
+					}, 600); }),
+				]);
+			} finally {
+				clearTimeout(timer);
 			}
 		};
 		let turnBinding = null;
