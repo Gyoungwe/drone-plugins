@@ -16739,22 +16739,21 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
     let turnKnowledgeRequested = false;
     const probeNamedTopic = async (ctx, binding, prompt) => {
       if (!binding || !String(prompt || "").trim()) return null;
+      const service = await getKnowledgeService2(binding);
+      const project = await currentProject2(ctx.cwd, ctx);
+      let timer;
       try {
-        const service = await getKnowledgeService2(binding);
-        const project = await currentProject2(ctx.cwd, ctx);
-        let timer;
-        try {
-          return await Promise.race([
-            service.probeTopic({ query: prompt, project }),
-            new Promise((resolveProbe) => {
-              timer = setTimeout(() => resolveProbe(null), 600);
-            })
-          ]);
-        } finally {
-          clearTimeout(timer);
-        }
-      } catch {
-        return null;
+        return await Promise.race([
+          service.probeTopic({ query: prompt, project }),
+          new Promise((resolveProbe) => {
+            timer = setTimeout(() => {
+              console.warn("[knowledge] Optional topic probe exceeded its deadline; continuing ordinary chat.");
+              resolveProbe(null);
+            }, 600);
+          })
+        ]);
+      } finally {
+        clearTimeout(timer);
       }
     };
     let turnBinding = null;
