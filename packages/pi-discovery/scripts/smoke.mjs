@@ -14,14 +14,10 @@ const root = await mkdtemp(join(tmpdir(), "pi-discovery-smoke-"));
 try {
 	const packed = JSON.parse(
 		(
-			await exec(
-				"npm",
-				["pack", "--json", "--ignore-scripts", "--pack-destination", root],
-				{
-					cwd: fileURLToPath(new URL("..", import.meta.url)),
-					maxBuffer: 4 * 1024 * 1024,
-				},
-			)
+			await exec("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", root], {
+				cwd: fileURLToPath(new URL("..", import.meta.url)),
+				maxBuffer: 4 * 1024 * 1024,
+			})
 		).stdout,
 	)[0];
 	assert.match(packed.filename, /\.tgz$/u);
@@ -41,12 +37,8 @@ try {
 		{ maxBuffer: 4 * 1024 * 1024 },
 	);
 	const installedRoot = join(prefix, "node_modules/@gyoungwe/pi-discovery");
-	const manifest = JSON.parse(
-		await readFile(join(installedRoot, "plugin.manifest.json"), "utf8"),
-	);
-	const packageJson = JSON.parse(
-		await readFile(join(installedRoot, "package.json"), "utf8"),
-	);
+	const manifest = JSON.parse(await readFile(join(installedRoot, "plugin.manifest.json"), "utf8"));
+	const packageJson = JSON.parse(await readFile(join(installedRoot, "package.json"), "utf8"));
 	assert.deepEqual(manifest.hosts, ["native-pi", "drone-desktop"]);
 	assert.deepEqual(packageJson.pi.extensions, ["./dist/index.mjs"]);
 	const extension = await import(
@@ -63,9 +55,15 @@ try {
 		[...registered.values()]
 			.filter(
 				(tool) =>
-					!["discovery_bind_workspace", "discovery_create_plan"].includes(
-						tool.name,
-					),
+					![
+						"discovery_bind_workspace",
+						"discovery_create_plan",
+						"discovery_cancel_execution",
+						"discovery_create_kernel",
+						"discovery_execute_kernel",
+						"discovery_close_kernel",
+						"discovery_reconcile_executions",
+					].includes(tool.name),
 			)
 			.every((tool) => tool.drone.readOnly === true),
 	);
@@ -77,9 +75,7 @@ try {
 		});
 	assert.equal(status.details.status, "unconfigured");
 	const { discoveryHostLoader } = await import(
-		pathToFileURL(
-			join(prefix, "node_modules/@gyoungwe/pi-discovery/dist/host.mjs"),
-		).href
+		pathToFileURL(join(prefix, "node_modules/@gyoungwe/pi-discovery/dist/host.mjs")).href
 	);
 	const { memoryServices } = await import("../test/memory-services.mjs");
 	const host = discoveryHostLoader.create({

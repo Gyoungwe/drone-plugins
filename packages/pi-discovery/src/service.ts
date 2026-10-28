@@ -44,9 +44,7 @@ import type {
 	DiscoveryAuthorizationOperation,
 } from "./ports.js";
 
-export type DiscoveryAuthorization = (
-	operation: DiscoveryAuthorizationOperation,
-) => Promise<void>;
+export type DiscoveryAuthorization = (operation: DiscoveryAuthorizationOperation) => Promise<void>;
 
 export interface DiscoveryKernelSessionInput {
 	readonly sessionId: string;
@@ -84,21 +82,15 @@ interface PersistedMultipath extends DiscoveryMultipathAssessment {
 
 export interface DiscoveryServicePort {
 	init(): Promise<void>;
-	getCapabilities(
-		language: DiscoveryKernelLanguage,
-	): Promise<DiscoveryCapabilities>;
+	getCapabilities(language: DiscoveryKernelLanguage): Promise<DiscoveryCapabilities>;
 	listKernelSessions(): Promise<readonly DiscoveryKernelSession[]>;
 	getKernelSession(sessionId: string): Promise<DiscoveryKernelSession | null>;
 	recordDiscovery(input: DiscoveryLedgerInput): Promise<void>;
-	createKernelSession(
-		input: DiscoveryKernelSessionInput,
-	): Promise<DiscoveryKernelSession>;
+	createKernelSession(input: DiscoveryKernelSessionInput): Promise<DiscoveryKernelSession>;
 	executeKernel(
 		sessionId: string,
 		code: string,
-	): Promise<
-		ReturnType<KernelSession["execute"]> extends Promise<infer T> ? T : never
-	>;
+	): Promise<ReturnType<KernelSession["execute"]> extends Promise<infer T> ? T : never>;
 	exportKernel(sessionId: string): Promise<{
 		readonly scriptPath: string;
 		readonly notebookPath: string;
@@ -115,22 +107,16 @@ export interface DiscoveryServicePort {
 		readonly hypothesisId: string;
 		readonly prior: QuestionPrior;
 		readonly budget: DiscoveryExplorationBudget;
-		readonly candidates: readonly Parameters<
-			typeof rankExplorationCandidates
-		>[0][number][];
+		readonly candidates: readonly Parameters<typeof rankExplorationCandidates>[0][number][];
 	}): Promise<DiscoveryExplorationPlan>;
 	runCritic(request: CriticRequest): Promise<DiscoveryCriticReview>;
 	runMultipath(
 		plan: MultipathPlan,
-		executor: (
-			path: MultipathPlan["paths"][number],
-		) => Promise<MultipathPathExecutionResult>,
+		executor: (path: MultipathPlan["paths"][number]) => Promise<MultipathPathExecutionResult>,
 	): Promise<DiscoveryMultipathAssessment>;
 	runEvaluation(
 		cases: readonly DiscoveryEvaluationCase[],
-		evaluator: (
-			item: DiscoveryEvaluationCase,
-		) => Promise<DiscoveryEvaluationObservation>,
+		evaluator: (item: DiscoveryEvaluationCase) => Promise<DiscoveryEvaluationObservation>,
 		options?: { readonly runId?: string; readonly timeoutMs?: number },
 	): Promise<DiscoveryEvaluationRun>;
 }
@@ -155,9 +141,7 @@ function safeRunDirectory(projectRoot: string, value: string): string {
 		throw new Error("Discovery runs are restricted to project runs");
 	return normalized;
 }
-function toCapabilities(
-	value: KernelRunnerCapabilities,
-): DiscoveryCapabilities {
+function toCapabilities(value: KernelRunnerCapabilities): DiscoveryCapabilities {
 	return {
 		kind: value.kind,
 		languages: [...value.languages],
@@ -166,12 +150,8 @@ function toCapabilities(
 	};
 }
 class FileBaselineStore {
-	constructor(
-		private readonly store: DiscoveryJournal<DiscoveryBaselineRecord>,
-	) {}
-	async put(
-		record: import("./domain/index.js").DiscoveryBaselineRecord,
-	): Promise<void> {
+	constructor(private readonly store: DiscoveryJournal<DiscoveryBaselineRecord>) {}
+	async put(record: import("./domain/index.js").DiscoveryBaselineRecord): Promise<void> {
 		const normalized = createBaseline(record);
 		const records =
 			(await this.store.read()) as import("./domain/index.js").DiscoveryBaselineRecord[];
@@ -192,14 +172,10 @@ class FileBaselineStore {
 	): Promise<import("./domain/index.js").DiscoveryBaselineRecord | undefined> {
 		return (await this.store.read()).find(
 			(item: import("./domain/index.js").DiscoveryBaselineRecord) =>
-				item.metric === metric &&
-				item.datasetId === datasetId &&
-				item.datasetRevision === revision,
+				item.metric === metric && item.datasetId === datasetId && item.datasetRevision === revision,
 		);
 	}
-	async list(): Promise<
-		readonly import("./domain/index.js").DiscoveryBaselineRecord[]
-	> {
+	async list(): Promise<readonly import("./domain/index.js").DiscoveryBaselineRecord[]> {
 		return await this.store.read();
 	}
 }
@@ -222,27 +198,28 @@ export class DiscoveryService implements DiscoveryServicePort {
 	private readonly plans: DiscoveryExplorationPlan[] = [];
 	private readonly evaluations: DiscoveryEvaluation[] = [];
 	private initialized?: Promise<void>;
+	private creations = Promise.resolve();
+	private sessionWrites = Promise.resolve();
+	private sessionsRevision = 0;
+	private savedSessionsRevision = 0;
 	private disposed = false;
 	private readonly executions = new Map<
 		string,
 		Promise<Awaited<ReturnType<KernelSession["execute"]>>>
 	>();
+	private readonly executionSignals = new Map<string, AbortSignal>();
 	private disposal?: Promise<void>;
 
 	constructor(options: DiscoveryServiceOptions) {
 		this.projectId = safeProjectId(options.projectId);
-		if (!isAbsolute(options.projectRoot))
-			throw new Error("discovery projectRoot must be absolute");
+		if (!isAbsolute(options.projectRoot)) throw new Error("discovery projectRoot must be absolute");
 		this.projectRoot = resolve(options.projectRoot);
 		this.options = options;
 		this.sessionsStore = options.services.journal<PersistedSession>("sessions");
 		this.criticsStore = options.services.journal<PersistedCritic>("critics");
-		this.multipathStore =
-			options.services.journal<PersistedMultipath>("multipath");
-		this.plansStore =
-			options.services.journal<DiscoveryExplorationPlan>("plans");
-		this.evaluationsStore =
-			options.services.journal<DiscoveryEvaluation>("evaluations");
+		this.multipathStore = options.services.journal<PersistedMultipath>("multipath");
+		this.plansStore = options.services.journal<DiscoveryExplorationPlan>("plans");
+		this.evaluationsStore = options.services.journal<DiscoveryEvaluation>("evaluations");
 		this.baselineStore = new FileBaselineStore(
 			options.services.journal<DiscoveryBaselineRecord>("baselines"),
 		);
@@ -253,26 +230,19 @@ export class DiscoveryService implements DiscoveryServicePort {
 		if (this.initialized) return this.initialized;
 		this.initialized = (async () => {
 			if (this.disposed) throw new Error("discovery service is disposed");
-			const [sessions, critics, multipaths, plans, evaluations] =
-				await Promise.all([
-					this.sessionsStore.read(),
-					this.criticsStore.read(),
-					this.multipathStore.read(),
-					this.plansStore.read(),
-					this.evaluationsStore.read(),
-				]);
+			const [sessions, critics, multipaths, plans, evaluations] = await Promise.all([
+				this.sessionsStore.read(),
+				this.criticsStore.read(),
+				this.multipathStore.read(),
+				this.plansStore.read(),
+				this.evaluationsStore.read(),
+			]);
 			for (const session of sessions) {
 				try {
-					if (
-						safeSessionId(session.sessionId) &&
-						session.runDirectory.startsWith("runs/")
-					)
+					if (safeSessionId(session.sessionId) && session.runDirectory.startsWith("runs/"))
 						this.sessionMeta.set(session.sessionId, session);
 				} catch (error) {
-					console.warn(
-						"Ignored invalid discovery session journal entry",
-						error,
-					);
+					console.warn("Ignored invalid discovery session journal entry", error);
 				}
 			}
 			this.critics.splice(0, this.critics.length, ...critics);
@@ -283,25 +253,55 @@ export class DiscoveryService implements DiscoveryServicePort {
 		return this.initialized;
 	}
 
-	private async authorize(
-		operation: DiscoveryAuthorizationOperation,
-	): Promise<void> {
+	private async authorize(operation: DiscoveryAuthorizationOperation): Promise<void> {
 		await this.options.services.authorize(operation);
 	}
 	private runnerFor(language: KernelLanguage): Promise<ControlledKernelRunner> {
 		return this.options.services.runner(language);
 	}
 
-	async getCapabilities(
-		language: DiscoveryKernelLanguage,
-	): Promise<DiscoveryCapabilities> {
+	async getCapabilities(language: DiscoveryKernelLanguage): Promise<DiscoveryCapabilities> {
 		const runner = await this.runnerFor(language);
 		return toCapabilities(runner.capabilities);
 	}
 
-	private async persistSessions(): Promise<void> {
-		await this.sessionsStore.write([...this.sessionMeta.values()]);
+	private writeSessions(write: () => Promise<void>): Promise<void> {
+		const pending = this.sessionWrites.then(write);
+		// The original promise returns each failure to its caller; later authorized writes may retry.
+		this.sessionWrites = pending.then(
+			() => undefined,
+			() => undefined,
+		);
+		return pending;
 	}
+	private persistSessions(): Promise<void> {
+		return this.writeSessions(async () => {
+			const revision = this.sessionsRevision;
+			await this.sessionsStore.write([...this.sessionMeta.values()]);
+			this.savedSessionsRevision = revision;
+		});
+	}
+	/** Called only by an explicit legitimate runtime reconcile operation, never by dispose. */
+	async persistObservedKernelStates(): Promise<void> {
+		await this.init();
+		for (const [id, session] of this.sessions) {
+			const meta = this.sessionMeta.get(id);
+			if (!meta) throw new Error("Active discovery session has no journal metadata");
+			if (
+				meta.status !== session.status.status ||
+				meta.executionCount !== session.status.executionCount
+			) {
+				this.sessionMeta.set(id, {
+					...meta,
+					status: session.status.status,
+					executionCount: session.status.executionCount,
+				});
+				this.sessionsRevision++;
+			}
+		}
+		if (this.savedSessionsRevision !== this.sessionsRevision) await this.persistSessions();
+	}
+
 	private sessionProjection(id: string): DiscoveryKernelSession | null {
 		const session = this.sessions.get(id);
 		const meta = this.sessionMeta.get(id);
@@ -337,23 +337,26 @@ export class DiscoveryService implements DiscoveryServicePort {
 			.map((id) => this.sessionProjection(id))
 			.filter((value): value is DiscoveryKernelSession => value !== null);
 	}
-	async getKernelSession(
-		sessionId: string,
-	): Promise<DiscoveryKernelSession | null> {
+	async getKernelSession(sessionId: string): Promise<DiscoveryKernelSession | null> {
 		await this.init();
 		return this.sessionProjection(safeSessionId(sessionId));
 	}
 	async recordDiscovery(input: DiscoveryLedgerInput): Promise<void> {
 		await this.init();
-		if (!this.options.services.inquiry)
-			throw new Error("inquiry ledger is not configured");
+		if (!this.options.services.inquiry) throw new Error("inquiry ledger is not configured");
 		if (input.projectId !== this.projectId)
 			throw new Error("discovery project does not match inquiry project");
 		await recordDiscoveryToInquiry(this.options.services.inquiry, input);
 	}
-	async createKernelSession(
-		input: DiscoveryKernelSessionInput,
-	): Promise<DiscoveryKernelSession> {
+	createKernelSession(input: DiscoveryKernelSessionInput): Promise<DiscoveryKernelSession> {
+		const pending = this.creations.then(() => this.createKernel(input));
+		this.creations = pending.then(
+			() => undefined,
+			() => undefined,
+		);
+		return pending;
+	}
+	private async createKernel(input: DiscoveryKernelSessionInput): Promise<DiscoveryKernelSession> {
 		await this.init();
 		const sessionId = safeSessionId(input.sessionId);
 		if (this.sessionMeta.has(sessionId))
@@ -363,7 +366,6 @@ export class DiscoveryService implements DiscoveryServicePort {
 			kind: "create-kernel-session",
 			projectId: this.projectId,
 		});
-		await this.options.services.files.prepareDirectory(runDirectory);
 		const runner = await this.runnerFor(input.language);
 		if (this.disposed) throw new Error("discovery service is disposed");
 		const options: KernelSessionOptions = {
@@ -373,22 +375,15 @@ export class DiscoveryService implements DiscoveryServicePort {
 			dataClassification: input.dataClassification,
 			runner,
 			writer: this.options.services.files,
-			...(input.idleTimeoutMs === undefined
-				? {}
-				: { idleTimeoutMs: input.idleTimeoutMs }),
+			...(input.idleTimeoutMs === undefined ? {} : { idleTimeoutMs: input.idleTimeoutMs }),
 			...(input.executionTimeoutMs === undefined
 				? {}
 				: { executionTimeoutMs: input.executionTimeoutMs }),
-			...(input.maxExecutions === undefined
-				? {}
-				: { maxExecutions: input.maxExecutions }),
-			...(input.maxOutputBytes === undefined
-				? {}
-				: { maxOutputBytes: input.maxOutputBytes }),
+			...(input.maxExecutions === undefined ? {} : { maxExecutions: input.maxExecutions }),
+			...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
 		};
 		const session = new KernelSession(options);
-		this.sessions.set(sessionId, session);
-		this.sessionMeta.set(sessionId, {
+		const metadata: PersistedSession = {
 			sessionId,
 			runDirectory,
 			language: input.language,
@@ -397,35 +392,49 @@ export class DiscoveryService implements DiscoveryServicePort {
 			executionCount: session.status.executionCount,
 			capabilities: runner.capabilities,
 			createdAt: new Date().toISOString(),
-		});
-		await this.persistSessions();
+		};
+		try {
+			await this.writeSessions(async () => {
+				const revision = this.sessionsRevision;
+				await this.sessionsStore.write([...this.sessionMeta.values(), metadata]);
+				this.savedSessionsRevision = revision;
+				if (this.disposed) throw new Error("Discovery service was disposed during kernel creation");
+				this.sessions.set(sessionId, session);
+				this.sessionMeta.set(sessionId, metadata);
+			});
+		} catch (error) {
+			await session.close();
+			throw error;
+		}
 		return this.sessionProjection(sessionId) as DiscoveryKernelSession;
 	}
 	async executeKernel(
 		sessionId: string,
 		code: string,
+		signal?: AbortSignal,
 	): Promise<Awaited<ReturnType<KernelSession["execute"]>>> {
 		await this.init();
 		const id = safeSessionId(sessionId);
 		const session = this.sessions.get(id);
-		if (!session)
-			throw new Error(
-				"Discovery kernel session is not active; create a new session",
-			);
+		if (!session) throw new Error("Discovery kernel session is not active; create a new session");
 		await this.authorize({
 			kind: "execute-kernel",
 			projectId: this.projectId,
 			sessionId: id,
 		});
 		if (this.disposed) throw new Error("discovery service is disposed");
-		if (this.executions.has(id))
-			throw new Error("discovery kernel execution is already running");
-		const pending = this.executeSession(id, code, session);
+		if (this.executions.has(id)) throw new Error("discovery kernel execution is already running");
+		signal?.throwIfAborted();
+		const pending = this.executeSession(id, code, session, signal);
 		this.executions.set(id, pending);
+		if (signal) this.executionSignals.set(id, signal);
 		try {
 			return await pending;
 		} finally {
-			if (this.executions.get(id) === pending) this.executions.delete(id);
+			if (this.executions.get(id) === pending) {
+				this.executions.delete(id);
+				this.executionSignals.delete(id);
+			}
 		}
 	}
 
@@ -433,22 +442,25 @@ export class DiscoveryService implements DiscoveryServicePort {
 		id: string,
 		code: string,
 		session: KernelSession,
+		signal?: AbortSignal,
 	): Promise<Awaited<ReturnType<KernelSession["execute"]>>> {
-		const execution = await session.execute(code);
+		const execution = await session.execute(code, signal);
+		signal?.throwIfAborted();
 		const meta = this.sessionMeta.get(id);
-		if (meta)
-			this.sessionMeta.set(id, {
-				...meta,
-				status: session.status.status,
-				executionCount: session.status.executionCount,
-			});
+		if (!meta) throw new Error("Active discovery session has no journal metadata");
+		this.sessionMeta.set(id, {
+			...meta,
+			status: session.status.status,
+			executionCount: session.status.executionCount,
+		});
+		this.sessionsRevision++;
 		await this.persistSessions();
 		await this.options.services.onExecution({
 			sessionId: id,
 			projectId: this.projectId,
 			cwd: this.projectRoot,
-			runDirectory: this.sessionMeta.get(id)?.runDirectory ?? "runs",
-			language: this.sessionMeta.get(id)?.language ?? "unknown",
+			runDirectory: meta.runDirectory,
+			language: meta.language,
 			code,
 			execution,
 		});
@@ -458,16 +470,31 @@ export class DiscoveryService implements DiscoveryServicePort {
 		await this.init();
 		const id = safeSessionId(sessionId);
 		const session = this.sessions.get(id);
-		if (!session)
-			throw new Error(
-				"Discovery kernel session is not active; create a new session",
-			);
+		if (!session) throw new Error("Discovery kernel session is not active; create a new session");
 		await this.authorize({
 			kind: "export-kernel",
 			projectId: this.projectId,
 			sessionId: id,
 		});
 		return session.export();
+	}
+	/** Resource-only shutdown: no capability, caller replacement or journal write is borrowed. */
+	async disposeKernelSession(sessionId: string): Promise<void> {
+		const id = safeSessionId(sessionId);
+		const session = this.sessions.get(id);
+		const execution = this.executions.get(id),
+			signal = this.executionSignals.get(id);
+		await session?.close();
+		const [completed] = await Promise.allSettled([execution]);
+		if (completed.status === "rejected" && !signal?.aborted) throw completed.reason;
+		const meta = this.sessionMeta.get(id);
+		if (meta && session)
+			this.sessionMeta.set(id, {
+				...meta,
+				status: session.status.status,
+				executionCount: session.status.executionCount,
+			});
+		this.sessionsRevision++;
 	}
 	async closeKernelSession(sessionId: string): Promise<void> {
 		await this.init();
@@ -477,16 +504,7 @@ export class DiscoveryService implements DiscoveryServicePort {
 			projectId: this.projectId,
 			sessionId: id,
 		});
-		const session = this.sessions.get(id);
-		await session?.close();
-		await this.executions.get(id);
-		const meta = this.sessionMeta.get(id);
-		if (meta)
-			this.sessionMeta.set(id, {
-				...meta,
-				status: session?.status.status ?? "closed",
-				executionCount: session?.status.executionCount ?? meta.executionCount,
-			});
+		await this.disposeKernelSession(id);
 		await this.persistSessions();
 	}
 
@@ -495,9 +513,7 @@ export class DiscoveryService implements DiscoveryServicePort {
 		readonly hypothesisId: string;
 		readonly prior: QuestionPrior;
 		readonly budget: DiscoveryExplorationBudget;
-		readonly candidates: readonly Parameters<
-			typeof rankExplorationCandidates
-		>[0][number][];
+		readonly candidates: readonly Parameters<typeof rankExplorationCandidates>[0][number][];
 	}): Promise<DiscoveryExplorationPlan> {
 		await this.init();
 		const ledger = new ExplorationBudgetLedger(input.budget);
@@ -522,10 +538,7 @@ export class DiscoveryService implements DiscoveryServicePort {
 	}
 	async runCritic(request: CriticRequest): Promise<DiscoveryCriticReview> {
 		await this.init();
-		const result = await runCriticReview(
-			request,
-			this.options.services.criticProvider,
-		);
+		const result = await runCriticReview(request, this.options.services.criticProvider);
 		const review: PersistedCritic = {
 			findingId: request.findingId,
 			...result,
@@ -551,9 +564,7 @@ export class DiscoveryService implements DiscoveryServicePort {
 	}
 	async runMultipath(
 		plan: MultipathPlan,
-		executor: (
-			path: MultipathPlan["paths"][number],
-		) => Promise<MultipathPathExecutionResult>,
+		executor: (path: MultipathPlan["paths"][number]) => Promise<MultipathPathExecutionResult>,
 	): Promise<DiscoveryMultipathAssessment> {
 		await this.init();
 		await this.authorize({
@@ -561,14 +572,10 @@ export class DiscoveryService implements DiscoveryServicePort {
 			projectId: this.projectId,
 			planId: plan.id,
 		});
-		const assessment = await executeMultiPath(
-			createMultiPathPlan(plan),
-			executor,
-			{
-				projectId: this.projectId,
-				inquiry: this.options.services.inquiry,
-			},
-		);
+		const assessment = await executeMultiPath(createMultiPathPlan(plan), executor, {
+			projectId: this.projectId,
+			inquiry: this.options.services.inquiry,
+		});
 		const record: PersistedMultipath = {
 			planId: plan.id,
 			findingId: plan.findingId,
@@ -583,19 +590,13 @@ export class DiscoveryService implements DiscoveryServicePort {
 		await this.multipathStore.write(this.multipaths);
 		return record;
 	}
-	async listMultipathAssessments(): Promise<
-		readonly DiscoveryMultipathAssessment[]
-	> {
+	async listMultipathAssessments(): Promise<readonly DiscoveryMultipathAssessment[]> {
 		await this.init();
-		return this.multipaths.map(
-			({ recordedAt: _recordedAt, ...value }) => value,
-		);
+		return this.multipaths.map(({ recordedAt: _recordedAt, ...value }) => value);
 	}
 	async runEvaluation(
 		cases: readonly DiscoveryEvaluationCase[],
-		evaluator: (
-			item: DiscoveryEvaluationCase,
-		) => Promise<DiscoveryEvaluationObservation>,
+		evaluator: (item: DiscoveryEvaluationCase) => Promise<DiscoveryEvaluationObservation>,
 		options: { readonly runId?: string; readonly timeoutMs?: number } = {},
 	): Promise<DiscoveryEvaluationRun> {
 		await this.init();
@@ -650,12 +651,20 @@ export class DiscoveryService implements DiscoveryServicePort {
 	}
 
 	private async disposeSessions(): Promise<void> {
+		const sessionClosures = [...this.sessions.values()].map((session) => session.close());
+		const executions = [...this.executions].map(([id, pending]) => ({
+			pending,
+			signal: this.executionSignals.get(id),
+		}));
 		const settled = await Promise.allSettled([
-			...Array.from(this.sessions.values(), (session) => session.close()),
-			...this.executions.values(),
+			...sessionClosures,
+			...executions.map((item) => item.pending),
 		]);
 		const failures = settled.filter(
-			(result): result is PromiseRejectedResult => result.status === "rejected",
+			(result, index): result is PromiseRejectedResult =>
+				result.status === "rejected" &&
+				(index < sessionClosures.length ||
+					!executions[index - sessionClosures.length]?.signal?.aborted),
 		);
 		if (failures.length)
 			throw new AggregateError(
@@ -664,15 +673,13 @@ export class DiscoveryService implements DiscoveryServicePort {
 			);
 		for (const [id, session] of this.sessions) {
 			const meta = this.sessionMeta.get(id);
-			if (!meta)
-				throw new Error("Active discovery session has no journal metadata");
+			if (!meta) throw new Error("Active discovery session has no journal metadata");
 			this.sessionMeta.set(id, {
 				...meta,
 				status: session.status.status,
 				executionCount: session.status.executionCount,
 			});
 		}
-		if (this.sessions.size) await this.persistSessions();
 		this.sessions.clear();
 	}
 }

@@ -10,6 +10,10 @@ The package owns discovery algorithms, kernel-session orchestration, critic/mult
 - `discovery_list_records` / `discovery_search_records`: read up to 32 records from a journal.
 - `discovery_bind_workspace`: bind the selected state root to the actual workspace and acquire an exclusive writer lease. In the default Node adapter, pass `root: "native-state"`; existing journals require `acknowledgeExistingData: true`.
 - `discovery_create_plan`: persist an exploration plan without executing code or certifying its findings.
+- `discovery_execution_environment` / `discovery_execution_receipt`: inspect only configured cached language images or the current creator's own receipt.
+- `discovery_list_kernels` / `discovery_create_kernel`: inspect or persist creator-owned **logical** kernels and execution budgets; creation starts no container.
+- `discovery_execute_kernel` / `discovery_close_kernel`: run with exact configured cached image and per-code approval, or cancel/close only this actual SDK creator's kernel after owned cleanup.
+- `discovery_cancel_execution` / `discovery_reconcile_executions`: cancel an own accepted request, or use a fresh legitimate caller to CAS-persist verified receipt/observed closure states.
 
 Default native state remains `<current session cwd>/runs/.drone-discovery`. Read tools create no directories and may inspect unbound existing journals. They reject symlinks, malformed JSON and journals above 1 MiB. An explicit Node adapter may use an already-selected Desktop state root; an existing binding must match the actual native canonical workspace. Native tools do not infer a HOME/application directory.
 
@@ -23,7 +27,9 @@ To preserve old Desktop journals, explicitly select the existing project-hashed 
 
 Managed journals use real host `JsonStore` CAS ports. Native and managed writers share one local-user `state-writers` lease protocol. The remaining legacy backend writer also holds that lease during actual writes and rejects stale snapshots before replacing journals. Cleanup failure is never reported as successful release.
 
-Kernel execution, critic, multipath, evaluation, Inquiry and export ports are still unavailable in the **new** runtime. The existing legacy host service retains its prior capabilities until the complete replacement is verified. This candidate does not claim full P5 or formal macOS GUI acceptance.
+The kernel panel and native tools use the same canonical-workspace domain owner. Native default execution consumes the same public Node runner as the Desktop capability, with real `ctx.ui.confirm` approval; headless code execution fails closed. `permissions.subprocess: ["container"]` only requests this bounded capability, never a shell or image pull. A daemon with no configured cached image permits logical records but cannot execute code. Kernel budgets and exact image selection remain visible. Cancel only narrows the current actual call, waits for owned cleanup, and never borrows later state-write authority. A fresh caller reconciles the private host receipt; activation restart or an unverifiable/missing accepted receipt never silently replays execution. Cleanup failure stays explicit and retains writer ownership.
+
+The execution wiring is a candidate under actual SDK/worker and explicitly synthetic engine acceptance; real cached-image execution and formal installer GUI are still pending. Critic, multipath, evaluation, Inquiry and export ports are still unavailable in the **new** runtime. The existing legacy host service retains its prior capabilities until the complete replacement is verified. This candidate does not claim full P5 or formal macOS GUI acceptance.
 
 ## Checks
 
@@ -32,3 +38,5 @@ Kernel execution, critic, multipath, evaluation, Inquiry and export ports are st
 Host `packed-discovery-owner-sdk.test.ts` clean-installs the same tarball, builds its real UI with the production builder, mounts it through the production registry/entry host, executes actual UI actions and actual managed SDK tool dispatch, and checks another Node process running a real SDK against the same root. It also checks real legacy writer competition, preservation and stale-reader rejection. Offline faux providers supply deterministic tool calls; these are real SDK dispatches without remote inference.
 
 `discovery-native-readback-sdk.test.ts` creates real journals through the production installed legacy writer and reads them from the same tarball in native sessions. `scripts/check-sdk-sessions.mjs` repeats readback in clean locked Pi 1.1.0/latest installations. These are separate from Docker/Podman and formal installer GUI acceptance.
+
+Host `packed-discovery-execution-sdk.test.ts` uses the production Desktop source scanner/factory and the same installed tar with two actual SDK sessions. It checks missing images without side effects, creator-only resource close, fresh-caller persistence, kernel-local timeout/close during approval (late approval accepts nothing), accepted cancellation waiting for real synthetic-engine cleanup, and same-application disable/re-enable after deletion of an accepted receipt. Its deterministic synthetic engine is **not** Docker evidence. The panel's full rendered execution interaction and standalone native execution remain separately tracked until their tests run.

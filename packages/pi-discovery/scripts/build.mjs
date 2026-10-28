@@ -21,7 +21,7 @@ for (const entry of ["host", "index", "runtime"]) {
 		format: "esm",
 		platform: "node",
 		packages: "bundle",
-		external: ["@gyoungwe/plugin-api/node/reservations"],
+		external: ["@gyoungwe/plugin-api/node/reservations", "@gyoungwe/plugin-api/node/execution"],
 		metafile: true,
 		write: false,
 		logLevel: "silent",
@@ -35,14 +35,10 @@ for (const entry of ["host", "index", "runtime"]) {
 			output,
 		)
 	)
-		throw new Error(
-			`pi-discovery ${entry} artifact contains a forbidden runtime dependency`,
-		);
+		throw new Error(`pi-discovery ${entry} artifact contains a forbidden runtime dependency`);
 	if (check) {
 		if ((await readFile(outputPath, "utf8")) !== output)
-			throw new Error(
-				`pi-discovery ${entry} artifact is stale; run npm run build`,
-			);
+			throw new Error(`pi-discovery ${entry} artifact is stale; run npm run build`);
 	} else {
 		await mkdir(distRoot, { recursive: true });
 		await writeFile(outputPath, output, "utf8");
@@ -50,10 +46,7 @@ for (const entry of ["host", "index", "runtime"]) {
 }
 const manifest = `${JSON.stringify({ version: 1, generator: "packages/pi-discovery/scripts/build.mjs", inputs, outputs }, null, "\t")}\n`;
 if (check) {
-	if (
-		(await readFile(join(packageRoot, "build-manifest.json"), "utf8")) !==
-		manifest
-	)
+	if ((await readFile(join(packageRoot, "build-manifest.json"), "utf8")) !== manifest)
 		throw new Error("pi-discovery build manifest is stale; run npm run build");
 } else await writeFile(join(packageRoot, "build-manifest.json"), manifest);
 console.log(`pi-discovery artifacts ${check ? "are up to date" : "built"}`);

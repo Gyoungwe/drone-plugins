@@ -72,13 +72,11 @@ test("close waits for aborted execution cleanup and late completion never revive
 	assert.equal(aborted, true);
 	assert.equal(closed, false);
 	assert.equal(closedAgain, false);
+	assert.notEqual((await host.getKernelSession({ sessionId: "session" })).status, "closed");
 	cleanup.resolve();
 	assert.equal((await execution).blockedReason, "cancelled");
 	await Promise.all([closing, closingAgain]);
-	assert.equal(
-		(await host.getKernelSession({ sessionId: "session" })).status,
-		"closed",
-	);
+	assert.equal((await host.getKernelSession({ sessionId: "session" })).status, "closed");
 	assert.equal(journals.get("sessions")[0].status, "closed");
 	await host.dispose();
 });
@@ -197,4 +195,46 @@ test("dispose waits for execution publication as well as the runner resource", a
 	release.resolve();
 	await execution;
 	await disposal;
+});
+
+test("a rejected creation journal never leaves a live logical kernel or timer", async () => {
+	const { services, journals } = memoryServices();
+	services.authorize = async () => {};
+	services.runner = async () => ({
+		capabilities,
+		run: async () => ({ exitCode: 0, durationMs: 0, producedBytes: 0, outputs: [] }),
+	});
+	const original = services.journal;
+	let fail = true;
+	services.journal = (name) => {
+		const journal = original(name);
+		return name === "sessions"
+			? {
+					...journal,
+					write: async (records) => {
+						if (fail) {
+							fail = false;
+							throw new Error("actual journal write rejected");
+						}
+						await journal.write(records);
+					},
+				}
+			: journal;
+	};
+	const host = discoveryHostLoader.create({
+		projectId: "creation",
+		projectRoot: "/tmp/discovery-creation",
+		services,
+	});
+	const input = {
+		sessionId: "new",
+		language: "python",
+		runDirectory: "runs/new",
+		dataClassification: "public",
+	};
+	await assert.rejects(host.createKernelSession(input), /actual journal write rejected/);
+	assert.deepEqual(await host.listKernelSessions(), []);
+	assert.equal((await host.createKernelSession(input)).status, "ready");
+	assert.equal(journals.get("sessions").length, 1);
+	await host.dispose();
 });

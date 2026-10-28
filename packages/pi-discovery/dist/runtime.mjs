@@ -702,10 +702,7 @@ function ensureOptions(options) {
     options.language === "python" || options.language === "r",
     "unsupported kernel language"
   );
-  assertValid(
-    validClassification(options.dataClassification),
-    "invalid data classification"
-  );
+  assertValid(validClassification(options.dataClassification), "invalid data classification");
   assertValid(
     options.runner && typeof options.runner.run === "function",
     "controlled runner is required"
@@ -720,10 +717,7 @@ function ensureOptions(options) {
     "runner does not support this language"
   );
   if (capabilities.kind !== "unavailable") {
-    assertValid(
-      capabilities.networkDisabled,
-      "kernel runner must disable network access"
-    );
+    assertValid(capabilities.networkDisabled, "kernel runner must disable network access");
     assertValid(
       capabilities.writesOnlyToRunDirectory,
       "kernel runner must constrain writes to runs"
@@ -736,18 +730,12 @@ function ensureOptions(options) {
     ["maxOutputBytes", options.maxOutputBytes]
   ]) {
     if (value !== void 0)
-      assertValid(
-        boundedInteger(value, 1, 24 * 60 * 6e4),
-        `${label} is invalid`
-      );
+      assertValid(boundedInteger(value, 1, 24 * 60 * 6e4), `${label} is invalid`);
   }
 }
 function filterKernelOutput(outputs, policy, maxBytes = DEFAULT_MAX_OUTPUT_BYTES) {
   assertValid(validClassification(policy), "invalid output policy");
-  assertValid(
-    boundedInteger(maxBytes, 1, DEFAULT_MAX_OUTPUT_BYTES * 100),
-    "maxBytes is invalid"
-  );
+  assertValid(boundedInteger(maxBytes, 1, DEFAULT_MAX_OUTPUT_BYTES * 100), "maxBytes is invalid");
   const accepted = [];
   const kinds = [];
   let redactedBytes = 0;
@@ -841,10 +829,7 @@ var KernelSession = class {
     this.armIdleTimer();
   }
   get status() {
-    const remaining = Math.max(
-      0,
-      this.options.maxExecutions - this.executionCount
-    );
+    const remaining = Math.max(0, this.options.maxExecutions - this.executionCount);
     return {
       sessionId: this.options.sessionId,
       status: this.state,
@@ -856,19 +841,17 @@ var KernelSession = class {
   get executions() {
     return this.history;
   }
-  async execute(code) {
+  async execute(code, signal) {
     assertValid(this.state === "ready", `kernel session is ${this.state}`);
-    assertValid(
-      nonEmptyText(code, MAX_CODE_LENGTH),
-      "kernel code is empty or too large"
-    );
+    assertValid(nonEmptyText(code, MAX_CODE_LENGTH), "kernel code is empty or too large");
     assertValid(
       this.executionCount < this.options.maxExecutions,
       "kernel execution budget exceeded"
     );
     const controller = new AbortController();
     this.executionController = controller;
-    const execution = this.executeActive(code, controller);
+    signal?.throwIfAborted();
+    const execution = this.executeActive(code, controller, signal);
     this.activeExecution = execution;
     try {
       return await execution;
@@ -877,7 +860,7 @@ var KernelSession = class {
       this.executionController = void 0;
     }
   }
-  async executeActive(code, controller) {
+  async executeActive(code, controller, callerSignal) {
     this.state = "running";
     this.executionCount += 1;
     this.armIdleTimer();
@@ -890,7 +873,7 @@ var KernelSession = class {
     let execution;
     try {
       const result = await this.options.runner.run({
-        signal: controller.signal,
+        signal: callerSignal ? AbortSignal.any([controller.signal, callerSignal]) : controller.signal,
         requestId: id,
         language: this.options.language,
         code,
@@ -931,7 +914,7 @@ var KernelSession = class {
     } catch (error) {
       if (error instanceof Error && "code" in error && error.code === "DISCOVERY_CLEANUP_FAILED") {
         this.cleanupFailure = error;
-        this.state = "closed";
+        this.state = "cleanup-failed";
         throw error;
       }
       execution = {
@@ -945,7 +928,7 @@ var KernelSession = class {
         contentKinds: [],
         producedBytes: 0,
         redactedBytes: 0,
-        blockedReason: controller.signal.reason instanceof Error && controller.signal.reason.message === "runner-timeout" ? "timeout" : controller.signal.aborted ? "cancelled" : "runner-failure"
+        blockedReason: controller.signal.reason instanceof Error && controller.signal.reason.message === "runner-timeout" ? "timeout" : controller.signal.aborted ? "cancelled" : error instanceof Error && "code" in error && error.code === "EXECUTION_IMAGE_NOT_CACHED" ? "image-not-cached" : error instanceof Error && "code" in error && error.code === "EXECUTION_IMAGE_MISMATCH" ? "image-mismatch" : "runner-failure"
       };
     } finally {
       clearTimeout(timer);
@@ -980,9 +963,12 @@ var KernelSession = class {
     if (this.closing) return this.closing;
     if (this.cleanupFailure) return Promise.reject(this.cleanupFailure);
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.state = reason;
     this.executionController?.abort(new Error("kernel-closed"));
-    this.closing = this.activeExecution ? this.activeExecution.then(() => void 0) : Promise.resolve();
+    this.closing = (async () => {
+      await this.activeExecution;
+      if (this.idleTimer) clearTimeout(this.idleTimer);
+      this.state = reason;
+    })();
     return this.closing;
   }
   now() {
@@ -992,10 +978,7 @@ var KernelSession = class {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.state !== "ready") return;
     this.expiresAt = this.now() + this.options.idleTimeoutMs;
-    this.idleTimer = setTimeout(
-      () => this.close("idle-timeout"),
-      this.options.idleTimeoutMs
-    );
+    this.idleTimer = setTimeout(() => this.close("idle-timeout"), this.options.idleTimeoutMs);
   }
 };
 var UnavailableKernelRunner = class {
@@ -1079,13 +1062,17 @@ var DiscoveryService = class {
   plans = [];
   evaluations = [];
   initialized;
+  creations = Promise.resolve();
+  sessionWrites = Promise.resolve();
+  sessionsRevision = 0;
+  savedSessionsRevision = 0;
   disposed = false;
   executions = /* @__PURE__ */ new Map();
+  executionSignals = /* @__PURE__ */ new Map();
   disposal;
   constructor(options) {
     this.projectId = safeProjectId(options.projectId);
-    if (!isAbsolute(options.projectRoot))
-      throw new Error("discovery projectRoot must be absolute");
+    if (!isAbsolute(options.projectRoot)) throw new Error("discovery projectRoot must be absolute");
     this.projectRoot = resolve(options.projectRoot);
     this.options = options;
     this.sessionsStore = options.services.journal("sessions");
@@ -1114,10 +1101,7 @@ var DiscoveryService = class {
           if (safeSessionId(session.sessionId) && session.runDirectory.startsWith("runs/"))
             this.sessionMeta.set(session.sessionId, session);
         } catch (error) {
-          console.warn(
-            "Ignored invalid discovery session journal entry",
-            error
-          );
+          console.warn("Ignored invalid discovery session journal entry", error);
         }
       }
       this.critics.splice(0, this.critics.length, ...critics);
@@ -1137,8 +1121,37 @@ var DiscoveryService = class {
     const runner = await this.runnerFor(language);
     return toCapabilities(runner.capabilities);
   }
-  async persistSessions() {
-    await this.sessionsStore.write([...this.sessionMeta.values()]);
+  writeSessions(write) {
+    const pending = this.sessionWrites.then(write);
+    this.sessionWrites = pending.then(
+      () => void 0,
+      () => void 0
+    );
+    return pending;
+  }
+  persistSessions() {
+    return this.writeSessions(async () => {
+      const revision = this.sessionsRevision;
+      await this.sessionsStore.write([...this.sessionMeta.values()]);
+      this.savedSessionsRevision = revision;
+    });
+  }
+  /** Called only by an explicit legitimate runtime reconcile operation, never by dispose. */
+  async persistObservedKernelStates() {
+    await this.init();
+    for (const [id, session] of this.sessions) {
+      const meta = this.sessionMeta.get(id);
+      if (!meta) throw new Error("Active discovery session has no journal metadata");
+      if (meta.status !== session.status.status || meta.executionCount !== session.status.executionCount) {
+        this.sessionMeta.set(id, {
+          ...meta,
+          status: session.status.status,
+          executionCount: session.status.executionCount
+        });
+        this.sessionsRevision++;
+      }
+    }
+    if (this.savedSessionsRevision !== this.sessionsRevision) await this.persistSessions();
   }
   sessionProjection(id) {
     const session = this.sessions.get(id);
@@ -1178,13 +1191,20 @@ var DiscoveryService = class {
   }
   async recordDiscovery(input) {
     await this.init();
-    if (!this.options.services.inquiry)
-      throw new Error("inquiry ledger is not configured");
+    if (!this.options.services.inquiry) throw new Error("inquiry ledger is not configured");
     if (input.projectId !== this.projectId)
       throw new Error("discovery project does not match inquiry project");
     await recordDiscoveryToInquiry(this.options.services.inquiry, input);
   }
-  async createKernelSession(input) {
+  createKernelSession(input) {
+    const pending = this.creations.then(() => this.createKernel(input));
+    this.creations = pending.then(
+      () => void 0,
+      () => void 0
+    );
+    return pending;
+  }
+  async createKernel(input) {
     await this.init();
     const sessionId = safeSessionId(input.sessionId);
     if (this.sessionMeta.has(sessionId))
@@ -1194,7 +1214,6 @@ var DiscoveryService = class {
       kind: "create-kernel-session",
       projectId: this.projectId
     });
-    await this.options.services.files.prepareDirectory(runDirectory);
     const runner = await this.runnerFor(input.language);
     if (this.disposed) throw new Error("discovery service is disposed");
     const options = {
@@ -1210,8 +1229,7 @@ var DiscoveryService = class {
       ...input.maxOutputBytes === void 0 ? {} : { maxOutputBytes: input.maxOutputBytes }
     };
     const session = new KernelSession(options);
-    this.sessions.set(sessionId, session);
-    this.sessionMeta.set(sessionId, {
+    const metadata = {
       sessionId,
       runDirectory,
       language: input.language,
@@ -1220,50 +1238,65 @@ var DiscoveryService = class {
       executionCount: session.status.executionCount,
       capabilities: runner.capabilities,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    await this.persistSessions();
+    };
+    try {
+      await this.writeSessions(async () => {
+        const revision = this.sessionsRevision;
+        await this.sessionsStore.write([...this.sessionMeta.values(), metadata]);
+        this.savedSessionsRevision = revision;
+        if (this.disposed) throw new Error("Discovery service was disposed during kernel creation");
+        this.sessions.set(sessionId, session);
+        this.sessionMeta.set(sessionId, metadata);
+      });
+    } catch (error) {
+      await session.close();
+      throw error;
+    }
     return this.sessionProjection(sessionId);
   }
-  async executeKernel(sessionId, code) {
+  async executeKernel(sessionId, code, signal) {
     await this.init();
     const id = safeSessionId(sessionId);
     const session = this.sessions.get(id);
-    if (!session)
-      throw new Error(
-        "Discovery kernel session is not active; create a new session"
-      );
+    if (!session) throw new Error("Discovery kernel session is not active; create a new session");
     await this.authorize({
       kind: "execute-kernel",
       projectId: this.projectId,
       sessionId: id
     });
     if (this.disposed) throw new Error("discovery service is disposed");
-    if (this.executions.has(id))
-      throw new Error("discovery kernel execution is already running");
-    const pending = this.executeSession(id, code, session);
+    if (this.executions.has(id)) throw new Error("discovery kernel execution is already running");
+    signal?.throwIfAborted();
+    const pending = this.executeSession(id, code, session, signal);
     this.executions.set(id, pending);
+    if (signal) this.executionSignals.set(id, signal);
     try {
       return await pending;
     } finally {
-      if (this.executions.get(id) === pending) this.executions.delete(id);
+      if (this.executions.get(id) === pending) {
+        this.executions.delete(id);
+        this.executionSignals.delete(id);
+      }
     }
   }
-  async executeSession(id, code, session) {
-    const execution = await session.execute(code);
+  async executeSession(id, code, session, signal) {
+    const execution = await session.execute(code, signal);
+    signal?.throwIfAborted();
     const meta = this.sessionMeta.get(id);
-    if (meta)
-      this.sessionMeta.set(id, {
-        ...meta,
-        status: session.status.status,
-        executionCount: session.status.executionCount
-      });
+    if (!meta) throw new Error("Active discovery session has no journal metadata");
+    this.sessionMeta.set(id, {
+      ...meta,
+      status: session.status.status,
+      executionCount: session.status.executionCount
+    });
+    this.sessionsRevision++;
     await this.persistSessions();
     await this.options.services.onExecution({
       sessionId: id,
       projectId: this.projectId,
       cwd: this.projectRoot,
-      runDirectory: this.sessionMeta.get(id)?.runDirectory ?? "runs",
-      language: this.sessionMeta.get(id)?.language ?? "unknown",
+      runDirectory: meta.runDirectory,
+      language: meta.language,
       code,
       execution
     });
@@ -1273,16 +1306,30 @@ var DiscoveryService = class {
     await this.init();
     const id = safeSessionId(sessionId);
     const session = this.sessions.get(id);
-    if (!session)
-      throw new Error(
-        "Discovery kernel session is not active; create a new session"
-      );
+    if (!session) throw new Error("Discovery kernel session is not active; create a new session");
     await this.authorize({
       kind: "export-kernel",
       projectId: this.projectId,
       sessionId: id
     });
     return session.export();
+  }
+  /** Resource-only shutdown: no capability, caller replacement or journal write is borrowed. */
+  async disposeKernelSession(sessionId) {
+    const id = safeSessionId(sessionId);
+    const session = this.sessions.get(id);
+    const execution = this.executions.get(id), signal = this.executionSignals.get(id);
+    await session?.close();
+    const [completed] = await Promise.allSettled([execution]);
+    if (completed.status === "rejected" && !signal?.aborted) throw completed.reason;
+    const meta = this.sessionMeta.get(id);
+    if (meta && session)
+      this.sessionMeta.set(id, {
+        ...meta,
+        status: session.status.status,
+        executionCount: session.status.executionCount
+      });
+    this.sessionsRevision++;
   }
   async closeKernelSession(sessionId) {
     await this.init();
@@ -1292,16 +1339,7 @@ var DiscoveryService = class {
       projectId: this.projectId,
       sessionId: id
     });
-    const session = this.sessions.get(id);
-    await session?.close();
-    await this.executions.get(id);
-    const meta = this.sessionMeta.get(id);
-    if (meta)
-      this.sessionMeta.set(id, {
-        ...meta,
-        status: session?.status.status ?? "closed",
-        executionCount: session?.status.executionCount ?? meta.executionCount
-      });
+    await this.disposeKernelSession(id);
     await this.persistSessions();
   }
   async createExplorationPlan(input) {
@@ -1328,10 +1366,7 @@ var DiscoveryService = class {
   }
   async runCritic(request) {
     await this.init();
-    const result = await runCriticReview(
-      request,
-      this.options.services.criticProvider
-    );
+    const result = await runCriticReview(request, this.options.services.criticProvider);
     const review = {
       findingId: request.findingId,
       ...result,
@@ -1362,14 +1397,10 @@ var DiscoveryService = class {
       projectId: this.projectId,
       planId: plan.id
     });
-    const assessment = await executeMultiPath(
-      createMultiPathPlan(plan),
-      executor,
-      {
-        projectId: this.projectId,
-        inquiry: this.options.services.inquiry
-      }
-    );
+    const assessment = await executeMultiPath(createMultiPathPlan(plan), executor, {
+      projectId: this.projectId,
+      inquiry: this.options.services.inquiry
+    });
     const record = {
       planId: plan.id,
       findingId: plan.findingId,
@@ -1386,9 +1417,7 @@ var DiscoveryService = class {
   }
   async listMultipathAssessments() {
     await this.init();
-    return this.multipaths.map(
-      ({ recordedAt: _recordedAt, ...value }) => value
-    );
+    return this.multipaths.map(({ recordedAt: _recordedAt, ...value }) => value);
   }
   async runEvaluation(cases, evaluator, options = {}) {
     await this.init();
@@ -1442,12 +1471,17 @@ var DiscoveryService = class {
     return this.disposal;
   }
   async disposeSessions() {
+    const sessionClosures = [...this.sessions.values()].map((session) => session.close());
+    const executions = [...this.executions].map(([id, pending]) => ({
+      pending,
+      signal: this.executionSignals.get(id)
+    }));
     const settled = await Promise.allSettled([
-      ...Array.from(this.sessions.values(), (session) => session.close()),
-      ...this.executions.values()
+      ...sessionClosures,
+      ...executions.map((item) => item.pending)
     ]);
     const failures = settled.filter(
-      (result) => result.status === "rejected"
+      (result, index) => result.status === "rejected" && (index < sessionClosures.length || !executions[index - sessionClosures.length]?.signal?.aborted)
     );
     if (failures.length)
       throw new AggregateError(
@@ -1456,15 +1490,13 @@ var DiscoveryService = class {
       );
     for (const [id, session] of this.sessions) {
       const meta = this.sessionMeta.get(id);
-      if (!meta)
-        throw new Error("Active discovery session has no journal metadata");
+      if (!meta) throw new Error("Active discovery session has no journal metadata");
       this.sessionMeta.set(id, {
         ...meta,
         status: session.status.status,
         executionCount: session.status.executionCount
       });
     }
-    if (this.sessions.size) await this.persistSessions();
     this.sessions.clear();
   }
 };
@@ -1520,12 +1552,7 @@ var planSchema = {
         maxOutputBytes: { type: "integer", minimum: 1 },
         maxCostUnits: { type: "number", exclusiveMinimum: 0 }
       },
-      required: [
-        "maxExecutions",
-        "maxWallTimeMs",
-        "maxOutputBytes",
-        "maxCostUnits"
-      ],
+      required: ["maxExecutions", "maxWallTimeMs", "maxOutputBytes", "maxCostUnits"],
       additionalProperties: false
     },
     candidates: {
@@ -1562,19 +1589,42 @@ function binding(value) {
   return item;
 }
 function records(value, journal) {
-  if (!Array.isArray(value) || value.some(
-    (item) => !item || typeof item !== "object" || Array.isArray(item)
-  ))
-    throw new Error(
-      `Discovery journal ${journal} must contain an array of records`
-    );
+  if (!Array.isArray(value) || value.some((item) => !item || typeof item !== "object" || Array.isArray(item)))
+    throw new Error(`Discovery journal ${journal} must contain an array of records`);
   return value;
 }
 var response = (details) => ({
   content: [{ type: "text", text: JSON.stringify(details) }],
   details
 });
+function ownerMetadata(value) {
+  const item = value;
+  if (!item || item.schemaVersion !== 1 || !Array.isArray(item.kernels) || !Array.isArray(item.intents))
+    throw new Error("Discovery owner metadata is malformed");
+  for (const record of item.kernels) {
+    if (!record || typeof record.sessionId !== "string" || typeof record.creatorSessionId !== "string" || typeof record.runDirectory !== "string" || typeof record.image !== "string" || !["creating", "active", "closed", "cleanup-failed"].includes(record.status))
+      throw new Error("Discovery kernel ownership metadata is malformed");
+  }
+  for (const record of item.intents) {
+    if (!record || typeof record.requestId !== "string" || typeof record.applicationId !== "string" || typeof record.sessionId !== "string" || typeof record.creatorSessionId !== "string" || typeof record.codeSha256 !== "string" || ![
+      "pending",
+      "not-accepted",
+      "needs-recovery",
+      "accepted",
+      "succeeded",
+      "failed",
+      "cancelled",
+      "cleanup-failed"
+    ].includes(record.status))
+      throw new Error("Discovery execution intent metadata is malformed");
+  }
+  if (new Set(item.kernels.map((record) => record.sessionId)).size !== item.kernels.length || new Set(item.intents.map((record) => record.requestId)).size !== item.intents.length)
+    throw new Error("Discovery owner metadata contains duplicate identities");
+  return item;
+}
 var createDiscoveryRuntime = async ({
+  applicationId,
+  signal,
   capabilities,
   events
 }) => {
@@ -1592,16 +1642,14 @@ var createDiscoveryRuntime = async ({
     return Promise.all(
       granted.filter((item) => item.kind === "state").map(async (root) => {
         const stored = await read(root.handle, bindingPath);
-        const entries = await capabilities.call("state.list", {
+        const entries = stored.kind === "missing" ? await capabilities.call("state.list", {
           root: root.handle,
           path: ""
-        });
+        }) : [];
         return {
           root,
           binding: stored.kind === "missing" ? null : binding(stored.value),
-          hasExistingData: entries.some(
-            (item) => JOURNALS.some((name) => item.name === `${name}.json`)
-          )
+          hasExistingData: stored.kind === "value" || entries.some((item) => JOURNALS.some((name) => item.name === `${name}.json`))
         };
       })
     );
@@ -1621,9 +1669,7 @@ var createDiscoveryRuntime = async ({
       (item) => item.binding?.workspaceId === scope.workspaceId
     );
     if (selected.length > 1)
-      throw new Error(
-        "More than one approved discovery root is bound to this workspace"
-      );
+      throw new Error("More than one approved discovery root is bound to this workspace");
     return selected[0];
   };
   const overview = async (preferredRoot) => {
@@ -1654,9 +1700,39 @@ var createDiscoveryRuntime = async ({
     if (current) {
       if (current.root !== root.root.handle)
         throw new Error("Discovery workspace already owns another state root");
-      await current.service.init();
-      return current.service;
+      await current.ready;
+      return current;
     }
+    const kernels = /* @__PURE__ */ new Map(), intents = /* @__PURE__ */ new Map();
+    const activeKernels = /* @__PURE__ */ new Set(), verifiedReceipts = /* @__PURE__ */ new Set();
+    let metadataVersion = null;
+    let metadataWrites = Promise.resolve();
+    const writeMetadata2 = (change) => {
+      const pending = metadataWrites.then(async () => {
+        const next = change({
+          schemaVersion: 1,
+          kernels: [...kernels.values()],
+          intents: [...intents.values()]
+        });
+        const written = await capabilities.call("state.writeJson", {
+          root: root.root.handle,
+          path: "owner-state.json",
+          value: next,
+          expectedVersion: metadataVersion
+        });
+        metadataVersion = written.version;
+        kernels.clear();
+        intents.clear();
+        for (const item of next.kernels) kernels.set(item.sessionId, item);
+        for (const item of next.intents) intents.set(item.requestId, item);
+        events.changed();
+      });
+      metadataWrites = pending.then(
+        () => void 0,
+        () => void 0
+      );
+      return pending;
+    };
     const journals = /* @__PURE__ */ new Map();
     const services = {
       journal: (name) => ({
@@ -1680,25 +1756,87 @@ var createDiscoveryRuntime = async ({
           events.changed();
         }
       }),
-      authorize: async () => {
+      authorize: async (operation) => {
+        const actual = await caller();
+        if (actual.kind !== "session")
+          throw new Error("Discovery mutation requires a real creator SDK session");
+        if ("sessionId" in operation) {
+          const ownership = kernels.get(operation.sessionId);
+          if (!ownership || ownership.creatorSessionId !== actual.sessionId || !activeKernels.has(operation.sessionId))
+            throw new Error("Kernel belongs to another creator or is historical");
+        }
         await capabilities.call("state.reserve", {
           root: root.root.handle,
           path: ""
         });
       },
-      runner: async () => new UnavailableKernelRunner(),
+      runner: async () => {
+        const environment = await capabilities.call(
+          "execution.describe",
+          null
+        );
+        if (environment.kind !== "container") return new UnavailableKernelRunner();
+        return {
+          capabilities: {
+            kind: "container",
+            languages: ["python", "r"],
+            networkDisabled: true,
+            writesOnlyToRunDirectory: true
+          },
+          async run(request) {
+            request.signal?.throwIfAborted();
+            const actual = await caller();
+            const ownership = [...kernels.values()].find(
+              (item) => item.runDirectory === request.runDirectory && activeKernels.has(item.sessionId)
+            );
+            if (actual.kind !== "session" || !ownership || ownership.creatorSessionId !== actual.sessionId)
+              throw new Error("Execution has no live creator-owned logical kernel");
+            const intent = {
+              requestId: request.requestId,
+              applicationId,
+              sessionId: ownership.sessionId,
+              creatorSessionId: actual.sessionId,
+              codeSha256: createHash("sha256").update(request.code).digest("hex"),
+              status: "pending"
+            };
+            await writeMetadata2((state) => ({ ...state, intents: [...state.intents, intent] }));
+            request.signal?.throwIfAborted();
+            const executed = await capabilities.call(
+              "execution.run",
+              {
+                requestId: request.requestId,
+                language: request.language,
+                code: request.code,
+                runDirectory: request.runDirectory,
+                timeoutMs: request.timeoutMs,
+                maxOutputBytes: request.maxOutputBytes,
+                dataClassification: request.dataClassification,
+                image: ownership.image
+              },
+              request.signal
+            );
+            request.signal?.throwIfAborted();
+            await writeMetadata2((state) => ({
+              ...state,
+              intents: state.intents.map(
+                (item) => item.requestId === request.requestId ? { ...item, status: executed.receipt.status, receipt: executed.receipt } : item
+              )
+            }));
+            verifiedReceipts.add(request.requestId);
+            return executed.result;
+          }
+        };
+      },
       files: {
         prepareDirectory: async () => {
-          throw new Error(
-            "Controlled execution directory service is unavailable"
-          );
+          throw new Error("Controlled execution directory service is unavailable");
         },
         write: async () => {
           throw new Error("Discovery export service is unavailable");
         }
       },
       onExecution: async () => {
-        throw new Error("Discovery execution receipts are unavailable");
+        events.changed();
       },
       legacyJournal: async () => void 0
     };
@@ -1707,19 +1845,37 @@ var createDiscoveryRuntime = async ({
       projectRoot: scope.workspaceDirectory,
       services
     });
-    current = { root: root.root.handle, service };
-    owners.set(scope.workspaceId, current);
-    await service.init().catch((error) => {
+    const ready = (async () => {
+      await service.init();
+      const stored = await read(root.root.handle, "owner-state.json");
+      metadataVersion = stored.version;
+      if (stored.kind === "value") {
+        const metadata = ownerMetadata(stored.value);
+        for (const record of metadata.kernels) kernels.set(record.sessionId, record);
+        for (const record of metadata.intents) intents.set(record.requestId, record);
+      }
+    })().catch((error) => {
       owners.delete(scope.workspaceId);
       throw error;
     });
-    return service;
+    current = {
+      root: root.root.handle,
+      service,
+      kernels,
+      intents,
+      activeKernels,
+      verifiedReceipts,
+      ready,
+      writeMetadata: writeMetadata2,
+      closuresDirty: false
+    };
+    owners.set(scope.workspaceId, current);
+    await ready;
+    return current;
   };
   const bind = async (input) => {
     const scope = await workspace();
-    const selected = (await roots()).find(
-      (item) => item.root.handle === input.root
-    );
+    const selected = (await roots()).find((item) => item.root.handle === input.root);
     if (!selected || selected.root.access !== "read-write")
       throw new Error("Select an approved writable discovery state root");
     if (selected.binding && selected.binding.workspaceId !== scope.workspaceId)
@@ -1742,9 +1898,7 @@ var createDiscoveryRuntime = async ({
       });
       const unique = [...new Set(ids)];
       if (unique.length > 1)
-        throw new Error(
-          "Existing discovery plans contain conflicting project identities"
-        );
+        throw new Error("Existing discovery plans contain conflicting project identities");
       const projectId = unique[0] ?? `discovery-${createHash("sha256").update(scope.workspaceId).digest("hex").slice(0, 32)}`;
       await capabilities.call("state.writeJson", {
         root: input.root,
@@ -1770,8 +1924,7 @@ var createDiscoveryRuntime = async ({
     const root = input.root ? (await roots()).find((item) => item.root.handle === input.root) : await findRoot(scope);
     if (root?.binding && root.binding.workspaceId !== scope.workspaceId)
       throw new Error("Discovery state belongs to another workspace");
-    if (!JOURNALS.includes(input.journal))
-      throw new Error("Unknown discovery journal");
+    if (!JOURNALS.includes(input.journal)) throw new Error("Unknown discovery journal");
     if (!root)
       return {
         readOnly: true,
@@ -1783,9 +1936,7 @@ var createDiscoveryRuntime = async ({
       };
     const values = await journalRecords(root.root.handle, input.journal);
     const query = input.query?.trim().toLocaleLowerCase();
-    const matches = query ? values.filter(
-      (value) => JSON.stringify(value).toLocaleLowerCase().includes(query)
-    ) : values;
+    const matches = query ? values.filter((value) => JSON.stringify(value).toLocaleLowerCase().includes(query)) : values;
     return {
       readOnly: true,
       status: "configured",
@@ -1798,17 +1949,198 @@ var createDiscoveryRuntime = async ({
   const createPlan = async (input) => {
     const scope = await workspace();
     const selected = await findRoot(scope);
-    if (!selected)
-      throw new Error(
-        "Bind a discovery state directory before creating a plan"
-      );
+    if (!selected) throw new Error("Bind a discovery state directory before creating a plan");
     await capabilities.call("state.reserve", {
       root: selected.root.handle,
       path: ""
     });
-    return (await owner(scope, selected)).createExplorationPlan(input);
+    return (await owner(scope, selected)).service.createExplorationPlan(input);
   };
   const journalSchema = { type: "string", enum: JOURNALS };
+  const creatorOwner = async () => {
+    const scope = await workspace();
+    if (scope.kind !== "session") throw new Error("Select a real creator SDK session for kernels");
+    const selected = await findRoot(scope);
+    if (!selected)
+      throw new Error("Bind a discovery state directory before creating a logical kernel");
+    return { scope, owned: await owner(scope, selected) };
+  };
+  const ownedKernel = (owned, creatorSessionId, sessionId) => {
+    const kernel = owned.kernels.get(sessionId);
+    if (!kernel || kernel.creatorSessionId !== creatorSessionId || !owned.activeKernels.has(sessionId))
+      throw new Error("Kernel belongs to another creator or is a historical record");
+    return kernel;
+  };
+  const listKernels = async () => {
+    const { scope, owned } = await creatorOwner();
+    return {
+      kernels: (await owned.service.listKernelSessions()).map((kernel) => ({
+        ...kernel,
+        creatorSessionId: owned.kernels.get(kernel.sessionId)?.creatorSessionId ?? null,
+        ownership: !owned.activeKernels.has(kernel.sessionId) ? "historical" : owned.kernels.get(kernel.sessionId)?.creatorSessionId === scope.sessionId ? "own" : "another-creator",
+        ownershipState: owned.kernels.get(kernel.sessionId)?.status ?? "unassigned",
+        image: owned.kernels.get(kernel.sessionId)?.image ?? null,
+        logicalOnly: true
+      })),
+      intents: [...owned.intents.values()].map((intent) => ({
+        ...intent,
+        verification: owned.verifiedReceipts.has(intent.requestId) ? "host-verified-this-activation" : "historical-unverified"
+      }))
+    };
+  };
+  const createKernel = async (input) => {
+    const { scope, owned } = await creatorOwner();
+    if (owned.kernels.has(input.sessionId) || await owned.service.getKernelSession(input.sessionId))
+      throw new Error("Kernel identity already exists; use a new identity");
+    if ([...owned.kernels.values()].some(
+      (item) => owned.activeKernels.has(item.sessionId) && item.runDirectory === input.runDirectory
+    ))
+      throw new Error("An active logical kernel already owns this runs directory");
+    const record = {
+      sessionId: input.sessionId,
+      creatorSessionId: scope.sessionId,
+      runDirectory: input.runDirectory,
+      image: input.image,
+      status: "creating"
+    };
+    await owned.writeMetadata((state) => ({ ...state, kernels: [...state.kernels, record] }));
+    const created = await owned.service.createKernelSession(input);
+    owned.activeKernels.add(input.sessionId);
+    await owned.writeMetadata((state) => ({
+      ...state,
+      kernels: state.kernels.map(
+        (item) => item.sessionId === input.sessionId ? { ...item, status: "active" } : item
+      )
+    }));
+    return {
+      kernel: created,
+      creatorSessionId: scope.sessionId,
+      logicalOnly: true,
+      environment: await capabilities.call("execution.describe", null)
+    };
+  };
+  const reconcile = async (signal2) => {
+    const { scope, owned } = await creatorOwner();
+    for (const intent of [...owned.intents.values()].filter(
+      (item) => item.creatorSessionId === scope.sessionId
+    )) {
+      signal2?.throwIfAborted();
+      if (intent.applicationId !== applicationId) {
+        await owned.writeMetadata((state) => ({
+          ...state,
+          intents: state.intents.map(
+            (item) => item.requestId === intent.requestId ? { ...item, status: "needs-recovery" } : item
+          )
+        }));
+        continue;
+      }
+      let receipt;
+      try {
+        receipt = await capabilities.call("execution.receipt", {
+          requestId: intent.requestId
+        });
+      } catch (error) {
+        if (!(error instanceof Error) || !("code" in error) || error.code !== "EXECUTION_RECEIPT_NEEDS_RECOVERY")
+          throw error;
+        signal2?.throwIfAborted();
+        await owned.writeMetadata((state) => ({
+          ...state,
+          intents: state.intents.map(
+            (item) => item.requestId === intent.requestId ? { ...item, status: "needs-recovery" } : item
+          )
+        }));
+        continue;
+      }
+      signal2?.throwIfAborted();
+      await owned.writeMetadata((state) => ({
+        ...state,
+        intents: state.intents.map(
+          (item) => item.requestId === intent.requestId ? {
+            ...item,
+            status: receipt.kind === "missing" ? "not-accepted" : receipt.receipt.status,
+            ...receipt.kind === "value" ? { receipt: receipt.receipt } : {}
+          } : item
+        )
+      }));
+      owned.verifiedReceipts.add(intent.requestId);
+    }
+    signal2?.throwIfAborted();
+    await owned.service.persistObservedKernelStates();
+    if (owned.closuresDirty) {
+      signal2?.throwIfAborted();
+      await owned.writeMetadata((state) => state);
+      owned.closuresDirty = false;
+    }
+    return listKernels();
+  };
+  const executeKernel = async (input, signal2) => {
+    const { scope, owned } = await creatorOwner();
+    const kernel = ownedKernel(owned, scope.sessionId, input.sessionId);
+    if (kernel.status !== "active")
+      throw new Error("Kernel ownership is not active; reconcile it before execution");
+    const execution = await owned.service.executeKernel(input.sessionId, input.code, signal2);
+    signal2?.throwIfAborted();
+    await reconcile(signal2);
+    return { execution, ...await listKernels() };
+  };
+  const closeKernel = async (input, signal2) => {
+    const { scope, owned } = await creatorOwner();
+    ownedKernel(owned, scope.sessionId, input.sessionId);
+    signal2?.throwIfAborted();
+    await owned.service.closeKernelSession(input.sessionId);
+    signal2?.throwIfAborted();
+    await reconcile(signal2);
+    await owned.writeMetadata((state) => ({
+      ...state,
+      kernels: state.kernels.map(
+        (item) => item.sessionId === input.sessionId ? { ...item, status: "closed" } : item
+      )
+    }));
+    owned.activeKernels.delete(input.sessionId);
+    return listKernels();
+  };
+  const kernelSchema = {
+    type: "object",
+    properties: {
+      sessionId: { type: "string", minLength: 1, maxLength: 128, pattern: "^[a-zA-Z0-9._-]+$" },
+      runDirectory: { type: "string", minLength: 6, pattern: "^runs/" },
+      language: { enum: ["python", "r"] },
+      image: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" },
+      dataClassification: { enum: ["public", "internal", "controlled", "restricted"] },
+      idleTimeoutMs: { type: "integer", minimum: 1, maximum: 12e4 },
+      executionTimeoutMs: { type: "integer", minimum: 1, maximum: 12e4 },
+      maxExecutions: { type: "integer", minimum: 1, maximum: 32 },
+      maxOutputBytes: { type: "integer", minimum: 1, maximum: 1e6 }
+    },
+    required: ["sessionId", "runDirectory", "language", "image", "dataClassification"],
+    additionalProperties: false
+  };
+  const kernelIdSchema = {
+    type: "object",
+    properties: { sessionId: kernelSchema.properties.sessionId },
+    required: ["sessionId"],
+    additionalProperties: false
+  };
+  const kernelExecuteSchema = {
+    type: "object",
+    properties: {
+      sessionId: kernelSchema.properties.sessionId,
+      code: { type: "string", minLength: 1, maxLength: 1e6 }
+    },
+    required: ["sessionId", "code"],
+    additionalProperties: false
+  };
+  const executionDescription = () => capabilities.call("execution.describe", null);
+  const executionReceipt = (input) => capabilities.call("execution.receipt", input);
+  const cancelExecution = (input) => capabilities.call("execution.cancel", input);
+  const requestSchema = {
+    type: "object",
+    properties: {
+      requestId: { type: "string", minLength: 1, maxLength: 128, pattern: "^[a-zA-Z0-9._-]+$" }
+    },
+    required: ["requestId"],
+    additionalProperties: false
+  };
   const operations = {
     overview: {
       inputSchema: nullSchema,
@@ -1837,6 +2169,54 @@ var createDiscoveryRuntime = async ({
       effect: "read",
       execute: (input) => list(input)
     },
+    listKernelSessions: {
+      inputSchema: nullSchema,
+      resultSchema: objectSchema,
+      effect: "read",
+      execute: () => listKernels()
+    },
+    createKernelSession: {
+      inputSchema: kernelSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (input) => createKernel(input)
+    },
+    executeKernel: {
+      inputSchema: kernelExecuteSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (input, context) => executeKernel(input, context.signal)
+    },
+    closeKernelSession: {
+      inputSchema: kernelIdSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (input, context) => closeKernel(input, context.signal)
+    },
+    reconcileExecutions: {
+      inputSchema: nullSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (_input, context) => reconcile(context.signal)
+    },
+    executionDescription: {
+      inputSchema: nullSchema,
+      resultSchema: objectSchema,
+      effect: "read",
+      execute: () => executionDescription()
+    },
+    executionReceipt: {
+      inputSchema: requestSchema,
+      resultSchema: objectSchema,
+      effect: "read",
+      execute: executionReceipt
+    },
+    cancelExecution: {
+      inputSchema: requestSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: cancelExecution
+    },
     createExplorationPlan: {
       inputSchema: planSchema,
       resultSchema: objectSchema,
@@ -1844,74 +2224,188 @@ var createDiscoveryRuntime = async ({
       execute: (input) => createPlan(input)
     }
   };
-  const createNativeSession = () => ({
-    toolEffects: {
-      discovery_status: "read",
-      discovery_list_records: "read",
-      discovery_search_records: "read",
-      discovery_bind_workspace: "write",
-      discovery_create_plan: "write"
-    },
-    extension(pi) {
-      pi.registerTool({
-        name: "discovery_status",
-        label: "Discovery \xB7 status",
-        description: "Read approved discovery roots and current workspace journals; does not acquire writer ownership.",
-        parameters: {
-          type: "object",
-          properties: { root: { type: "string" } },
-          additionalProperties: false
-        },
-        ...readMetadata,
-        async execute(_id, input) {
-          return response(await overview(input.root));
-        }
-      });
-      for (const name of [
-        "discovery_list_records",
-        "discovery_search_records"
-      ])
-        pi.registerTool({
-          name,
-          label: "Discovery \xB7 records",
-          description: "Read approved current-workspace discovery journal records; observations are not independent scientific validation.",
-          parameters: operations.listRecords.inputSchema,
-          ...readMetadata,
-          async execute(_id, input) {
-            return response(await list(input));
+  const createNativeSession = () => {
+    let creatorSessionId;
+    return {
+      toolEffects: {
+        discovery_status: "read",
+        discovery_list_records: "read",
+        discovery_search_records: "read",
+        discovery_bind_workspace: "write",
+        discovery_create_plan: "write",
+        discovery_execution_environment: "read",
+        discovery_execution_receipt: "read",
+        discovery_cancel_execution: "write",
+        discovery_list_kernels: "read",
+        discovery_create_kernel: "write",
+        discovery_execute_kernel: "write",
+        discovery_close_kernel: "write",
+        discovery_reconcile_executions: "write"
+      },
+      extension(pi) {
+        const adapted = Object.create(pi);
+        adapted.registerTool = (definition) => pi.registerTool({
+          ...definition,
+          async execute(id, input, signal2, update, context) {
+            const scope = await caller();
+            if (scope.kind !== "session" || creatorSessionId && creatorSessionId !== scope.sessionId)
+              throw new Error("Native projection belongs to another SDK session");
+            creatorSessionId = scope.sessionId;
+            return definition.execute(id, input, signal2, update, context);
           }
         });
-      pi.registerTool({
-        name: "discovery_bind_workspace",
-        label: "Discovery \xB7 bind",
-        description: "Explicitly bind an approved state directory to this real workspace, acknowledge any existing journals, and acquire exclusive writer ownership.",
-        parameters: bindingSchema,
-        ...writeMetadata,
-        async execute(_id, input) {
-          return response(await bind(input));
-        }
-      });
-      pi.registerTool({
-        name: "discovery_create_plan",
-        label: "Discovery \xB7 plan",
-        description: "Persist a ranked exploration plan in the bound workspace. Does not execute code or certify scientific validity.",
-        parameters: planSchema,
-        ...writeMetadata,
-        async execute(_id, input) {
-          return response(await createPlan(input));
-        }
-      });
-    },
-    dispose: async () => {
-    }
-  });
+        const nativePi = adapted;
+        const emptyParameters = {
+          type: "object",
+          properties: {},
+          additionalProperties: false
+        };
+        const kernelTools = [
+          ["discovery_list_kernels", emptyParameters, "read", () => listKernels()],
+          [
+            "discovery_create_kernel",
+            kernelSchema,
+            "write",
+            (input) => createKernel(input)
+          ],
+          [
+            "discovery_execute_kernel",
+            kernelExecuteSchema,
+            "write",
+            (input, signal2) => executeKernel(input, signal2)
+          ],
+          [
+            "discovery_close_kernel",
+            kernelIdSchema,
+            "write",
+            (input, signal2) => closeKernel(input, signal2)
+          ],
+          [
+            "discovery_reconcile_executions",
+            emptyParameters,
+            "write",
+            (_input, signal2) => reconcile(signal2)
+          ]
+        ];
+        for (const [name, parameters, effect, run] of kernelTools)
+          nativePi.registerTool({
+            name,
+            label: "Discovery \xB7 logical kernel",
+            description: name === "discovery_create_kernel" ? "Create only a creator-owned logical kernel and budget; no container is started. Configured cached images and actual approval are still required for execution." : "Operate only the calling creator SDK session's discovery logical kernels and verified host receipts; historical records cannot be adopted.",
+            parameters,
+            ...effect === "read" ? readMetadata : writeMetadata,
+            async execute(_id, input, signal2) {
+              return response(await run(input, signal2));
+            }
+          });
+        for (const [name, operation, effect, description] of [
+          [
+            "discovery_execution_environment",
+            "executionDescription",
+            "read",
+            "Read only the configured Python/R cached exact image identities; never pulls or enumerates images."
+          ],
+          [
+            "discovery_execution_receipt",
+            "executionReceipt",
+            "read",
+            "Read only this live creator session's own host execution receipt; missing is not closed."
+          ],
+          [
+            "discovery_cancel_execution",
+            "cancelExecution",
+            "write",
+            "Cancel this creator's accepted execution, wait for owned cleanup and return its terminal receipt; missing is never closed."
+          ]
+        ])
+          nativePi.registerTool({
+            name,
+            label: "Discovery \xB7 execution",
+            description,
+            parameters: operations[operation].inputSchema.type === "null" ? { type: "object", properties: {}, additionalProperties: false } : requestSchema,
+            ...effect === "read" ? readMetadata : writeMetadata,
+            async execute(_id, input) {
+              return response(
+                await operations[operation].execute(
+                  operation === "executionDescription" ? null : input
+                )
+              );
+            }
+          });
+        nativePi.registerTool({
+          name: "discovery_status",
+          label: "Discovery \xB7 status",
+          description: "Read approved discovery roots and current workspace journals; does not acquire writer ownership.",
+          parameters: {
+            type: "object",
+            properties: { root: { type: "string" } },
+            additionalProperties: false
+          },
+          ...readMetadata,
+          async execute(_id, input) {
+            return response(await overview(input.root));
+          }
+        });
+        for (const name of ["discovery_list_records", "discovery_search_records"])
+          nativePi.registerTool({
+            name,
+            label: "Discovery \xB7 records",
+            description: "Read approved current-workspace discovery journal records; observations are not independent scientific validation.",
+            parameters: operations.listRecords.inputSchema,
+            ...readMetadata,
+            async execute(_id, input) {
+              return response(await list(input));
+            }
+          });
+        nativePi.registerTool({
+          name: "discovery_bind_workspace",
+          label: "Discovery \xB7 bind",
+          description: "Explicitly bind an approved state directory to this real workspace, acknowledge any existing journals, and acquire exclusive writer ownership.",
+          parameters: bindingSchema,
+          ...writeMetadata,
+          async execute(_id, input) {
+            return response(await bind(input));
+          }
+        });
+        nativePi.registerTool({
+          name: "discovery_create_plan",
+          label: "Discovery \xB7 plan",
+          description: "Persist a ranked exploration plan in the bound workspace. Does not execute code or certify scientific validity.",
+          parameters: planSchema,
+          ...writeMetadata,
+          async execute(_id, input) {
+            return response(await createPlan(input));
+          }
+        });
+      },
+      async dispose() {
+        if (!creatorSessionId) return;
+        const closing = [...owners.values()].flatMap(
+          (owned) => [...owned.kernels.values()].filter(
+            (kernel) => kernel.creatorSessionId === creatorSessionId && owned.activeKernels.has(kernel.sessionId)
+          ).map(async (kernel) => {
+            await owned.service.disposeKernelSession(kernel.sessionId);
+            owned.activeKernels.delete(kernel.sessionId);
+            owned.kernels.set(kernel.sessionId, { ...kernel, status: "closed" });
+            owned.closuresDirty = true;
+          })
+        );
+        const results = await Promise.allSettled(closing);
+        const failures = results.filter((result) => result.status === "rejected");
+        if (failures.length)
+          throw new AggregateError(
+            failures.map((result) => result.reason),
+            "Creator kernel cleanup failed"
+          );
+        if (!signal.aborted) events.changed();
+      }
+    };
+  };
   return {
     operations,
     createNativeSession,
     async dispose() {
-      await Promise.all(
-        [...owners.values()].map((item) => item.service.dispose())
-      );
+      await Promise.all([...owners.values()].map((item) => item.service.dispose()));
       owners.clear();
     }
   };
