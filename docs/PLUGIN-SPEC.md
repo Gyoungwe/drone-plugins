@@ -214,3 +214,12 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 - [ ] `plugins.lock.json` 已更新；干净 checkout、不设 `DRONE_PLUGINS_DIR` 时，`npm ci → fetch:plugins → lint → typecheck → test → check:arch → build → check:extensions -- --strict` 全部通过
 - [x] 宿主独立性检查：源码扫描可选插件 import，并验证空插件安装根
 - [ ] 真机：功能可见可用；禁用插件后界面回到默认状态
+
+
+### 原始二进制状态（未发布 API 1.3 候选）
+
+`permissions.filesystem` 的 `binary-state-read` / `binary-state-write` 独立于 application-state 与 files 权限；write 仅隐含 binary read。宿主每次 activation 另选目录并交付 `kind: "binary-state"` opaque root。JSON/file root 不可用于 binary 端口，binary root 亦不提供 JSON 或文本权限。
+
+`state.readBinary({root,path})` 返回 missing/version:null 或 value/base64/version:SHA256。`state.writeBinary({root,path,base64,expectedVersion,assertAbsent})` 仅在该文件父目录持有真实 `state.reserve` 独占租约、用户逐次批准、raw-byte CAS 与最多 8 个同根 absence 条件满足后原子替换，并回读确认。decoded 上限固定 4 MiB；超限明确拒绝，不自动转换、拆分或改变原库。二进制内容不透明，批准页展示实际 scope、路径、旧/新 SHA、字节数和 absence 条件，不能冒充逻辑 diff。
+
+提交点前取消保留原字节并清理本次临时文件；提交点后取消/回读失败返回 `EBINARYWRITEOUTCOMEUNKNOWN`，新的合法 caller 须回读 SHA 核对，不能盲目重试。临时文件清理失败保留 writer lease。原 SQLite schema、备份、WAL/SHM/journal 拒绝及领域恢复由插件维护；此合同本身不证明 Inquiry 完整迁移通过。

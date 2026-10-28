@@ -111,3 +111,9 @@ test("resources must have a Desktop owner and real packaged entries", () => {
  assert.match(errors({ ...valid, entrypoints: { ...entrypoints, resources: [] } }), /nonempty resource IDs/);
  assert.match(errors({ ...valid, entrypoints: { ...entrypoints, resources: { "": "./dist/index.mjs" } } }), /nonempty resource IDs/);
 });
+
+for (const token of ["binary-state-read", "binary-state-write"]) {
+ test(`accepts independent ${token} without JSON or file permissions`, () => {
+ assert.equal(errors({...valid,permissions:{...valid.permissions,filesystem:[token]}}), "");
+ });
+}

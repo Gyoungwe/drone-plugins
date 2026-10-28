@@ -14,6 +14,8 @@ const FILESYSTEM_PERMISSIONS = new Set([
 	"vault-read",
 	"application-state",
 	"application-state-write",
+ "binary-state-read",
+ "binary-state-write",
 	"project-read",
 ]);
 const PERMISSION_KEYS = new Set(["filesystem", "network", "subprocess", "externalWrites", "credentials", "readWrite", "externalSideEffects"]);
