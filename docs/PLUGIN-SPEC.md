@@ -103,6 +103,7 @@ packages/<name>/
 | `drone.resultContract` | 必须为 `drone-result/v3` |
 | `drone.provides` | API 1.3 候选：`{service:{version:正整数,operations:非空唯一操作名数组}}`；须有 `desktopRuntime` |
 | `drone.requires` | API 1.3 候选：`{alias:{service:服务合同名,version:正整数}}`；不接受包名或 npm 依赖，须有 `desktopRuntime` |
+| `drone.recordAdoptions` | 临时 API 1.3 候选：`{logicalType:{legacyType,fromVersions:[精确稳定版本],removeBeforeVersion:删除版本}}`；须有 `desktopRuntime`，到删除版本清单即不合格 |
 | `entrypoints` | 至少一项；每个路径必须存在，并且包含在 `files` 里。`host` 只供宿主组合根使用（§6.1） |
 | `capabilities` | 来自固定词表（§4.1）；不在词表内的值视为错误 |
 | `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
@@ -119,6 +120,10 @@ packages/<name>/
 同包 UI 的 `droneUi: 2` 需要宿主已验证 installed desktopRuntime 来源；v1-only 宿主应在加载前拒绝。原生 `PluginNativeSession.toolEffects` 明确声明每个工具的 read/write 效果，未声明时宿主按写操作处理，不能依赖插件自定义 metadata 推断。可信 scope 的 `workspaceId` 是身份标识，`workspaceDirectory` 才是实际目录；两者都来自宿主，目录值本身不赋予文件访问权。API 1.3 尚未发布时只允许记录指纹的私有验收，正式最低依赖及公开 clean install 仍是发布门禁。
 
 manifest 是声明，不是安全边界：外部写入、远程执行、删除和发布仍由宿主授权。宿主会在安装确认和插件详情中展示 `permissions` 与 `tools`。
+
+临时旧会话记录导入只能通过两项 write 能力 `session.records.adoption.inspect({type})` / `commit({type,legacyId,legacyHash,data})`。inspect 只在真实用户批准后返回已声明精确旧 tag 的当前 branch 最新候选，并明确 creator/packageVersion=unknown；fromVersions 只是当前迁移器支持范围，不能证明旧记录来自哪个包或版本。不能导入 `plugin-record:` / `plugin-notice:` 的其他来源 namespace。普通 records.read 没有 legacyTypes 参数。
+
+commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpoint，保存新 namespace 并真实持久化回读；原记录保留。hash 仅用于并发核对，不是授权/provenance token；已有 own-source checkpoint 后 inspect 不再暴露旧值。deferred/needs-reopen 不能称导入完成。迁移器必须按具体旧数据格式与真实 scope 验证，导入的 approved、roots、proof 等 JSON 不能变成 live 文件/模型/执行许可或科学验收 proof，必须重新获取当前真实授权与 opaque 执行回执。Core 目标支持 0.1.9/0.2.0 的旧全局检查点并在 0.3.0 前移除此临时声明，Knowledge 支持 0.2.0/0.2.1 并在 0.4.0 前移除；具体生产迁移器仍须单独验收，不能用通用端口 fixture 代替。
 
 宿主加载能力插件时，应把 manifest 的 `permissions` 传给
 `createPermissionedHostPort`（来自 `@gyoungwe/plugin-api`）。该适配器在调用

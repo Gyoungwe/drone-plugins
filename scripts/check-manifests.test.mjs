@@ -41,6 +41,15 @@ for (const [declaration,expected] of [
 ]) test(`rejects invalid service declarations ${JSON.stringify(declaration)}`,()=>assert.match(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,...declaration}}),expected));
 test("service declarations require an actual managed owner",()=>assert.match(errors({...valid,drone:{...valid.drone,provides:{"audit.runtime":{version:1,operations:["read"]}}}}),/requires desktopRuntime ownership/));
 
+test("temporary legacy migrations declare exact supported versions and a future removal version",()=>assert.equal(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,recordAdoptions:{recovery:{legacyType:"legacy-recovery-v1",fromVersions:["0.2.0","0.2.1"],removeBeforeVersion:"2.0.0"}}}}),""));
+for(const [declaration,expected] of [
+	[{legacyType:"plugin-record:other:private",fromVersions:["0.2.1"],removeBeforeVersion:"2.0.0"},/source-owned namespace/],
+	[{legacyType:"legacy-v1",fromVersions:["0.2.x"],removeBeforeVersion:"2.0.0"},/exact supported/],
+	[{legacyType:"legacy-v1",fromVersions:["0.2.1"],removeBeforeVersion:"1.2.3"},/must be removed before/],
+	[{legacyType:"legacy-v1",fromVersions:["0.2.1"],removeBeforeVersion:"2.0.0",arbitraryTypes:["another"]},/only accepts/],
+])test(`rejects unsafe or expired record adoption ${JSON.stringify(declaration)}`,()=>assert.match(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,recordAdoptions:{recovery:declaration}}}),expected));
+test("legacy record migration requires a managed owner",()=>assert.match(errors({...valid,drone:{...valid.drone,recordAdoptions:{recovery:{legacyType:"legacy-v1",fromVersions:["0.2.1"],removeBeforeVersion:"2.0.0"}}}}),/requires desktopRuntime ownership/));
+
 const cases = [
 	["id", { id: "bad" }, "id must match"],
 	["version", { version: "9.9.9" }, "version must match"],
