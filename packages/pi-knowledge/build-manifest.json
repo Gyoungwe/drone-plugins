@@ -108,10 +108,10 @@
 		"src/maintenance/run.ts": "2575e35c4a879955e0e0d6dae32456318a34fef8ea6d19a63797bbd06d2f3460"
 	},
 	"outputs": {
-		"dist/index.mjs": "67769651856503474b1362e8cb90f3a25fdd6fee31c56d69c2d5bd8408a6bb46",
-		"dist/host.mjs": "461c5c1be093d95cf94bb8a3eb2ccdacc659de7a6cde42d651a61ba05d46225e",
+		"dist/index.mjs": "48d144b2b3fe10fbc1a566b585c284a5804f1433427aff65a36cdf94682528ac",
+		"dist/host.mjs": "8c575e5a718b12bc43c432c0fc90eaf01d1c8f237f1fd52f1f190be250a3cf98",
 		"dist/host.d.ts": "9b0f7b44ef7fcc4afef611009971f3e0e3f0258ec948bdbbdc24468c21371ed6",
-		"dist/desktop-runtime.mjs": "742766d39a70e09519c9ee16f037af30a30d65494786ae4e738098bb93eaa7a1",
+		"dist/desktop-runtime.mjs": "9227ac9a38e8e74bd636abf31f575ca8d1bfb17abdcbc5d3ed12862f38177ec3",
 		"lib/knowledge/runtime/desktop-index.mjs": "becaf424e993e4b6efd096ce6c52d8be660b50d986c6f6857bd8d08e25446e22",
 		"lib/knowledge/runtime/worker.mjs": "72c809b9d15e7d8b57d695c0a0b62aec2b101e0986f0a04627b913867e2d7f0c",
 		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "0a743634dc8ccf9eb02bdf72543044a5d659c58b8910052b3bb08fdcb2f4f74d",
