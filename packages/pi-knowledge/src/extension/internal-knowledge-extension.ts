@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { join, resolve } from "node:path";
+import { parseKnowledgeRecoveryCheckpoint } from "../core/recovery-checkpoint.js";
 import { createKnowledgePrepareTool, createKnowledgeReadTool, createKnowledgeSearchTool, createKnowledgeAnswerCheckTool } from "./read-tools.js";
 import * as compatibilityHost from "../core/runtime-host.js";
 import type { KnowledgeExtensionHost } from "@gyoungwe/plugin-api/knowledge";
@@ -225,20 +226,20 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			const result = dependencies.session ? await dependencies.session.readRecords(ctx) : null;
 			if (result?.state === "needs-reopen") throw new Error("Session records need reopening before knowledge recovery");
 			const entries = result ? result.records.map(record => ({ customType: record.type, data: record.data })) : ctx.sessionManager.getBranch();
-			recoveryScope = scope;
-			recovery.clear();
-			for (const e of entries)
-				if (
-					e.customType === "drone-knowledge-recovery-v1" &&
-					e.data?.scope === scope &&
-					Array.isArray(e.data.records) &&
-					e.data.records.length <= 8
-				) {
-					recovery.clear();
-					for (const r of e.data.records)
-						if (typeof r?.id === "string" && typeof r.path === "string" && /^[a-f0-9]{64}$/.test(r.hash))
-							recovery.set(r.id, r);
+			const next = new Map();
+			for (const entry of entries) {
+				if (entry.customType !== "drone-knowledge-recovery-v1") continue;
+				const checkpoint = parseKnowledgeRecoveryCheckpoint(entry.data);
+				if (checkpoint.scope !== scope) continue;
+				next.clear();
+				for (const record of checkpoint.records) {
+					if (record.sessionId !== sessionIdentity(ctx)) throw new Error("Knowledge recovery record has a foreign session identity");
+					next.set(record.id, record);
 				}
+			}
+			recovery.clear();
+			for (const [id, record] of next) recovery.set(id, record);
+			recoveryScope = scope;
 		};
 		if (!dependencies.session) pi.events.on("drone:context-evicted", async (e) => {
 			let changed = false;

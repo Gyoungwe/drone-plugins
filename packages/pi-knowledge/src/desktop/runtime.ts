@@ -70,6 +70,7 @@ import { createBrokerKnowledgeState } from "./native-state.js";
 import { createBrokerTopicMemoryStorage } from "./topic-storage.js";
 import { createBrokerSpecialistSettingsStorage } from "./specialist-settings-storage.js";
 import { createManagedKnowledgeSessionPorts } from "./session-ports.js";
+import { createKnowledgeRecoveryMigration } from "./recovery-migration.js";
 import { createBrokerKnowledgeSpecialist } from "./specialist-model.js";
 import {
 	overviewInputSchema,
@@ -463,6 +464,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 		},
 		createNativeSession: () => {
 			const sessionPorts = createManagedKnowledgeSessionPorts(context.capabilities);
+			const migrateRecovery = createKnowledgeRecoveryMigration(context.capabilities, config);
 			const native = createManagedNativeSession(owner, {
 				session: sessionPorts.ports,
 				registerReadTools: pi => registerDesktopKnowledgeNativeReadTools(pi, owner, native => projectFor(context.capabilities, native.cwd)),
@@ -477,11 +479,19 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 				...native,
 				toolEffects: { knowledge_status: "read", knowledge_search: "read" },
 				eventEffects: { session_start: "read", session_tree: "read", tool_execution_start: "read", tool_result: "read" },
-				commandEffects: { "knowledge-review-model": "write", "obsidian-review": "write" },
+				commandEffects: { "knowledge-review-model": "write", "obsidian-review": "write", "knowledge-migrate-recovery": "write" },
 				async extension(pi) {
 					await native.extension(pi);
 					pi.on("session_start", (_event, caller) => {
 						unregister = specialists.registerKnowledgeSpecialistHost(caller.sessionManager.getSessionId(), createBrokerKnowledgeSpecialist(context.capabilities));
+					});
+					pi.registerCommand("knowledge-migrate-recovery", {
+						description: "Explicitly import an authorized 0.2.0/0.2.1 historical read-window checkpoint; no current proof is restored",
+						async handler(args, caller) {
+							if (args.trim()) throw new Error("Checkpoint migration accepts no scope or target arguments");
+							const result = await migrateRecovery(caller);
+							await sessionPorts.ports.notify(JSON.stringify(result), caller);
+						},
 					});
 					pi.registerCommand("knowledge-review-model", {
 						description: "Review one exact Wiki proposal with explicit JSON cost/data acknowledgement; read the audit in the knowledge review UI",

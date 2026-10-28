@@ -95,6 +95,7 @@ it("real answer validation waits for strict policy and rejects an unread related
 	);
 	try {
 		const service = await services.getKnowledgeService();
+		await service.request("reconcile", { force: true });
 		const prepared = await service.prepare({
 			cwd: root,
 			project: null,
