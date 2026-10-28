@@ -324,7 +324,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 			const tools = blocks.filter((b) => b.type === "toolCall");
 			if (tools.length) {
 				toolRounds += 1;
-				if (toolRounds > maxToolRounds && getTaskRuntime?.()?.advanceStage?.()) toolRounds = 1;
+				if (toolRounds > maxToolRounds && await getTaskRuntime?.()?.advanceStage?.()) toolRounds = 1;
 				const bytes = Buffer.byteLength(JSON.stringify(blocks), "utf8");
 				// 熔断：软预算（tool-budget 的 read/search 上限）只是建议，弱模型会无视并空转。
 				// 这里在本轮工具轮次超过硬上限（或字节/条数兜底）时强制结束本轮——早于旧的 64 轮/4MB，
@@ -375,7 +375,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 			const content = blocks.filter((b) => b.type === "text");
 			// A status query must not replace the model's explanation with a stale host snapshot.
 			// Drain legacy requests, but never use them to bypass the normal publication/evidence checks.
-			if (!evidenceOnly) getTaskRuntime?.()?.takeReport();
+			if (!evidenceOnly) await getTaskRuntime?.()?.takeReport();
 			// Only the controlled setup writer can set this receipt. Never whitelist model-written claims.
 			if (setupReceipt) {
 				const done = setupReceipt;

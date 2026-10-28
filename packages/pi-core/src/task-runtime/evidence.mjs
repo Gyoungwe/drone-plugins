@@ -6,6 +6,8 @@ function createEvidenceRecovery({ authorize, persist = () => {
   let scope = null, taskId = null, records = [], used = 0;
   const save = () => persist({ version: 1, scope, taskId, records, used });
   return {
+    checkpoint: () => structuredClone({ version: 1, scope, taskId, records, used }),
+    rollback: state => { ({ scope, taskId, records, used } = structuredClone(state)); },
     scope: () => scope,
     attach(nextScope, nextTaskId, entries = [], force = false) {
       if (!force && scope === nextScope && taskId === nextTaskId) return;

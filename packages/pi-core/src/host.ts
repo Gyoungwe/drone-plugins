@@ -14,7 +14,7 @@ import {
 import { normalizeTaskMilestones } from "./milestone-plan";
 import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
 import type { TaskAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
-import { createTaskRuntimeOwner } from "./task-runtime/owner.mjs";
+import { createTaskApplication } from "./task-runtime/owner.mjs";
 import { makeDeliverFilesTool as makeDeliverFilesToolImpl } from "./tools/deliver-files";
 import { makeMemorySaveTool as makeMemorySaveToolImpl } from "./tools/memory-save";
 import { makeStatusTool as makeStatusToolImpl } from "./tools/status";
@@ -126,33 +126,14 @@ interface WorkbenchPluginClient {
 export const taskHostLoader = {
 	contractVersion: 1 as const,
 	load: (input?: { readonly workbench?: WorkbenchPluginClient }) => {
-    const owner = createTaskRuntimeOwner();
-    const sessions = new Set<PluginNativeSession>();
-    let active = true;
+    const application = createTaskApplication();
     return {
       contractVersion: 1 as const,
-      registerAcceptanceVerifier: owner.registerAcceptanceVerifier,
-      readAcceptanceVerifier: owner.readAcceptanceVerifier,
+      registerAcceptanceVerifier: application.registerAcceptanceVerifier,
+      readAcceptanceVerifier: application.readAcceptanceVerifier,
       normalizeMilestones: normalizeTaskMilestones,
-      createNativeSession: (): PluginNativeSession => {
-        if (!active) throw new Error("Task plugin is unavailable: loader disposed");
-        const sessionOwner = createTaskRuntimeOwner(owner.definitions());
-        const session: PluginNativeSession = {
-          extension: (pi) => { sessionOwner.attach(pi); },
-          dispose: async () => {
-            await sessionOwner.dispose();
-            sessions.delete(session);
-          },
-        };
-        sessions.add(session);
-        return session;
-      },
-      dispose: async () => {
-        if (!active) return;
-        active = false;
-        await Promise.all([...sessions].map((session) => session.dispose()));
-        await owner.dispose();
-      },
+      createNativeSession: application.createNativeSession,
+      dispose: application.dispose,
       ...(input?.workbench ? { workbench: input.workbench } : {}),
     };
   },

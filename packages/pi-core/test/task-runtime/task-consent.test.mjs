@@ -185,9 +185,9 @@ async function registered({ withPlan = true } = {}) {
 		sessionManager: { getSessionId: () => "session-a", getBranch: () => entries },
 	};
 	const j = registerWorkbench(pi);
-	events.session_start({}, ctx);
-	j.begin("分析数据");
-	if (withPlan) plan(j);
+	await events.session_start({}, ctx);
+	await j.begin("分析数据");
+	if (withPlan) await plan(j);
 	const approve = () =>
 		commands["task-action"].handler(
 			Buffer.from(
@@ -199,7 +199,7 @@ async function registered({ withPlan = true } = {}) {
 }
 const readProgress = async (events, ctx, id) => {
 	const input = { path: `${id}.txt` };
-	events.tool_call({ toolName: "read", toolCallId: id, input });
+	await events.tool_call({ toolName: "read", toolCallId: id, input });
 	await events.tool_result(
 		{ toolName: "read", toolCallId: id, input, result: { content: [{ type: "text", text: "ok" }] } },
 		ctx,
@@ -236,7 +236,7 @@ it("自动接续用完上限后，回合末改为主动弹窗问去留，而不�
 	await vi.runOnlyPendingTimersAsync();
 	for (let i = 0; i < LIMITS.autoHandoffs; i++) {
 		await readProgress(events, ctx, `call_${i}`);
-		expect(j.reserveHandoff()).toBe(true);
+		expect(await j.reserveHandoff()).toBe(true);
 	}
 	expect(j.snapshot().budget.autoHandoffs).toBe(LIMITS.autoHandoffs);
 	await readProgress(events, ctx, "call_last");
@@ -255,7 +255,7 @@ it("自动接续用完上限后，回合末改为主动弹窗问去留，而不�
 it("未授权的任务不会在回合结束时被打断", async () => {
 	const { ctx, events } = await registered({ withPlan: true });
 	vi.useFakeTimers();
-	events.tool_call({ toolName: "read", toolCallId: "call_n", input: { path: "n.txt" } });
+	await events.tool_call({ toolName: "read", toolCallId: "call_n", input: { path: "n.txt" } });
 	await events.tool_result(
 		{ toolName: "read", toolCallId: "call_n", result: { content: [{ type: "text", text: "ok" }] } },
 		ctx,
@@ -271,7 +271,7 @@ it("回合以错误结束时不弹窗（错误自有反馈路径，不该再要�
 	vi.useFakeTimers();
 	await approve();
 	await vi.runOnlyPendingTimersAsync();
-	events.tool_call({ toolName: "read", toolCallId: "call_e", input: { path: "e.txt" } });
+	await events.tool_call({ toolName: "read", toolCallId: "call_e", input: { path: "e.txt" } });
 	await events.tool_result(
 		{ toolName: "read", toolCallId: "call_e", result: { content: [{ type: "text", text: "ok" }] } },
 		ctx,
@@ -306,7 +306,7 @@ it("no status card is injected between tool_calls and their results (400 invalid
 	// 回合执行中：模型已发出 tool_calls，tool 结果尚未写回
 	idle.value = false;
 	// tool_call 钩子内触发阶段推进 → onCheckpoint → send()
-	events.tool_call({ toolName: "read", toolCallId: "call_a", input: { path: "a.txt" } });
+	await events.tool_call({ toolName: "read", toolCallId: "call_a", input: { path: "a.txt" } });
 	await events.tool_result(
 		{
 			toolName: "read",
@@ -327,7 +327,7 @@ it("a status card held during the turn is still delivered at agent_end", async (
 	pi.sendMessage.mockClear();
 	idle.value = false;
 	// 执行窗口内触发阶段推进：卡片被挂起，不得注入
-	events.tool_call({ toolName: "read", toolCallId: "call_h", input: { path: "h.txt" } });
+	await events.tool_call({ toolName: "read", toolCallId: "call_h", input: { path: "h.txt" } });
 	await events.tool_result(
 		{
 			toolName: "read",
@@ -404,14 +404,14 @@ it("readback can verify a user-approved data directory outside the session cwd, 
 	};
 	const ctx = { cwd: project, sessionManager: { getSessionId: () => "s", getBranch: () => entries } };
 	const j = registerWorkbench(pi);
-	handlers.session_start({}, ctx);
-	j.begin("分析指定数据目录");
-	j.plan({
+	await handlers.session_start({}, ctx);
+	await j.begin("分析指定数据目录");
+	await j.plan({
 		summary: "只在已选数据目录写入报告",
 		writeRoots: [root],
 		milestones: [{ id: "report", title: "报告", acceptance: { kind: "file", path: output } }],
 	});
-	act(j, "authorize-task");
+	await act(j, "authorize-task");
 	await j.reconcile(project);
 	expect(readChecks).toBeGreaterThan(0);
 	expect(j.snapshot().milestones[0].state).toBe("completed");
@@ -495,11 +495,11 @@ it.each([false, true])(
 		if (exhausted)
 			for (let i = 0; i < LIMITS.stageCalls; i++)
 				expect(
-					events.tool_call({ toolName: "set_status", toolCallId: `status-${i}`, input: {} }),
+					await events.tool_call({ toolName: "set_status", toolCallId: `status-${i}`, input: {} }),
 				).toBeUndefined();
 		const previous = j.snapshot();
 		expect(
-			events.tool_call({ toolName: "task_plan", toolCallId: "plan-b", input: input("Second report") }),
+			await events.tool_call({ toolName: "task_plan", toolCallId: "plan-b", input: input("Second report") }),
 		).toBeUndefined();
 		await tool.execute("plan-b", input("Second report"), undefined, undefined, ctx);
 		const tasks = j.view().tasks;
@@ -513,7 +513,7 @@ it.each([false, true])(
 		expect(tasks[0].milestones).toEqual(previous.milestones);
 		expect(tasks[0].budget).toEqual(previous.budget);
 		expect(tasks[0].executionConsent).toEqual(previous.executionConsent);
-		j.command({ taskId: first.id, revision: j.view().revision, action: "select" });
+		await j.command({ taskId: first.id, revision: j.view().revision, action: "select" });
 		expect(j.snapshot().id).toBe(first.id);
 		expect(prompts).toBe(2);
 	},
@@ -550,7 +550,7 @@ it.each(["ask-authorization", "acknowledge"])(
 		await vi.runOnlyPendingTimersAsync();
 		pi.sendMessage.mockClear();
 		ctx.ui.select.mockClear();
-		const pending = j.wait({ kind: "authorization", title: "新增范围确认", reason: "只确认这一项" });
+		const pending = await j.wait({ kind: "authorization", title: "新增范围确认", reason: "只确认这一项" });
 		const input = { taskId: j.snapshot().id, revision: j.view().revision, action, actionId: pending.id };
 		await commands["task-action"].handler(Buffer.from(JSON.stringify(input)).toString("base64url"), ctx);
 		await vi.runOnlyPendingTimersAsync();

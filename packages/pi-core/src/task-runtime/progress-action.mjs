@@ -28,7 +28,7 @@ function createTaskProgression(journal, { askAuthorization, checkBinding, contin
       const action = task.actions.find((a) => a.state === "pending");
       if (action?.kind === "authorization") {
         if (await askAuthorization({ ...input, action: "ask-authorization", actionId: action.id }, ctx)) {
-          journal.command({ taskId: task.id, revision: journal.view().revision, action: "select" });
+          await journal.command({ taskId: task.id, revision: journal.view().revision, action: "select" });
           send("\u4F60\u5DF2\u540C\u610F\u8FD9\u9879\u65B0\u589E\u7684\u5185\u5BB9\uFF0C\u7EE7\u7EED\u5F80\u4E0B\u505A\u3002");
           continueAuthorized(ctx);
         }
@@ -63,17 +63,17 @@ ${action.reason}
         if (!path?.trim() || ctx.signal?.aborted) return;
         await validate();
       }
-      journal.command({ ...input, action: "select" });
+      await journal.command({ ...input, action: "select" });
       const command = (extra) => ({ taskId: task.id, revision: journal.view().revision, ...extra });
       if (path) {
         await journal.acceptFile(
           command({ action: "file", actionId: action.id, path: path.trim() }),
           ctx.cwd
         );
-        journal.command(command({ action: "acknowledge", actionId: action.id }));
+        await journal.command(command({ action: "acknowledge", actionId: action.id }));
       }
       if (review && selected === proceed)
-        journal.command(command({ action: "acknowledge", actionId: action.id }));
+        await journal.command(command({ action: "acknowledge", actionId: action.id }));
       await journal.reconcile(ctx.cwd);
       if (journal.scope() !== scope || journal.snapshot()?.id !== task.id || getGeneration() !== generation || ctx.signal?.aborted || await checkBinding() !== binding)
         return;
