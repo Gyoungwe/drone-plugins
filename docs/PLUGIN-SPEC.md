@@ -231,3 +231,9 @@ commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpo
 - [ ] `plugins.lock.json` 已更新；干净 checkout、不设 `DRONE_PLUGINS_DIR` 时，`npm ci → fetch:plugins → lint → typecheck → test → check:arch → build → check:extensions -- --strict` 全部通过
 - [x] 宿主独立性检查：源码扫描可选插件 import，并验证空插件安装根
 - [ ] 真机：功能可见可用；禁用插件后界面回到默认状态
+
+### 候选 canonical task 数据服务（尚未登记生产清单）
+
+`pi-core` 的候选 `dist/managed-runtime.mjs` 复用同一 TaskSession/TaskController；生产清单尚未设置 desktopRuntime/provides。候选 `task.runtime@1` 数据操作为 status(null)、pause({reason})、advanceStage(null)、takeReport(null)；status 返回 `{snapshot,render,storage}`，其他操作 await 同一 actor，advanceStage 另返回真实 advanced，takeReport 另返回一次性的 report。snapshot 只投影任务/里程碑/预算/待处理操作的可展示字段，不输出 executionConsent、writeRoots、compute、planApproved 或 proof。
+
+状态仅由实际 SDK native attachment 建立，app 无选定会话或该 SDK entry 未 attach 时明确不可用，不猜测焦点会话。own namespace/current branch 的 records 经过真实回读，memory/deferred 不伪装 durable，写失败/取消后的 needs-reopen 不能被 SDK reload 清掉。完整 native 工具、文件验收、一次实际任务授权、host-queued 自动续作和旧 startup 删除仍未完成；此数据切片不得作为完整插件切换或正式安装包 GUI 验收。
