@@ -330,7 +330,7 @@ it("refreshes the candidate version after a conflict and preserves source/target
 	fireEvent.click(screen.getByRole("button", { name: "刷新", exact: true }));
 	fireEvent.click(await screen.findByRole("button", { name: "Candidate A" }));
 	await screen.findByText("Suggested claim");
-	expect(runtime.invoke).toHaveBeenLastCalledWith("previewReview", {
+	expect(runtime.invoke).toHaveBeenCalledWith("previewReview", {
 		id: item.id,
 		expectedProposalHash: nextHash,
 		revision: 2,

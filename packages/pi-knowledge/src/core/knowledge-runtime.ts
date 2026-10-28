@@ -8,6 +8,7 @@ import { createKnowledgeServicePool } from "./service.js";
 import { createKnowledgeWorkerTransportFactory } from "./worker-transport.js";
 import { createKnowledgeSpecialistHost } from "./specialist-host.js";
 import { createKnowledgeSpecialistTools } from "./specialists.js";
+import { createKnowledgeModelReview } from "./wiki-model-review.js";
 import { createKnowledgeWikiReview } from "./wiki-review.js";
 import { createLocalWikiReviewPorts } from "./wiki-review-node.js";
 import { createTopicMemoryApi } from "./topic-memory.js";
@@ -41,7 +42,15 @@ export function createKnowledgeRuntime(
 	);
 	const specialists = createKnowledgeSpecialistHost(host, config, ui);
 	const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
-	const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui, createLocalWikiReviewPorts(config));
+	const reviewIo = createLocalWikiReviewPorts(config);
+	const wiki = createKnowledgeWikiReview(host, config, reviewPolicy, ui, reviewIo);
+	const modelReview = createKnowledgeModelReview(
+		host,
+		config,
+		wiki,
+		reviewIo,
+		specialists.specialistSettings,
+	);
 	const topics = createTopicMemoryApi(host, config);
 	const delivery = createSpecialistDelivery(host, config);
 	const lifecycle = createKnowledgeOwnerLifecycle({
@@ -73,6 +82,7 @@ export function createKnowledgeRuntime(
 		specialists,
 		specialistTools,
 		wiki,
+		modelReview,
 		topics,
 		delivery,
 		...lifecycle,

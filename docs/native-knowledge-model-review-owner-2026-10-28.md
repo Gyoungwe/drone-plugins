@@ -1,0 +1,36 @@
+# Canonical knowledge model-review owner (2026-10-28)
+
+Status: source/real-SDK slice implemented; formal installed-app GUI and full native/legacy closure remain incomplete. `pi-knowledge@0.3.0` and API `1.3.0` are unpublished candidates.
+
+The Wiki model-review algorithm now belongs to the same explicit knowledge owner as review preview, human apply/reject, history and undo. Audit persistence uses the existing `WikiReviewPorts` (broker state CAS in Desktop; existing local atomic adapter in native owners). Its single-flight state belongs to that owner, with no process-wide review ledger. The old published 0.2/Host API 1.x named methods keep real compatibility wrappers; their removal is still a separate migration.
+
+The plugin owns the prompt, evidence packet, five checks and apply policy. The host supplies only generic model selection/generation, live-session inspection and granted file/state mechanisms. A foreground review needs a selected live project session, exact binding revision/proposal hash, explicit cost/data acknowledgement and an independent auto-apply choice. It checks session idleness, selected model, sources, target and binding before generation, after the response and immediately before writing. Model agreement never becomes human review or scientific verification. Source excerpts are bounded without silent truncation; missing usage/pricing stays unknown.
+
+The canonical review UI displays the actual selection, sends only a revision/hash-scoped operation through the bound client, and uses invocation-local AbortSignal cancellation. It disables human decisions during the model operation and aborts on unmount/replacement. The host independently approves model data/cost and each granted write. A successful apply emits invalidation and supplies the complete write receipt; partial audit/write failures remain visible.
+
+## Observed evidence
+
+- `desktop-review-owner.integration.test.ts`: 2/2 actual SDK + real temporary SQLite/Vault cases. The model case verifies busy/unacknowledged requests make zero model calls; advice does not write; actual provider cancellation cannot auto-apply; a session becoming busy after generation blocks the write; recovery applies once with audit read-back, history and undo. Closing the native session leaves the UI owner readable; final owner close releases SQLite. `/tmp/model-owner-plugin-integration.log`.
+- New model-review UI and existing review/store regressions: 23/23, including explicit acknowledgement, configured profile, auto-apply, unknown pricing and exact invocation signal. `/tmp/model-owner-plugin-ui-final.log`.
+- Full knowledge package `check`: 531/531, typecheck, build consistency, packed real native SDK smoke and clean installed UI load pass. `/tmp/model-owner-plugin-check-final.log`. The clean UI consumer uses the privately packed API tarball SHA-256 `5094498d60a7560fb5444d8c077107fad4d38e61b2d548cafa6f89250385ff7f`; no public registry release is claimed.
+- Host mechanism source/actual SDK evidence is recorded in Drone `docs/pluginization/native-plugin-model-capabilities-evidence.md` (host commits `c32e37d0`, `b1d2a7ad`). Those host checks are distinct from the plugin's adapter fixture and formal installer gates.
+
+The first package check reached all 531 tests and native smoke, then correctly failed because the explicit private API tarball input was missing. The final full package check supplied it. An earlier test run overlapped this worktree's rebuild and observed the build's temporary removal of `dist/host.mjs`; after rebuilding, checks ran sequentially without relaxing that test. Both failed logs remain under `/tmp/model-owner-plugin-{check,tests-all}.log`.
+
+## Remaining
+
+- The managed native command now awaits the same foreground model-review operation and exposes the persisted audit to its UI. Full default CLI foreground integration and native text receipt support remain incomplete.
+- Full managed native hooks, publication proof identity and remaining knowledge flows still need migration. Published legacy foreground UI methods and `knowledge.specialist-runner` consumers remain active.
+- The full candidate tarball must be rebuilt from the final combined clean source and tested with the matching host lock. This development worktree's API symlink is not release evidence; the packed UI smoke installs the separate private API tarball.
+- Formal macOS installer GUI model review, enable/disable recovery, upgrade/rollback and zero-domain-plugin final acceptance remain NOT_RUN for this change. Existing four external acceptances and deferred MinerU/GROBID/B8/B8-2 remain unchanged.
+
+Boundary checks introduced are the external model reply shape; scoped user-operation revision/hash/acknowledgement/profile; actual caller/session facts; persisted specialist setting shape; and stale model/source/binding checks before a side effect. Existing audit partial-failure catches preserve a visible partial receipt, never success. The retained 0.2 compatibility wrapper has the explicit API 2 removal condition; no fallback execution path or new retry/cache/flag was added.
+
+
+## Managed command and packed owner follow-up
+
+The official-shaped `/knowledge-review-model` command accepts only the exact proposal ID/hash, explicit cost/data acknowledgement, an explicit autoApply boolean and the optional known reviewer profile. It obtains caller scope from the host, matches the actual SDK session ID and uses `session.inspect` for the foreground idle policy. Its effect is write. It returns no invented SDK command result; the UI reads the durable audit after awaiting completion.
+
+Source `238a346` was packed as knowledge tarball SHA-256 `31ded49a6a3477f34597436910acfdbbd6e233b85e3a9adc0face01f4a0370de`. The matching private API tarball is `c4631cbfb190562eaf092e6be68ecdd0f8843f82560fef7b18f376c3720bf90c` (candidate 1.3.0, including command effects). Host test source `5da9b5b1` uses the production coordinator, capability broker, two restricted Node workers and real Pi 1.1.0 sessions/SQLite against the clean installed tarball. The command writes an advice audit; UI read-back finds that same audit. Denied model approval makes zero SDK requests. Provider cancellation reaches the actual signal, drains and leaves the Vault unchanged; a subsequent model application records history and undo restores the exact human text. Final close verifies both processes exited, SQLite can reopen exclusively and leases are released. `/tmp/model-command-packed-sdk-final.log`; machine receipt in Drone `docs/releases/native-plugin-knowledge-model-command-2026-10-28.json`.
+
+The command candidate also passes the full knowledge check with 533/533 tests, typecheck, build consistency, actual packed default-native SDK smoke and clean UI install/load using that API tarball (`/tmp/model-command-plugin-check-final.log`). The first expanded packed test exposed a fixture using a write DTO for read-only `modelReviewInfo`; the real broker correctly rejected it. Separate exact read/write DTOs fixed the fixture without relaxing production contracts. This is genuine installed-package runtime evidence, while formal macOS GUI and the final combined clean-archive/lock gates remain unverified here. Test runtime resources reused the existing verified Node directory via a temporary worktree symlink; this is not an installer resource claim.
