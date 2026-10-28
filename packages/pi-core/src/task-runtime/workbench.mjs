@@ -12,7 +12,7 @@ import {
 import { contractHash, hasTaskConsent, MAX_AUTO_RESUMES } from "./consent.mjs";
 import { failureObservation, failureReceipt, toolResultFailed } from "./failure-feedback.mjs";
 import { bilingual } from "./host-language.mjs";
-import { readPdfIdentity } from "./pdf-identity.mjs";
+import { inspectTaskBytes } from "./file-inspection.mjs";
 import { remainingExplanation } from "./remaining.mjs";
 import { isReadOnlyTool } from "./tool-manifest.mjs";
 const WORKBENCH_ENTRY = "drone-task-workbench-v2";
@@ -100,45 +100,11 @@ async function inspectTaskFile(cwd, input, expected = {}) {
     const bytes = await file.readFile();
     if (bytes.length > LIMITS.fileBytes)
       throw error("file-limit", "File changed beyond the inspection limit.");
-    const identity = {
+    return await inspectTaskBytes(bytes, {
       path: rel.split(sep).join("/"),
       absolutePath: path,
       rootKind: ARTIFACT_ROOT_KINDS.includes(expected.rootKind) ? expected.rootKind : "workspace",
-      bytes: bytes.length,
-      sha256: hash(bytes),
-      observedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      kind: "file",
-      identity: "not-requested"
-    };
-    if (expected.kind === "pdf") {
-      if (!bytes.subarray(0, 1024).includes(Buffer.from("%PDF-")))
-        throw error("not-pdf", "Not a PDF: HTML landing pages and renamed downloads are not accepted.");
-      identity.kind = "pdf";
-      if (expected.doi || expected.title) {
-        const found = await readPdfIdentity(bytes);
-        const normalize = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]/g, "");
-        const doi = String(expected.doi || "").toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
-        const title = normalize(expected.title);
-        const titleMatch = title.length >= 12 && normalize(found.text).includes(title);
-        const doiMatch = !!doi && found.text.toLowerCase().includes(doi);
-        if (doi && !doiMatch || title.length >= 12 && !titleMatch)
-          throw error(
-            "identity-mismatch",
-            "Selected PDF does not match the requested title/DOI in the inspected first pages. Choose the correct file or explicitly revise the request; original unchanged."
-          );
-        identity.identity = doiMatch && titleMatch ? "metadata-matched" : "needs-review";
-        identity.extraction = { pages: found.pages, partial: found.partial };
-      }
-      identity.identity = expected.sha256 ? identity.sha256 === expected.sha256 ? "hash-matched" : "mismatch" : identity.identity === "metadata-matched" ? "metadata-matched" : "needs-review";
-      if (identity.identity === "mismatch")
-        throw error(
-          "identity-mismatch",
-          "File hash does not match the requested artifact; original file was not changed."
-        );
-    }
-    if (expected.sha256 && expected.kind !== "pdf" && identity.sha256 !== expected.sha256)
-      throw error("artifact-changed", "File version differs from the expected hash.");
-    return identity;
+    }, expected);
   } finally {
     await file.close();
   }
