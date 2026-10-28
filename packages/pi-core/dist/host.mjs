@@ -2538,8 +2538,8 @@ ${hostLanguage() === "zh" ? "\u4EFB\u52A1\u68C0\u67E5\u70B9\u4ECD\u4E3A deferred
   const attach = async (ctx, force = false) => {
     options.onJournalAttached?.(journal);
     context = ctx;
-    activeSessionId = ctx.sessionManager?.getSessionId?.() || ctx.sessionId || void 0;
-    const scope = createHash3("sha256").update(`${ctx.sessionManager?.getSessionId?.() || ctx.sessionId || "isolated"}\0${resolve4(ctx.cwd)}`).digest("hex");
+    activeSessionId = ctx.sessionManager.getSessionId();
+    const scope = createHash3("sha256").update(`${activeSessionId}\0${resolve4(ctx.cwd)}`).digest("hex");
     const storage = readNativeSessionStorage(ctx.sessionManager);
     storageState = storage.state;
     if (!options.application.readFailure(activeSessionId)) {
@@ -2655,7 +2655,7 @@ ${hostLanguage() === "zh" ? "\u4EFB\u52A1\u68C0\u67E5\u70B9\u4ECD\u4E3A deferred
   });
   const prepare = async (query, ctx) => {
     await attach(ctx);
-    const entries = ctx.sessionManager?.getBranch?.() || [];
+    const entries = ctx.sessionManager.getBranch();
     const caps = [...entries].reverse().find((e) => e.customType === "drone-capability-checkpoint-v1")?.data?.capabilities || [];
     const result = await journal.begin(query, caps, await bindingKey());
     halted = false;
