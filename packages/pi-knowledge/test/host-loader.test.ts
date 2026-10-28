@@ -81,6 +81,7 @@ describe("knowledge host loader", () => {
 			"reviewWikiWithModel",
 			"reviews",
 			"runMaintenance",
+			"runSpecialistModelLoop",
 			"search",
 			"semantic",
 			"setupPreview",
