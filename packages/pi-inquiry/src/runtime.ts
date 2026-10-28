@@ -13,6 +13,13 @@ import type {
 } from "@gyoungwe/plugin-api/runtime";
 import { type Static, Type } from "typebox";
 import {
+	type InquiryComputeEvent,
+	InquiryEventProjector,
+	type InquiryLocalExecutionEvent,
+	type InquiryTaskTerminalEvent,
+} from "./event-projection.js";
+import { assertedEventWriteSchema } from "./event-schema.js";
+import {
 	type InquiryBindingState,
 	InquiryLedgerOwner,
 	type InquiryWasmEngine,
@@ -63,6 +70,7 @@ const readSchema = Type.Union([
 	),
 ]);
 const writeSchema = Type.Union([
+	assertedEventWriteSchema,
 	Type.Object(
 		{
 			action: Type.Literal("bind"),
@@ -426,6 +434,30 @@ export async function createInquiryRuntimeWithEngine(
 					input.action,
 					async (service) => {
 						switch (input.action) {
+							case "recordComputeEvent":
+								await new InquiryEventProjector(
+									service.storage,
+									service,
+									(value) => value ?? "",
+								).recordComputeEvent(input.event as InquiryComputeEvent);
+								return null;
+							case "recordTaskTerminal":
+								await new InquiryEventProjector(
+									service.storage,
+									service,
+									(value) => value ?? "",
+								).recordTaskTerminal(input.event as InquiryTaskTerminalEvent);
+								return null;
+							case "recordLocalExecution":
+								await new InquiryEventProjector(
+									service.storage,
+									service,
+									(value) => value ?? "",
+								).recordLocalExecution(
+									input.event as InquiryLocalExecutionEvent,
+								);
+								return null;
+
 							case "recordArtifact":
 								await service.recordArtifact(
 									input.record as unknown as ArtifactRecord,
