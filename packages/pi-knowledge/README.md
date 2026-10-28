@@ -46,3 +46,16 @@ automatically inject memory or turn a previous repair into an execution plan.
 The candidate managed native adapter additionally registers `/knowledge-review-model` using the official Pi command shape. Its JSON argument contains `id`, `expectedProposalHash`, `acknowledged:true`, `autoApply:boolean` and optionally `profile:"knowledge-wiki-reviewer"`; it accepts no cwd/caller/path assertion. The command runs the same owner operation as the canonical UI, then the UI reads the durable audit through `modelReviewInfo`. The handler is void; it does not invent a command-result API or a native text receipt. This enhancement requires the matching unpublished managed-command host protocol; full default CLI model-review integration remains incomplete.
 
 The 0.3 specialist thinking default intentionally changes from the old 0.2.1 implicit medium fallback: without an explicit role thinking preference, it inherits the actual parent selection (including high or off). An explicitly configured role thinking level takes precedence even when the role uses the parent model. Invalid configured values fail closed; role token/turn budgets are unchanged. No new thinking setting or requestedThinking parameter is introduced.
+
+The managed 0.3 candidate provides an explicit `/knowledge-migrate-recovery`
+command with no arguments. It imports one authorized 0.2.0/0.2.1 legacy
+`drone-knowledge-recovery-v1` checkpoint into this installed source's own session
+namespace. Inspection and commit require separate host write approvals, an idle
+originating session, the current Vault binding and durable storage/readback.
+The original legacy entry remains; unknown creator/package version stay unknown.
+Only bounded historical read-window fields are copied, preserving `used:true`
+and setting `evicted:false`. No grants, current read tickets or publication
+proofs are restored. Cancellation, malformed data, foreign scope, a changed
+binding or a non-durable write cannot report success. Remove this command and
+its `recordAdoptions` declaration before 0.4.0. Managed actual-context eviction
+and a later genuine reread remain separate unfinished work.

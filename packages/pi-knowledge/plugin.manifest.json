@@ -19,6 +19,16 @@
         "service": "task.runtime",
         "version": 1
       }
+    },
+    "recordAdoptions": {
+      "drone-knowledge-recovery-v1": {
+        "legacyType": "drone-knowledge-recovery-v1",
+        "fromVersions": [
+          "0.2.0",
+          "0.2.1"
+        ],
+        "removeBeforeVersion": "0.4.0"
+      }
     }
   },
   "entrypoints": {
