@@ -18,9 +18,15 @@ export { advisoryLine, advisoryNotice, knowledgeFailure };
 
 import * as compatibilityUi from "./ui-state.js";
 import type { createKnowledgeUi } from "./ui-state.js";
+import type { PluginRuntimeContext } from "@gyoungwe/plugin-api/runtime";
 
-function createPublicationApi(ui, reviewPolicy, config, createState, signal = null) {
-	const { knowledgeDirectory } = config;
+interface PublicationPorts {
+	available(): boolean;
+	registerFinalizer(pi: any, handler: (event: any, context: any) => Promise<any>): void;
+	persisted(message: any, saved: any[]): boolean;
+}
+
+function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createState, signal = null) {
 	const { publicationKnowledgeFlow, updateKnowledgeFlow } = ui;
 	const { readReviewMode } = reviewPolicy;
 	const state = createState(
@@ -151,7 +157,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 	}
 	function projectKnowledgeEvent(event) {
 		signal?.throwIfAborted();
-		if (!knowledgeDirectory()) return event;
+		if (!ports.available()) return event;
 		if (event.type === "message_update") return null; // no draft text/thinking/partial snapshots cross the delivery boundary
 		if (event.type === "message_start" && event.message?.role === "assistant")
 			return { ...event, message: base(event.message, []) };
@@ -170,13 +176,11 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 	}
 	function projectKnowledgeSnapshot(messages, persisted = []) {
 		signal?.throwIfAborted();
-		if (!knowledgeDirectory()) return messages;
-		const known = new Set(
-			persisted.filter((m) => m.role === "assistant").map((m) => `${m.timestamp}:${hash(m.content)}`),
-		);
+		if (!ports.available()) return messages;
+
 		return messages.map((m) => {
 			if (m.role !== "assistant" || isSealed(m)) return m;
-			const saved = known.has(`${m.timestamp}:${hash(m.content)}`);
+			const saved = ports.persisted(m, persisted);
 			if (saved && (!m[FIELD] || isSealed(m, true))) return m; // legacy history is not retroactively certified
 			return projectUnsealed(m);
 		});
@@ -567,7 +571,7 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 				return report(failure(message, error));
 			}
 		};
-		pi.on("message_end", (event, ctx) => handleMessageEnd(event, ctx));
+		ports.registerFinalizer(pi, handleMessageEnd);
 		return {
 			attachRuntime,
 			attachReviewer,
@@ -693,12 +697,65 @@ function createPublicationApi(ui, reviewPolicy, config, createState, signal = nu
 	return { projectKnowledgeEvent, projectKnowledgeSnapshot, registerAnswerPublication };
 }
 
+/** 0.3 never reconstructs history authority from content hashes or timestamps. */
+function localPublicationPorts(config: Pick<KnowledgeConfigApi, "knowledgeDirectory">): PublicationPorts {
+	return {
+		available: () => Boolean(config.knowledgeDirectory()),
+		registerFinalizer: (pi, handler) => pi.on("message_end", handler),
+		persisted: (message, saved) => saved.includes(message),
+	};
+}
+
+/** Same publication algorithm, finalized only at the host's actual after-all-hooks boundary. */
+export function createManagedKnowledgePublication(
+	ui: Pick<ReturnType<typeof createKnowledgeUi>, "publicationKnowledgeFlow" | "updateKnowledgeFlow">,
+	reviewPolicy: Pick<typeof compatibilityReviewPolicy, "readReviewMode">,
+	signal: AbortSignal,
+) {
+	let finalizer: ((event: any, context: any) => Promise<any>) | undefined;
+	const publication = createPublicationApi(ui, reviewPolicy, {
+		available: () => true,
+		registerFinalizer(_pi, handler) {
+			if (finalizer) throw new Error("Knowledge publication is already registered");
+			finalizer = handler;
+		},
+		// Only the host's private SDK-origin courier can preserve this identity across IPC.
+		// History display never enrolls a recovered proof in the live WeakSet.
+		persisted: (message, saved) => saved.includes(message),
+	}, (create) => create(), signal);
+	return {
+		...publication,
+		projection: {
+			async finalize(event: any, context: PluginRuntimeContext) {
+				if (!finalizer) throw new Error("Knowledge publication has not been registered");
+				if (context.scope.kind !== "session") throw new Error("Knowledge publication requires its live session");
+				context.signal.throwIfAborted();
+				const result = await finalizer(event, {
+					cwd: context.scope.workspaceDirectory,
+					sessionManager: { getSessionId: () => context.scope.sessionId },
+					signal: context.signal,
+				});
+				context.signal.throwIfAborted();
+				return result?.message ? { ...event, message: result.message } : event;
+			},
+			event: (event: any, signal?: AbortSignal) => {
+				signal?.throwIfAborted();
+				return publication.projectKnowledgeEvent(event);
+			},
+			snapshot: (messages: any[], persisted: any[], signal?: AbortSignal) => {
+				signal?.throwIfAborted();
+				return publication.projectKnowledgeSnapshot(messages, persisted);
+			},
+		},
+	};
+}
+
 /** Each native session adapter owns its proof identities and projections. */
 export function createKnowledgePublication(ui: Pick<ReturnType<typeof createKnowledgeUi>, "publicationKnowledgeFlow" | "updateKnowledgeFlow">, reviewPolicy: Pick<typeof compatibilityReviewPolicy, "readReviewMode">, config: Pick<KnowledgeConfigApi, "knowledgeDirectory">, signal: AbortSignal) {
-	return createPublicationApi(ui, reviewPolicy, config, (create) => create(), signal);
+	return createPublicationApi(ui, reviewPolicy, localPublicationPorts(config), (create) => create(), signal);
 }
 
 // pi-knowledge 0.2 compatibility. Remove after all native/Desktop adapters
 // use explicit owners and per-session publication instances in 0.3.
-const compatibility = createPublicationApi(compatibilityUi, compatibilityReviewPolicy, compatibilityConfig, (create) => runtimeSlot("knowledge", "publication", create));
+const compatibility = createPublicationApi(compatibilityUi, compatibilityReviewPolicy, localPublicationPorts(compatibilityConfig), (create) => runtimeSlot("knowledge", "publication", create));
 export const { projectKnowledgeEvent, projectKnowledgeSnapshot, registerAnswerPublication } = compatibility;
