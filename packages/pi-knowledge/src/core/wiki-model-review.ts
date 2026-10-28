@@ -287,7 +287,11 @@ const compatibility = createKnowledgeModelReview(
 	compatibilitySpecialistSettings,
 );
 export const lastWikiModelReview = compatibility.lastWikiModelReview;
-export function reviewWikiWithModel(input, options) {
+export async function reviewWikiWithModel(input, options) {
+	// This public 0.2/API-1 adapter owns token consumption. Consent must precede it;
+	// canonical 0.3 callers validate their own request at the owner boundary.
+	if (input?.acknowledged !== true || typeof input.autoApply !== "boolean")
+		throw new Error("Confirm model costs and choose whether successful review may apply this exact candidate");
 	return compatibility.reviewWikiWithModel(
 		consumeKnowledgeReviewPreview(input.cwd, input.token),
 		input,
