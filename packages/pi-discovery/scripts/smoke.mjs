@@ -63,6 +63,7 @@ try {
 						"discovery_execute_kernel",
 						"discovery_close_kernel",
 						"discovery_reconcile_executions",
+						"discovery_record_inquiry",
 					].includes(tool.name),
 			)
 			.every((tool) => tool.drone.readOnly === true),

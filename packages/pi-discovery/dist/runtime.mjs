@@ -2,6 +2,38 @@
 // src/runtime.ts
 import { createHash } from "node:crypto";
 
+// src/inquiry-provider.ts
+function inquiryProvider(capabilities, discoveryProjectId) {
+  const write = async (action, record) => {
+    if (record.projectId !== discoveryProjectId)
+      throw new Error("Discovery record belongs to another project");
+    const inspection = await capabilities.call("provider.inspect", {
+      alias: "inquiry"
+    });
+    if (inspection.state !== "available")
+      throw new Error(`Inquiry provider is ${inspection.state}`);
+    const status = await capabilities.call("provider.read", {
+      alias: "inquiry",
+      operation: "inquiry.read",
+      input: { action: "status" }
+    });
+    if (status.state !== "bound" || typeof status.projectId !== "string" || !status.projectId)
+      throw new Error(
+        "Bind the original Inquiry ledger to this actual workspace first"
+      );
+    await capabilities.call("provider.write", {
+      alias: "inquiry",
+      operation: "inquiry.write",
+      input: { action, record: { ...record, projectId: status.projectId } }
+    });
+  };
+  return {
+    recordQuestion: (record) => write("recordQuestion", record),
+    recordAttempt: (record) => write("recordAttempt", record),
+    recordFinding: (record) => write("recordFinding", record)
+  };
+}
+
 // src/service.ts
 import { isAbsolute, relative, resolve } from "node:path";
 
@@ -1692,7 +1724,7 @@ var createDiscoveryRuntime = async ({
       roots: available,
       journals,
       execution: "unavailable",
-      inquiry: "unavailable"
+      inquiry: await capabilities.call("provider.inspect", { alias: "inquiry" })
     };
   };
   const owner = async (scope, root) => {
@@ -1827,6 +1859,7 @@ var createDiscoveryRuntime = async ({
           }
         };
       },
+      inquiry: inquiryProvider(capabilities, root.binding.projectId),
       files: {
         prepareDirectory: async () => {
           throw new Error("Controlled execution directory service is unavailable");
@@ -2141,7 +2174,44 @@ var createDiscoveryRuntime = async ({
     required: ["requestId"],
     additionalProperties: false
   };
+  const recordInquiry = async (input) => {
+    const scope = await workspace(), root = await findRoot(scope);
+    if (!root) throw new Error("Bind the Discovery state root first");
+    await (await owner(scope, root)).service.recordDiscovery(input);
+    return { recorded: true, authority: "plugin-asserted-or-imported" };
+  };
   const operations = {
+    recordInquiry: {
+      inputSchema: {
+        type: "object",
+        properties: {
+          projectId: { type: "string" },
+          questionId: { type: "string" },
+          statement: { type: "string" },
+          hypothesisId: { type: "string" },
+          prior: { type: "object" },
+          posterior: { type: "object" },
+          explanations: { type: "array", items: { type: "object" } },
+          testsPlanned: { type: "array", items: { type: "string" } },
+          attemptId: { type: "string" },
+          parameters: { type: "object" },
+          artifactIds: { type: "array", items: { type: "string" } }
+        },
+        required: [
+          "projectId",
+          "questionId",
+          "statement",
+          "prior",
+          "explanations",
+          "testsPlanned",
+          "attemptId"
+        ],
+        additionalProperties: false
+      },
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (input) => recordInquiry(input)
+    },
     overview: {
       inputSchema: nullSchema,
       resultSchema: objectSchema,
@@ -2240,7 +2310,8 @@ var createDiscoveryRuntime = async ({
         discovery_create_kernel: "write",
         discovery_execute_kernel: "write",
         discovery_close_kernel: "write",
-        discovery_reconcile_executions: "write"
+        discovery_reconcile_executions: "write",
+        discovery_record_inquiry: "write"
       },
       extension(pi) {
         const adapted = Object.create(pi);
@@ -2332,6 +2403,16 @@ var createDiscoveryRuntime = async ({
               );
             }
           });
+        nativePi.registerTool({
+          name: "discovery_record_inquiry",
+          label: "Discovery \xB7 Inquiry",
+          description: "Record a discovery question and attempt through the optional versioned Inquiry provider bound to this actual workspace. Records remain asserted data. Each provider write needs its own current authorization.",
+          parameters: operations.recordInquiry.inputSchema,
+          ...writeMetadata,
+          async execute(_id, input) {
+            return response(await recordInquiry(input));
+          }
+        });
         nativePi.registerTool({
           name: "discovery_status",
           label: "Discovery \xB7 status",

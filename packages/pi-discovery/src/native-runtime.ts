@@ -274,6 +274,8 @@ export async function nativeDiscoveryExtension(
 			caller.signal.throwIfAborted();
 			return calls.run(caller, async () => {
 				if (name === "caller.scope") return { ...caller.scope };
+                // Standard Pi cross-package discovery needs an SDK event-bus transport; no global registry or invented host authority.
+                if (name === "provider.inspect") return { state: "unavailable", service: "inquiry.runtime", requestedVersion: 1, provider: null };
 				if (name.startsWith("execution.")) return executeCapability(name, input, caller);
 				if (name === "roots.describe") {
 					try {

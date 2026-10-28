@@ -43,6 +43,7 @@ test("native entry registers exactly its declared tools with explicit write meta
 						"discovery_execute_kernel",
 						"discovery_close_kernel",
 						"discovery_reconcile_executions",
+						"discovery_record_inquiry",
 					].includes(tool.name),
 			)
 			.every((tool) => tool.drone.readOnly === true),
@@ -55,7 +56,7 @@ test("first-run status is unconfigured and creates no journal", async () => {
 		const status = (await call(await tools(), "discovery_status", root)).details;
 		assert.equal(status.status, "unconfigured");
 		assert.equal(status.execution, "unavailable");
-		assert.equal(status.inquiry, "unavailable");
+		assert.equal(status.inquiry.state, "unavailable");
 		await assert.rejects(access(join(root, "runs")), { code: "ENOENT" });
 	} finally {
 		await rm(root, { recursive: true, force: true });

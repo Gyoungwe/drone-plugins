@@ -9,6 +9,8 @@ import type {
 	PluginExecutionReceiptResult,
 	PluginExecutionResult,
 } from "@gyoungwe/plugin-api/runtime";
+import { inquiryProvider } from "./inquiry-provider.js";
+import type { DiscoveryLedgerInput } from "./domain/index.js";
 import { DiscoveryService } from "./service.js";
 import type { DiscoveryHostServices, DiscoveryJournalName } from "./ports.js";
 import { JOURNALS, type JournalName } from "./native-records.js";
@@ -296,7 +298,7 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 			roots: available,
 			journals,
 			execution: "unavailable",
-			inquiry: "unavailable",
+			inquiry: await capabilities.call("provider.inspect", { alias: "inquiry" }),
 		};
 	};
 	const owner = async (
@@ -447,6 +449,7 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 					},
 				};
 			},
+			inquiry: inquiryProvider(capabilities, root.binding.projectId),
 			files: {
 				prepareDirectory: async () => {
 					throw new Error("Controlled execution directory service is unavailable");
@@ -796,7 +799,46 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 		required: ["requestId"],
 		additionalProperties: false,
 	} as const;
+	const recordInquiry = async (input: DiscoveryLedgerInput) => {
+		const scope = await workspace(),
+			root = await findRoot(scope);
+		if (!root) throw new Error("Bind the Discovery state root first");
+		await (await owner(scope, root)).service.recordDiscovery(input);
+		return { recorded: true, authority: "plugin-asserted-or-imported" };
+	};
 	const operations = {
+		recordInquiry: {
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: { type: "string" },
+					questionId: { type: "string" },
+					statement: { type: "string" },
+					hypothesisId: { type: "string" },
+					prior: { type: "object" },
+					posterior: { type: "object" },
+					explanations: { type: "array", items: { type: "object" } },
+					testsPlanned: { type: "array", items: { type: "string" } },
+					attemptId: { type: "string" },
+					parameters: { type: "object" },
+					artifactIds: { type: "array", items: { type: "string" } },
+				},
+				required: [
+					"projectId",
+					"questionId",
+					"statement",
+					"prior",
+					"explanations",
+					"testsPlanned",
+					"attemptId",
+				],
+				additionalProperties: false,
+			},
+			resultSchema: objectSchema,
+			effect: "write" as const,
+			execute: (input: unknown) => recordInquiry(input as DiscoveryLedgerInput),
+		},
+
 		overview: {
 			inputSchema: nullSchema,
 			resultSchema: objectSchema,
@@ -898,6 +940,7 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 				discovery_execute_kernel: "write",
 				discovery_close_kernel: "write",
 				discovery_reconcile_executions: "write",
+				discovery_record_inquiry: "write",
 			},
 			extension(pi) {
 				const adapted = Object.create(pi) as typeof pi;
@@ -1004,6 +1047,17 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 							);
 						},
 					});
+				nativePi.registerTool({
+					name: "discovery_record_inquiry",
+					label: "Discovery · Inquiry",
+					description:
+						"Record a discovery question and attempt through the optional versioned Inquiry provider bound to this actual workspace. Records remain asserted data. Each provider write needs its own current authorization.",
+					parameters: operations.recordInquiry.inputSchema,
+					...writeMetadata,
+					async execute(_id, input) {
+						return response(await recordInquiry(input as DiscoveryLedgerInput));
+					},
+				});
 				nativePi.registerTool({
 					name: "discovery_status",
 					label: "Discovery · status",
