@@ -101,6 +101,8 @@ packages/<name>/
 | `pi.apiVersion`、`pi.minHostVersion` | 必填；`testedHosts` 列出 CI 实际跑过的 Pi 版本 |
 | `drone.pluginApi` | 必须为 `1` |
 | `drone.resultContract` | 必须为 `drone-result/v3` |
+| `drone.provides` | API 1.3 候选：`{service:{version:正整数,operations:非空唯一操作名数组}}`；须有 `desktopRuntime` |
+| `drone.requires` | API 1.3 候选：`{alias:{service:服务合同名,version:正整数}}`；不接受包名或 npm 依赖，须有 `desktopRuntime` |
 | `entrypoints` | 至少一项；每个路径必须存在，并且包含在 `files` 里。`host` 只供宿主组合根使用（§6.1） |
 | `capabilities` | 来自固定词表（§4.1）；不在词表内的值视为错误 |
 | `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
@@ -155,7 +157,10 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 ### 6.2 插件 → 插件
 
 - 插件之间**不得**互相 import，也不得把另一个 Drone 插件写进 `dependencies`。
-- 需要别的插件提供的能力时，声明在 `requires.hostCapabilities` 中，由宿主协商；对方不存在时走降级路径。
+- 宿主能力继续声明在 `requires.hostCapabilities` 中，由宿主协商；对方不存在时走降级路径。
+- API 1.3 候选的可选服务使用 `drone.requires` 的 alias → service/version 合同；这不改变禁止 plugin-to-plugin import/`dependencies` 的规则。`drone.provides` 只列本包 `desktopRuntime.operations` 的公开 JSON 操作名，不能放函数、包路径或授权对象。声明从同一份实际安装包来源解析，受 content hash 与启停生命周期约束；不能从 UI 清单建立第二套 provider catalog。
+- `provider.inspect({alias})` 为 read，明确返回 available/absent/disabled/unavailable/incompatible/ambiguous；多个同版本 enabled 提供者必须拒绝选择，不能默认取第一个。`provider.read` / `provider.write` 接收 `{alias,operation,input}`；操作必须同时在提供者声明和实际 runtime 中存在，read 不得调用 write。版本是精确服务合同版本，不是 npm 版本范围。
+- 服务在实际提供者 owner 内执行，原 caller、同一 live SDK session、原窗口批准和取消作用域由宿主决定。短调用 lease 必须排空并清理，已有 native/UI 绑定时共享同一 application owner，无其他绑定时该纯服务 owner 仅活本次调用，状态须显式持久化。嵌套调用携带 host-only source/operation 链，循环拒绝；函数和身份不经 JSON 传送。普通 JSON 返回值不授予文件、模型或任务写入批准；特权角色须另行提供真实不可伪造的回执与消费验证，本片没有开放。
 - 共享的类型和合同只能放进 `@gyoungwe/plugin-api`，不得从另一个插件包里取。
 
 ### 6.3 聚合包
