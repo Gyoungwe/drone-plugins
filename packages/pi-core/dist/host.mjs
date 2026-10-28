@@ -162,6 +162,17 @@ function normalizeTaskMilestones(input, catalog) {
   });
 }
 
+// src/task-runtime/application-state.mjs
+function createTaskApplicationState() {
+  const failures = /* @__PURE__ */ new Map();
+  return {
+    readFailure: (scope) => failures.get(scope),
+    recordFailure: (scope, failure) => {
+      failures.set(scope, failure);
+    }
+  };
+}
+
 // src/task-runtime/runtime-bridge.mjs
 import { AsyncLocalStorage } from "node:async_hooks";
 var contexts = new AsyncLocalStorage();
@@ -447,6 +458,7 @@ function describeAcceptance(acceptance, verifier = acceptanceVerifier(acceptance
 }
 
 // src/task-runtime/native-adapter.mjs
+import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
 import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
 import { realpath as realpath3 } from "node:fs/promises";
 import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve4, sep as sep2 } from "node:path";
@@ -566,7 +578,7 @@ ${details}`, [deny, allow], { signal });
       if (selected !== allow || signal?.aborted) return false;
       if (journal.scope() !== scope || await checkBinding() !== binding)
         throw new Error("Task context or knowledge binding changed; ask again in the current context.");
-      journal.command({ ...input, action: action ? "acknowledge" : input.action });
+      await journal.command({ ...input, action: action ? "acknowledge" : input.action });
       return true;
     })();
     pending.set(key, operation);
@@ -1879,6 +1891,10 @@ function createTaskWorkbench({
     ].filter(Boolean).join("\n");
   }
   return {
+    checkpoint: () => clone({ book, requested, pinned, turnCapabilities, turnBinding }),
+    rollback: (state) => {
+      ({ book, requested, pinned, turnCapabilities, turnBinding } = clone(state));
+    },
     advanceStage,
     authorization,
     scope: () => book.scope,
@@ -1920,6 +1936,10 @@ function createEvidenceRecovery({ authorize, persist = () => {
   let scope = null, taskId = null, records = [], used = 0;
   const save = () => persist({ version: 1, scope, taskId, records, used });
   return {
+    checkpoint: () => structuredClone({ version: 1, scope, taskId, records, used }),
+    rollback: (state) => {
+      ({ scope, taskId, records, used } = structuredClone(state));
+    },
     scope: () => scope,
     attach(nextScope, nextTaskId, entries = [], force = false) {
       if (!force && scope === nextScope && taskId === nextTaskId) return;
@@ -2002,6 +2022,193 @@ function createEvidenceRecovery({ authorize, persist = () => {
   };
 }
 
+// src/task-runtime/task-session.mjs
+var TASK_SESSION_ENTRY = "drone-task-session-v1";
+var EVIDENCE_ENTRY = "drone-task-evidence-v1";
+function taskEntries(entries) {
+  return entries.flatMap(
+    (entry) => entry.customType === TASK_SESSION_ENTRY && entry.data?.version === 1 ? [
+      { customType: WORKBENCH_ENTRY, data: entry.data.workbench },
+      { customType: EVIDENCE_ENTRY, data: entry.data.evidence }
+    ] : [entry]
+  );
+}
+function createTaskSession({
+  persist,
+  inspect,
+  authorize,
+  readOnly,
+  onCommitted,
+  readFailure,
+  onPersistenceFailed
+}) {
+  const lifetime = new AbortController();
+  let tail = Promise.resolve(), closed = false, dirty = false, checkpointRequested = false, records = [];
+  const journal = createTaskWorkbench({
+    requireAuthorization: true,
+    readOnly,
+    inspect,
+    persist: () => {
+      dirty = true;
+    },
+    onCheckpoint: () => {
+      checkpointRequested = true;
+    }
+  });
+  const evidence = createEvidenceRecovery({
+    authorize,
+    persist: () => {
+      dirty = true;
+    }
+  });
+  const projection = () => ({
+    scope: journal.scope(),
+    view: journal.view(),
+    snapshot: journal.snapshot(),
+    render: journal.render(),
+    readRoots: journal.readRoots(),
+    authorization: journal.authorization(),
+    writeAuthorization: journal.authorization(true)
+  });
+  let committed = projection(), persistenceFailure;
+  const failure = () => persistenceFailure || readFailure();
+  const execute = (signal, operation) => {
+    const previous = tail;
+    let release;
+    tail = new Promise((resolve6) => {
+      release = resolve6;
+    });
+    const combined = signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal;
+    return (async () => {
+      await previous;
+      let before, beforeEvidence, beforeRecords, saved = false;
+      try {
+        if (closed) throw new Error("Task session is closed");
+        if (failure())
+          throw new Error(
+            "Task storage failed; reopen the application from disk before changing this session. " + failure().message
+          );
+        combined.throwIfAborted();
+        before = journal.checkpoint();
+        beforeEvidence = evidence.checkpoint();
+        beforeRecords = records;
+        dirty = false;
+        checkpointRequested = false;
+        const result = await operation(journal, evidence, combined);
+        evidence.attach(journal.scope(), journal.snapshot()?.id, records);
+        combined.throwIfAborted();
+        if (dirty) {
+          try {
+            await persist(
+              {
+                customType: TASK_SESSION_ENTRY,
+                data: {
+                  version: 1,
+                  workbench: journal.checkpoint().book,
+                  evidence: evidence.checkpoint()
+                }
+              },
+              combined
+            );
+          } catch (error3) {
+            persistenceFailure = {
+              state: "needs-reopen",
+              message: error3.message,
+              lastCommitted: structuredClone(committed)
+            };
+            onPersistenceFailed(persistenceFailure);
+            throw error3;
+          }
+        }
+        committed = projection();
+        saved = true;
+        combined.throwIfAborted();
+        if (checkpointRequested) await onCommitted(committed);
+        return result;
+      } catch (error3) {
+        if (!saved && before) {
+          journal.rollback(before);
+          evidence.rollback(beforeEvidence);
+          records = beforeRecords;
+        }
+        throw error3;
+      } finally {
+        release();
+      }
+    })();
+  };
+  const status = () => {
+    if (closed) throw new Error("Task session is closed");
+    const result = structuredClone(failure()?.lastCommitted || committed);
+    if (failure()) {
+      result.persistence = { state: failure().state, message: failure().message };
+      result.render += "\nTask storage failed. This is the last committed task state; reopen the application from disk before continuing.";
+    }
+    return result;
+  };
+  return {
+    status,
+    input: ({ query, capabilities, binding }, signal) => execute(signal, (journal2) => journal2.begin(query, capabilities, binding)),
+    turn: (event, signal) => execute(signal, (journal2, evidence2) => {
+      switch (event.kind) {
+        case "attach": {
+          records = taskEntries(event.entries);
+          journal2.attach(event.scope, records, event.force);
+          evidence2.attach(event.scope, journal2.snapshot()?.id, records, event.force);
+          return;
+        }
+        case "pause":
+          return journal2.pause(event.reason);
+        case "settle":
+          return journal2.settle();
+        case "reserve-continuation":
+          return journal2.reserveContinuation(event.reason);
+        case "reserve-handoff":
+          return journal2.reserveHandoff();
+        case "advance-stage":
+          return journal2.advanceStage();
+        case "request-report":
+          return journal2.requestReport();
+        case "take-report":
+          return journal2.takeReport();
+        default:
+          throw new Error("Unknown task turn: " + event.kind);
+      }
+    }),
+    observe: (event, signal) => execute(signal, async (journal2, evidence2) => {
+      if (event.kind === "call") return journal2.guard(event.value);
+      if (event.kind === "result") return journal2.observe(event.value, event.cwd);
+      if (event.kind === "capture")
+        return evidence2.capture(event.value, event.cwd, event.binding);
+      if (event.kind === "evicted") return evidence2.evict(event.ids);
+      throw new Error("Unknown task observation: " + event.kind);
+    }),
+    action: (event, signal) => execute(signal, (journal2, evidence2) => {
+      switch (event.kind) {
+        case "plan":
+          return journal2.plan(event.input);
+        case "wait":
+          return journal2.wait(event.input);
+        case "command":
+          return journal2.command(event.input);
+        case "file":
+          return journal2.acceptFile(event.input, event.cwd);
+        case "reconcile":
+          return journal2.reconcile(event.cwd);
+        case "evidence-restore":
+          return evidence2.restore(event.input, event.cwd, event.binding);
+        default:
+          throw new Error("Unknown task action: " + event.kind);
+      }
+    }),
+    close: () => {
+      closed = true;
+      lifetime.abort(new Error("Task session closed"));
+      return tail;
+    }
+  };
+}
+
 // src/task-runtime/progress-action.mjs
 function createTaskProgression(journal, { askAuthorization, checkBinding, continueAuthorized, prepareRemaining, send, getGeneration = () => 0 }) {
   const pending = /* @__PURE__ */ new Map();
@@ -2031,7 +2238,7 @@ function createTaskProgression(journal, { askAuthorization, checkBinding, contin
       const action = task.actions.find((a) => a.state === "pending");
       if (action?.kind === "authorization") {
         if (await askAuthorization({ ...input, action: "ask-authorization", actionId: action.id }, ctx)) {
-          journal.command({ taskId: task.id, revision: journal.view().revision, action: "select" });
+          await journal.command({ taskId: task.id, revision: journal.view().revision, action: "select" });
           send("\u4F60\u5DF2\u540C\u610F\u8FD9\u9879\u65B0\u589E\u7684\u5185\u5BB9\uFF0C\u7EE7\u7EED\u5F80\u4E0B\u505A\u3002");
           continueAuthorized(ctx);
         }
@@ -2066,17 +2273,17 @@ ${action.reason}
         if (!path?.trim() || ctx.signal?.aborted) return;
         await validate();
       }
-      journal.command({ ...input, action: "select" });
+      await journal.command({ ...input, action: "select" });
       const command = (extra) => ({ taskId: task.id, revision: journal.view().revision, ...extra });
       if (path) {
         await journal.acceptFile(
           command({ action: "file", actionId: action.id, path: path.trim() }),
           ctx.cwd
         );
-        journal.command(command({ action: "acknowledge", actionId: action.id }));
+        await journal.command(command({ action: "acknowledge", actionId: action.id }));
       }
       if (review && selected === proceed)
-        journal.command(command({ action: "acknowledge", actionId: action.id }));
+        await journal.command(command({ action: "acknowledge", actionId: action.id }));
       await journal.reconcile(ctx.cwd);
       if (journal.scope() !== scope || journal.snapshot()?.id !== task.id || getGeneration() !== generation || ctx.signal?.aborted || await checkBinding() !== binding)
         return;
@@ -2159,29 +2366,43 @@ function shouldAskToContinue(task) {
 
 // src/task-runtime/native-adapter.mjs
 function registerWorkbench(pi, options = {}) {
-  const bindCallback = (handler) => (...args) => withHostRuntime(pi, () => handler(...args));
+  const invocation = new AsyncLocalStorage2();
+  const bindCallback = (handler, contextIndex = 1) => (...args) => withHostRuntime(pi, () => invocation.run(args[contextIndex], () => handler(...args)));
   const on = (name, handler) => pi.on(name, bindCallback(handler));
   const onEvent = (name, handler) => pi.events?.on?.(name, bindCallback(handler));
   let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || (() => pi?.drone?.readKnowledgeBinding?.() || null);
   let pendingStatus = null;
   let providerTurnOpen = false;
   const authorize = async (cwd, path) => {
-    if (!context || !pi.events?.emit)
+    const ctx = invocation.getStore() || context;
+    if (!ctx || !pi.events?.emit)
       throw new Error("Current read-permission adapter unavailable; refusing recovery read.");
+    const signal = ctx.signal;
+    signal?.throwIfAborted();
     let handled = false;
-    const allowed = await new Promise((resolveResult) => {
-      const request = {
+    const allowed = await new Promise((resolveResult, reject) => {
+      const stop = () => signal?.removeEventListener("abort", abort);
+      const respond = (allowed2) => {
+        stop();
+        resolveResult(allowed2);
+      };
+      const abort = () => {
+        stop();
+        reject(signal.reason);
+      };
+      signal?.addEventListener("abort", abort, { once: true });
+      pi.events.emit("drone:task-read-check", {
         cwd,
         path: resolve4(cwd, path),
-        sessionId: context.sessionManager?.getSessionId?.(),
-        resolve: resolveResult,
+        sessionId: ctx.sessionManager.getSessionId(),
+        resolve: respond,
         claim: () => {
           handled = true;
         }
-      };
-      pi.events.emit("drone:task-read-check", request);
-      if (!handled) resolveResult(false);
+      });
+      if (!handled) respond(false);
     });
+    signal?.throwIfAborted();
     if (!allowed) throw new Error("Current permission policy denied this read.");
   };
   const inspect = async (cwd, path, expected = {}) => {
@@ -2218,33 +2439,58 @@ function registerWorkbench(pi, options = {}) {
       )
     };
   };
-  const journal = createTaskWorkbench({
-    requireAuthorization: true,
-    // Resolve the effective SDK registration in this session on every call.
-    // Native adapters publish an explicit false for write/unknown effects, which
-    // must override any older same-name manifest. Unannotated v1 tools still
-    // use their host-bound manifest until that registration path is migrated.
+  const session = createTaskSession({
+    readFailure: () => options.application.readFailure(activeSessionId),
+    onPersistenceFailed: (failure) => options.application.recordFailure(activeSessionId, failure),
     readOnly: (name) => {
       const declared = pi.getAllTools().find((tool2) => tool2.name === name)?.annotations?.readOnlyHint;
       return declared !== void 0 ? declared : withHostRuntime(pi, () => isReadOnlyTool(name));
     },
-    persist: (snapshot) => pi.appendEntry(WORKBENCH_ENTRY, snapshot),
-    onCheckpoint: () => send(),
-    // 里程碑验收器（zotero_item / wiki_review / …）由各自的扩展 registerAcceptanceVerifier 登记（挂钩 2）
-    inspect
+    persist: async (record, signal) => {
+      signal.throwIfAborted();
+      await pi.appendEntry(record.customType, record.data);
+    },
+    onCommitted: () => send(),
+    inspect,
+    authorize
   });
+  const journal = {
+    scope: () => session.status().scope,
+    view: () => session.status().view,
+    snapshot: () => session.status().snapshot,
+    render: () => session.status().render,
+    readRoots: () => session.status().readRoots,
+    authorization: (forWrite) => session.status()[forWrite ? "writeAuthorization" : "authorization"],
+    begin: (query, capabilities = [], binding = null) => session.input({ query, capabilities, binding }, invocation.getStore()?.signal),
+    plan: (input) => session.action({ kind: "plan", input }, invocation.getStore()?.signal),
+    wait: (input) => session.action({ kind: "wait", input }, invocation.getStore()?.signal),
+    command: (input) => session.action({ kind: "command", input }, invocation.getStore()?.signal),
+    acceptFile: (input, cwd) => session.action({ kind: "file", input, cwd }, invocation.getStore()?.signal),
+    reconcile: (cwd) => session.action({ kind: "reconcile", cwd }, invocation.getStore()?.signal),
+    guard: (value) => session.observe({ kind: "call", value }, invocation.getStore()?.signal),
+    observe: (value, cwd) => session.observe({ kind: "result", value, cwd }, invocation.getStore()?.signal),
+    pause: (reason) => session.turn({ kind: "pause", reason }),
+    settle: () => session.turn({ kind: "settle" }, invocation.getStore()?.signal),
+    reserveContinuation: (reason) => session.turn({ kind: "reserve-continuation", reason }, invocation.getStore()?.signal),
+    reserveHandoff: () => session.turn({ kind: "reserve-handoff" }, invocation.getStore()?.signal),
+    advanceStage: () => session.turn({ kind: "advance-stage" }, invocation.getStore()?.signal),
+    requestReport: () => session.turn({ kind: "request-report" }, invocation.getStore()?.signal),
+    takeReport: () => session.turn({ kind: "take-report" }, invocation.getStore()?.signal)
+  };
   const askAuthorization = createTaskAuthorization(journal, () => bindingKey());
-  const evidence = createEvidenceRecovery({
-    authorize,
-    persist: (data) => pi.appendEntry("drone-task-evidence-v1", data)
-  });
-  const attach = (ctx, force = false) => {
+  const evidence = {
+    capture: (value, cwd, binding) => session.observe({ kind: "capture", value, cwd, binding }, invocation.getStore()?.signal),
+    evict: (ids) => session.observe({ kind: "evicted", ids }, invocation.getStore()?.signal),
+    restore: (input, cwd, binding) => session.action({ kind: "evidence-restore", input, cwd, binding }, invocation.getStore()?.signal)
+  };
+  currentRuntime().registerDisposable({ dispose: () => session.close() });
+  const attach = async (ctx, force = false) => {
     options.onJournalAttached?.(journal);
     context = ctx;
     activeSessionId = ctx.sessionManager?.getSessionId?.() || ctx.sessionId || void 0;
     const scope = createHash3("sha256").update(`${ctx.sessionManager?.getSessionId?.() || ctx.sessionId || "isolated"}\0${resolve4(ctx.cwd)}`).digest("hex");
-    journal.attach(scope, ctx.sessionManager?.getBranch?.() || [], force);
-    evidence.attach(scope, journal.snapshot()?.id, ctx.sessionManager?.getBranch?.() || [], force);
+    if (!options.application.readFailure(activeSessionId))
+      await session.turn({ kind: "attach", scope, entries: ctx.sessionManager?.getBranch?.() || [], force }, ctx.signal);
   };
   journal.configure = (nextOptions = {}) => {
     if (nextOptions.readKnowledgeBinding) readKnowledgeBinding = nextOptions.readKnowledgeBinding;
@@ -2254,20 +2500,27 @@ function registerWorkbench(pi, options = {}) {
     return b ? `${b.vaultId}:${b.revision}` : null;
   };
   const send = (content = journal.render(), command = null) => {
+    const state = session.status();
+    if (state.persistence) throw new Error(`Task storage needs-reopen; last committed revision ${state.view.revision}. ${state.persistence.message}`);
     if (providerTurnOpen) {
       pendingStatus = { content, command };
       return;
     }
     pendingStatus = null;
-    return pi.sendMessage(
-      {
-        customType: "drone-task-status",
-        display: true,
-        content,
-        details: { operational: true, reportId: randomUUID2(), command, taskView: journal.view() }
-      },
-      { triggerTurn: false }
-    );
+    try {
+      return pi.sendMessage(
+        {
+          customType: "drone-task-status",
+          display: true,
+          content,
+          details: { operational: true, reportId: randomUUID2(), command, taskView: journal.view() }
+        },
+        { triggerTurn: false }
+      );
+    } catch (error3) {
+      options.application.recordFailure(activeSessionId, { state: "needs-reopen", message: error3.message, lastCommitted: state });
+      throw error3;
+    }
   };
   let handoffGeneration = 0;
   let handoffTimer;
@@ -2298,7 +2551,7 @@ function registerWorkbench(pi, options = {}) {
       if (!idle) {
         if (++idleChecks < 40) handoffTimer = setTimeout(() => void handoff().catch(cancelHandoff), 25);
         else {
-          journal.pause("auto-handoff-not-idle");
+          await journal.pause("auto-handoff-not-idle");
           send();
         }
         return;
@@ -2306,7 +2559,7 @@ function registerWorkbench(pi, options = {}) {
       try {
         const binding = await bindingKey();
         if (generation !== handoffGeneration || context !== ctx || journal.snapshot()?.id !== taskId) return;
-        const result = journal.begin("\u7EE7\u7EED", [], binding);
+        const result = await journal.begin("\u7EE7\u7EED", [], binding);
         if (result.blocked || ["blocked", "waiting_user"].includes(journal.snapshot()?.state) || !journal.authorization()) {
           send();
           return;
@@ -2326,7 +2579,7 @@ function registerWorkbench(pi, options = {}) {
       } catch (e) {
         if (generation !== handoffGeneration || context !== ctx || journal.snapshot()?.id !== taskId || ["completed", "cancelled", "archived"].includes(journal.snapshot()?.state))
           return;
-        journal.pause("auto-handoff-failed");
+        await journal.pause("auto-handoff-failed");
         send(`\u6CA1\u80FD\u81EA\u52A8\u63A5\u7740\u505A\uFF1A${clean2(e.message)}\u3002\u5DF2\u6709\u7684\u7ED3\u679C\u90FD\u5728\uFF0C\u6CA1\u6709\u91CD\u590D\u6267\u884C\u4EFB\u4F55\u64CD\u4F5C\u3002`);
       }
     };
@@ -2342,33 +2595,37 @@ function registerWorkbench(pi, options = {}) {
       request.respond?.(journal.authorization(true));
   });
   const prepare = async (query, ctx) => {
-    attach(ctx);
+    await attach(ctx);
     const entries = ctx.sessionManager?.getBranch?.() || [];
     const caps = [...entries].reverse().find((e) => e.customType === "drone-capability-checkpoint-v1")?.data?.capabilities || [];
-    const result = journal.begin(query, caps, await bindingKey());
-    evidence.attach(evidence.scope(), journal.snapshot()?.id, entries);
+    const result = await journal.begin(query, caps, await bindingKey());
     halted = false;
     return result;
   };
-  on("session_start", (_event, ctx) => {
+  on("session_start", async (_event, ctx) => {
     cancelHandoff();
     providerTurnOpen = false;
     pendingStatus = null;
-    attach(ctx, true);
+    await attach(ctx, true);
     prepared = false;
     awaitingUser = false;
   });
-  on("session_tree", (_event, ctx) => {
+  on("session_tree", async (_event, ctx) => {
     cancelHandoff();
     providerTurnOpen = false;
     pendingStatus = null;
-    attach(ctx, true);
+    await attach(ctx, true);
     prepared = false;
     halted = false;
   });
   on("input", async (event, ctx) => {
+    if (session.status().persistence) {
+      halted = true;
+      ctx.ui.notify(session.status().render, "error");
+      return { action: "handled" };
+    }
     if (!event.images?.length && isTaskStatusQuery(event.text)) {
-      attach(ctx);
+      await attach(ctx);
       send(void 0, "task-status");
       return { action: "handled" };
     }
@@ -2384,16 +2641,9 @@ function registerWorkbench(pi, options = {}) {
       prepared = true;
     } catch (e) {
       halted = true;
-      pi.sendMessage(
-        {
-          customType: "drone-task-status",
-          display: true,
-          content: `\u4EFB\u52A1\u672A\u5F00\u59CB\uFF1A${clean2(e.message)}
-${journal.render()}`,
-          details: { reportId: randomUUID2(), taskView: journal.view() }
-        },
-        { triggerTurn: false }
-      );
+      if (session.status().persistence) ctx.ui.notify(session.status().render, "error");
+      else send(`\u4EFB\u52A1\u672A\u5F00\u59CB\uFF1A${clean2(e.message)}
+${journal.render()}`);
       return { action: "handled" };
     }
     return { action: "continue" };
@@ -2429,7 +2679,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       prepared = false;
       automaticTurn = false;
       awaitingUser = false;
-      const result = journal.begin("\u7EE7\u7EED", [], await bindingKey());
+      const result = await journal.begin("\u7EE7\u7EED", [], await bindingKey());
       halted = !!result.blocked;
       return;
     }
@@ -2457,7 +2707,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     providerTurnOpen = false;
     if (pendingStatus !== null) send(pendingStatus.content, pendingStatus.command);
   });
-  on("tool_call", (event) => {
+  on("tool_call", async (event) => {
     providerTurnOpen = true;
     if (halted && event.toolName !== "task_status")
       return {
@@ -2465,7 +2715,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
         reason: "Task selection/recovery is required. Return the saved task status; do not perform queued effects."
       };
     try {
-      return journal.guard(event) || void 0;
+      return await journal.guard(event) || void 0;
     } catch (e) {
       return { block: true, reason: clean2(e.message) };
     }
@@ -2479,8 +2729,8 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       return { content: [...event.content || [], { type: "text", text: context2 }] };
     }
   });
-  onEvent("drone:context-evicted", (event) => {
-    if (event.sessionId === activeSessionId) evidence.evict(event.toolCallIds);
+  onEvent("drone:context-evicted", async (event) => {
+    if (event.sessionId === activeSessionId) await evidence.evict(event.toolCallIds);
   });
   on("agent_end", async (event, ctx) => {
     const turnContext = context;
@@ -2494,23 +2744,20 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     if (held) send(held.content, held.command);
     if (last?.stopReason === "aborted" || ctx?.signal?.aborted || /was aborted|request aborted/i.test(last?.errorMessage || "")) {
       cancelHandoff();
-      journal.pause("user-aborted");
+      await journal.pause("user-aborted");
       send();
       return;
     }
-    journal.settle();
+    await journal.settle();
     if (journal.authorization()) {
-      try {
-        await journal.reconcile(turnContext.cwd);
-      } catch {
-      }
-      if (last?.knowledgePublication?.status === "blocked" && last.stopReason !== "error" && journal.reserveContinuation(last.knowledgePublication.reason)) {
+      await journal.reconcile(turnContext.cwd);
+      if (last?.knowledgePublication?.status === "blocked" && last.stopReason !== "error" && await journal.reserveContinuation(last.knowledgePublication.reason)) {
         send("\u521A\u624D\u505C\u4E86\u4E00\u4E0B\uFF0C\u6B63\u5728\u6309\u4F60\u4E4B\u524D\u7684\u6388\u6743\u63A5\u7740\u505A\uFF1A\u5148\u6838\u5BF9\u5DF2\u6709\u7ED3\u679C\uFF0C\u518D\u7EE7\u7EED\u5269\u4E0B\u7684\u90E8\u5206\uFF0C\u4E0D\u7528\u4F60\u518D\u786E\u8BA4\u3002");
         if (activeSessionId !== turnSessionId || context !== turnContext) return;
         continueAuthorized(turnContext);
         return;
       }
-      if (last?.stopReason !== "error" && !ctx?.signal?.aborted && journal.reserveHandoff()) {
+      if (last?.stopReason !== "error" && !ctx?.signal?.aborted && await journal.reserveHandoff()) {
         send();
         if (activeSessionId !== turnSessionId || context !== turnContext) return;
         continueAuthorized(turnContext);
@@ -2535,13 +2782,13 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     description,
     parameters: { type: "object", properties, required, additionalProperties: false },
     execute: bindCallback(async (_id, input, _signal, _update, ctx) => {
-      attach(ctx);
+      await attach(ctx);
       const result = await execute(input, ctx, _signal);
       return {
         content: [{ type: "text", text: typeof result === "string" ? result : JSON.stringify(result) }],
         details: { operational: true }
       };
-    })
+    }, 4)
   });
   const str = { type: "string", minLength: 1, maxLength: 512 };
   tool(
@@ -2550,17 +2797,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     {},
     [],
     async (_input, ctx) => {
-      let notice = "";
-      if (journal.authorization()) {
-        try {
-          await journal.reconcile(ctx.cwd);
-        } catch (e) {
-          notice = `
-\u672C\u6B21\u53EA\u8BFB\u6838\u5BF9\u672A\u5B8C\u6210\uFF1A${String(e.message).replace(/\s+/g, " ").slice(0, 120)}\u3002\u4E0B\u5217\u4FE1\u606F\u53EF\u80FD\u4ECD\u662F\u4E0A\u4E00\u6B21\u89C2\u5BDF\uFF0C\u4E0D\u80FD\u5F53\u4F5C\u672C\u6B21\u5DF2\u786E\u8BA4\u3002`;
-        }
-      } else {
-        notice = "\n\u672C\u6B21\u53EA\u8FD4\u56DE\u5DF2\u4FDD\u5B58\u7684\u89C2\u5BDF\uFF0C\u672A\u8FDB\u884C\u65B0\u7684\u6587\u4EF6\u6838\u5BF9\uFF1B\u8FD9\u4E0D\u8868\u793A\u9700\u8981\u91CD\u65B0\u6388\u6743\u6216\u91CD\u590D\u6267\u884C\u3002\u8BF7\u7ED3\u5408\u5F53\u524D\u6743\u9650\u3001\u5F85\u529E\u548C\u672A\u786E\u5B9A\u64CD\u4F5C\u8BF4\u660E\u4E0B\u4E00\u6B65\u3002";
-      }
+      const notice = "\n\u672C\u6B21\u53EA\u8FD4\u56DE\u5DF2\u4FDD\u5B58\u7684\u89C2\u5BDF\uFF1B\u9700\u8981\u91CD\u65B0\u6838\u5BF9\u5DF2\u6709\u6587\u4EF6\u65F6\u8BF7\u660E\u786E\u8C03\u7528 task_reconcile\u3002";
       return `${journal.render()}${notice}${taskProgressContext(journal.snapshot())}`;
     }
   );
@@ -2620,7 +2857,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     ["goal", "summary", "milestones"],
     async (input, ctx, signal) => {
       const writeRoots = await resolveWriteRoots(ctx.cwd, input.writeDirectories || []);
-      const result = journal.plan({ ...input, writeRoots });
+      const result = await journal.plan({ ...input, writeRoots });
       send("\u8BA1\u5212\u5DF2\u7ECF\u51C6\u5907\u597D\uFF0C\u9A6C\u4E0A\u4F1A\u5F39\u51FA\u4E00\u4E2A\u786E\u8BA4\u6846\uFF0C\u540C\u610F\u540E\u5F00\u59CB\u6267\u884C\u3002");
       const authorized = await askAuthorization(
         { taskId: journal.snapshot().id, revision: journal.view().revision, action: "authorize-task" },
@@ -2649,7 +2886,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     },
     ["kind", "title", "reason"],
     async (input, ctx, signal) => {
-      const action = journal.wait(input);
+      const action = await journal.wait(input);
       if (!["authorization", "rebind"].includes(action.kind)) return action;
       const authorized = await askAuthorization(
         {
@@ -2685,7 +2922,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
   pi.registerCommand("task-status", {
     description: "\u4EFB\u52A1\u5DE5\u4F5C\u53F0\uFF1A\u65E0\u6A21\u578B\u72B6\u6001\u3001\u4EFB\u52A1\u9009\u62E9\u3001\u4EA7\u7269\u4E0E\u4EBA\u5DE5\u52A8\u4F5C",
     handler: bindCallback(async (_args, ctx) => {
-      attach(ctx);
+      await attach(ctx);
       send(void 0, "task-status");
     })
   });
@@ -2701,7 +2938,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     description: "\u4EFB\u52A1\u9762\u677F\u7684\u7248\u672C\u5316\u7528\u6237\u64CD\u4F5C\uFF1B\u4E0D\u6388\u4E88\u65B0\u6743\u9650",
     handler: bindCallback(singleFlightCommand(async (args, ctx) => {
       cancelHandoff();
-      attach(ctx);
+      await attach(ctx);
       if (ctx.isIdle && !ctx.isIdle())
         throw new Error("Stop the agent before changing tasks or inspecting recovery files.");
       if (args.length > 6e3) throw new Error("Task command too large.");
@@ -2735,7 +2972,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
         const accepted = await askAuthorization(input, ctx);
         send(accepted ? "\u5DF2\u8BB0\u5F55\u4F60\u7684\u786E\u8BA4\u3002" : "\u4F60\u6CA1\u6709\u786E\u8BA4\uFF0C\u4E00\u5207\u4FDD\u6301\u539F\u6837\u3002");
         if (accepted) {
-          journal.command({ taskId: input.taskId, revision: journal.view().revision, action: "select" });
+          await journal.command({ taskId: input.taskId, revision: journal.view().revision, action: "select" });
           continueAuthorized(ctx);
         }
         return;
@@ -2754,7 +2991,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
                 basis: [`task:${input.taskId}`, `action:${input.actionId}`],
                 at: (/* @__PURE__ */ new Date()).toISOString()
               });
-            journal.command({ taskId: input.taskId, revision: journal.view().revision, action: "select" });
+            await journal.command({ taskId: input.taskId, revision: journal.view().revision, action: "select" });
             continueAuthorized(ctx);
           }
           return;
@@ -2762,11 +2999,11 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       }
       if (input.action === "file") await journal.acceptFile(input, ctx.cwd);
       else if (input.action === "refresh") {
-        journal.command({ ...input, action: "select" });
+        await journal.command({ ...input, action: "select" });
         await journal.reconcile(ctx.cwd);
       } else if (input.action === "resume") {
-        journal.command({ ...input, action: "select" });
-        const result = journal.begin("\u7EE7\u7EED", [], await bindingKey());
+        await journal.command({ ...input, action: "select" });
+        const result = await journal.begin("\u7EE7\u7EED", [], await bindingKey());
         if (result.blocked || journal.snapshot()?.state === "blocked" || journal.snapshot()?.state === "waiting_user") {
           send();
           return;
@@ -2774,7 +3011,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
         send();
         pi.sendUserMessage("\u7EE7\u7EED", { expandPromptTemplates: true });
         return;
-      } else journal.command(input);
+      } else await journal.command(input);
       send(void 0, "task-action");
     }))
   });
@@ -2799,6 +3036,7 @@ function registerTaskRuntime(pi, options = {}) {
   const registry3 = { version: 1, journal: null, runtime: hostRuntime };
   const journal = withHostRuntime(pi, () => registerWorkbench(pi, {
     ...options,
+    application: options.application || createTaskApplicationState(),
     onJournalAttached: (current) => {
       registry3.journal = current;
       hostRuntime.tasks.workbench.journal = current;
@@ -2828,10 +3066,11 @@ function publishTaskRuntimeRegistry(pi, registry3) {
   registry3.unsubscribe = events.on(TASK_RUNTIME_REQUEST, (payload) => {
     if (payload?.version === 1) events.emit(TASK_RUNTIME_RESPONSE, { version: 1, registry: registry3 });
   });
+  registry3.runtime.registerDisposable({ dispose: registry3.unsubscribe });
 }
 
 // src/task-runtime/owner.mjs
-function createTaskRuntimeOwner(definitions = []) {
+function createTaskRuntimeOwner(definitions = [], application) {
   const runtime = createStandaloneRuntime();
   withRuntime(runtime, () => {
     for (const verifier of definitions) registerAcceptanceVerifier(verifier.kind, verifier);
@@ -2839,6 +3078,11 @@ function createTaskRuntimeOwner(definitions = []) {
   let active = true;
   const lifetime = new AbortController();
   const signalFor = (signal) => signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal;
+  const contextFor = (context, signal) => new Proxy(context, {
+    get(target, name) {
+      return name === "signal" ? signalFor(signal || target.signal) : Reflect.get(target, name);
+    }
+  });
   let attached;
   let unbind;
   let unlisten;
@@ -2894,21 +3138,21 @@ function createTaskRuntimeOwner(definitions = []) {
         get(target, name) {
           if (name === "events") return guardedEvents;
           if (name === "on") return (event, handler) => target.on(event, (value2, context) => {
-            if (active) return withHostRuntime(pi, () => handler(value2, { ...context, signal: signalFor(context.signal) }));
+            if (active) return withHostRuntime(pi, () => handler(value2, contextFor(context)));
           });
           if (name === "registerTool") return (tool) => target.registerTool({
             ...tool,
             execute: (id, input, signal, update, context) => {
               requireActive();
               const scopedSignal = signalFor(signal);
-              return withHostRuntime(pi, () => tool.execute(id, input, scopedSignal, update, { ...context, signal: scopedSignal }));
+              return withHostRuntime(pi, () => tool.execute(id, input, scopedSignal, update, contextFor(context, scopedSignal)));
             }
           });
           if (name === "registerCommand") return (command, definition) => target.registerCommand(command, {
             ...definition,
-            handler: (...args) => {
+            handler: (args, context) => {
               requireActive();
-              return withHostRuntime(pi, () => definition.handler(...args));
+              return withHostRuntime(pi, () => definition.handler(args, contextFor(context)));
             }
           });
           const value = target[name];
@@ -2916,7 +3160,7 @@ function createTaskRuntimeOwner(definitions = []) {
         }
       });
       const unbindGuarded = bindRuntime(guarded, current);
-      const journal = registerTaskRuntime(guarded, { runtime: current });
+      const journal = registerTaskRuntime(guarded, { runtime: current, application });
       const oldUnbind = unbind;
       unbind = () => {
         unbindGuarded();
@@ -2943,6 +3187,45 @@ function createTaskRuntimeOwner(definitions = []) {
       eventCleanups.clear();
       await linkedOwner?.dispose();
       await runtime.dispose();
+    }
+  };
+}
+function createTaskApplication(definitions = []) {
+  const application = createTaskApplicationState();
+  const registry3 = createTaskRuntimeOwner(definitions, application);
+  const sessions = /* @__PURE__ */ new Set();
+  let active = true;
+  const requireActive = () => {
+    if (!active) throw new Error("Task application is disposed");
+  };
+  const createSession = () => {
+    requireActive();
+    const owner = createTaskRuntimeOwner(registry3.definitions(), application);
+    const session = {
+      attach: (pi) => owner.attach(pi),
+      dispose: async () => {
+        await owner.dispose();
+        sessions.delete(session);
+      }
+    };
+    sessions.add(session);
+    return session;
+  };
+  return {
+    registerAcceptanceVerifier: registry3.registerAcceptanceVerifier,
+    readAcceptanceVerifier: registry3.readAcceptanceVerifier,
+    attach: (pi) => createSession().attach(pi),
+    createNativeSession: () => {
+      const session = createSession();
+      return { extension: (pi) => {
+        session.attach(pi);
+      }, dispose: session.dispose };
+    },
+    dispose: async () => {
+      if (!active) return;
+      active = false;
+      await Promise.all([...sessions].map((session) => session.dispose()));
+      await registry3.dispose();
     }
   };
 }
@@ -7603,35 +7886,14 @@ var coreHostLoader = {
 var taskHostLoader = {
   contractVersion: 1,
   load: (input) => {
-    const owner = createTaskRuntimeOwner();
-    const sessions = /* @__PURE__ */ new Set();
-    let active = true;
+    const application = createTaskApplication();
     return {
       contractVersion: 1,
-      registerAcceptanceVerifier: owner.registerAcceptanceVerifier,
-      readAcceptanceVerifier: owner.readAcceptanceVerifier,
+      registerAcceptanceVerifier: application.registerAcceptanceVerifier,
+      readAcceptanceVerifier: application.readAcceptanceVerifier,
       normalizeMilestones: normalizeTaskMilestones,
-      createNativeSession: () => {
-        if (!active) throw new Error("Task plugin is unavailable: loader disposed");
-        const sessionOwner = createTaskRuntimeOwner(owner.definitions());
-        const session = {
-          extension: (pi) => {
-            sessionOwner.attach(pi);
-          },
-          dispose: async () => {
-            await sessionOwner.dispose();
-            sessions.delete(session);
-          }
-        };
-        sessions.add(session);
-        return session;
-      },
-      dispose: async () => {
-        if (!active) return;
-        active = false;
-        await Promise.all([...sessions].map((session) => session.dispose()));
-        await owner.dispose();
-      },
+      createNativeSession: application.createNativeSession,
+      dispose: application.dispose,
       ...input?.workbench ? { workbench: input.workbench } : {}
     };
   }

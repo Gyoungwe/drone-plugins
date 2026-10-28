@@ -6289,7 +6289,7 @@ ${String(footer).slice(0, 2e3)}` }] : [];
       const tools = blocks.filter((b) => b.type === "toolCall");
       if (tools.length) {
         toolRounds += 1;
-        if (toolRounds > maxToolRounds && getTaskRuntime?.()?.advanceStage?.()) toolRounds = 1;
+        if (toolRounds > maxToolRounds && await getTaskRuntime?.()?.advanceStage?.()) toolRounds = 1;
         const bytes = Buffer.byteLength(JSON.stringify(blocks), "utf8");
         if (toolRounds > maxToolRounds || protocolBytes + bytes > 4 * 1024 * 1024 || protocol.size >= 64) {
           const limit = toolRounds > maxToolRounds ? "tool-round-limit" : protocolBytes + bytes > 4 * 1024 * 1024 ? "protocol-byte-limit" : "protocol-entry-limit";
@@ -6324,7 +6324,7 @@ ${String(footer).slice(0, 2e3)}` }] : [];
       if (["aborted", "length", "pending"].includes(message.stopReason) || signal2?.aborted || isUserAbortError(message))
         return report(failure(message, { code: "interrupted" }));
       const content = blocks.filter((b) => b.type === "text");
-      if (!evidenceOnly) getTaskRuntime?.()?.takeReport();
+      if (!evidenceOnly) await getTaskRuntime?.()?.takeReport();
       if (setupReceipt) {
         const done = setupReceipt;
         setupReceipt = null;
