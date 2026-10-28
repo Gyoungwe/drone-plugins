@@ -446,7 +446,7 @@ function describeAcceptance(acceptance, verifier = acceptanceVerifier(acceptance
   return `\u5B8C\u6210 ${acceptance?.kind || "\u672A\u77E5"} \u9A8C\u6536`;
 }
 
-// src/task-runtime/register.mjs
+// src/task-runtime/native-adapter.mjs
 import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
 import { realpath as realpath3 } from "node:fs/promises";
 import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve4, sep as sep2 } from "node:path";
@@ -2157,7 +2157,7 @@ function shouldAskToContinue(task) {
   return (task.progressCount || 0) > (task.lastResumeProgress || 0);
 }
 
-// src/task-runtime/register.mjs
+// src/task-runtime/native-adapter.mjs
 function registerWorkbench(pi, options = {}) {
   const bindCallback = (handler) => (...args) => withHostRuntime(pi, () => handler(...args));
   const on = (name, handler) => pi.on(name, bindCallback(handler));
