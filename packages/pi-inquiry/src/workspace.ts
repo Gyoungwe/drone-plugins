@@ -1,7 +1,7 @@
 import { relative, resolve, sep } from "node:path";
-import { type CleanupCandidate, cleanupCandidates, isSafeArtifactPath } from "./lineage";
-import type { ArtifactRecord, AttemptRecord, FindingRecord, QuestionRecord } from "./models";
-import type { InquiryStorage } from "./storage";
+import { type CleanupCandidate, cleanupCandidates, isSafeArtifactPath } from "./lineage.js";
+import type { ArtifactRecord, AttemptRecord, FindingRecord, QuestionRecord } from "./models.js";
+import type { InquiryStorage } from "./storage.js";
 
 export interface WorkspaceLayout {
 	readonly projectRoot: string;
@@ -88,7 +88,9 @@ export function planWorkspacePromotion(input: {
 		.filter((artifact) => artifact.runId === input.run.id && artifact.status === "valid")
 		.sort((a, b) => a.id.localeCompare(b.id));
 	const relativeResultPath = (artifact: ArtifactRecord): string => {
-		const relativePath = artifact.path.replaceAll("\\", "/").replace(/^runs\/(?:[^/]+)\/(?:[^/]+)\/?/, "");
+		const relativePath = artifact.path
+			.replaceAll("\\", "/")
+			.replace(/^runs\/(?:[^/]+)\/(?:[^/]+)\/?/, "");
 		return `results/${input.run.taskId}/${input.run.id}/${relativePath || artifact.id}`;
 	};
 	const moves = selected.map((artifact) => {
@@ -98,7 +100,11 @@ export function planWorkspacePromotion(input: {
 		const resultPath = relativeResultPath(artifact);
 		assertWithin(input.layout.projectRoot, sourcePath);
 		assertWithin(input.layout.projectRoot, resultPath);
-		return { from: sourcePath, to: resolve(input.layout.projectRoot, resultPath), artifactId: artifact.id };
+		return {
+			from: sourcePath,
+			to: resolve(input.layout.projectRoot, resultPath),
+			artifactId: artifact.id,
+		};
 	});
 	const indexEntries = selected.map((artifact) => ({
 		artifactId: artifact.id,
@@ -148,7 +154,9 @@ export function workspaceIndexForSnapshot(snapshot: {
 	readonly attempts: readonly AttemptRecord[];
 }): readonly WorkspaceEntry[] {
 	const referenced = new Set(
-		snapshot.artifacts.filter((artifact) => artifact.status === "valid").map((artifact) => artifact.id),
+		snapshot.artifacts
+			.filter((artifact) => artifact.status === "valid")
+			.map((artifact) => artifact.id),
 	);
 	return snapshot.artifacts
 		.filter((artifact) => referenced.has(artifact.id) && artifact.purpose === "deliverable")

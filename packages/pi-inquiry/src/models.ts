@@ -5,11 +5,18 @@
 
 export const INQUIRY_SCHEMA_VERSION = 2 as const;
 export const LEGACY_INQUIRY_SCHEMA_VERSION = 1 as const;
-export type InquirySchemaVersion = typeof LEGACY_INQUIRY_SCHEMA_VERSION | typeof INQUIRY_SCHEMA_VERSION;
+export type InquirySchemaVersion =
+	| typeof LEGACY_INQUIRY_SCHEMA_VERSION
+	| typeof INQUIRY_SCHEMA_VERSION;
 
 export type ArtifactLocation = "local" | "remote";
 export type ArtifactPurpose = "input" | "draft" | "intermediate" | "deliverable" | "evidence";
-export type ArtifactStatus = "valid" | "superseded" | "cleanup-candidate" | "archived" | "pending-review";
+export type ArtifactStatus =
+	| "valid"
+	| "superseded"
+	| "cleanup-candidate"
+	| "archived"
+	| "pending-review";
 
 /** Bounded run metadata used for provenance display and reproducibility checks. */
 export interface RunProvenanceSummary {

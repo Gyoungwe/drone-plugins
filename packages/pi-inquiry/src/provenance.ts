@@ -4,8 +4,8 @@ import type {
 	AttemptRecord,
 	InquirySnapshot,
 	RunProvenanceSummary,
-} from "./models";
-import { reproducibilityStatus } from "./reproducibility";
+} from "./models.js";
+import { reproducibilityStatus } from "./reproducibility.js";
 
 const MAX_PARENT_CHAIN = 20;
 
@@ -13,7 +13,8 @@ function runProvenanceFor(
 	artifact: ArtifactRecord,
 	attempts: readonly AttemptRecord[],
 ): RunProvenanceSummary | undefined {
-	if (artifact.runProvenance && Object.keys(artifact.runProvenance).length > 0) return artifact.runProvenance;
+	if (artifact.runProvenance && Object.keys(artifact.runProvenance).length > 0)
+		return artifact.runProvenance;
 	const candidate = attempts.find(
 		(attempt) => attempt.runProvenance && Object.keys(attempt.runProvenance).length > 0,
 	);

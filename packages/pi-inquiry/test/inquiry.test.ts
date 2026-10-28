@@ -18,7 +18,7 @@ import {
 	validateArtifactRecord,
 	type WorkspaceRun,
 	workspaceLayout,
-} from "../src";
+} from "../src/index.js";
 
 // Legacy SQLite fixtures spawn a child Node process on Windows. Native process
 // startup and file I/O can exceed Vitest's 5 s default on hosted runners even

@@ -1,4 +1,8 @@
-import { cleanupCandidates, validateArtifactLineage, validateFindingReferences } from "./lineage";
+import {
+	cleanupCandidates,
+	validateArtifactLineage,
+	validateFindingReferences,
+} from "./lineage.js";
 import {
 	type ArtifactProvenance,
 	type ArtifactRecord,
@@ -11,9 +15,9 @@ import {
 	INQUIRY_SCHEMA_VERSION,
 	LEGACY_INQUIRY_SCHEMA_VERSION,
 	type QuestionRecord,
-} from "./models";
-import { artifactProvenance } from "./provenance";
-import type { InquiryStorage } from "./storage";
+} from "./models.js";
+import { artifactProvenance } from "./provenance.js";
+import type { InquiryStorage } from "./storage.js";
 import {
 	type CleanupDryRun,
 	cleanupDryRun,
@@ -24,7 +28,7 @@ import {
 	type WorkspacePromotionPlan,
 	type WorkspacePromotionResult,
 	type WorkspaceRun,
-} from "./workspace";
+} from "./workspace.js";
 
 /** Domain service used by hosts; all side effects are behind injected storage/files ports. */
 export class InquiryService {
@@ -44,7 +48,9 @@ export class InquiryService {
 	}
 
 	setRerunHandler(
-		handler: (provenance: ArtifactProvenance) => Promise<{ readonly jobId: string } | ArtifactRecord>,
+		handler: (
+			provenance: ArtifactProvenance,
+		) => Promise<{ readonly jobId: string } | ArtifactRecord>,
 	): void {
 		this.rerunHandler = handler;
 	}
@@ -74,7 +80,8 @@ export class InquiryService {
 			...(existing?.reviews ? { reviews: existing.reviews } : {}),
 			...(pending.length ? { status: "pending-review", pendingReviewDecisionIds: pending } : {}),
 			...(!pending.length &&
-			(existing?.status === "pending-review" || parents.some((item) => item.status === "pending-review"))
+			(existing?.status === "pending-review" ||
+				parents.some((item) => item.status === "pending-review"))
 				? { status: "pending-review" }
 				: {}),
 		});
@@ -124,7 +131,9 @@ export class InquiryService {
 			? {
 					...record,
 					...existing,
-					affectedArtifactIds: [...new Set([...existing.affectedArtifactIds, ...record.affectedArtifactIds])],
+					affectedArtifactIds: [
+						...new Set([...existing.affectedArtifactIds, ...record.affectedArtifactIds]),
+					],
 				}
 			: record;
 		await this.storage.decisions.put(next);
@@ -134,7 +143,9 @@ export class InquiryService {
 	async listDecisions(projectId = this.storage.projectId): Promise<readonly DecisionRecord[]> {
 		if (projectId !== this.storage.projectId)
 			throw new Error("Decision project does not match inquiry project");
-		return [...(await this.storage.decisions.list())].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+		return [...(await this.storage.decisions.list())].sort((a, b) =>
+			b.createdAt.localeCompare(a.createdAt),
+		);
 	}
 
 	/**
@@ -142,7 +153,11 @@ export class InquiryService {
 	 * compute, Zotero, task, or other external adapter. Affected artifacts and
 	 * every descendant in the immutable parentIds graph become pending review.
 	 */
-	async revokeDecision(id: string, reason: string, now = new Date().toISOString()): Promise<DecisionRecord> {
+	async revokeDecision(
+		id: string,
+		reason: string,
+		now = new Date().toISOString(),
+	): Promise<DecisionRecord> {
 		const decision = await this.storage.decisions.get(id);
 		if (!decision) throw new Error(`Decision not found: ${id}`);
 		if (decision.status === "revoked") return decision;
@@ -175,26 +190,38 @@ export class InquiryService {
 		while (changed) {
 			changed = false;
 			for (const artifact of snapshot.artifacts) {
-				if (!affected.has(artifact.id) && artifact.parentIds.some((parentId) => affected.has(parentId))) {
+				if (
+					!affected.has(artifact.id) &&
+					artifact.parentIds.some((parentId) => affected.has(parentId))
+				) {
 					affected.add(artifact.id);
 					changed = true;
 				}
 			}
 		}
 		for (const artifact of snapshot.artifacts) {
-			if (!affected.has(artifact.id) || artifact.reviews?.some((review) => review.decisionId === decision.id))
+			if (
+				!affected.has(artifact.id) ||
+				artifact.reviews?.some((review) => review.decisionId === decision.id)
+			)
 				continue;
 			await this.storage.artifacts.put({
 				...artifact,
 				status: "pending-review",
-				pendingReviewDecisionIds: [...new Set([...(artifact.pendingReviewDecisionIds ?? []), decision.id])],
+				pendingReviewDecisionIds: [
+					...new Set([...(artifact.pendingReviewDecisionIds ?? []), decision.id]),
+				],
 				updatedAt: decision.revokedAt ?? new Date().toISOString(),
 			});
 		}
 	}
 
 	/** Explicit human acknowledgement; each independent revocation must be reviewed. */
-	async confirmDecision(id: string, reason: string, now = new Date().toISOString()): Promise<DecisionRecord> {
+	async confirmDecision(
+		id: string,
+		reason: string,
+		now = new Date().toISOString(),
+	): Promise<DecisionRecord> {
 		const decision = await this.storage.decisions.get(id);
 		if (decision?.status !== "revoked") throw new Error("Only revoked decisions can be reviewed");
 		if (!reason.trim()) throw new Error("A human review reason is required");
@@ -234,7 +261,11 @@ export class InquiryService {
 		readonly run: WorkspaceRun;
 	}): Promise<WorkspacePromotionPlan> {
 		const snapshot = await this.storage.snapshot();
-		return planWorkspacePromotion({ layout: input.layout, run: input.run, artifacts: snapshot.artifacts });
+		return planWorkspacePromotion({
+			layout: input.layout,
+			run: input.run,
+			artifacts: snapshot.artifacts,
+		});
 	}
 
 	async promote(input: {
@@ -254,7 +285,9 @@ export class InquiryService {
 			typeof artifactId !== "string" ||
 			!artifactId.trim() ||
 			artifactId.length > 512 ||
-			[...artifactId].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)
+			[...artifactId].some(
+				(character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+			)
 		)
 			return undefined;
 		return artifactProvenance(await this.storage.snapshot(), artifactId);
@@ -263,7 +296,8 @@ export class InquiryService {
 	async rerunArtifact(artifactId: string): Promise<ArtifactRerunResult> {
 		const provenance = await this.artifactProvenance(artifactId);
 		if (!provenance) throw new Error(`Artifact not found: ${artifactId}`);
-		if (provenance.reproducibility !== "reproducible") throw new Error("Artifact is not reproducible");
+		if (provenance.reproducibility !== "reproducible")
+			throw new Error("Artifact is not reproducible");
 		if (!this.rerunHandler) throw new Error("Artifact rerun is unavailable");
 		const existing = [...(await this.storage.reruns.list())]
 			.filter((item) => item.sourceArtifactId === provenance.artifact.id)
