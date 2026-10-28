@@ -125,6 +125,8 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 
 `session.tools(null)` 是 read，逐次读取实际 SDK 的工具配置，只返回 `[{name,readOnlyHint:boolean|null}]`；缺少 hint 时为 null，工具名称不产生权限。无当前真实会话时拒绝；这个异步能力不模拟同步 `pi.getAllTools()`，也不要求模型网络声明。
 
+`session.records.read(null)` 的 mode 只来自真实 SDK：persistent 与 memory 分开，lazy persistent 仍可能 deferred，memory 是明确未落盘的 live-only。checkpoint 恢复不得从 executionConsent/roots/proof 等 JSON 取得当前 owner/source/session 授权；storage 展示扩展应由插件自己的 view/decoder 实现，不能向宿主添加领域状态字段或用 UI 状态授予权限。
+
 managed native 新增 input、tool_call、turn_start、turn_end，复用 eventEffects（除 session_start 外默认 write）与真实 caller/权限/取消。input 的 transform/handled 和工具参数就地变更由实际 SDK 按注册顺序传递。turn_end 暂只支持 null、空对象、continue 布尔结果；返回 entries 或就地修改 event.entries 均明确拒绝，不能绕过 source-owned session.records 追加其他来源检查点。完整 owned boundary draft broker、任务一次授权和自动续作仍须单独实现，不得用 continue 布尔或恢复的 JSON proof 代替授权。宿主对应真实 SDK 与受限进程证据见 Drone `docs/pluginization/native-plugin-chain-events-evidence.md`。
 
 commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpoint，保存新 namespace 并真实持久化回读；原记录保留。hash 仅用于并发核对，不是授权/provenance token；已有 own-source checkpoint 后 inspect 不再暴露旧值。deferred/needs-reopen 不能称导入完成。迁移器必须按具体旧数据格式与真实 scope 验证，导入的 approved、roots、proof 等 JSON 不能变成 live 文件/模型/执行许可或科学验收 proof，必须重新获取当前真实授权与 opaque 执行回执。Core 目标支持 0.1.9/0.2.0 的旧全局检查点并在 0.3.0 前移除此临时声明，Knowledge 支持 0.2.0/0.2.1 并在 0.4.0 前移除；具体生产迁移器仍须单独验收，不能用通用端口 fixture 代替。
