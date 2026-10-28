@@ -1,7 +1,7 @@
 {
 	"version": 1,
 	"generator": "packages/pi-core/scripts/build.mjs",
-	"inputsSha256": "3ab71fe06308dba2d8fa171a70ac9093d9e159e0c823b4f0b45969dd188c36f8",
+	"inputsSha256": "489053f0c7493adce381b9b5f093d03f1eb28787e8de157d211987a2559a57a2",
 	"outputs": {
 		"dist/contracts.d.ts": "4977ed343b53826c3be9ff1ea5e064585043c017753ae917eebba189bab2b4cf",
 		"dist/drone-commands.d.ts": "35a67f4528292a38d5de6ec7321e5668dfbecbc9001a7d72132412346998828f",
