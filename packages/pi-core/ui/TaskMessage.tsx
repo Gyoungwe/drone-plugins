@@ -1,5 +1,6 @@
 import type { ChatMessageProps } from "@gyoungwe/plugin-api/ui";
 import { useSessionMessages } from "./api";
+import { TaskStorageNotice } from "./components/TaskStorageNotice";
 import { TaskDecisionCard } from "./components/TaskDecisionCard";
 import { tasksForDecision } from "./presentation";
 
@@ -22,6 +23,7 @@ export function TaskMessageContent({
 	if (latest?.id !== message.id) return ordinaryText ? renderDefault() : null;
 	return (
 		<>
+			<TaskStorageNotice view={view} />
 			{tasksForDecision(view).map((task) => (
 				<TaskDecisionCard
 					key={task.id}

@@ -1,6 +1,10 @@
 import { useLanguage } from "./api";
 
 const zh = {
+ "storage.unknown": "这条历史记录没有存储回执，无法确认已保存。",
+ "storage.memory": "仅保留在当前内存会话，未保存到磁盘；重新加载后需要重新授权。",
+ "storage.deferred": "检查点尚未落盘，外部写入暂不可用。",
+ "storage.failed": "会话存储失败，显示最近确认的记录；请从磁盘重新打开。",
 	"taskRow.running": "任务仍在执行；完成进度会随结果更新，无需重复发起。",
 	"taskRow.unconfirmed":
 		"还有几项没确认完成；这是较早的记录，先核对一下已有结果，别重复生成。",
@@ -24,6 +28,10 @@ const zh = {
 	empty: "此会话还没有任务记录。",
 };
 const en: Record<keyof typeof zh, string> = {
+ "storage.unknown": "This historical record has no storage receipt; saved state is unconfirmed.",
+ "storage.memory": "Live-only in this memory session, not saved to disk; reload requires fresh authorization.",
+ "storage.deferred": "The checkpoint is not on disk yet; external writes are unavailable.",
+ "storage.failed": "Session storage failed. Showing the last confirmed state; reopen from disk.",
 	"taskRow.running":
 		"The task is still running; acceptance progress updates as results come in — no need to start it again.",
 	"taskRow.unconfirmed":

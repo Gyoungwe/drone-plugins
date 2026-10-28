@@ -1,9 +1,9 @@
 import type { TaskView, WorkbenchTask } from "@gyoungwe/plugin-api/ui";
 import { useState } from "react";
 import { sessions, useLanguage } from "../api";
+import { storageTaskReason } from "../storage";
 import { useTaskText } from "../copy";
 import {
-	explainTaskReason,
 	taskActionArguments,
 	taskDeliveryPresentation,
 } from "../presentation";
@@ -53,7 +53,7 @@ export function TaskRow({
 	const pct = task.milestones.length
 		? Math.round((done / task.milestones.length) * 100)
 		: 0;
-	const reason = explainTaskReason(task.reason, language);
+	const reason = storageTaskReason(view, task.reason, language);
 	const presentation = taskDeliveryPresentation(task, agentActive, language);
 	const pendingReview = task.actions.some(
 		(action) => action.kind === "review" && action.state === "pending",
