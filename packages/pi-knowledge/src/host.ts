@@ -7,3 +7,6 @@ export * from "./maintenance/run.js";
 export { createKnowledgeInterface, configureKnowledgeExtensionHost, registerKnowledgeInterface, registerWikiReviewAcceptance } from "./extension/internal-knowledge-extension.js";
 
 export { createNativeExtension, createNativeSession } from "./extension/knowledge-extension.js";
+
+/** Temporary 0.3 pure adapter export for published 1.x callers; no host algorithm fallback. */
+export { runKnowledgeSpecialist as runCanonicalKnowledgeSpecialist } from "./core/specialist-model-loop.js";
