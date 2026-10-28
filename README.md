@@ -14,6 +14,8 @@ Drone 的独立插件 workspace。它承载可独立安装、升级、禁用和�
 | `@gyoungwe/desktop-ui-pack` | 研究状态面板 | 公开 0.2.0 仍含历史知识 UI；0.3.0 候选把知识贡献迁给 pi-knowledge，未发布 |
 | `@gyoungwe/research-suite` | 聚合包 | 公开 0.1.11；未发布 0.2.0 候选组合 core 0.1.9 / knowledge 0.3.0 / research 0.2.0 |
 
+2026-10-29 原生架构候选新增 `pi-inquiry@0.1.0`：原 SQLite 领域代码保留 Git 历史，同包标准 Pi 入口、受管理 runtime 与可选 UI 共用原格式 SQL/WASM owner。根构建和完整检查已登记该包；当前来源与实际 SDK/UI 范围见 [Inquiry 候选记录](docs/inquiry-sqlite-migration-candidate.md)。它尚未发布，宿主旧 Inquiry 投影/rerun 路径及正式安装包验收仍未完成。
+
 ## 开发门槛
 
 ```sh
