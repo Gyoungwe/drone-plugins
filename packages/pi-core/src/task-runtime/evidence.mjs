@@ -23,25 +23,30 @@ function createEvidenceRecovery({ authorize, files, persist = () => {
     async capture(event, cwd, binding) {
       if (!taskId || typeof event.input?.path !== "string" || records.some((r) => r.id === event.toolCallId))
         return;
+      let file;
       try {
-        const file = await files.inspect(cwd, event.input.path);
-        const offset = Math.max(1, Math.floor(event.input.offset || event.input.start_line || 1));
-        const limit = Math.min(120, Math.max(1, Math.floor(event.input.limit || 120)));
-        records.push({
-          id: clean(event.toolCallId, 100),
-          path: file.path,
-          sha256: file.sha256,
-          ...file.rootKind ? { rootKind: file.rootKind } : {},
-          ...file.absolutePath ? { absolutePath: file.absolutePath } : {},
-          offset,
-          limit,
-          binding,
-          evicted: false
-        });
-        records = records.slice(-8);
-        save();
-      } catch {
+        file = await files.inspect(cwd, event.input.path);
+      } catch (error) {
+        // A successful tool read without a stable file cannot produce a recovery
+        // receipt. Preserve that tool result, and diagnose only this optional capture.
+        console.warn("Task evidence capture unavailable:", error.code || "file-unavailable");
+        return;
       }
+      const offset = Math.max(1, Math.floor(event.input.offset || event.input.start_line || 1));
+      const limit = Math.min(120, Math.max(1, Math.floor(event.input.limit || 120)));
+      records.push({
+        id: clean(event.toolCallId, 100),
+        path: file.path,
+        sha256: file.sha256,
+        ...file.rootKind ? { rootKind: file.rootKind } : {},
+        ...file.absolutePath ? { absolutePath: file.absolutePath } : {},
+        offset,
+        limit,
+        binding,
+        evicted: false
+      });
+      records = records.slice(-8);
+      save();
     },
     evict(ids) {
       if (!Array.isArray(ids)) return;
