@@ -1,4 +1,5 @@
 import { useAgentActive, useSessionMessages, useSessionsStore } from "./api";
+import { TaskStorageNotice } from "./components/TaskStorageNotice";
 import { TaskRow } from "./components/TaskRow";
 import { useTaskText } from "./copy";
 import { taskNeedsUser } from "./presentation";
@@ -22,6 +23,7 @@ export function TaskPanelContent() {
 	return (
 		<section className="min-h-0 overflow-auto p-3" data-testid="task-panel">
 			<h3 className="text-[13px] font-medium text-ink">{t("panelTitle")}</h3>
+			{view && <TaskStorageNotice view={view} />}
 			{attention > 0 && (
 				<p className="mt-1 text-[12px] text-warn">
 					{t("attention", { count: attention })}

@@ -93,9 +93,9 @@ export const TASK_REASON_TEXT: Record<string, string> = {
 	"task-authorization-required":
 		"计划已经准备好，等你点头。确认一次，后面就自动做完，不再反复打扰。",
 	"automatic-recovery":
-		"刚才中断了一下，已经从上次保存的地方接着做，不用你操作。",
+		"刚才中断后已重新读取记录；后续操作按当前授权处理。",
 	"automatic-stage-checkpoint": "进展已保存，正在接着做下一部分。",
-	"automatic-handoff": "这一步已保存，按你之前的授权接着做剩下的，不用再确认。",
+	"automatic-handoff": "这一步的进展已保存，后续执行按当前授权范围处理。",
 	"total-budget":
 		"这个任务的步数已经用完，做出来的结果都保留着。想继续做，请重新描述需求开一个新任务。",
 	"stage-budget": "最近一段没有做出新进展，先停下来保留结果，避免空转。",
@@ -114,7 +114,7 @@ export const TASK_REASON_TEXT: Record<string, string> = {
 	"wiki-rejected-or-stale":
 		"Wiki 修改没有通过审阅（或者来源内容变了），这一项还不算完成。",
 	"verified-stage-checkpoint": "有一项交付已经确认完成，接着做下一项。",
-	"session-restored": "会话已恢复，从上次保存的进度接着来。",
+	"session-restored": "已从磁盘读取先前任务记录；后续执行需要当前会话授权。",
 	"legacy-checkpoint-unreviewed":
 		"这是从旧版本带过来的任务记录，之前做了什么还没核对过。",
 	"user-cancelled": "你已取消这个任务。",
@@ -124,11 +124,11 @@ const TASK_REASON_TEXT_EN: Record<string, string> = {
 	"task-authorization-required":
 		"The plan is ready for your approval. One approval covers the agreed work.",
 	"automatic-recovery":
-		"The saved checkpoint was restored; work is continuing without another approval.",
+		"The saved checkpoint was read again; further actions use current authorization.",
 	"automatic-stage-checkpoint":
 		"Progress was saved and the next part is continuing.",
 	"automatic-handoff":
-		"This step was saved; the remaining work continues under the existing authorization.",
+		"This step was saved; further work uses the current authorization scope.",
 	"total-budget":
 		"The task reached its call limit. Existing results are retained; start a new task to continue.",
 	"stage-budget":
@@ -149,7 +149,7 @@ const TASK_REASON_TEXT_EN: Record<string, string> = {
 		"The Wiki update was rejected or its sources changed; this item is not accepted.",
 	"verified-stage-checkpoint":
 		"One deliverable was checked; work continues with the next item.",
-	"session-restored": "The session resumed from its saved checkpoint.",
+	"session-restored": "The saved task record was restored; further execution needs current-session authorization.",
 	"legacy-checkpoint-unreviewed":
 		"This older checkpoint has not been reconciled yet.",
 	"user-cancelled": "You cancelled this task.",

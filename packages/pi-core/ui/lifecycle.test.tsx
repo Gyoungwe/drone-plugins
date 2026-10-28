@@ -168,3 +168,35 @@ it("renders an incompatible diagnostic without invoking a missing host hook", ()
 		window.DroneUI.hooks.useSessionMessages = hook;
 	}
 });
+
+it.each(["zh","en"] as const)("shows live-only memory and pending disk receipts in both task surfaces (%s)",language=>{
+ uiFixture.language=language;
+ const memory={...latest,taskView:{...taskView,storage:{mode:"memory",state:"deferred"}}};
+ uiFixture.messages=[memory];
+ let rendered=render(<TaskMessage {...props(memory)} />);
+ expect(screen.getByRole("status").textContent).toContain(language==="zh"?"未保存到磁盘":"not saved to disk");
+ rendered.unmount();
+ rendered=render(<TaskPanel />);
+ expect(screen.getByRole("status").textContent).toContain(language==="zh"?"重新授权":"fresh authorization");
+ rendered.unmount();
+ const pending={...latest,taskView:{...taskView,storage:{mode:"persistent",state:"deferred"}}};
+ uiFixture.messages=[pending];
+ rendered=render(<TaskMessage {...props(pending)} />);
+ expect(screen.getByRole("status").textContent).toContain(language==="zh"?"外部写入暂不可用":"external writes are unavailable");
+ rendered.unmount();
+ const durable={...latest,taskView:{...taskView,storage:{mode:"persistent",state:"durable"}}};
+ uiFixture.messages=[durable];
+ render(<TaskPanel />);
+ expect(screen.queryByRole("status")).toBeNull();
+});
+
+it("shows historical unknown and needs-reopen without a saved receipt claim",()=>{
+ uiFixture.messages=[latest];
+ let rendered=render(<TaskMessage {...props()} />);
+ expect(screen.getByRole("status").textContent).toContain("无法确认已保存");
+ rendered.unmount();
+ const failed={...latest,taskView:{...taskView,storage:{mode:"persistent",state:"needs-reopen"}}};
+ uiFixture.messages=[failed];
+ render(<TaskPanel />);
+ expect(screen.getByRole("status").textContent).toContain("请从磁盘重新打开");
+});
