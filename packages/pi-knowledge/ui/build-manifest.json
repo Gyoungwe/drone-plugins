@@ -10,12 +10,12 @@
     "ui/NativeKnowledgeReading.tsx": "7b47d1958837f0001b26759d5bc31756e18709350c31b3bd9e02aa534c66871b",
     "ui/NativeKnowledgeReviews.tsx": "70956f7995fbe3c0b1264d342bba1d21a14449623fd1698a4720d7696c7a5f1d",
     "ui/NativeKnowledgeSemanticSettings.tsx": "9370131ffced4753ccd4a280f45259dfb0445d143063da395c05d8b2fb48569d",
-    "ui/api.ts": "5cc5ec14a7aafd7135cb7ef96265c74288d1b28ca0ac690aa6e4eedb18117a8f",
+    "ui/api.ts": "0faf3aca31b621e71f4352b411d8962f1d9a0af0c3cfe23c1c06547c0dd7b7b0",
     "ui/entry.tsx": "0ffcfeb30af636916e23a7256b450e8ae4dbadd416fe0b5a323ae701b9636209",
     "ui/knowledge/DailyIdeas.tsx": "c19632cca5b203482c9f30342036c46901204f191f41f38f1d37df23a2d8795c",
     "ui/knowledge/InstitutionalAccessSection.tsx": "b404d86b3c602fb45855c546bfbba8fb5b219db32d1e129734b524de7ae20cef",
     "ui/knowledge/KnowledgeCloudSection.tsx": "f243a8009e2dea2f681fcf23f6de5b18d291b5de7cad491b76ab82b81fd1f672",
-    "ui/knowledge/KnowledgeFlowCard.tsx": "6681197aff4e5190cbfbbca59e8b3d7543faec101d89c63bbcf10b00db0c17ef",
+    "ui/knowledge/KnowledgeFlowCard.tsx": "7b27463cc011e9dfbbbb45a9f44514c10c9b6879a4d813629896659ea296c956",
     "ui/knowledge/KnowledgeGraph.tsx": "8ebd1d9d10ab9f2d26891e7481dc8b8e8cca85eab01b5010f15b978ab45e7a00",
     "ui/knowledge/KnowledgeGraphView.tsx": "a3922b06e2da5228157c399ab54bfa0125cba79431e42f6e4754cb7e83b7b70d",
     "ui/knowledge/KnowledgeHome.tsx": "7751a33a359890d10f7bee9fab0dc3ac12b8271e30940337a99e544a6aee08be",
@@ -42,7 +42,7 @@
     "ui/knowledge/ZoteroLocalWriteSection.tsx": "f386f2c67b781a6a326c433d05daf642992c77df000ef10f044e336a7e5e084b",
     "ui/knowledge/ZoteroPanel.tsx": "c907036221edc1370e5fb10a7b2f1928eb1aa0934cb8cd2fd61d5911103b45fd",
     "ui/knowledge/ZoteroWebApiSection.tsx": "6c6b1241a3661c55d9227af6a8349a71ed7d0395685e274549b4c04efa292fdc",
-    "ui/knowledge/artifacts.ts": "13f9702358b37794cc4c93af5e526fb753cf758290e98701a3372330f590ea34",
+    "ui/knowledge/artifacts.ts": "3e789d3fa95b92c1e5aa852ce10612d138aa4ef9b5a6f6589bffe555a61ad4a9",
     "ui/knowledge/copy.ts": "33b013757971a783da677862cbd9df6e39060971af6dc7e25221ed3147e845f1",
     "ui/knowledge/graph-layout.ts": "50a8eb55b8de8809accad14592b605a79ae56494af83fccc123701221f5963ad",
     "ui/knowledge/graph-model.ts": "b3328c27ec09597f93b4d3699a1b36e2ed8ceab6a63f154e219737b50624a311",
@@ -61,7 +61,7 @@
     "ui/styles/utilities.css": "2002c87dd3d05601d0c91c97afc7d11e0fecec5a3ddc1cdef9279842eb1cefd0"
   },
   "outputs": {
-    "ui/styles/generated.ts": "dc95990487f72d53b9a217f185467e6df76ec919a0ef10c909bf59e7f74b81dd",
-    "ui/bundle.js": "b457ce61c111b668458edef3ba73483c23c763954beb9c74d02b3d95950b99e7"
+    "ui/styles/generated.ts": "9547098a14a94dc985133d71cb63836791bd4ce0bf6bc27e61eab9d69f3fe979",
+    "ui/bundle.js": "5e3e8427d2d120656437212dd977706f7403c2d0ba92cc39f1351147aa9e1672"
   }
 }
