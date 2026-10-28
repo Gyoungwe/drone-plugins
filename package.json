@@ -40,7 +40,7 @@
     "@earendil-works/pi-coding-agent": "1.1.0",
     "@gyoungwe/pi-core": "0.2.0",
     "@gyoungwe/pi-research": "0.3.2",
-    "@gyoungwe/plugin-api": "file:vendor/gyoungwe-plugin-api-1.3.0-2c4e3ecd.tgz",
+    "@gyoungwe/plugin-api": "file:vendor/gyoungwe-plugin-api-1.3.0-e41cf906.tgz",
     "@tailwindcss/cli": "^4.3.3",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
