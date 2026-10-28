@@ -300,10 +300,15 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			try {
 				const service = await getKnowledgeService(binding);
 				const project = await currentProject(ctx.cwd, ctx);
-				return await Promise.race([
-					service.probeTopic({ query: prompt, project }),
-					new Promise((resolveProbe) => setTimeout(() => resolveProbe(null), 600)),
-				]);
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				try {
+					return await Promise.race([
+						service.probeTopic({ query: prompt, project }),
+						new Promise((resolveProbe) => { timer = setTimeout(() => resolveProbe(null), 600); }),
+					]);
+				} finally {
+					clearTimeout(timer);
+				}
 			} catch {
 				return null;
 			}
