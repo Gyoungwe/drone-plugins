@@ -131,6 +131,11 @@ if (!check) {
 	});
 	await build({
 		...buildOptions,
+		entryPoints: [join(packageRoot, "src/managed-runtime.ts")],
+		outfile: join(distRoot, "managed-runtime.mjs"),
+	});
+	await build({
+		...buildOptions,
 		entryPoints: [join(packageRoot, "src/memory.ts")],
 		outfile: join(distRoot, "memory.mjs"),
 	});
