@@ -15,3 +15,5 @@
 插件 source typecheck、76 文件 446 测试通过。严格策略异步测试先完成真实 index reconcile，再断言 unread Wiki 拒绝，避免冷索引 coverage 先失败掩盖该测试的目标；没有放宽拒绝强度。
 
 未完成项：真实 managed eviction 后的 reread 闭环、child scope、全树/未打开历史、task privileged provider 组合、explainer archive、旧 host 领域算法删除与正式安装包 GUI。当前文本不宣称这些已完成。
+
+最终冻结：source `512043e`（前置 read effects `331a19f`、timer 修复 `bb26228`），official build `05cf187`；最终 knowledge tar SHA256 `850513debaed231e52263497407fc85618d33e6efb4eca214af9e71d9d06bec4`，同 API `79b5d34ad78355129beb52a09dc63fa445d9ddb82bb1f3d05ccd6ce056eed9aa`。最终相同 tar 的完整 publication、migration、共享 owner shutdown 三项实际 SDK 通过，日志 `/tmp/knowledge-adoption-frozen-packed.log`。这替代上一段临时 `6ec6…` 包作为本批最终回执；上一条仍是 timer RED→GREEN 的历史事实。
