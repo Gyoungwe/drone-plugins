@@ -5,7 +5,6 @@ import { useT } from "../api";
 import { useKnowledgeStore } from "../api";
 import { isDraftSessionId, useSessionsStore } from "../api";
 import { useSettingsStore } from "../api";
-import { selectTranscript, useTranscriptStore } from "../api";
 import { useUiStore } from "../api";
 import { ChevronDownIcon, ObsidianIcon } from "../api";
 import { Button } from "../api";
@@ -34,13 +33,7 @@ export function KnowledgeFlowCard({ sessionId }: { sessionId: string | null }) {
 		appT = useT(),
 		cwd = useSessionsStore((s) => s.cwd);
 	const flow = useKnowledgeStore((s) => (sessionId ? s.flows[sessionId] : undefined));
-	const transcript = useTranscriptStore((s) => selectTranscript(s, sessionId));
-	const latest = [...transcript.messages].reverse().find((m) => m.kind === "assistant" && m.taskView);
-	const artifacts = mergeKnowledgeArtifacts(
-		flow?.cards || [],
-		latest?.kind === "assistant" ? latest.taskView?.tasks || [] : [],
-		cwd || "",
-	);
+	const artifacts = mergeKnowledgeArtifacts(flow?.cards || [], cwd || "");
 	const [open, setOpen] = useState(false),
 		[path, setPath] = useState<string | null>(null),
 		[resuming, setResuming] = useState(false);
@@ -61,39 +54,7 @@ export function KnowledgeFlowCard({ sessionId }: { sessionId: string | null }) {
 		};
 	}, [sessionId, cwd]);
 	if (!sessionId) return null;
-	// Flow events are transient; persisted observed task artifacts must survive a reload.
-	if (!flow)
-		return artifacts.length ? (
-			<section
-				className="mx-3 my-0.5 rounded-lg border border-border bg-surface px-2 py-1 text-xs"
-				data-testid="knowledge-flow-card"
-			>
-				<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-					<p className="text-xs font-medium text-ink-dim">
-						{t("outputs")} {artifacts.length}
-					</p>
-					{artifacts.map(
-						(item) =>
-							item.path && (
-								<button
-									key={item.key}
-									type="button"
-									className="block max-w-full truncate text-left text-xs underline underline-offset-2"
-									onClick={() =>
-										useUiStore.getState().openResourcePreview({
-											href: item.path || "",
-											label: item.title,
-											cwd: cwd || undefined,
-										})
-									}
-								>
-									{item.title}
-								</button>
-							),
-					)}
-				</div>
-			</section>
-		) : null;
+	if (!flow) return null;
 	const records = [...flow.navigation, ...flow.reads];
 	const activeSpecialist = flow.specialists?.find(
 		(agent) => agent.status === "running" || agent.status === "queued",
