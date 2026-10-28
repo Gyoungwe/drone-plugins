@@ -22,6 +22,10 @@ import type {
 	KnowledgeReviewHistoryResult,
 	KnowledgeUndoReviewInput,
 	KnowledgeUndoReviewResult,
+	KnowledgeModelReviewInput,
+	KnowledgeModelReviewResult,
+	KnowledgeModelReviewInfoInput,
+	KnowledgeModelReviewInfo,
 } from "../src/desktop/contract.js";
 
 export interface KnowledgeRuntimeState {
@@ -149,12 +153,15 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 			throw new Error("Knowledge observation was superseded");
 		return result;
 	}
-	async function mutate<T>(operation: string, input: object): Promise<T> {
+	async function mutate<T>(operation: string, input: object, signal?: AbortSignal): Promise<T> {
 		if (!connected) throw new Error("Knowledge caller is disconnected");
 		const binding = state.overview?.binding;
 		if (!binding) throw new Error("Knowledge writing requires a bound Vault");
 		const owner = generation;
-		const result = (await client.invoke(operation, { ...input, revision: binding.revision })) as T;
+		const request = { ...input, revision: binding.revision };
+		const result = (await (signal
+			? client.invoke(operation, request, signal)
+			: client.invoke(operation, request))) as T;
 		// A successful write invalidates reads before its receipt arrives. Retain that
 		// receipt for this caller, while rejecting a replaced caller or binding.
 		if (
@@ -233,8 +240,10 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 		setView: (view: KnowledgeRuntimeState["view"]) => update({ view, selectedNote: null }),
 		readNote: (input: Omit<KnowledgeReadNoteInput, "revision">) =>
 			read<KnowledgeReadNoteResult>("readNote", input),
-		links: (input: Omit<KnowledgeLinksInput, "revision">) => read<KnowledgeLinksResult>("links", input),
-		graph: (input: Omit<KnowledgeGraphInput, "revision">) => read<KnowledgeGraphResult>("graph", input),
+		links: (input: Omit<KnowledgeLinksInput, "revision">) =>
+			read<KnowledgeLinksResult>("links", input),
+		graph: (input: Omit<KnowledgeGraphInput, "revision">) =>
+			read<KnowledgeGraphResult>("graph", input),
 		jobs: (input: Omit<KnowledgeJobsInput, "revision">) => read<KnowledgeJobsResult>("jobs", input),
 		reviews: (input: Omit<KnowledgeReviewsInput, "revision">) =>
 			read<KnowledgeReviewsResult>("reviews", input),
@@ -245,6 +254,10 @@ export function createKnowledgeRuntimeStore(client: PluginUiRuntimeClient) {
 		applyReview: (input: Omit<KnowledgeApplyReviewInput, "revision">) =>
 			mutate<KnowledgeApplyReviewResult>("applyReview", input),
 		reviewHistory: () => read<KnowledgeReviewHistoryResult>("reviewHistory", {}),
+		modelReviewInfo: (input: Omit<KnowledgeModelReviewInfoInput, "revision">) =>
+			read<KnowledgeModelReviewInfo>("modelReviewInfo", input),
+		modelReview: (input: Omit<KnowledgeModelReviewInput, "revision">, signal: AbortSignal) =>
+			mutate<KnowledgeModelReviewResult>("modelReview", input, signal),
 		undoReview: (input: Omit<KnowledgeUndoReviewInput, "revision">) =>
 			mutate<KnowledgeUndoReviewResult>("undoReview", input),
 		recentByCategory: () => read<KnowledgeRecentByCategoryResult>("recentByCategory", { limit: 8 }),

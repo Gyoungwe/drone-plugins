@@ -19,6 +19,16 @@ import { createStoredKnowledgeReviewPolicy } from "../core/review-policy.js";
 import { createBrokerReviewPolicyStorage } from "./state-policy.js";
 import { createBrokerSemanticSettings } from "./semantic-settings.js";
 import { createResourceServiceTransportFactory } from "./service-transport.js";
+import { createKnowledgeModelReview } from "../core/wiki-model-review.js";
+import { createKnowledgeModelReviewModel } from "./model-review.js";
+import {
+	modelReviewInputSchema,
+	modelReviewResultSchema,
+	modelReviewInfoInputSchema,
+	modelReviewInfoResultSchema,
+	type KnowledgeModelReviewInput,
+	type KnowledgeModelReviewInfoInput,
+} from "./contract.js";
 import { createKnowledgeReviewModel } from "./reviews.js";
 import { createKnowledgeWikiReview } from "../core/wiki-review.js";
 import { createBrokerWikiReviewPorts } from "./review-storage.js";
@@ -78,7 +88,10 @@ async function projectFor(
 	workspace: string | null,
 ): Promise<string | null> {
 	if (workspace === null) return null;
-	const { handle } = (await capabilities.call("roots.resolve", { path: workspace, kind: "files" })) as {
+	const { handle } = (await capabilities.call("roots.resolve", {
+		path: workspace,
+		kind: "files",
+	})) as {
 		handle: string;
 	};
 	let text: string;
@@ -104,7 +117,8 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 		throw new Error("Knowledge runtime requires exactly one authorized application-state root");
 	const state = states[0].handle;
 	const fileRoots = context.resources.filter((resource) => resource.kind === "files");
-	if (fileRoots.length > 1) throw new Error("Knowledge runtime requires at most one selected file root");
+	if (fileRoots.length > 1)
+		throw new Error("Knowledge runtime requires at most one selected file root");
 	if (!context.resourcesLifecycle)
 		throw new Error("Knowledge services require the host resource shutdown barrier");
 	async function readKnowledgeBinding(): Promise<KnowledgeBinding | null> {
@@ -129,7 +143,11 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 		createBrokerReviewPolicyStorage(context.capabilities, state),
 		() => false,
 	);
-	const transports = createResourceServiceTransportFactory(context, state, context.resourcesLifecycle);
+	const transports = createResourceServiceTransportFactory(
+		context,
+		state,
+		context.resourcesLifecycle,
+	);
 	const services = createKnowledgeServicePool(host, config, semantic, policy, transports);
 	const lifecycle = createKnowledgeOwnerLifecycle({
 		async dispose() {
@@ -139,14 +157,29 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 			await services.dispose();
 		},
 	});
+	const reviewIo = createBrokerWikiReviewPorts(context.capabilities, state);
 	const wiki = createKnowledgeWikiReview(
 		host,
 		config,
 		policy,
 		{ invalidateKnowledgeUi: () => context.events.changed() },
-		createBrokerWikiReviewPorts(context.capabilities, state),
+		reviewIo,
 	);
-	const owner = { config, services, wiki, ...lifecycle };
+	const modelReview = createKnowledgeModelReview(host, config, wiki, reviewIo, async () => {
+		const document = (await reviewIo.state.read("specialists.json"))?.value as
+			| { mode?: unknown }
+			| undefined;
+		if (document === undefined) return { mode: "automatic" };
+		if (!["automatic", "manual", "off"].includes(document.mode as string))
+			throw new Error("Invalid knowledge specialist settings");
+		return document;
+	});
+	const owner = { config, services, wiki, modelReview, ...lifecycle };
+	const modelReviews = createKnowledgeModelReviewModel(
+		owner,
+		states[0].access === "read-write",
+		fileRoots[0]?.access === "read-write",
+	);
 	const reads = createKnowledgeReadModel(owner);
 	const reviews = createKnowledgeReviewModel(
 		owner,
@@ -166,6 +199,37 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	);
 	return {
 		operations: {
+			modelReviewInfo: {
+				inputSchema: modelReviewInfoInputSchema,
+				resultSchema: modelReviewInfoResultSchema,
+				effect: "read",
+				execute: async (input, call) =>
+					modelReviews.info(
+						input as KnowledgeModelReviewInfoInput,
+						await projectFor(
+							call.capabilities,
+							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
+						),
+						call,
+					),
+			},
+			modelReview: {
+				inputSchema: modelReviewInputSchema,
+				resultSchema: modelReviewResultSchema,
+				effect: "write",
+				execute: async (input, call) => {
+					const result = await modelReviews.review(
+						input as KnowledgeModelReviewInput,
+						await projectFor(
+							call.capabilities,
+							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
+						),
+						call,
+					);
+					context.events.changed();
+					return result;
+				},
+			},
 			reviewHistory: {
 				inputSchema: reviewHistoryInputSchema,
 				resultSchema: reviewHistoryResultSchema,
@@ -374,7 +438,9 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 			},
 		},
 		createNativeSession: () =>
-			createDesktopKnowledgeNativeSession(owner, (native) => projectFor(context.capabilities, native.cwd)),
+			createDesktopKnowledgeNativeSession(owner, (native) =>
+				projectFor(context.capabilities, native.cwd),
+			),
 		dispose: () => owner.dispose(),
 	};
 };

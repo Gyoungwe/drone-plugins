@@ -17,7 +17,7 @@ import type {
 } from "./contract.js";
 
 type Wiki = ReturnType<typeof createKnowledgeWikiReview>;
-type ReviewService = {
+export type ReviewService = {
 	binding: KnowledgeBinding;
 	request(operation: string, input?: object): Promise<unknown>;
 };
@@ -25,7 +25,7 @@ export interface KnowledgeReviewOwner extends KnowledgeReadOwner {
 	wiki: Wiki;
 }
 /** UI and native callers use the same owner-owned review rules; UI never mints evidence tickets. */
-export function createKnowledgeReviewModel(
+export function createKnowledgeReviewContext(
 	owner: KnowledgeReviewOwner,
 	canWriteState: boolean,
 	canWriteFiles: boolean,
@@ -55,8 +55,20 @@ export function createKnowledgeReviewModel(
 		if (!canWriteState) throw new Error("Application-state write permission is required");
 		if (files && !canWriteFiles) throw new Error("Configured Vault write permission is required");
 	}
+	return { bound, requireWrite };
+}
+
+export function createKnowledgeReviewModel(
+	owner: KnowledgeReviewOwner,
+	canWriteState: boolean,
+	canWriteFiles: boolean,
+) {
+	const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
 	return {
-		async reviews(input: KnowledgeReviewsInput, project: string | null): Promise<KnowledgeReviewsResult> {
+		async reviews(
+			input: KnowledgeReviewsInput,
+			project: string | null,
+		): Promise<KnowledgeReviewsResult> {
 			if (project === null) {
 				return owner.run(async () => {
 					const binding = await owner.config.readKnowledgeBinding({ fresh: true });
@@ -166,7 +178,10 @@ export function createKnowledgeReviewModel(
 				items: await owner.wiki.wikiHistory(service, project),
 			}));
 		},
-		undoReview(input: KnowledgeUndoReviewInput, project: string | null): Promise<KnowledgeUndoReviewResult> {
+		undoReview(
+			input: KnowledgeUndoReviewInput,
+			project: string | null,
+		): Promise<KnowledgeUndoReviewResult> {
 			requireWrite(true);
 			return bound(input.revision, project, (service) =>
 				owner.wiki.undoWikiUpdate(service, project, input.id, input.expectedHash),

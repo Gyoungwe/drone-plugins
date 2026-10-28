@@ -104,7 +104,7 @@ packages/<name>/
 | `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
 | `hosts` | `native-pi`、`drone-desktop` 的非空子集；只写 `drone-desktop` 时必须在 README 说明原因 |
 | `requires.hostCapabilities` | 依赖的宿主能力，由 `negotiateCapabilities` 协商；缺失时插件必须返回 `degraded` 或 `incompatible`，不能抛错 |
-| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`、`application-state`、`application-state-write`）、`network`（主机名列表）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
+| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`、`application-state`、`application-state-write`）、`network`（主机名列表或已配置服务边界 `configured-services`）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
 
 `application-state` 只声明宿主明确指定的插件状态目录及已登记的本机资源协调目录，不能推导出整个 HOME 的权限。0.3 knowledge 候选把既有配置/SQLite 状态和 `~/.drone/runtime-leases/knowledge-writers` 的本机同用户租约列入此范围；host/broker 必须另行验证具体 root 与操作。新增词表不代表旧宿主已经支持或自动授予该能力，尚未接通时只能保留候选/未验收状态。
 
@@ -212,3 +212,6 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 - [ ] `plugins.lock.json` 已更新；干净 checkout、不设 `DRONE_PLUGINS_DIR` 时，`npm ci → fetch:plugins → lint → typecheck → test → check:arch → build → check:extensions -- --strict` 全部通过
 - [x] 宿主独立性检查：源码扫描可选插件 import，并验证空插件安装根
 - [ ] 真机：功能可见可用；禁用插件后界面回到默认状态
+
+
+候选 API 1.3 的 `model.selection` / `model.generate` 仅对安装包实际 `permissions.network` 声明 `configured-services` 的 source 提供；不授权任意网络 URL。模型由真实会话/已有明确配置的模型偏好解析，不能回退 provider；每次 generate 都显示真实选择、输出预算、数据出口和可能费用，并单独取得批准。运行时不将思考、父对话或凭据交给插件；缺失用量/有效定价保持未知。该声明变化会撤销既有绑定，不能由 renderer 自报或旧授权暗中升级。

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
 	KnowledgeReviewsResult,
 	KnowledgePreviewReviewResult,
@@ -7,6 +7,7 @@ import type {
 import type { createKnowledgeRuntimeStore } from "./runtime-store";
 import { Button } from "./runtime-api";
 import { useNativeKnowledgeText } from "./native-copy";
+import { NativeKnowledgeModelReview } from "./NativeKnowledgeModelReview";
 import { WikiReviewContent } from "./knowledge/WikiReviewContent";
 
 type Store = ReturnType<typeof createKnowledgeRuntimeStore>;
@@ -18,16 +19,25 @@ function ReviewPreview({
 	selection,
 	onClose,
 	onDecision,
+	onModelBusy,
 }: {
 	store: Store;
 	selection: Selection;
 	onClose: () => void;
 	onDecision: (receipt?: KnowledgeApplyReviewResult) => void;
+	onModelBusy: (busy: boolean) => void;
 }) {
 	const t = useNativeKnowledgeText();
+	const handleModelBusy = useCallback(
+		(busy: boolean) => {
+			setAction(busy ? "model" : null);
+			onModelBusy(busy);
+		},
+		[onModelBusy],
+	);
 	const [preview, setPreview] = useState<KnowledgePreviewReviewResult | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [action, setAction] = useState<"apply" | "reject" | null>(null);
+	const [action, setAction] = useState<"apply" | "reject" | "model" | null>(null);
 	useEffect(() => {
 		let live = true;
 		setPreview(null);
@@ -123,6 +133,13 @@ function ReviewPreview({
 						}
 					/>
 					<p className="text-xs text-ink-dim">{t.reviewNotVerified}</p>
+					<NativeKnowledgeModelReview
+						store={store}
+						preview={preview}
+						disabled={(action !== null && action !== "model") || !preview.canApply}
+						onBusy={handleModelBusy}
+						onApplied={(result) => onDecision(result.writeResult)}
+					/>
 					<div className="flex gap-2">
 						<Button
 							size="sm"
@@ -149,6 +166,16 @@ export function NativeKnowledgeReviews({
 	observationRevision: number;
 }) {
 	const t = useNativeKnowledgeText();
+	const modelBusy = useRef(false);
+	const setModelBusy = useCallback((busy: boolean) => {
+		modelBusy.current = busy;
+	}, []);
+	const reviewContext = useRef<{
+		store: Store;
+		vaultId: string | undefined;
+		revision: number | undefined;
+		project: string | null | undefined;
+	} | null>(null);
 	const [offset, setOffset] = useState(0);
 	const [page, setPage] = useState<KnowledgeReviewsResult | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -159,7 +186,20 @@ export function NativeKnowledgeReviews({
 		let live = true;
 		setPage(null);
 		setError(null);
-		setSelection(null);
+		const overview = store.getSnapshot().overview;
+		const previous = reviewContext.current;
+		const sameContext =
+			previous?.store === store &&
+			previous.vaultId === overview?.binding?.vaultId &&
+			previous.revision === overview?.binding?.revision &&
+			previous.project === overview?.project;
+		reviewContext.current = {
+			store,
+			vaultId: overview?.binding?.vaultId,
+			revision: overview?.binding?.revision,
+			project: overview?.project,
+		};
+		if (!sameContext || !modelBusy.current) setSelection(null);
 		void store.reviews({ offset, limit: 12 }).then(
 			(value) => {
 				if (live) setPage(value);
@@ -221,7 +261,9 @@ export function NativeKnowledgeReviews({
 								</Button>
 								<p className="mt-1 break-all text-xs text-ink-dim">{item.path}</p>
 								{item.expired && <p className="text-xs text-warn">{t.reviewExpired}</p>}
-								{item.bindingChanged && <p className="text-xs text-warn">{t.reviewBindingChanged}</p>}
+								{item.bindingChanged && (
+									<p className="text-xs text-warn">{t.reviewBindingChanged}</p>
+								)}
 							</li>
 						))}
 					</ul>
@@ -229,7 +271,11 @@ export function NativeKnowledgeReviews({
 						<Button size="sm" disabled={offset === 0} onClick={() => setOffset(0)}>
 							{t.firstPage}
 						</Button>
-						<Button size="sm" disabled={page.nextOffset === null} onClick={() => setOffset(page.nextOffset!)}>
+						<Button
+							size="sm"
+							disabled={page.nextOffset === null}
+							onClick={() => setOffset(page.nextOffset!)}
+						>
 							{t.nextPage}
 						</Button>
 					</div>
@@ -241,6 +287,7 @@ export function NativeKnowledgeReviews({
 					store={store}
 					selection={selection}
 					onClose={() => setSelection(null)}
+					onModelBusy={setModelBusy}
 					onDecision={(receipt) => {
 						setReceiptError(
 							receipt && (!receipt.reviewRecorded || !receipt.indexed)

@@ -1,14 +1,15 @@
 {
   "artifactSource": "ui/src/index.ts",
   "inputs": {
-    "package.json": "651a63dc2c8340da1d1fbb851c52521b7ec9b1c547ef0bee60b71ad0d643c2ae",
+    "package.json": "907a5873cfd369928e93f708583c31b3cb1b3ca890f40b10a29b5761d9902b9b",
     "plugin.manifest.json": "5cb7621651c4fe64a86a4047a183059feaaf6b73319723ec37ae189da0e1fe2f",
     "scripts/build-ui.mjs": "28fc76e64c9189d077436720c98faefcade07ea4c5290471918ad310e0b5f3cb",
     "ui/NativeKnowledgeHistory.tsx": "a1cb6513280158e439bd2412021c0e418e10ae3f9cc8e974f1489fac475b1369",
+    "ui/NativeKnowledgeModelReview.tsx": "356fce757a8103216cfa848c1b8cfb723b06a3f59dce056aa19536ae4bb27fa0",
     "ui/NativeKnowledgePage.tsx": "e13b88cd496d4d65c753080655a83e452655881cb4622e5074760945b2b83c39",
     "ui/NativeKnowledgePreferences.tsx": "db80803b08eca1f105c845fa6984d7603adcd6c38d7b07bc27eaf5f2595230d9",
     "ui/NativeKnowledgeReading.tsx": "7b47d1958837f0001b26759d5bc31756e18709350c31b3bd9e02aa534c66871b",
-    "ui/NativeKnowledgeReviews.tsx": "70956f7995fbe3c0b1264d342bba1d21a14449623fd1698a4720d7696c7a5f1d",
+    "ui/NativeKnowledgeReviews.tsx": "c233596ed459f90117aca95f4848147da9739f7d912ad8d00ef617510aa32aa2",
     "ui/NativeKnowledgeSemanticSettings.tsx": "9370131ffced4753ccd4a280f45259dfb0445d143063da395c05d8b2fb48569d",
     "ui/api.ts": "5cc5ec14a7aafd7135cb7ef96265c74288d1b28ca0ac690aa6e4eedb18117a8f",
     "ui/entry.tsx": "0ffcfeb30af636916e23a7256b450e8ae4dbadd416fe0b5a323ae701b9636209",
@@ -52,16 +53,16 @@
     "ui/knowledge/nebula-model.ts": "44e63f088ffa3bad4fd9a93c238165b07853fc149448358f1ca9a2a60ec746b4",
     "ui/knowledge/note-display.ts": "22c6b1f6375acb7cd3269641b53f8182460e5c5c57cf5b2adfa8ed981ebf862a",
     "ui/knowledge/zotero-copy.ts": "26fcff152004dfcfefc6ca0fe3f9dec81cbd33affe4653a785527a94705786c7",
-    "ui/native-copy.ts": "5a1bb29ec87067b2825de0416d8985976502ad3f0ce2e2b30cdaafef5d3f7f6a",
+    "ui/native-copy.ts": "9771ecb3bd8db89c07f9a26802a67d4a2ece04b3332e644b9512e068c6b7dded",
     "ui/plugin.json": "f741e57bd2ba9fb6cdf8ab4bd3c49401724e617fe65e3dfbed18a92c2e58b168",
-    "ui/runtime-api.ts": "f7cd4ca798fbc617a0036a1c1e71448ed21f28e1bd3ce38771f595fe8493b69a",
-    "ui/runtime-store.ts": "3673d2cdf8d006131b6ed23e5d6c8ce4c1c1fdfd6acf6e58cc31b394af1484a2",
+    "ui/runtime-api.ts": "08b5d4ceaffdacabd55ab03ee118d55dce1f42eed83262a2974cc2152247435b",
+    "ui/runtime-store.ts": "89c1d7e30315ae701f1d7e3bae433c7b472a0c4614d1df35693cd5f9832c5e96",
     "ui/src/index.ts": "5e3d83468eb7c8473c9b7e2b2d16d265e6321886cad9933f234c0ab9b0eab8ee",
     "ui/styles/knowledge.css": "1178e545f62e9c12dfdfc05db6c0f634321fa3e25c52365c7ee14329f910ba7d",
     "ui/styles/utilities.css": "2002c87dd3d05601d0c91c97afc7d11e0fecec5a3ddc1cdef9279842eb1cefd0"
   },
   "outputs": {
     "ui/styles/generated.ts": "dc95990487f72d53b9a217f185467e6df76ec919a0ef10c909bf59e7f74b81dd",
-    "ui/bundle.js": "b457ce61c111b668458edef3ba73483c23c763954beb9c74d02b3d95950b99e7"
+    "ui/bundle.js": "988f9d3071ed1712def429b036c226f0610607afe3c5fe42881074502d92ac65"
   }
 }

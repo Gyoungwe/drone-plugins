@@ -665,17 +665,20 @@ export const semanticPreferencesInputSchema = { type: "null" };
 export const semanticPreferencesResultSchema = object({
 	binding: nullable(object({ vaultId: string, revision: bindingRevision, label: string })),
 	settings: nullable(
-		object({ ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string }, [
-			"enabled",
-			"provider",
-			"baseUrl",
-			"model",
-			"credentialEnv",
-			"remoteConsent",
-			"version",
-			"revision",
-			"updatedAt",
-		]),
+		object(
+			{ ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string },
+			[
+				"enabled",
+				"provider",
+				"baseUrl",
+				"model",
+				"credentialEnv",
+				"remoteConsent",
+				"version",
+				"revision",
+				"updatedAt",
+			],
+		),
 	),
 	canWriteState: boolean,
 	providerExecution: { const: "unavailable" },
@@ -692,7 +695,13 @@ export interface KnowledgeReviewHistoryInput {
 export interface KnowledgeReviewHistoryResult {
 	bindingRevision: number;
 	project: string;
-	items: { id: string; path: string; afterHash: string; reviewedAt: number; reviewMethod: string }[];
+	items: {
+		id: string;
+		path: string;
+		afterHash: string;
+		reviewedAt: number;
+		reviewMethod: string;
+	}[];
 }
 export interface KnowledgeUndoReviewInput {
 	revision: number;
@@ -723,3 +732,106 @@ export const undoReviewInputSchema = object({
 	expectedHash: proposalHash,
 });
 export const undoReviewResultSchema = object({ status: { const: "reverted" }, path: string });
+
+export interface KnowledgeModelReviewInput {
+	revision: number;
+	id: string;
+	expectedProposalHash: string;
+	acknowledged: true;
+	autoApply: boolean;
+	profile?: "knowledge-wiki-reviewer";
+}
+export interface KnowledgeModelReviewInfoInput {
+	revision: number;
+	id: string;
+	expectedProposalHash: string;
+	profile?: "knowledge-wiki-reviewer";
+}
+export type KnowledgeModelReviewResult =
+	import("../core/wiki-model-review-types.js").WikiModelReviewAudit;
+export interface KnowledgeModelReviewInfo {
+	selection: import("@gyoungwe/plugin-api/runtime").PluginModelSelection;
+	lastReview: KnowledgeModelReviewResult | null;
+}
+const modelReviewProfile = { const: "knowledge-wiki-reviewer" };
+export const modelReviewInputSchema = object(
+	{
+		revision: bindingRevision,
+		id: proposalId,
+		expectedProposalHash: proposalHash,
+		acknowledged: { const: true },
+		autoApply: boolean,
+		profile: modelReviewProfile,
+	},
+	["revision", "id", "expectedProposalHash", "acknowledged", "autoApply"],
+);
+export const modelReviewInfoInputSchema = object(
+	{
+		revision: bindingRevision,
+		id: proposalId,
+		expectedProposalHash: proposalHash,
+		profile: modelReviewProfile,
+	},
+	["revision", "id", "expectedProposalHash"],
+);
+const modelReviewUsageSchema = object({
+	inputTokens: nullable({ type: "number", minimum: 0 }),
+	outputTokens: nullable({ type: "number", minimum: 0 }),
+	cost: nullable({ type: "number", minimum: 0 }),
+});
+export const modelReviewResultSchema = {
+	type: "object",
+	properties: {
+		auditId: proposalId,
+		proposalId,
+		proposalHash,
+		path: string,
+		model: string,
+		startedAt: integer,
+		completedAt: integer,
+		verdict: { enum: ["approve", "needs-human", "reject"] },
+		summary: string,
+		cautions: array(string),
+		checks: { type: "object", additionalProperties: boolean },
+		source_paths: array(string),
+		canAutoApply: boolean,
+		autoApplyAuthorized: boolean,
+		applied: boolean,
+		humanReviewed: { const: false },
+		scientificallyVerified: { const: false },
+		usage: modelReviewUsageSchema,
+		partial: boolean,
+		applyError: string,
+		auditSaveError: string,
+		writeResult: { type: "object" },
+	},
+	required: [
+		"auditId",
+		"proposalId",
+		"proposalHash",
+		"path",
+		"model",
+		"startedAt",
+		"completedAt",
+		"verdict",
+		"summary",
+		"cautions",
+		"checks",
+		"source_paths",
+		"canAutoApply",
+		"autoApplyAuthorized",
+		"applied",
+		"humanReviewed",
+		"scientificallyVerified",
+		"usage",
+	],
+	additionalProperties: true,
+};
+export const modelReviewInfoResultSchema = object({
+	selection: object({ provider: string, model: string, thinkingLevel: string, profile: string }, [
+		"provider",
+		"model",
+		"thinkingLevel",
+	]),
+	lastReview: nullable(modelReviewResultSchema),
+});
