@@ -6,6 +6,7 @@ import type {
 import {
 	CanonicalSqliteInquiryStorage,
 	configureInquirySqlite,
+	readInquirySqliteMetadata,
 } from "./sqlite-storage.js";
 
 class WasmConnection implements InquirySqliteConnection {
@@ -81,11 +82,29 @@ export class WasmInquiryStorage extends CanonicalSqliteInquiryStorage {
 /** One initialized engine belongs to the caller's application owner; no process-global domain ledger. */
 export async function createInquiryWasmEngine(wasmBinary: Uint8Array): Promise<{
 	open(projectId: string, bytes?: Uint8Array): WasmInquiryStorage;
+	inspect(bytes: Uint8Array): {
+		projectId: string;
+		schemaVersion: number;
+		revision: number;
+	};
 }> {
 	const SQL: SqlJsStatic = await initSqlJs({
 		wasmBinary: new Uint8Array(wasmBinary).buffer,
 	});
 	return {
+		inspect(bytes) {
+			const connection = new WasmConnection(new SQL.Database(bytes));
+			try {
+				const meta = readInquirySqliteMetadata(connection);
+				return {
+					projectId: meta.project_id,
+					schemaVersion: meta.schema_version,
+					revision: meta.revision,
+				};
+			} finally {
+				connection.close();
+			}
+		},
 		open(projectId, bytes) {
 			if (!projectId.trim())
 				throw new Error("Inquiry projectId cannot be empty");

@@ -3,16 +3,17 @@ import {
 	validateFindingReferences,
 } from "./lineage.js";
 import {
-	INQUIRY_SCHEMA_VERSION,
-	LEGACY_INQUIRY_SCHEMA_VERSION,
 	type ArtifactRecord,
 	type ArtifactRerunRecord,
 	type AttemptRecord,
 	type DecisionRecord,
 	type FindingRecord,
+	INQUIRY_SCHEMA_VERSION,
 	type InquirySnapshot,
+	LEGACY_INQUIRY_SCHEMA_VERSION,
 	type QuestionRecord,
 } from "./models.js";
+import type { InquirySqliteConnection } from "./sqlite-connection.js";
 import type {
 	ArtifactLedger,
 	ArtifactRerunLedger,
@@ -24,7 +25,6 @@ import type {
 	PersistedLedgerRecord,
 	QuestionLedger,
 } from "./storage-contract.js";
-import type { InquirySqliteConnection } from "./sqlite-connection.js";
 
 /** Canonical SQL, schema migration and record validation; the internal connection owns no caller authority. */
 const SQLITE_TABLES = [
@@ -61,7 +61,9 @@ export function configureInquirySqlite(
 	database.exec("PRAGMA journal_mode = WAL");
 	database.exec("PRAGMA synchronous = FULL");
 }
-function readMeta(database: InquirySqliteConnection): SqliteMetaRow {
+export function readInquirySqliteMetadata(
+	database: InquirySqliteConnection,
+): SqliteMetaRow {
 	const rows = database
 		.prepare(
 			"SELECT project_id, schema_version, revision, updated_at FROM inquiry_meta",
@@ -69,6 +71,7 @@ function readMeta(database: InquirySqliteConnection): SqliteMetaRow {
 		.all() as readonly SqliteMetaRow[];
 	if (rows.length !== 1)
 		throw new Error("Inquiry SQLite metadata must contain exactly one project");
+	// biome-ignore lint/style/noNonNullAssertion: The preceding trust-boundary check requires exactly one metadata row.
 	const meta = rows[0]!;
 	if (
 		(meta.schema_version !== INQUIRY_SCHEMA_VERSION &&
@@ -101,7 +104,7 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 				.prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
 				.all() as readonly { name: string }[];
 			if (tables.some((table) => table.name === "inquiry_meta")) {
-				if (readMeta(database).project_id !== projectId)
+				if (readInquirySqliteMetadata(database).project_id !== projectId)
 					throw new Error("Inquiry SQLite ledger belongs to another project");
 			} else if (tables.length)
 				throw new Error("Unrecognized Inquiry SQLite schema");
@@ -150,7 +153,9 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 				updated_at TEXT NOT NULL
 			);
 		`);
-			let meta = tables.length ? readMeta(database) : undefined;
+			let meta = tables.length
+				? readInquirySqliteMetadata(database)
+				: undefined;
 			if (meta && meta.project_id !== projectId) {
 				throw new Error("Inquiry SQLite ledger belongs to another project");
 			}
@@ -175,7 +180,7 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 						.run(INQUIRY_SCHEMA_VERSION);
 					this.database.exec("DROP TABLE inquiry_meta_v1");
 					this.database.exec("COMMIT");
-					meta = readMeta(database);
+					meta = readInquirySqliteMetadata(database);
 				} catch (error) {
 					try {
 						this.database.exec("ROLLBACK");
@@ -238,7 +243,7 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 
 	private snapshotSync(): InquirySnapshot {
 		this.assertOpen();
-		const meta = readMeta(this.database);
+		const meta = readInquirySqliteMetadata(this.database);
 		if (
 			!meta ||
 			meta.project_id !== this.projectId ||

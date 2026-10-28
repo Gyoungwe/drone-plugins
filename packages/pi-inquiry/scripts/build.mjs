@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { build } from "esbuild";
+
 const require = createRequire(import.meta.url),
 	root = resolve(import.meta.dirname, ".."),
 	check = process.argv.includes("--check");
@@ -23,6 +24,7 @@ async function output(name, bytes) {
 for (const [entry, name] of [
 	["index", "host"],
 	["domain", "domain"],
+	["ledger-owner", "ledger-owner"],
 	["wasm-storage", "wasm-storage"],
 ]) {
 	const result = await build({

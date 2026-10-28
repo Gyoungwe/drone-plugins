@@ -21,3 +21,9 @@
 新增异常处理只用于连接初始化失败时真实关闭、SQL rollback 失败保留原错误、原文件临时写清理失败显式聚合；后续事务队列只让原错误留在调用者 promise，绝不吞掉失败并报告成功。缺失与不可信 SQLite 元数据仅在存储输入边界验证。
 
 仍未完成：独立 binary-state 生产端口、旧库备份/WAL/原路径 CAS、真实旧 writer 竞争、provider/native/UI 接线及旧宿主 seam 删除。超过 4 MiB 原库支持未覆盖；knowledge 索引 FTS5 资源不在本切片，仍不得宣称其 SQLite 例外已关闭。
+
+## 原库持久化 owner 候选（2026-10-28）
+
+`ledger-owner.ts` 复用同一 WASM canonical SQL，并将每个 application/workspace 的事务串行化。实际 host ports 是每次借用的当前 caller 权限，没有 process 全局账本。原库 SHA 命名备份以 expected-null 创建并回读；原 `ledger.sqlite` 的 staged SQL 通过 pending JSON(old/candidate SHA) → binary CAS → terminal JSON 记录提交。取消后不新写 metadata；新合法 caller 显式 reconcile，只有 previous/candidate 两种匹配可收口，其余保持 needs-recovery；恢复原库也在原路径走 pending/CAS/回读。WAL/SHM/journal 存在、外部 SHA 变化、混合 project/schema 均拒绝自动接管。
+
+新增 6 项 owner 回归，连同原 30 项共 36 项通过，TypeScript/build:check 通过，日志 `/tmp/inquiry-owner-final-check.log`。测试使用真实原 SQLite、真实内存 SQL、公共 Node binary IO 和临时目录；JSON metadata port 是测试的原子 Node fixture，**不是宿主 JsonStore/真实 SDK provider 的最终证据**。测试覆盖备份字节、提交/reopen、原路径精确恢复、被拒提交显式 not-committed、实际提交后撤销零新 metadata 与 fresh-caller committed、WAL 拒绝、外部变化和领域失败回滚。provider/native/UI/旧 seam 删除仍未完成，新包继续 private 未发布候选。

@@ -25,6 +25,10 @@
 		"./domain": {
 			"types": "./src/domain.ts",
 			"import": "./dist/domain.mjs"
+		},
+		"./ledger-owner": {
+			"types": "./src/ledger-owner.ts",
+			"import": "./dist/ledger-owner.mjs"
 		}
 	},
 	"scripts": {
@@ -35,7 +39,9 @@
 		"check:domain": "npm run typecheck && npm run build:check && npm test"
 	},
 	"dependencies": {
-		"sql.js": "1.15.2"
+		"sql.js": "1.15.2",
+		"typebox": "1.3.27",
+		"@gyoungwe/plugin-api": "^1.3.0"
 	},
 	"devDependencies": {
 		"@types/node": "^22.0.0",
