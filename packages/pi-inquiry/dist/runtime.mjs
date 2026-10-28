@@ -598,8 +598,8 @@ function IsSchema(value) {
 }
 
 // ../../node_modules/typebox/build/type/types/deferred.mjs
-function Deferred(action, parameters, options) {
-  return memory_exports.Create({ "~kind": "Deferred" }, { type: "deferred", action, parameters, options }, {});
+function Deferred(action, parameters2, options) {
+  return memory_exports.Create({ "~kind": "Deferred" }, { type: "deferred", action, parameters: parameters2, options }, {});
 }
 function IsDeferred(value) {
   return IsKind(value, "Deferred");
@@ -643,8 +643,8 @@ function ArrayOptions(type) {
 }
 
 // ../../node_modules/typebox/build/type/types/constructor.mjs
-function Constructor(parameters, instanceType, options = {}) {
-  return memory_exports.Create({ "~kind": "Constructor" }, { type: "constructor", parameters, instanceType }, options);
+function Constructor(parameters2, instanceType, options = {}) {
+  return memory_exports.Create({ "~kind": "Constructor" }, { type: "constructor", parameters: parameters2, instanceType }, options);
 }
 function IsConstructor2(value) {
   return IsKind(value, "Constructor");
@@ -654,8 +654,8 @@ function ConstructorOptions(type) {
 }
 
 // ../../node_modules/typebox/build/type/types/function.mjs
-function _Function_(parameters, returnType, options = {}) {
-  return memory_exports.Create({ ["~kind"]: "Function" }, { type: "function", parameters, returnType }, options);
+function _Function_(parameters2, returnType, options = {}) {
+  return memory_exports.Create({ ["~kind"]: "Function" }, { type: "function", parameters: parameters2, returnType }, options);
 }
 function IsFunction2(value) {
   return IsKind(value, "Function");
@@ -673,8 +673,8 @@ function IsRef(value) {
 }
 
 // ../../node_modules/typebox/build/type/types/generic.mjs
-function Generic(parameters, expression) {
-  return memory_exports.Create({ "~kind": "Generic" }, { type: "generic", parameters, expression });
+function Generic(parameters2, expression) {
+  return memory_exports.Create({ "~kind": "Generic" }, { type: "generic", parameters: parameters2, expression });
 }
 function IsGeneric(value) {
   return IsKind(value, "Generic");
@@ -1709,8 +1709,8 @@ function IsVoid(value) {
 }
 
 // ../../node_modules/typebox/build/type/script/mapping.mjs
-function IntrinsicOrCall(ref, parameters) {
-  return guard_exports.IsEqual(ref, "Array") ? _Array_(parameters[0]) : guard_exports.IsEqual(ref, "Capitalize") ? CapitalizeDeferred(parameters[0]) : guard_exports.IsEqual(ref, "ConstructorParameters") ? ConstructorParametersDeferred(parameters[0]) : guard_exports.IsEqual(ref, "Evaluate") ? EvaluateDeferred(parameters[0]) : guard_exports.IsEqual(ref, "Exclude") ? ExcludeDeferred(parameters[0], parameters[1]) : guard_exports.IsEqual(ref, "Extract") ? ExtractDeferred(parameters[0], parameters[1]) : guard_exports.IsEqual(ref, "Index") ? IndexDeferred(parameters[0], parameters[1]) : guard_exports.IsEqual(ref, "InstanceType") ? InstanceTypeDeferred(parameters[0]) : guard_exports.IsEqual(ref, "Lowercase") ? LowercaseDeferred(parameters[0]) : guard_exports.IsEqual(ref, "NonNullable") ? NonNullableDeferred(parameters[0]) : guard_exports.IsEqual(ref, "Omit") ? OmitDeferred(parameters[0], parameters[1]) : guard_exports.IsEqual(ref, "Parameters") ? ParametersDeferred(parameters[0]) : guard_exports.IsEqual(ref, "Partial") ? PartialDeferred(parameters[0]) : guard_exports.IsEqual(ref, "Pick") ? PickDeferred(parameters[0], parameters[1]) : guard_exports.IsEqual(ref, "Readonly") ? ReadonlyObjectDeferred(parameters[0]) : guard_exports.IsEqual(ref, "KeyOf") ? KeyOfDeferred(parameters[0]) : guard_exports.IsEqual(ref, "Record") ? RecordDeferred(parameters[0], parameters[1]) : guard_exports.IsEqual(ref, "Required") ? RequiredDeferred(parameters[0]) : guard_exports.IsEqual(ref, "ReturnType") ? ReturnTypeDeferred(parameters[0]) : guard_exports.IsEqual(ref, "Uncapitalize") ? UncapitalizeDeferred(parameters[0]) : guard_exports.IsEqual(ref, "Uppercase") ? UppercaseDeferred(parameters[0]) : CallConstruct(Ref(ref), parameters);
+function IntrinsicOrCall(ref, parameters2) {
+  return guard_exports.IsEqual(ref, "Array") ? _Array_(parameters2[0]) : guard_exports.IsEqual(ref, "Capitalize") ? CapitalizeDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "ConstructorParameters") ? ConstructorParametersDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "Evaluate") ? EvaluateDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "Exclude") ? ExcludeDeferred(parameters2[0], parameters2[1]) : guard_exports.IsEqual(ref, "Extract") ? ExtractDeferred(parameters2[0], parameters2[1]) : guard_exports.IsEqual(ref, "Index") ? IndexDeferred(parameters2[0], parameters2[1]) : guard_exports.IsEqual(ref, "InstanceType") ? InstanceTypeDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "Lowercase") ? LowercaseDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "NonNullable") ? NonNullableDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "Omit") ? OmitDeferred(parameters2[0], parameters2[1]) : guard_exports.IsEqual(ref, "Parameters") ? ParametersDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "Partial") ? PartialDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "Pick") ? PickDeferred(parameters2[0], parameters2[1]) : guard_exports.IsEqual(ref, "Readonly") ? ReadonlyObjectDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "KeyOf") ? KeyOfDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "Record") ? RecordDeferred(parameters2[0], parameters2[1]) : guard_exports.IsEqual(ref, "Required") ? RequiredDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "ReturnType") ? ReturnTypeDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "Uncapitalize") ? UncapitalizeDeferred(parameters2[0]) : guard_exports.IsEqual(ref, "Uppercase") ? UppercaseDeferred(parameters2[0]) : CallConstruct(Ref(ref), parameters2);
 }
 function Unreachable2() {
   throw Error("Unreachable");
@@ -2098,11 +2098,11 @@ function InterfaceDeclarationHeritageMapping(input) {
   return guard_exports.IsEqual(input.length, 2) ? input[1] : [];
 }
 function InterfaceDeclarationGenericMapping(input) {
-  const parameters = input[2];
+  const parameters2 = input[2];
   const heritage = input[3];
   const [properties, patternProperties] = input[4];
   const options = guard_exports.IsEqual(guard_exports.Keys(patternProperties).length, 0) ? {} : { patternProperties };
-  return { [input[1]]: Generic(parameters, InterfaceDeferred(heritage, properties, options)) };
+  return { [input[1]]: Generic(parameters2, InterfaceDeferred(heritage, properties, options)) };
 }
 function InterfaceDeclarationMapping(input) {
   const heritage = input[2];
@@ -2752,8 +2752,8 @@ function ExtendsReturnType(inferred, left, right) {
 }
 
 // ../../node_modules/typebox/build/type/extends/constructor.mjs
-function ExtendsConstructor(inferred, parameters, returnType, right) {
-  return IsAny(right) ? ExtendsTrue(inferred) : IsUnknown(right) ? ExtendsTrue(inferred) : IsConstructor2(right) ? Match3(ExtendsParameters(inferred, parameters, right["parameters"]), (inferred2) => ExtendsReturnType(inferred2, returnType, right["instanceType"]), () => ExtendsFalse()) : ExtendsFalse();
+function ExtendsConstructor(inferred, parameters2, returnType, right) {
+  return IsAny(right) ? ExtendsTrue(inferred) : IsUnknown(right) ? ExtendsTrue(inferred) : IsConstructor2(right) ? Match3(ExtendsParameters(inferred, parameters2, right["parameters"]), (inferred2) => ExtendsReturnType(inferred2, returnType, right["instanceType"]), () => ExtendsFalse()) : ExtendsFalse();
 }
 
 // ../../node_modules/typebox/build/type/extends/dependent.mjs
@@ -2768,8 +2768,8 @@ function ExtendsEnum(inferred, left, right) {
 }
 
 // ../../node_modules/typebox/build/type/extends/function.mjs
-function ExtendsFunction(inferred, parameters, returnType, right) {
-  return IsAny(right) ? ExtendsTrue(inferred) : IsUnknown(right) ? ExtendsTrue(inferred) : IsFunction2(right) ? Match3(ExtendsParameters(inferred, parameters, right["parameters"]), (inferred2) => ExtendsReturnType(inferred2, returnType, right["returnType"]), () => ExtendsFalse()) : ExtendsFalse();
+function ExtendsFunction(inferred, parameters2, returnType, right) {
+  return IsAny(right) ? ExtendsTrue(inferred) : IsUnknown(right) ? ExtendsTrue(inferred) : IsFunction2(right) ? Match3(ExtendsParameters(inferred, parameters2, right["parameters"]), (inferred2) => ExtendsReturnType(inferred2, returnType, right["returnType"]), () => ExtendsFalse()) : ExtendsFalse();
 }
 
 // ../../node_modules/typebox/build/type/extends/integer.mjs
@@ -3197,8 +3197,8 @@ function CollectDistributionNames(expression, result = []) {
     IsDeferred(expression) && guard_exports.IsEqual(expression.action, "Conditional") ? IsRef(expression.parameters[0]) ? CollectDistributionNames(expression.parameters[2], CollectDistributionNames(expression.parameters[3], [...result, expression.parameters[0]["$ref"]])) : CollectDistributionNames(expression.parameters[2], CollectDistributionNames(expression.parameters[3], result)) : IsDeferred(expression) && guard_exports.IsEqual(expression.action, "Mapped") ? IsDeferred(expression.parameters[1]) && guard_exports.IsEqual(expression.parameters[1].action, "KeyOf") && IsRef(expression.parameters[1].parameters[0]) ? [...result, expression.parameters[1].parameters[0]["$ref"]] : result : result
   );
 }
-function BuildDistributionArray(parameters, names) {
-  return parameters.reduce((result, left) => [...result, names.includes(left.name)], []);
+function BuildDistributionArray(parameters2, names) {
+  return parameters2.reduce((result, left) => [...result, names.includes(left.name)], []);
 }
 function ZipDistributionArray(arguments_, distributionArray, result = []) {
   return guard_exports.ShiftLeft(arguments_, (argumentLeft, argumentRight) => guard_exports.ShiftLeft(distributionArray, (booleanLeft, booleanRight) => ZipDistributionArray(argumentRight, booleanRight, [...result, [booleanLeft, argumentLeft]]), () => result), () => result);
@@ -3223,9 +3223,9 @@ function Distribute2(zipped) {
     return guard_exports.IsEqual(left[0], true) ? Cross(result, Expand(left[1])) : Cross(result, [left[1]]);
   }, [[]]);
 }
-function DistributeArguments(parameters, arguments_, expression) {
+function DistributeArguments(parameters2, arguments_, expression) {
   const distributionNames = CollectDistributionNames(expression);
-  const distributionArray = BuildDistributionArray(parameters, distributionNames);
+  const distributionArray = BuildDistributionArray(parameters2, distributionNames);
   const zippedArguments = ZipDistributionArray(arguments_, distributionArray);
   return IsDeferred(expression) && guard_exports.IsEqual(expression.action, "Conditional") ? Distribute2(zippedArguments) : IsDeferred(expression) && guard_exports.IsEqual(expression.action, "Mapped") ? Distribute2(zippedArguments) : [arguments_];
 }
@@ -3237,8 +3237,8 @@ function FromNotResolvable() {
 function FromNotGeneric() {
   return ["(not-generic)", Never()];
 }
-function FromGeneric(name2, parameters, expression) {
-  return [name2, Generic(parameters, expression)];
+function FromGeneric(name2, parameters2, expression) {
+  return [name2, Generic(parameters2, expression)];
 }
 function FromRef4(context, ref, arguments_) {
   return ref in context ? FromType6(context, ref, context[ref], arguments_) : FromNotResolvable();
@@ -3267,11 +3267,11 @@ function BindArguments(context, state, parameterLeft, parameterRight, arguments_
   const instantiatedEquals = InstantiateType(context, state, parameterLeft.equals);
   return guard_exports.ShiftLeft(arguments_, (left, right) => BindParameters(BindArgument(context, state, parameterLeft["name"], instantiatedExtends, left), state, parameterRight, right), () => BindParameters(BindArgument(context, state, parameterLeft["name"], instantiatedExtends, instantiatedEquals), state, parameterRight, []));
 }
-function BindParameters(context, state, parameters, arguments_) {
-  return guard_exports.ShiftLeft(parameters, (left, right) => BindArguments(context, state, left, right, arguments_), () => context);
+function BindParameters(context, state, parameters2, arguments_) {
+  return guard_exports.ShiftLeft(parameters2, (left, right) => BindArguments(context, state, left, right, arguments_), () => context);
 }
-function ResolveArgumentsContext(context, state, parameters, arguments_) {
-  return BindParameters(context, state, parameters, arguments_);
+function ResolveArgumentsContext(context, state, parameters2, arguments_) {
+  return BindParameters(context, state, parameters2, arguments_);
 }
 
 // ../../node_modules/typebox/build/type/engine/call/instantiate.mjs
@@ -3300,25 +3300,25 @@ function IsTailCall(state, name2) {
   const result = guard_exports.IsEqual(Peek(state), name2);
   return result;
 }
-function CallDispatch(context, state, target, parameters, expression, arguments_) {
+function CallDispatch(context, state, target, parameters2, expression, arguments_) {
   InstantiationIncrement();
   try {
-    const argumentsContext = ResolveArgumentsContext(context, state, parameters, arguments_);
+    const argumentsContext = ResolveArgumentsContext(context, state, parameters2, arguments_);
     const returnType = InstantiateType(argumentsContext, State([...state["callstack"], target["$ref"]], state["visited"]), expression);
     return InstantiateType(argumentsContext, State([], []), returnType);
   } finally {
     InstantiationDecrement();
   }
 }
-function CallDistributed(context, state, target, parameters, expression, distributedArguments) {
+function CallDistributed(context, state, target, parameters2, expression, distributedArguments) {
   return distributedArguments.reduce((result, arguments_) => {
-    const returnType = CallDispatch(context, state, target, parameters, expression, arguments_);
+    const returnType = CallDispatch(context, state, target, parameters2, expression, arguments_);
     return [...result, returnType];
   }, []);
 }
-function CallImmediate(context, state, target, parameters, expression, arguments_) {
-  const distributedArguments = DistributeArguments(parameters, arguments_, expression);
-  const returnTypes = CallDistributed(context, state, target, parameters, expression, distributedArguments);
+function CallImmediate(context, state, target, parameters2, expression, arguments_) {
+  const distributedArguments = DistributeArguments(parameters2, arguments_, expression);
+  const returnTypes = CallDistributed(context, state, target, parameters2, expression, distributedArguments);
   const result = guard_exports.IsEqual(returnTypes.length, 1) ? returnTypes[0] : EvaluateUnion(returnTypes);
   return result;
 }
@@ -3486,8 +3486,8 @@ function ConstructorParameters(type, options = {}) {
 
 // ../../node_modules/typebox/build/type/engine/constructor_parameters/instantiate.mjs
 function ConstructorParametersOperation(type) {
-  const parameters = IsConstructor2(type) ? type["parameters"] : [];
-  const instantiatedParameters = InstantiateElements({}, State([], []), parameters);
+  const parameters2 = IsConstructor2(type) ? type["parameters"] : [];
+  const instantiatedParameters = InstantiateElements({}, State([], []), parameters2);
   const result = Tuple(instantiatedParameters);
   return result;
 }
@@ -4092,8 +4092,8 @@ function Parameters(type, options = {}) {
 
 // ../../node_modules/typebox/build/type/engine/parameters/instantiate.mjs
 function ParametersOperation(type) {
-  const parameters = IsFunction2(type) ? type["parameters"] : [];
-  const instantiatedParameters = InstantiateElements({}, State([], []), parameters);
+  const parameters2 = IsFunction2(type) ? type["parameters"] : [];
+  const instantiatedParameters = InstantiateElements({}, State([], []), parameters2);
   const result = Tuple(instantiatedParameters);
   return result;
 }
@@ -4416,12 +4416,12 @@ function WithModifiers(type, instantiatedType) {
   const withImmutable = IsImmutable(type) ? AddImmutableAction(withReadonly, {}) : withReadonly;
   return withImmutable;
 }
-function InstantiateDeferred(context, state, action, parameters, options) {
+function InstantiateDeferred(context, state, action, parameters2, options) {
   return (
     // Modifiers
-    guard_exports.IsEqual(action, "AddImmutable") ? AddImmutableInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "RemoveImmutable") ? RemoveImmutableInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "AddReadonly") ? AddReadonlyInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "RemoveReadonly") ? RemoveReadonlyInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "AddOptional") ? AddOptionalInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "RemoveOptional") ? RemoveOptionalInstantiate(context, state, parameters[0], options) : (
+    guard_exports.IsEqual(action, "AddImmutable") ? AddImmutableInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "RemoveImmutable") ? RemoveImmutableInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "AddReadonly") ? AddReadonlyInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "RemoveReadonly") ? RemoveReadonlyInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "AddOptional") ? AddOptionalInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "RemoveOptional") ? RemoveOptionalInstantiate(context, state, parameters2[0], options) : (
       // Actions
-      guard_exports.IsEqual(action, "Capitalize") ? CapitalizeInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Conditional") ? ConditionalInstantiate(context, state, parameters[0], parameters[1], parameters[2], parameters[3], options) : guard_exports.IsEqual(action, "ConstructorParameters") ? ConstructorParametersInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Evaluate") ? EvaluateInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Exclude") ? ExcludeInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "Extract") ? ExtractInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "Index") ? IndexInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "InstanceType") ? InstanceTypeInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Interface") ? InterfaceInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "KeyOf") ? KeyOfInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Lowercase") ? LowercaseInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Mapped") ? MappedInstantiate(context, state, parameters[0], parameters[1], parameters[2], parameters[3], options) : guard_exports.IsEqual(action, "Module") ? ModuleInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "NonNullable") ? NonNullableInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Pick") ? PickInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "Parameters") ? ParametersInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Partial") ? PartialInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Omit") ? OmitInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "ReadonlyObject") ? ReadonlyObjectInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Record") ? RecordInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "Required") ? RequiredInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "ReturnType") ? ReturnTypeInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "TemplateLiteral") ? TemplateLiteralInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Uncapitalize") ? UncapitalizeInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Uppercase") ? UppercaseInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "With") ? WithInstantiate(context, state, parameters[0], parameters[1]) : Deferred(action, parameters, options)
+      guard_exports.IsEqual(action, "Capitalize") ? CapitalizeInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Conditional") ? ConditionalInstantiate(context, state, parameters2[0], parameters2[1], parameters2[2], parameters2[3], options) : guard_exports.IsEqual(action, "ConstructorParameters") ? ConstructorParametersInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Evaluate") ? EvaluateInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Exclude") ? ExcludeInstantiate(context, state, parameters2[0], parameters2[1], options) : guard_exports.IsEqual(action, "Extract") ? ExtractInstantiate(context, state, parameters2[0], parameters2[1], options) : guard_exports.IsEqual(action, "Index") ? IndexInstantiate(context, state, parameters2[0], parameters2[1], options) : guard_exports.IsEqual(action, "InstanceType") ? InstanceTypeInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Interface") ? InterfaceInstantiate(context, state, parameters2[0], parameters2[1], options) : guard_exports.IsEqual(action, "KeyOf") ? KeyOfInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Lowercase") ? LowercaseInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Mapped") ? MappedInstantiate(context, state, parameters2[0], parameters2[1], parameters2[2], parameters2[3], options) : guard_exports.IsEqual(action, "Module") ? ModuleInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "NonNullable") ? NonNullableInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Pick") ? PickInstantiate(context, state, parameters2[0], parameters2[1], options) : guard_exports.IsEqual(action, "Parameters") ? ParametersInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Partial") ? PartialInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Omit") ? OmitInstantiate(context, state, parameters2[0], parameters2[1], options) : guard_exports.IsEqual(action, "ReadonlyObject") ? ReadonlyObjectInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Record") ? RecordInstantiate(context, state, parameters2[0], parameters2[1], options) : guard_exports.IsEqual(action, "Required") ? RequiredInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "ReturnType") ? ReturnTypeInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "TemplateLiteral") ? TemplateLiteralInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Uncapitalize") ? UncapitalizeInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "Uppercase") ? UppercaseInstantiate(context, state, parameters2[0], options) : guard_exports.IsEqual(action, "With") ? WithInstantiate(context, state, parameters2[0], parameters2[1]) : Deferred(action, parameters2, options)
     )
   );
 }
@@ -4624,6 +4624,454 @@ __export(typebox_exports, {
   Void: () => Void,
   With: () => With2
 });
+
+// src/event-projection.ts
+var TERMINAL_COMPUTE_STATUSES = /* @__PURE__ */ new Set([
+  "succeeded",
+  "failed",
+  "cancelled",
+  "blocked",
+  "partial"
+]);
+var TERMINAL_TASK_STATUSES = /* @__PURE__ */ new Set([
+  "succeeded",
+  "failed",
+  "cancelled",
+  "blocked",
+  "partial",
+  "unknown"
+]);
+var SHA256 = /^[a-f0-9]{64}$/i;
+function asIso(value) {
+  if (typeof value === "number" && Number.isFinite(value))
+    return new Date(value).toISOString();
+  if (typeof value === "string" && Number.isFinite(Date.parse(value)))
+    return new Date(value).toISOString();
+  return (/* @__PURE__ */ new Date()).toISOString();
+}
+function outcomeFor(status, eventType) {
+  if (eventType === "error" || status === "failed") return "failed";
+  if (eventType === "collected" || status === "succeeded") return "succeeded";
+  if (eventType === "cancelled") return "blocked";
+  if (status === "cancelled" || status === "blocked") return "blocked";
+  return "unknown";
+}
+function nonEmpty(value) {
+  const normalized = value?.trim();
+  return normalized || void 0;
+}
+function summary(value) {
+  return nonEmpty(value);
+}
+var InquiryEventProjector = class {
+  constructor(storage, domain, canonicalProjectId) {
+    this.storage = storage;
+    this.domain = domain;
+    this.canonicalProjectId = canonicalProjectId;
+  }
+  /** Record a terminal/collection compute event. Non-terminal progress is ignored. */
+  async recordComputeEvent(event) {
+    if (event.type === "submitted") {
+      await this.recordDecision({
+        id: `compute-submit:${event.jobId}`,
+        kind: "compute-submit",
+        summary: `Submitted compute job ${event.jobId}`,
+        basis: [`job:${event.jobId}`, event.id],
+        at: event.at,
+        projectId: event.projectId
+      });
+    }
+    if (event.type !== "collected" && event.type !== "cancelled" && event.type !== "error" && !TERMINAL_COMPUTE_STATUSES.has(event.status ?? ""))
+      return;
+    this.assertProject(event.projectId);
+    const executionId = nonEmpty(event.runId) ?? event.jobId;
+    const eventAt = asIso(event.at);
+    const artifactIds = await this.recordArtifacts(
+      "run",
+      executionId,
+      event.artifacts ?? event.manifest?.entries,
+      eventAt,
+      event.status === "succeeded" || event.type === "collected" ? "deliverable" : "intermediate",
+      "remote",
+      event.runId ?? event.jobId,
+      event.sessionId,
+      event.turn,
+      event.runProvenance
+    );
+    const attempt = {
+      id: `compute:${executionId}`,
+      schemaVersion: 2,
+      projectId: this.storage.projectId,
+      hypothesisIds: [],
+      parameters: {
+        source: "compute",
+        jobId: event.jobId,
+        ...event.runId ? { runId: event.runId } : {},
+        eventType: event.type,
+        status: event.status ?? null,
+        ...event.hostId ? { hostId: event.hostId } : {},
+        ...event.parameters ?? {}
+      },
+      artifactIds,
+      ...summary(event.detail) ? { resultSummary: summary(event.detail) } : {},
+      outcome: outcomeFor(event.status, event.type),
+      enteredReport: false,
+      startedAt: asIso(event.startedAt ?? event.at),
+      finishedAt: eventAt,
+      ...event.codeFingerprint ? { codeFingerprint: event.codeFingerprint } : {},
+      ...event.sessionId ? { sessionId: event.sessionId } : {},
+      ...event.turn !== void 0 ? { turn: event.turn } : {},
+      ...event.runProvenance ? { runProvenance: event.runProvenance } : {}
+    };
+    await this.domain.recordAttempt(attempt);
+    await this.associateReceipts(
+      [`job:${event.jobId}`, `run:${executionId}`],
+      artifactIds
+    );
+  }
+  /** Record a terminal task/workflow event and its verified artifact metadata. */
+  async recordTaskTerminal(event) {
+    if (!TERMINAL_TASK_STATUSES.has(event.status)) return;
+    this.assertProject(event.projectId);
+    const executionId = nonEmpty(event.runId) ?? event.taskId;
+    const eventAt = asIso(event.at);
+    const artifactIds = await this.recordArtifacts(
+      "task",
+      executionId,
+      event.artifacts ?? event.manifest?.entries,
+      eventAt,
+      event.status === "succeeded" ? "deliverable" : "intermediate",
+      "local",
+      event.runId ?? event.taskId,
+      event.sessionId,
+      event.turn,
+      event.runProvenance
+    );
+    const attempt = {
+      id: `task:${executionId}`,
+      schemaVersion: 2,
+      projectId: this.storage.projectId,
+      hypothesisIds: [],
+      parameters: {
+        source: "task",
+        taskId: event.taskId,
+        ...event.runId ? { runId: event.runId } : {},
+        status: event.status,
+        ...event.parameters ?? {}
+      },
+      artifactIds,
+      ...summary(event.detail) ? { resultSummary: summary(event.detail) } : {},
+      outcome: outcomeFor(event.status),
+      enteredReport: false,
+      startedAt: asIso(event.startedAt ?? event.at),
+      finishedAt: eventAt,
+      ...event.codeFingerprint ? { codeFingerprint: event.codeFingerprint } : {},
+      ...event.sessionId ? { sessionId: event.sessionId } : {},
+      ...event.turn !== void 0 ? { turn: event.turn } : {},
+      ...event.runProvenance ? { runProvenance: event.runProvenance } : {}
+    };
+    await this.domain.recordAttempt(attempt);
+    await this.associateReceipts(
+      [`task:${event.taskId}`, `run:${executionId}`],
+      artifactIds
+    );
+  }
+  /** Record provenance for host-local bash/kernel work without retaining source or output contents. */
+  async recordLocalExecution(event) {
+    this.assertProject(event.projectId);
+    const finishedAt = asIso(event.finishedAt ?? event.startedAt);
+    const artifactIds = await this.recordArtifacts(
+      "run",
+      event.id,
+      event.artifacts,
+      finishedAt,
+      "deliverable",
+      "local",
+      event.id,
+      event.sessionId,
+      event.turn,
+      event.runProvenance
+    );
+    await this.domain.recordAttempt({
+      id: `local:${event.id}`,
+      schemaVersion: 2,
+      projectId: this.storage.projectId,
+      hypothesisIds: [],
+      codeFingerprint: event.codeFingerprint,
+      parameters: {
+        source: "local",
+        tool: event.toolName,
+        ...event.parameters
+      },
+      artifactIds,
+      outcome: event.outcome,
+      enteredReport: false,
+      startedAt: asIso(event.startedAt ?? event.finishedAt),
+      finishedAt,
+      ...event.sessionId ? { sessionId: event.sessionId } : {},
+      ...event.turn !== void 0 ? { turn: event.turn } : {},
+      runProvenance: event.runProvenance
+    });
+    await this.associateReceipts(
+      [`tool:${event.id}`, `run:${event.id}`],
+      artifactIds
+    );
+  }
+  async recordDecision(event) {
+    const eventProjectId = event.projectId ? this.canonicalProjectId(event.projectId) : void 0;
+    if (eventProjectId && eventProjectId !== this.storage.projectId)
+      throw new Error(
+        `Inquiry decision belongs to another project: ${event.projectId}`
+      );
+    const record = "schemaVersion" in event ? { ...event, projectId: this.storage.projectId } : {
+      id: event.id,
+      schemaVersion: 2,
+      projectId: this.storage.projectId,
+      kind: event.kind,
+      summary: event.summary,
+      basis: [...new Set(event.basis ?? [])],
+      affectedArtifactIds: [...new Set(event.affectedArtifactIds ?? [])],
+      status: "active",
+      createdAt: asIso(event.at)
+    };
+    const snapshot = await this.storage.snapshot();
+    const related = snapshot.artifacts.filter(
+      (item) => record.basis.some(
+        (basis) => basis === `${item.source.kind}:${item.source.id}` || basis === `run:${item.runId}`
+      )
+    );
+    await this.domain.recordDecision({
+      ...record,
+      affectedArtifactIds: [
+        .../* @__PURE__ */ new Set([
+          ...record.affectedArtifactIds,
+          ...related.map((item) => item.id)
+        ])
+      ]
+    });
+  }
+  async associateReceipts(basis, artifactIds) {
+    if (!artifactIds.length) return;
+    for (const decision of await this.domain.listDecisions()) {
+      if (decision.basis.some((item) => basis.includes(item)))
+        await this.domain.associateDecisionArtifacts(decision.id, artifactIds);
+    }
+  }
+  assertProject(projectId) {
+    if (projectId && this.canonicalProjectId(projectId) !== this.storage.projectId)
+      throw new Error(`Inquiry event belongs to another project: ${projectId}`);
+  }
+  async recordArtifacts(kind, executionId, entries, eventAt, defaultPurpose, defaultLocation, defaultRunId, sessionId, turn, runProvenance) {
+    if (!entries?.length) return [];
+    const artifactIds = [];
+    for (const entry of entries) {
+      const record = this.artifactRecord(
+        kind,
+        executionId,
+        entry,
+        eventAt,
+        defaultPurpose,
+        defaultLocation,
+        defaultRunId,
+        sessionId,
+        turn,
+        runProvenance
+      );
+      if (!record) continue;
+      await this.domain.recordArtifact(record);
+      artifactIds.push(record.id);
+    }
+    return artifactIds;
+  }
+  artifactRecord(kind, executionId, entry, eventAt, defaultPurpose, defaultLocation, defaultRunId, sessionId, turn, runProvenance) {
+    const bytes2 = entry.bytes ?? entry.size;
+    const sha256 = entry.sha256?.trim();
+    if (typeof entry.path !== "string" || !entry.path.trim() || !Number.isSafeInteger(bytes2) || bytes2 < 0 || !sha256 || !SHA256.test(sha256))
+      return void 0;
+    const id = nonEmpty(entry.id) ?? `${kind}:${executionId}:${entry.path.replaceAll("\\", "/")}:${sha256.toLowerCase()}`;
+    return {
+      id,
+      schemaVersion: 2,
+      projectId: this.storage.projectId,
+      location: entry.location ?? defaultLocation,
+      path: entry.path,
+      bytes: bytes2,
+      sha256,
+      source: {
+        kind: entry.sourceKind ?? kind,
+        id: nonEmpty(entry.sourceId) ?? executionId
+      },
+      purpose: entry.purpose ?? defaultPurpose,
+      status: entry.status ?? "valid",
+      parentIds: [...new Set(entry.parentIds ?? [])],
+      runId: nonEmpty(entry.runId) ?? defaultRunId,
+      ...sessionId ? { sessionId } : {},
+      ...turn !== void 0 ? { turn } : {},
+      ...runProvenance ? { runProvenance } : {},
+      createdAt: eventAt,
+      updatedAt: eventAt
+    };
+  }
+};
+
+// src/event-schema.ts
+var text = typebox_exports.String({ minLength: 1, maxLength: 4096 });
+var timestamp = typebox_exports.Union([typebox_exports.Number(), text]);
+var scalar = typebox_exports.Union([
+  typebox_exports.String({ maxLength: 8192 }),
+  typebox_exports.Number(),
+  typebox_exports.Boolean(),
+  typebox_exports.Null()
+]);
+var parameters = typebox_exports.Record(typebox_exports.String(), scalar);
+var provenance = typebox_exports.Object(
+  {
+    containerDigests: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 128 })),
+    workflow: typebox_exports.Optional(text),
+    modules: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 128 })),
+    commandSummary: typebox_exports.Optional(text),
+    environment: typebox_exports.Optional(
+      typebox_exports.Record(typebox_exports.String(), typebox_exports.String({ maxLength: 8192 }))
+    )
+  },
+  { additionalProperties: false }
+);
+var artifact = typebox_exports.Object(
+  {
+    id: typebox_exports.Optional(text),
+    path: text,
+    bytes: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
+    size: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
+    sha256: typebox_exports.Optional(typebox_exports.String({ pattern: "^[a-fA-F0-9]{64}$" })),
+    location: typebox_exports.Optional(
+      typebox_exports.Union([typebox_exports.Literal("local"), typebox_exports.Literal("remote")])
+    ),
+    purpose: typebox_exports.Optional(
+      typebox_exports.Union(
+        ["input", "draft", "intermediate", "deliverable", "evidence"].map(
+          (value) => typebox_exports.Literal(value)
+        )
+      )
+    ),
+    status: typebox_exports.Optional(
+      typebox_exports.Union(
+        [
+          "valid",
+          "superseded",
+          "cleanup-candidate",
+          "archived",
+          "pending-review"
+        ].map((value) => typebox_exports.Literal(value))
+      )
+    ),
+    parentIds: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 256 })),
+    runId: typebox_exports.Optional(text),
+    sourceKind: typebox_exports.Optional(
+      typebox_exports.Union(
+        ["task", "run", "input", "tool", "workflow", "manual"].map(
+          (value) => typebox_exports.Literal(value)
+        )
+      )
+    ),
+    sourceId: typebox_exports.Optional(text)
+  },
+  { additionalProperties: false }
+);
+var artifacts = typebox_exports.Array(artifact, { maxItems: 256 });
+var common = {
+  id: text,
+  projectId: typebox_exports.Optional(text),
+  sessionId: typebox_exports.Optional(text),
+  turn: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
+  codeFingerprint: typebox_exports.Optional(text),
+  parameters: typebox_exports.Optional(parameters),
+  runProvenance: typebox_exports.Optional(provenance),
+  artifacts: typebox_exports.Optional(artifacts)
+};
+var compute = typebox_exports.Object(
+  {
+    ...common,
+    jobId: text,
+    type: typebox_exports.Union(
+      [
+        "created",
+        "submitted",
+        "status",
+        "logs",
+        "collected",
+        "cancelled",
+        "error"
+      ].map((value) => typebox_exports.Literal(value))
+    ),
+    at: timestamp,
+    status: typebox_exports.Optional(text),
+    cursor: typebox_exports.Optional(text),
+    detail: typebox_exports.Optional(text),
+    runId: typebox_exports.Optional(text),
+    startedAt: typebox_exports.Optional(timestamp),
+    hostId: typebox_exports.Optional(text),
+    manifest: typebox_exports.Optional(
+      typebox_exports.Object(
+        { entries: typebox_exports.Optional(artifacts) },
+        { additionalProperties: false }
+      )
+    )
+  },
+  { additionalProperties: false }
+);
+var task = typebox_exports.Object(
+  {
+    ...common,
+    taskId: text,
+    runId: typebox_exports.Optional(text),
+    status: typebox_exports.Union(
+      ["succeeded", "failed", "cancelled", "blocked", "partial", "unknown"].map(
+        (value) => typebox_exports.Literal(value)
+      )
+    ),
+    at: typebox_exports.Optional(timestamp),
+    startedAt: typebox_exports.Optional(timestamp),
+    detail: typebox_exports.Optional(text),
+    manifest: typebox_exports.Optional(
+      typebox_exports.Object(
+        { entries: typebox_exports.Optional(artifacts) },
+        { additionalProperties: false }
+      )
+    )
+  },
+  { additionalProperties: false }
+);
+var local = typebox_exports.Object(
+  {
+    ...common,
+    toolName: text,
+    startedAt: typebox_exports.Optional(timestamp),
+    finishedAt: typebox_exports.Optional(timestamp),
+    codeFingerprint: text,
+    parameters,
+    runProvenance: provenance,
+    outcome: typebox_exports.Union(
+      ["running", "succeeded", "failed", "blocked", "unknown"].map(
+        (value) => typebox_exports.Literal(value)
+      )
+    )
+  },
+  { additionalProperties: false }
+);
+var assertedEventWriteSchema = typebox_exports.Union([
+  typebox_exports.Object(
+    { action: typebox_exports.Literal("recordComputeEvent"), event: compute },
+    { additionalProperties: false }
+  ),
+  typebox_exports.Object(
+    { action: typebox_exports.Literal("recordTaskTerminal"), event: task },
+    { additionalProperties: false }
+  ),
+  typebox_exports.Object(
+    { action: typebox_exports.Literal("recordLocalExecution"), event: local },
+    { additionalProperties: false }
+  )
+]);
 
 // src/ledger-owner.ts
 import { createHash } from "node:crypto";
@@ -7850,28 +8298,28 @@ var Delete2 = _Object_({
 var Edit = Union([Insert2, Update2, Delete2]);
 
 // src/lineage.ts
-var SHA256 = /^[a-f0-9]{64}$/i;
+var SHA2562 = /^[a-f0-9]{64}$/i;
 function isSafeArtifactPath(path) {
   if (!path || path.includes("\0") || path.startsWith("~")) return false;
   if (path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(path)) return false;
   const parts = path.replaceAll("\\", "/").split("/");
   return parts.every((part) => part.length > 0 && part !== "." && part !== "..");
 }
-function nonEmpty(value) {
+function nonEmpty2(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 function validateArtifactRecord(record) {
   const errors = [];
   if (record.schemaVersion !== 1 && record.schemaVersion !== 2)
     errors.push("unsupported schema version");
-  if (!nonEmpty(record.id)) errors.push("id is required");
-  if (!nonEmpty(record.projectId)) errors.push("projectId is required");
+  if (!nonEmpty2(record.id)) errors.push("id is required");
+  if (!nonEmpty2(record.projectId)) errors.push("projectId is required");
   if (!isSafeArtifactPath(record.path)) errors.push("path must be a safe project-relative path");
   if (record.location !== "local" && record.location !== "remote") errors.push("invalid location");
   if (!Number.isSafeInteger(record.bytes) || record.bytes < 0)
     errors.push("bytes must be a non-negative integer");
-  if (!SHA256.test(record.sha256)) errors.push("sha256 must be a 64-character hexadecimal digest");
-  if (!record.source || !nonEmpty(record.source.id)) errors.push("source id is required");
+  if (!SHA2562.test(record.sha256)) errors.push("sha256 must be a 64-character hexadecimal digest");
+  if (!record.source || !nonEmpty2(record.source.id)) errors.push("source id is required");
   if (!["task", "run", "input", "tool", "workflow", "manual"].includes(record.source?.kind))
     errors.push("invalid source kind");
   if (!["input", "draft", "intermediate", "deliverable", "evidence"].includes(record.purpose))
@@ -7882,14 +8330,14 @@ function validateArtifactRecord(record) {
     errors.push("invalid status");
   if (new Set(record.parentIds).size !== record.parentIds.length)
     errors.push("parentIds must be unique");
-  if (record.parentIds.some((id) => !nonEmpty(id))) errors.push("parentIds must be non-empty");
-  if (record.pendingReviewDecisionIds?.some((id) => !nonEmpty(id)) || record.pendingReviewDecisionIds && new Set(record.pendingReviewDecisionIds).size !== record.pendingReviewDecisionIds.length)
+  if (record.parentIds.some((id) => !nonEmpty2(id))) errors.push("parentIds must be non-empty");
+  if (record.pendingReviewDecisionIds?.some((id) => !nonEmpty2(id)) || record.pendingReviewDecisionIds && new Set(record.pendingReviewDecisionIds).size !== record.pendingReviewDecisionIds.length)
     errors.push("pendingReviewDecisionIds must be unique and non-empty");
   if (record.reviews?.some(
-    (review) => !nonEmpty(review.decisionId) || review.confirmedBy !== "user" || !nonEmpty(review.reason) || !validDate(review.confirmedAt)
+    (review) => !nonEmpty2(review.decisionId) || review.confirmedBy !== "user" || !nonEmpty2(review.reason) || !validDate(review.confirmedAt)
   ))
     errors.push("artifact reviews must be user confirmations with valid timestamps");
-  if (record.runId !== void 0 && !nonEmpty(record.runId)) errors.push("runId must be non-empty");
+  if (record.runId !== void 0 && !nonEmpty2(record.runId)) errors.push("runId must be non-empty");
   if (!validDate(record.createdAt) || !validDate(record.updatedAt))
     errors.push("timestamps must be ISO dates");
   return errors;
@@ -7897,9 +8345,9 @@ function validateArtifactRecord(record) {
 function validDate(value) {
   return typeof value === "string" && Number.isFinite(Date.parse(value));
 }
-function validateArtifactLineage(record, artifacts) {
+function validateArtifactLineage(record, artifacts2) {
   const errors = [...validateArtifactRecord(record)];
-  const byId = new Map(artifacts.map((item) => [item.id, item]));
+  const byId = new Map(artifacts2.map((item) => [item.id, item]));
   for (const parentId of record.parentIds) {
     const parent = byId.get(parentId);
     if (!parent) {
@@ -7936,28 +8384,28 @@ function cleanupCandidates(snapshot, options = {}) {
     for (const artifactId of finding.artifactIds) addReference(artifactId, `finding:${finding.id}`);
   for (const attempt of snapshot.attempts)
     for (const artifactId of attempt.artifactIds) addReference(artifactId, `attempt:${attempt.id}`);
-  for (const artifact of snapshot.artifacts)
-    for (const parentId of artifact.parentIds) addReference(parentId, `artifact:${artifact.id}`);
+  for (const artifact2 of snapshot.artifacts)
+    for (const parentId of artifact2.parentIds) addReference(parentId, `artifact:${artifact2.id}`);
   const staleBefore = options.staleBefore ? Date.parse(options.staleBefore) : Number.NaN;
-  return snapshot.artifacts.filter((artifact) => {
-    if (artifact.status === "archived") return false;
-    if ((references.get(artifact.id)?.length ?? 0) > 0) return false;
-    if (artifact.status === "cleanup-candidate") return true;
-    if (artifact.status === "superseded") return true;
-    return artifact.purpose === "draft" && Number.isFinite(staleBefore) && Date.parse(artifact.updatedAt) < staleBefore;
-  }).map((artifact) => ({
-    artifact,
-    reason: artifact.status === "superseded" ? "superseded" : artifact.status === "cleanup-candidate" ? "unreferenced" : "stale-draft",
-    referencedBy: [...references.get(artifact.id) ?? []].sort()
+  return snapshot.artifacts.filter((artifact2) => {
+    if (artifact2.status === "archived") return false;
+    if ((references.get(artifact2.id)?.length ?? 0) > 0) return false;
+    if (artifact2.status === "cleanup-candidate") return true;
+    if (artifact2.status === "superseded") return true;
+    return artifact2.purpose === "draft" && Number.isFinite(staleBefore) && Date.parse(artifact2.updatedAt) < staleBefore;
+  }).map((artifact2) => ({
+    artifact: artifact2,
+    reason: artifact2.status === "superseded" ? "superseded" : artifact2.status === "cleanup-candidate" ? "unreferenced" : "stale-draft",
+    referencedBy: [...references.get(artifact2.id) ?? []].sort()
   })).sort((a, b) => a.artifact.id.localeCompare(b.artifact.id));
 }
 function validateFindingReferences(finding, snapshot) {
   const errors = [];
-  const artifacts = new Map(snapshot.artifacts.map((artifact) => [artifact.id, artifact]));
+  const artifacts2 = new Map(snapshot.artifacts.map((artifact2) => [artifact2.id, artifact2]));
   for (const artifactId of finding.artifactIds) {
-    const artifact = artifacts.get(artifactId);
-    if (!artifact) errors.push(`missing artifact reference: ${artifactId}`);
-    else if (artifact.status === "archived")
+    const artifact2 = artifacts2.get(artifactId);
+    if (!artifact2) errors.push(`missing artifact reference: ${artifactId}`);
+    else if (artifact2.status === "archived")
       errors.push(`archived artifact cannot support finding: ${artifactId}`);
   }
   for (const hypothesisId of finding.hypothesisIds) {
@@ -7982,22 +8430,22 @@ function reproducibilityStatus(codeFingerprint, runProvenance) {
 
 // src/provenance.ts
 var MAX_PARENT_CHAIN = 20;
-function runProvenanceFor(artifact, attempts) {
-  if (artifact.runProvenance && Object.keys(artifact.runProvenance).length > 0)
-    return artifact.runProvenance;
+function runProvenanceFor(artifact2, attempts) {
+  if (artifact2.runProvenance && Object.keys(artifact2.runProvenance).length > 0)
+    return artifact2.runProvenance;
   const candidate = attempts.find(
     (attempt) => attempt.runProvenance && Object.keys(attempt.runProvenance).length > 0
   );
   return candidate?.runProvenance;
 }
 function artifactProvenance(snapshot, artifactId) {
-  const artifact = snapshot.artifacts.find((item) => item.id === artifactId);
-  if (!artifact) return void 0;
+  const artifact2 = snapshot.artifacts.find((item) => item.id === artifactId);
+  if (!artifact2) return void 0;
   const byId = new Map(snapshot.artifacts.map((item) => [item.id, item]));
-  const attempts = snapshot.attempts.filter((attempt) => attempt.artifactIds.includes(artifact.id));
+  const attempts = snapshot.attempts.filter((attempt) => attempt.artifactIds.includes(artifact2.id));
   const parentChain = [];
-  const queue = [...artifact.parentIds];
-  const visited = /* @__PURE__ */ new Set([artifact.id]);
+  const queue = [...artifact2.parentIds];
+  const visited = /* @__PURE__ */ new Set([artifact2.id]);
   let parentChainTruncated = false;
   while (queue.length > 0) {
     const parentId = queue.shift();
@@ -8013,19 +8461,19 @@ function artifactProvenance(snapshot, artifactId) {
     queue.push(...parent.parentIds);
   }
   if (queue.length > 0) parentChainTruncated = true;
-  const runProvenance = runProvenanceFor(artifact, attempts);
+  const runProvenance = runProvenanceFor(artifact2, attempts);
   const sourceAttemptSession = attempts.find((attempt) => attempt.sessionId);
   const sourceAttemptTurn = attempts.find((attempt) => attempt.turn !== void 0);
   const codeFingerprint = attempts.find((attempt) => attempt.codeFingerprint)?.codeFingerprint;
-  const rerun = [...snapshot.reruns ?? []].filter((item) => item.sourceArtifactId === artifact.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  const rerun = [...snapshot.reruns ?? []].filter((item) => item.sourceArtifactId === artifact2.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
   return {
-    artifact,
+    artifact: artifact2,
     parentChain,
     parentChainTruncated,
     attempts,
     ...runProvenance ? { runProvenance } : {},
-    ...artifact.sessionId || sourceAttemptSession?.sessionId ? { sourceSessionId: artifact.sessionId ?? sourceAttemptSession?.sessionId } : {},
-    ...artifact.turn !== void 0 || sourceAttemptTurn?.turn !== void 0 ? { sourceTurn: artifact.turn ?? sourceAttemptTurn?.turn } : {},
+    ...artifact2.sessionId || sourceAttemptSession?.sessionId ? { sourceSessionId: artifact2.sessionId ?? sourceAttemptSession?.sessionId } : {},
+    ...artifact2.turn !== void 0 || sourceAttemptTurn?.turn !== void 0 ? { sourceTurn: artifact2.turn ?? sourceAttemptTurn?.turn } : {},
     reproducibility: reproducibilityStatus(codeFingerprint, runProvenance),
     ...rerun ? { rerun } : {}
   };
@@ -8044,31 +8492,31 @@ function assertWithin(root, path) {
 }
 function planWorkspacePromotion(input) {
   if (input.run.state !== "frozen") throw new Error("Only frozen runs can be promoted");
-  const selected = input.artifacts.filter((artifact) => artifact.runId === input.run.id && artifact.status === "valid").sort((a, b) => a.id.localeCompare(b.id));
-  const relativeResultPath = (artifact) => {
-    const relativePath = artifact.path.replaceAll("\\", "/").replace(/^runs\/(?:[^/]+)\/(?:[^/]+)\/?/, "");
-    return `results/${input.run.taskId}/${input.run.id}/${relativePath || artifact.id}`;
+  const selected = input.artifacts.filter((artifact2) => artifact2.runId === input.run.id && artifact2.status === "valid").sort((a, b) => a.id.localeCompare(b.id));
+  const relativeResultPath = (artifact2) => {
+    const relativePath = artifact2.path.replaceAll("\\", "/").replace(/^runs\/(?:[^/]+)\/(?:[^/]+)\/?/, "");
+    return `results/${input.run.taskId}/${input.run.id}/${relativePath || artifact2.id}`;
   };
-  const moves = selected.map((artifact) => {
-    if (!validateWorkspaceRelativePath(artifact.path))
-      throw new Error(`Unsafe workspace artifact path: ${artifact.path}`);
-    const sourcePath = resolve(input.layout.projectRoot, artifact.path);
-    const resultPath = relativeResultPath(artifact);
+  const moves = selected.map((artifact2) => {
+    if (!validateWorkspaceRelativePath(artifact2.path))
+      throw new Error(`Unsafe workspace artifact path: ${artifact2.path}`);
+    const sourcePath = resolve(input.layout.projectRoot, artifact2.path);
+    const resultPath = relativeResultPath(artifact2);
     assertWithin(input.layout.projectRoot, sourcePath);
     assertWithin(input.layout.projectRoot, resultPath);
     return {
       from: sourcePath,
       to: resolve(input.layout.projectRoot, resultPath),
-      artifactId: artifact.id
+      artifactId: artifact2.id
     };
   });
-  const indexEntries = selected.map((artifact) => ({
-    artifactId: artifact.id,
-    sourcePath: artifact.path,
-    resultPath: relativeResultPath(artifact),
-    sha256: artifact.sha256,
-    bytes: artifact.bytes,
-    purpose: artifact.purpose
+  const indexEntries = selected.map((artifact2) => ({
+    artifactId: artifact2.id,
+    sourcePath: artifact2.path,
+    resultPath: relativeResultPath(artifact2),
+    sha256: artifact2.sha256,
+    bytes: artifact2.bytes,
+    purpose: artifact2.purpose
   }));
   return { runId: input.run.id, moves, indexEntries };
 }
@@ -8189,21 +8637,21 @@ var InquiryService = class {
     let changed = true;
     while (changed) {
       changed = false;
-      for (const artifact of snapshot.artifacts) {
-        if (!affected.has(artifact.id) && artifact.parentIds.some((parentId) => affected.has(parentId))) {
-          affected.add(artifact.id);
+      for (const artifact2 of snapshot.artifacts) {
+        if (!affected.has(artifact2.id) && artifact2.parentIds.some((parentId) => affected.has(parentId))) {
+          affected.add(artifact2.id);
           changed = true;
         }
       }
     }
-    for (const artifact of snapshot.artifacts) {
-      if (!affected.has(artifact.id) || artifact.reviews?.some((review) => review.decisionId === decision.id))
+    for (const artifact2 of snapshot.artifacts) {
+      if (!affected.has(artifact2.id) || artifact2.reviews?.some((review) => review.decisionId === decision.id))
         continue;
       await this.storage.artifacts.put({
-        ...artifact,
+        ...artifact2,
         status: "pending-review",
         pendingReviewDecisionIds: [
-          .../* @__PURE__ */ new Set([...artifact.pendingReviewDecisionIds ?? [], decision.id])
+          .../* @__PURE__ */ new Set([...artifact2.pendingReviewDecisionIds ?? [], decision.id])
         ],
         updatedAt: decision.revokedAt ?? (/* @__PURE__ */ new Date()).toISOString()
       });
@@ -8215,15 +8663,15 @@ var InquiryService = class {
     if (decision?.status !== "revoked") throw new Error("Only revoked decisions can be reviewed");
     if (!reason.trim()) throw new Error("A human review reason is required");
     const snapshot = await this.storage.snapshot();
-    for (const artifact of snapshot.artifacts) {
-      if (!artifact.pendingReviewDecisionIds?.includes(id)) continue;
-      const pending = artifact.pendingReviewDecisionIds.filter((item) => item !== id);
+    for (const artifact2 of snapshot.artifacts) {
+      if (!artifact2.pendingReviewDecisionIds?.includes(id)) continue;
+      const pending = artifact2.pendingReviewDecisionIds.filter((item) => item !== id);
       await this.storage.artifacts.put({
-        ...artifact,
+        ...artifact2,
         status: pending.length ? "pending-review" : "valid",
         pendingReviewDecisionIds: pending,
         reviews: [
-          ...artifact.reviews ?? [],
+          ...artifact2.reviews ?? [],
           { decisionId: id, confirmedBy: "user", confirmedAt: now, reason }
         ],
         updatedAt: now
@@ -8260,26 +8708,26 @@ var InquiryService = class {
     return artifactProvenance(await this.storage.snapshot(), artifactId);
   }
   async rerunArtifact(artifactId) {
-    const provenance = await this.artifactProvenance(artifactId);
-    if (!provenance) throw new Error(`Artifact not found: ${artifactId}`);
-    if (provenance.reproducibility !== "reproducible")
+    const provenance2 = await this.artifactProvenance(artifactId);
+    if (!provenance2) throw new Error(`Artifact not found: ${artifactId}`);
+    if (provenance2.reproducibility !== "reproducible")
       throw new Error("Artifact is not reproducible");
     if (!this.rerunHandler) throw new Error("Artifact rerun is unavailable");
-    const existing = [...await this.storage.reruns.list()].filter((item) => item.sourceArtifactId === provenance.artifact.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    const existing = [...await this.storage.reruns.list()].filter((item) => item.sourceArtifactId === provenance2.artifact.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     if (existing && (existing.status === "submitted" || existing.status === "running"))
       return this.rerunResult(existing);
-    const submitted = await this.rerunHandler(provenance);
+    const submitted = await this.rerunHandler(provenance2);
     const now = (/* @__PURE__ */ new Date()).toISOString();
     if ("id" in submitted && !("jobId" in submitted)) {
       const rerun2 = {
-        id: `rerun:${provenance.artifact.id}:${submitted.id}`,
+        id: `rerun:${provenance2.artifact.id}:${submitted.id}`,
         schemaVersion: 2,
         projectId: this.storage.projectId,
-        sourceArtifactId: provenance.artifact.id,
-        artifact: provenance.artifact,
+        sourceArtifactId: provenance2.artifact.id,
+        artifact: provenance2.artifact,
         jobId: submitted.id,
         status: "running",
-        previousSha256: provenance.artifact.sha256,
+        previousSha256: provenance2.artifact.sha256,
         submittedAt: now,
         updatedAt: now
       };
@@ -8289,14 +8737,14 @@ var InquiryService = class {
     if (!submitted || typeof submitted.jobId !== "string" || !submitted.jobId.trim())
       throw new Error("Rerun submission did not return a job id");
     const rerun = {
-      id: `rerun:${provenance.artifact.id}:${submitted.jobId}`,
+      id: `rerun:${provenance2.artifact.id}:${submitted.jobId}`,
       schemaVersion: 2,
       projectId: this.storage.projectId,
-      sourceArtifactId: provenance.artifact.id,
-      artifact: provenance.artifact,
+      sourceArtifactId: provenance2.artifact.id,
+      artifact: provenance2.artifact,
       jobId: submitted.jobId,
       status: "submitted",
-      previousSha256: provenance.artifact.sha256,
+      previousSha256: provenance2.artifact.sha256,
       submittedAt: now,
       updatedAt: now
     };
@@ -9018,19 +9466,19 @@ var WasmConnection = class {
   }
   prepare(sql) {
     return {
-      get: (...parameters) => {
+      get: (...parameters2) => {
         const statement = this.database.prepare(sql);
         try {
-          statement.bind(parameters);
+          statement.bind(parameters2);
           return statement.step() ? statement.getAsObject() : void 0;
         } finally {
           statement.free();
         }
       },
-      all: (...parameters) => {
+      all: (...parameters2) => {
         const statement = this.database.prepare(sql);
         try {
-          statement.bind(parameters);
+          statement.bind(parameters2);
           const rows = [];
           while (statement.step()) rows.push(statement.getAsObject());
           return rows;
@@ -9038,8 +9486,8 @@ var WasmConnection = class {
           statement.free();
         }
       },
-      run: (...parameters) => {
-        this.database.run(sql, parameters);
+      run: (...parameters2) => {
+        this.database.run(sql, parameters2);
       }
     };
   }
@@ -9137,6 +9585,7 @@ var readSchema = typebox_exports.Union([
   )
 ]);
 var writeSchema = typebox_exports.Union([
+  assertedEventWriteSchema,
   typebox_exports.Object(
     {
       action: typebox_exports.Literal("bind"),
@@ -9451,6 +9900,29 @@ async function createInquiryRuntimeWithEngine(context, engine) {
           input.action,
           async (service) => {
             switch (input.action) {
+              case "recordComputeEvent":
+                await new InquiryEventProjector(
+                  service.storage,
+                  service,
+                  (value2) => value2 ?? ""
+                ).recordComputeEvent(input.event);
+                return null;
+              case "recordTaskTerminal":
+                await new InquiryEventProjector(
+                  service.storage,
+                  service,
+                  (value2) => value2 ?? ""
+                ).recordTaskTerminal(input.event);
+                return null;
+              case "recordLocalExecution":
+                await new InquiryEventProjector(
+                  service.storage,
+                  service,
+                  (value2) => value2 ?? ""
+                ).recordLocalExecution(
+                  input.event
+                );
+                return null;
               case "recordArtifact":
                 await service.recordArtifact(
                   input.record
