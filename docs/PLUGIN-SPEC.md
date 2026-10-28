@@ -237,3 +237,9 @@ commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpo
 `pi-core` 的候选 `dist/managed-runtime.mjs` 复用同一 TaskSession/TaskController；生产清单尚未设置 desktopRuntime/provides。候选 `task.runtime@1` 数据操作为 status(null)、pause({reason})、advanceStage(null)、takeReport(null)；status 返回 `{snapshot,render,storage}`，其他操作 await 同一 actor，advanceStage 另返回真实 advanced，takeReport 另返回一次性的 report。snapshot 只投影任务/里程碑/预算/待处理操作的可展示字段，不输出 executionConsent、writeRoots、compute、planApproved 或 proof。
 
 状态仅由实际 SDK native attachment 建立，app 无选定会话或该 SDK entry 未 attach 时明确不可用，不猜测焦点会话。own namespace/current branch 的 records 经过真实回读，memory/deferred 不伪装 durable，写失败/取消后的 needs-reopen 不能被 SDK reload 清掉。完整 native 工具、文件验收、一次实际任务授权、host-queued 自动续作和旧 startup 删除仍未完成；此数据切片不得作为完整插件切换或正式安装包 GUI 验收。
+
+### 通用已批准文件二进制快照（候选 1.3）
+
+`files.readBinary({root,path})` 仅使用已实际批准的 files root 和受限相对路径，read effect，不新增权限标志，不接受 JSON state / binary-state root。返回完整 `{base64,sha256,bytes,version}`，原字节最多 8 MiB、base64 最多 11184812；超限、文件/目录身份改变或取消明确失败，不截断、不返回迟到快照。hash/version 是数据，不能当作写入/执行/科学证明授权。
+
+插件自己运行 canonical 文件验收算法；当前 magic/hash 读取切片不等于真实 PDF DOI/title 身份验收。`pi-core` 的 PDF Worker/依赖仍需迁到同插件真实 resource 解析器，不能从 guest 开 Node Worker 或从宿主 app.asar 猜依赖；全 managed 文件接受闭环和生产 owner 切换仍未完成。
