@@ -18885,9 +18885,13 @@ function composeNativeSession(owner, managed) {
   let cleanup = null;
   const adapter = createKnowledgeNativeAdapter(owner, controller, (nativePi) => {
     const pi = managed ? managedDomainPi(nativePi, managed.session) : nativePi;
+    if (managed?.child === "evidence") {
+      publication.registerAnswerPublication(pi, { getCurrent: () => null, evidenceOnly: true }).begin(false);
+      return;
+    }
     if (managed) managed.registerReadTools(nativePi);
     else registerNativeStatusTools(nativePi, { ...owner, services });
-    const session = knowledge.registerKnowledgeInterface(pi);
+    const session = knowledge.registerKnowledgeInterface(pi, { readOnly: managed?.child === "read" });
     cleanup = session.dispose;
     pi.on("before_agent_start", (event, context) => session.beforeStart(event, context));
   }, async () => {
@@ -19392,6 +19396,7 @@ async function projectFor(capabilities, workspace) {
     throw new Error("Invalid research workspace configuration");
   return projectIdentity(workspace, document.knowledgeProjectId);
 }
+var CHILD_SESSION_EVENTS = ["session_start", "session_tree", "before_agent_start", "context", "message_start", "tool_execution_start", "tool_execution_end", "tool_result"];
 var createDesktopRuntime = async (context) => {
   const states = context.resources.filter((resource) => resource.kind === "state");
   if (states.length !== 1)
@@ -19715,10 +19720,9 @@ var createDesktopRuntime = async (context) => {
         )
       }
     },
-    createNativeSession: () => {
+    createNativeSession: async (facts) => {
       const sessionPorts = createManagedKnowledgeSessionPorts(context.capabilities);
-      const migrateRecovery = createKnowledgeRecoveryMigration(context.capabilities, config);
-      const native = createManagedNativeSession(owner, {
+      const composition = {
         session: sessionPorts.ports,
         registerReadTools: (pi) => registerDesktopKnowledgeNativeReadTools(pi, owner, (native2) => projectFor(context.capabilities, native2.cwd)),
         project: async (cwd) => {
@@ -19726,7 +19730,21 @@ var createDesktopRuntime = async (context) => {
           if (project === null) throw new Error("Knowledge native session has no workspace project");
           return project;
         }
-      });
+      };
+      if (facts?.kind === "child") {
+        const readable = facts.files === "read" && (await readKnowledgeBinding2())?.subagentPolicy === "read-local";
+        const child = createManagedNativeSession(owner, { ...composition, child: readable ? "read" : "evidence" });
+        const session = {
+          ...child,
+          toolEffects: readable ? { knowledge_status: "read", knowledge_search: "read" } : {},
+          // A child is read-only: its hooks get read capabilities only, so any write attempt fails at the broker.
+          eventEffects: Object.fromEntries(CHILD_SESSION_EVENTS.map((event) => [event, "read"])),
+          commandEffects: {}
+        };
+        return session;
+      }
+      const migrateRecovery = createKnowledgeRecoveryMigration(context.capabilities, config);
+      const native = createManagedNativeSession(owner, composition);
       let unregister;
       return {
         ...native,

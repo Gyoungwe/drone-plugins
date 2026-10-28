@@ -17926,9 +17926,13 @@ function composeNativeSession(owner, managed) {
   let cleanup = null;
   const adapter = createKnowledgeNativeAdapter(owner, controller, (nativePi) => {
     const pi = managed ? managedDomainPi(nativePi, managed.session) : nativePi;
+    if (managed?.child === "evidence") {
+      publication.registerAnswerPublication(pi, { getCurrent: () => null, evidenceOnly: true }).begin(false);
+      return;
+    }
     if (managed) managed.registerReadTools(nativePi);
     else registerNativeStatusTools(nativePi, { ...owner, services });
-    const session = knowledge.registerKnowledgeInterface(pi);
+    const session = knowledge.registerKnowledgeInterface(pi, { readOnly: managed?.child === "read" });
     cleanup = session.dispose;
     pi.on("before_agent_start", (event, context) => session.beforeStart(event, context));
   }, async () => {
