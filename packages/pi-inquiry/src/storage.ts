@@ -10,7 +10,10 @@ import type {
 	PersistedLedgerRecord,
 	QuestionLedger,
 } from "./storage-contract.js";
-export { INQUIRY_STORAGE_IDS, registerInquiryStorage } from "./storage-contract.js";
+export {
+	INQUIRY_STORAGE_IDS,
+	registerInquiryStorage,
+} from "./storage-contract.js";
 export type {
 	ArtifactLedger,
 	ArtifactRerunLedger,
@@ -27,7 +30,10 @@ import { mkdirSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { validateArtifactLineage, validateFindingReferences } from "./lineage.js";
+import {
+	validateArtifactLineage,
+	validateFindingReferences,
+} from "./lineage.js";
 import {
 	type ArtifactRecord,
 	type ArtifactRerunRecord,
@@ -48,10 +54,11 @@ const queues = new Map<string, Promise<void>>();
 
 function enqueue<T>(path: string, operation: () => Promise<T>): Promise<T> {
 	const previous = queues.get(path) ?? Promise.resolve();
-	const next = previous.catch(() => {}).then(operation);
+	const next = previous.then(operation, operation);
+	// Each original promise keeps its failure; later explicitly requested operations may proceed.
 	const settled = next.then(
-		() => {},
-		() => {},
+		() => undefined,
+		() => undefined,
 	);
 	queues.set(path, settled);
 	void settled.then(() => {
@@ -75,7 +82,9 @@ function emptyDocument(projectId: string): PersistedDocument {
 	};
 }
 
-function sortRecords<T extends { readonly id: string }>(records: readonly T[]): T[] {
+function sortRecords<T extends { readonly id: string }>(
+	records: readonly T[],
+): T[] {
 	return [...records].sort((a, b) => a.id.localeCompare(b.id));
 }
 
@@ -92,10 +101,13 @@ function stableDocument(document: PersistedDocument): PersistedDocument {
 }
 
 function parseDocument(raw: string, projectId: string): PersistedDocument {
-	const parsed = JSON.parse(raw) as Partial<PersistedDocument> & { schemaVersion?: number };
+	const parsed = JSON.parse(raw) as Partial<PersistedDocument> & {
+		schemaVersion?: number;
+	};
 	const schemaVersion = parsed.schemaVersion;
 	if (
-		(schemaVersion !== LEGACY_INQUIRY_SCHEMA_VERSION && schemaVersion !== INQUIRY_SCHEMA_VERSION) ||
+		(schemaVersion !== LEGACY_INQUIRY_SCHEMA_VERSION &&
+			schemaVersion !== INQUIRY_SCHEMA_VERSION) ||
 		parsed.projectId !== projectId ||
 		!Array.isArray(parsed.artifacts) ||
 		!Array.isArray(parsed.findings) ||
@@ -105,7 +117,11 @@ function parseDocument(raw: string, projectId: string): PersistedDocument {
 		throw new Error("Invalid inquiry ledger document");
 	}
 	const revision = parsed.revision;
-	if (typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 0)
+	if (
+		typeof revision !== "number" ||
+		!Number.isSafeInteger(revision) ||
+		revision < 0
+	)
 		throw new Error("Invalid inquiry ledger revision");
 	return stableDocument({
 		...parsed,
@@ -119,32 +135,56 @@ function parseDocument(raw: string, projectId: string): PersistedDocument {
 	} as PersistedDocument);
 }
 
-async function readDocument(path: string, projectId: string): Promise<PersistedDocument> {
+async function readDocument(
+	path: string,
+	projectId: string,
+): Promise<PersistedDocument> {
 	try {
 		return parseDocument(await readFile(path, "utf8"), projectId);
 	} catch (error) {
-		if (error && typeof error === "object" && "code" in error && error.code === "ENOENT")
+		if (
+			error &&
+			typeof error === "object" &&
+			"code" in error &&
+			error.code === "ENOENT"
+		)
 			return emptyDocument(projectId);
 		throw error;
 	}
 }
 
-async function writeDocument(path: string, document: PersistedDocument): Promise<void> {
+async function writeDocument(
+	path: string,
+	document: PersistedDocument,
+): Promise<void> {
 	await mkdir(dirname(path), { recursive: true });
 	const temporary = `${path}.${process.pid}.tmp`;
 	try {
-		await writeFile(temporary, `${JSON.stringify(stableDocument(document), null, 2)}\n`, {
-			encoding: "utf8",
-			mode: 0o600,
-		});
+		await writeFile(
+			temporary,
+			`${JSON.stringify(stableDocument(document), null, 2)}\n`,
+			{
+				encoding: "utf8",
+				mode: 0o600,
+			},
+		);
 		await rename(temporary, path);
 	} catch (error) {
-		await rm(temporary, { force: true }).catch(() => {});
+		const [cleanup] = await Promise.allSettled([
+			rm(temporary, { force: true }),
+		]);
+		if (cleanup.status === "rejected")
+			throw new AggregateError(
+				[error, cleanup.reason],
+				"Inquiry file write and cleanup failed",
+			);
 		throw error;
 	}
 }
 
-class FileLedgerCollection<T extends { readonly id: string }> implements LedgerCollection<T> {
+class FileLedgerCollection<T extends { readonly id: string }>
+	implements LedgerCollection<T>
+{
 	constructor(
 		private readonly owner: FileInquiryStorage,
 		private readonly key:
@@ -166,7 +206,10 @@ class FileLedgerCollection<T extends { readonly id: string }> implements LedgerC
 	}
 
 	async put(record: T): Promise<void> {
-		await this.owner.update(this.key, record as unknown as PersistedLedgerRecord);
+		await this.owner.update(
+			this.key,
+			record as unknown as PersistedLedgerRecord,
+		);
 	}
 }
 
@@ -190,11 +233,20 @@ export class FileInquiryStorage implements InquiryStorage {
 	) {
 		if (!projectId.trim()) throw new Error("Inquiry projectId cannot be empty");
 		if (!path.trim()) throw new Error("Inquiry ledger path cannot be empty");
-		this.artifacts = new FileLedgerCollection<ArtifactRecord>(this, "artifacts");
+		this.artifacts = new FileLedgerCollection<ArtifactRecord>(
+			this,
+			"artifacts",
+		);
 		this.findings = new FileLedgerCollection<FindingRecord>(this, "findings");
-		this.questions = new FileLedgerCollection<QuestionRecord>(this, "questions");
+		this.questions = new FileLedgerCollection<QuestionRecord>(
+			this,
+			"questions",
+		);
 		this.attempts = new FileLedgerCollection<AttemptRecord>(this, "attempts");
-		this.decisions = new FileLedgerCollection<DecisionRecord>(this, "decisions");
+		this.decisions = new FileLedgerCollection<DecisionRecord>(
+			this,
+			"decisions",
+		);
 		this.reruns = new FileLedgerCollection<ArtifactRerunRecord>(this, "reruns");
 	}
 
@@ -203,7 +255,13 @@ export class FileInquiryStorage implements InquiryStorage {
 	}
 
 	async update(
-		key: "artifacts" | "findings" | "questions" | "attempts" | "decisions" | "reruns",
+		key:
+			| "artifacts"
+			| "findings"
+			| "questions"
+			| "attempts"
+			| "decisions"
+			| "reruns",
 		record: PersistedLedgerRecord,
 	): Promise<void> {
 		return enqueue(this.path, async () => {
@@ -211,19 +269,25 @@ export class FileInquiryStorage implements InquiryStorage {
 			if (key === "artifacts") {
 				const artifact = record as ArtifactRecord;
 				const errors = [
-					...(artifact.projectId !== this.projectId ? ["artifact belongs to another project"] : []),
+					...(artifact.projectId !== this.projectId
+						? ["artifact belongs to another project"]
+						: []),
 					...validateArtifactLineage(artifact, current.artifacts),
 				];
-				if (errors.length) throw new Error(`Invalid artifact record: ${errors.join("; ")}`);
+				if (errors.length)
+					throw new Error(`Invalid artifact record: ${errors.join("; ")}`);
 			} else if (key === "findings") {
 				const finding = record as FindingRecord;
 				const errors = validateFindingReferences(finding, current);
-				if (errors.length) throw new Error(`Invalid finding record: ${errors.join("; ")}`);
+				if (errors.length)
+					throw new Error(`Invalid finding record: ${errors.join("; ")}`);
 			} else if (key === "questions") {
 				if (
 					!record ||
-					((record as QuestionRecord).schemaVersion !== INQUIRY_SCHEMA_VERSION &&
-						(record as QuestionRecord).schemaVersion !== LEGACY_INQUIRY_SCHEMA_VERSION) ||
+					((record as QuestionRecord).schemaVersion !==
+						INQUIRY_SCHEMA_VERSION &&
+						(record as QuestionRecord).schemaVersion !==
+							LEGACY_INQUIRY_SCHEMA_VERSION) ||
 					(record as QuestionRecord).projectId !== this.projectId
 				)
 					throw new Error("Invalid question record");
@@ -252,7 +316,8 @@ export class FileInquiryStorage implements InquiryStorage {
 			} else if (
 				!record ||
 				((record as AttemptRecord).schemaVersion !== INQUIRY_SCHEMA_VERSION &&
-					(record as AttemptRecord).schemaVersion !== LEGACY_INQUIRY_SCHEMA_VERSION) ||
+					(record as AttemptRecord).schemaVersion !==
+						LEGACY_INQUIRY_SCHEMA_VERSION) ||
 				(record as AttemptRecord).projectId !== this.projectId
 			) {
 				throw new Error("Invalid attempt record");
@@ -331,20 +396,33 @@ export class MemoryInquiryStorage implements InquiryStorage {
 	}
 
 	async update(
-		key: "artifacts" | "findings" | "questions" | "attempts" | "decisions" | "reruns",
+		key:
+			| "artifacts"
+			| "findings"
+			| "questions"
+			| "attempts"
+			| "decisions"
+			| "reruns",
 		record: PersistedLedgerRecord,
 	): Promise<void> {
 		if (key === "artifacts") {
 			const artifact = record as ArtifactRecord;
 			const errors = [
-				...(artifact.projectId !== this.projectId ? ["artifact belongs to another project"] : []),
+				...(artifact.projectId !== this.projectId
+					? ["artifact belongs to another project"]
+					: []),
 				...validateArtifactLineage(artifact, this.state.artifacts),
 			];
-			if (errors.length) throw new Error(`Invalid artifact record: ${errors.join("; ")}`);
+			if (errors.length)
+				throw new Error(`Invalid artifact record: ${errors.join("; ")}`);
 		}
 		if (key === "findings") {
-			const errors = validateFindingReferences(record as FindingRecord, this.state);
-			if (errors.length) throw new Error(`Invalid finding record: ${errors.join("; ")}`);
+			const errors = validateFindingReferences(
+				record as FindingRecord,
+				this.state,
+			);
+			if (errors.length)
+				throw new Error(`Invalid finding record: ${errors.join("; ")}`);
 		}
 		if (key === "decisions") {
 			const decision = record as DecisionRecord;
@@ -381,7 +459,9 @@ export class MemoryInquiryStorage implements InquiryStorage {
 	}
 }
 
-class MemoryLedgerCollection<T extends { readonly id: string }> implements LedgerCollection<T> {
+class MemoryLedgerCollection<T extends { readonly id: string }>
+	implements LedgerCollection<T>
+{
 	constructor(
 		private readonly owner: MemoryInquiryStorage,
 		private readonly key:
@@ -400,6 +480,9 @@ class MemoryLedgerCollection<T extends { readonly id: string }> implements Ledge
 		return sortRecords((snapshot[this.key] ?? []) as unknown as readonly T[]);
 	}
 	async put(record: T): Promise<void> {
-		await this.owner.update(this.key, record as unknown as PersistedLedgerRecord);
+		await this.owner.update(
+			this.key,
+			record as unknown as PersistedLedgerRecord,
+		);
 	}
 }

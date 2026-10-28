@@ -1,4 +1,7 @@
-import { validateArtifactLineage, validateFindingReferences } from "./lineage.js";
+import {
+	validateArtifactLineage,
+	validateFindingReferences,
+} from "./lineage.js";
 import {
 	INQUIRY_SCHEMA_VERSION,
 	LEGACY_INQUIRY_SCHEMA_VERSION,
@@ -49,6 +52,35 @@ function quotedTable(key: SqliteLedgerKey): string {
 	return `"${key}"`;
 }
 
+/** Engine settings are shared by Node and WASM, including after a WASM export reopens its database. */
+export function configureInquirySqlite(
+	database: InquirySqliteConnection,
+): void {
+	database.exec("PRAGMA busy_timeout = 5000");
+	database.exec("PRAGMA foreign_keys = ON");
+	database.exec("PRAGMA journal_mode = WAL");
+	database.exec("PRAGMA synchronous = FULL");
+}
+function readMeta(database: InquirySqliteConnection): SqliteMetaRow {
+	const rows = database
+		.prepare(
+			"SELECT project_id, schema_version, revision, updated_at FROM inquiry_meta",
+		)
+		.all() as readonly SqliteMetaRow[];
+	if (rows.length !== 1)
+		throw new Error("Inquiry SQLite metadata must contain exactly one project");
+	const meta = rows[0]!;
+	if (
+		(meta.schema_version !== INQUIRY_SCHEMA_VERSION &&
+			meta.schema_version !== LEGACY_INQUIRY_SCHEMA_VERSION) ||
+		!Number.isSafeInteger(meta.revision) ||
+		meta.revision < 0 ||
+		typeof meta.updated_at !== "string"
+	)
+		throw new Error("Invalid inquiry SQLite metadata");
+	return meta;
+}
+
 export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 	readonly artifacts: ArtifactLedger;
 	readonly findings: FindingLedger;
@@ -64,11 +96,17 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 		database: InquirySqliteConnection,
 	) {
 		this.database = database;
-		this.database.exec("PRAGMA busy_timeout = 5000");
-		this.database.exec("PRAGMA foreign_keys = ON");
-		this.database.exec("PRAGMA journal_mode = WAL");
-		this.database.exec("PRAGMA synchronous = FULL");
-		this.database.exec(`
+		try {
+			const tables = database
+				.prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+				.all() as readonly { name: string }[];
+			if (tables.some((table) => table.name === "inquiry_meta")) {
+				if (readMeta(database).project_id !== projectId)
+					throw new Error("Inquiry SQLite ledger belongs to another project");
+			} else if (tables.length)
+				throw new Error("Unrecognized Inquiry SQLite schema");
+			configureInquirySqlite(database);
+			this.database.exec(`
 			CREATE TABLE IF NOT EXISTS inquiry_meta (
 				project_id TEXT PRIMARY KEY NOT NULL,
 				schema_version INTEGER NOT NULL CHECK (schema_version = ${INQUIRY_SCHEMA_VERSION}),
@@ -112,18 +150,17 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 				updated_at TEXT NOT NULL
 			);
 		`);
-		let meta = this.database
-			.prepare("SELECT project_id, schema_version, revision, updated_at FROM inquiry_meta LIMIT 1")
-			.get() as SqliteMetaRow | undefined;
-		if (meta && meta.project_id !== projectId) {
-			this.database.close();
-			throw new Error("Inquiry SQLite ledger belongs to another project");
-		}
-		if (meta && meta.schema_version === LEGACY_INQUIRY_SCHEMA_VERSION) {
-			this.database.exec("BEGIN IMMEDIATE");
-			try {
-				this.database.exec("ALTER TABLE inquiry_meta RENAME TO inquiry_meta_v1");
-				this.database.exec(`
+			let meta = tables.length ? readMeta(database) : undefined;
+			if (meta && meta.project_id !== projectId) {
+				throw new Error("Inquiry SQLite ledger belongs to another project");
+			}
+			if (meta && meta.schema_version === LEGACY_INQUIRY_SCHEMA_VERSION) {
+				this.database.exec("BEGIN IMMEDIATE");
+				try {
+					this.database.exec(
+						"ALTER TABLE inquiry_meta RENAME TO inquiry_meta_v1",
+					);
+					this.database.exec(`
 					CREATE TABLE inquiry_meta (
 						project_id TEXT PRIMARY KEY NOT NULL,
 						schema_version INTEGER NOT NULL CHECK (schema_version = ${INQUIRY_SCHEMA_VERSION}),
@@ -131,40 +168,68 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 						updated_at TEXT NOT NULL
 					);
 				`);
+					this.database
+						.prepare(
+							"INSERT INTO inquiry_meta (project_id, schema_version, revision, updated_at) SELECT project_id, ?, revision, updated_at FROM inquiry_meta_v1",
+						)
+						.run(INQUIRY_SCHEMA_VERSION);
+					this.database.exec("DROP TABLE inquiry_meta_v1");
+					this.database.exec("COMMIT");
+					meta = readMeta(database);
+				} catch (error) {
+					try {
+						this.database.exec("ROLLBACK");
+					} catch (rollbackError) {
+						throw new AggregateError(
+							[error, rollbackError],
+							"Inquiry migration and rollback failed",
+						);
+					}
+					throw error;
+				}
+			}
+			if (!meta) {
 				this.database
 					.prepare(
-						"INSERT INTO inquiry_meta (project_id, schema_version, revision, updated_at) SELECT project_id, ?, revision, updated_at FROM inquiry_meta_v1",
+						"INSERT INTO inquiry_meta (project_id, schema_version, revision, updated_at) VALUES (?, ?, 0, ?)",
 					)
-					.run(INQUIRY_SCHEMA_VERSION);
-				this.database.exec("DROP TABLE inquiry_meta_v1");
-				this.database.exec("COMMIT");
-				meta = this.database
-					.prepare(
-						"SELECT project_id, schema_version, revision, updated_at FROM inquiry_meta LIMIT 1",
-					)
-					.get() as SqliteMetaRow | undefined;
-			} catch (error) {
-				try {
-					this.database.exec("ROLLBACK");
-				} catch {
-					// Preserve the original migration error.
-				}
-				throw error;
+					.run(projectId, INQUIRY_SCHEMA_VERSION, new Date(0).toISOString());
 			}
+			this.artifacts = new SqliteLedgerCollection<ArtifactRecord>(
+				this,
+				"artifacts",
+			);
+			this.findings = new SqliteLedgerCollection<FindingRecord>(
+				this,
+				"findings",
+			);
+			this.questions = new SqliteLedgerCollection<QuestionRecord>(
+				this,
+				"questions",
+			);
+			this.attempts = new SqliteLedgerCollection<AttemptRecord>(
+				this,
+				"attempts",
+			);
+			this.decisions = new SqliteLedgerCollection<DecisionRecord>(
+				this,
+				"decisions",
+			);
+			this.reruns = new SqliteLedgerCollection<ArtifactRerunRecord>(
+				this,
+				"reruns",
+			);
+		} catch (error) {
+			try {
+				database.close();
+			} catch (closeError) {
+				throw new AggregateError(
+					[error, closeError],
+					"Inquiry initialization and close failed",
+				);
+			}
+			throw error;
 		}
-		if (!meta) {
-			this.database
-				.prepare(
-					"INSERT INTO inquiry_meta (project_id, schema_version, revision, updated_at) VALUES (?, ?, 0, ?)",
-				)
-				.run(projectId, INQUIRY_SCHEMA_VERSION, new Date(0).toISOString());
-		}
-		this.artifacts = new SqliteLedgerCollection<ArtifactRecord>(this, "artifacts");
-		this.findings = new SqliteLedgerCollection<FindingRecord>(this, "findings");
-		this.questions = new SqliteLedgerCollection<QuestionRecord>(this, "questions");
-		this.attempts = new SqliteLedgerCollection<AttemptRecord>(this, "attempts");
-		this.decisions = new SqliteLedgerCollection<DecisionRecord>(this, "decisions");
-		this.reruns = new SqliteLedgerCollection<ArtifactRerunRecord>(this, "reruns");
 	}
 
 	async snapshot(): Promise<InquirySnapshot> {
@@ -173,19 +238,21 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 
 	private snapshotSync(): InquirySnapshot {
 		this.assertOpen();
-		const meta = this.database
-			.prepare("SELECT project_id, schema_version, revision, updated_at FROM inquiry_meta LIMIT 1")
-			.get() as SqliteMetaRow | undefined;
+		const meta = readMeta(this.database);
 		if (
 			!meta ||
 			meta.project_id !== this.projectId ||
 			meta.schema_version !== INQUIRY_SCHEMA_VERSION
 		)
 			throw new Error("Invalid inquiry SQLite metadata");
-		const read = <T extends PersistedLedgerRecord>(key: SqliteLedgerKey): readonly T[] =>
+		const read = <T extends PersistedLedgerRecord>(
+			key: SqliteLedgerKey,
+		): readonly T[] =>
 			(
 				this.database
-					.prepare(`SELECT payload FROM ${quotedTable(key)} WHERE project_id = ? ORDER BY id ASC`)
+					.prepare(
+						`SELECT payload FROM ${quotedTable(key)} WHERE project_id = ? ORDER BY id ASC`,
+					)
 					.all(this.projectId) as unknown as SqlitePayloadRow[]
 			).map((row) => JSON.parse(row.payload) as T);
 		return {
@@ -202,7 +269,10 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 		};
 	}
 
-	async update(key: SqliteLedgerKey, record: PersistedLedgerRecord): Promise<void> {
+	async update(
+		key: SqliteLedgerKey,
+		record: PersistedLedgerRecord,
+	): Promise<void> {
 		return this.database.serialize(async () => {
 			this.assertOpen();
 			this.database.exec("BEGIN IMMEDIATE");
@@ -224,8 +294,11 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 			} catch (error) {
 				try {
 					this.database.exec("ROLLBACK");
-				} catch {
-					// Preserve the original validation/SQLite error.
+				} catch (rollbackError) {
+					throw new AggregateError(
+						[error, rollbackError],
+						"Inquiry write and rollback failed",
+					);
 				}
 				throw error;
 			}
@@ -245,12 +318,20 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 		)
 			throw new Error(`Invalid ${key.slice(0, -1)} record`);
 		if (key === "artifacts") {
-			const errors = validateArtifactLineage(record as ArtifactRecord, current.artifacts);
-			if (errors.length) throw new Error(`Invalid artifact record: ${errors.join("; ")}`);
+			const errors = validateArtifactLineage(
+				record as ArtifactRecord,
+				current.artifacts,
+			);
+			if (errors.length)
+				throw new Error(`Invalid artifact record: ${errors.join("; ")}`);
 		}
 		if (key === "findings") {
-			const errors = validateFindingReferences(record as FindingRecord, current);
-			if (errors.length) throw new Error(`Invalid finding record: ${errors.join("; ")}`);
+			const errors = validateFindingReferences(
+				record as FindingRecord,
+				current,
+			);
+			if (errors.length)
+				throw new Error(`Invalid finding record: ${errors.join("; ")}`);
 		}
 		if (key === "decisions") {
 			const decision = record as DecisionRecord;
@@ -274,12 +355,14 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 
 	async close(): Promise<void> {
 		if (this.closed) return;
-		this.closed = true;
 		this.database.close();
+		this.closed = true;
 	}
 }
 
-class SqliteLedgerCollection<T extends { readonly id: string }> implements LedgerCollection<T> {
+class SqliteLedgerCollection<T extends { readonly id: string }>
+	implements LedgerCollection<T>
+{
 	constructor(
 		private readonly owner: CanonicalSqliteInquiryStorage,
 		private readonly key: SqliteLedgerKey,
@@ -295,6 +378,9 @@ class SqliteLedgerCollection<T extends { readonly id: string }> implements Ledge
 	}
 
 	async put(record: T): Promise<void> {
-		await this.owner.update(this.key, record as unknown as PersistedLedgerRecord);
+		await this.owner.update(
+			this.key,
+			record as unknown as PersistedLedgerRecord,
+		);
 	}
 }

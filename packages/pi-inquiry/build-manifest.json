@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "generator": "packages/pi-inquiry/scripts/build.mjs",
+  "inputs": {
+    "src/index.ts": "4353e0beef6ce3bf8883de93c9fcf6d41deaf26bff2b35adf35a8c71e79681e4",
+    "src/lineage.ts": "0db629d0ea351928f7f92fc8493e20925b7008e0a32c38d0e21ae4d288f430e1",
+    "src/models.ts": "07dcdbbfa44b5676750168a0655f8732abf0e93b42e846c9d48531f6951d8354",
+    "src/provenance.ts": "fee1a0cc0ab7d001afc6eab98ccbd54f1fd13051ed36fe536010b382486cb591",
+    "src/reproducibility.ts": "39768790f4ce928723d435b849e51cb2206ebe2696779b3b4d93a27a2e951569",
+    "src/service.ts": "8040c10c9a269524c4f0952798979d0b51da3a89bbe2d865210d5394d3a8cd65",
+    "src/sqlite-storage.ts": "57664ede987c66e9703e834ca20f4b07ef8b2303b3325a5dc1ce55eedbd3e0d7",
+    "src/storage-contract.ts": "d81d8ba86decabb9b344a7068b5b8d196acc5e75d814c313094b69be248380b7",
+    "src/storage.ts": "19d241c3b44b98aab4a9df3123468fa5857f340df40f6cf4f702cafe85b7afef",
+    "src/workspace.ts": "caecd0cba9e6637dfc0bad8226343aae6b9fbac1a0d04d47e2c109fe6c9fa075",
+    "src/domain.ts": "6cd4b798712e32abe53f82213afd0a939f556c9230a2003d22467ed15f12397d",
+    "src/wasm-storage.ts": "653fd3ca12f5b9a91f22495373f5a117350728d2ffc5c43ed4d44a05f156f1e5",
+    "sql.js/dist/sql-wasm.js": "b46d4bddfdde8a787fc4764bd0a405cdfdf96fbd77e6a4e95446106826ecfa47",
+    "sql.js/dist/sql-wasm.wasm": "0dfeecda2070b36da0cd4f6afa250af9453de528a983770f85b13d5d6b667572",
+    "sql.js/LICENSE": "60a3f6e4d7b29b4321359e683b36cf198d24f58e24582070f56e6fa89d5ee2be"
+  },
+  "outputs": {
+    "dist/host.mjs": "c6d226d85c1a8a4503bdb0dfb2bc4532546d778b350041292e627327e58a3aa4",
+    "dist/domain.mjs": "ad12befa223bb0734e4d5cdcb221d31631598f60f2f6f26e8f7a5d7471d5e05f",
+    "dist/wasm-storage.mjs": "3d27fe0b8089ff750d019075bdc23c481406caf19b1a0355de0c78bc89cfedb6",
+    "dist/sql-wasm.cjs": "b46d4bddfdde8a787fc4764bd0a405cdfdf96fbd77e6a4e95446106826ecfa47",
+    "dist/sql-wasm.wasm": "0dfeecda2070b36da0cd4f6afa250af9453de528a983770f85b13d5d6b667572",
+    "dist/SQLJS-LICENSE": "60a3f6e4d7b29b4321359e683b36cf198d24f58e24582070f56e6fa89d5ee2be"
+  }
+}
