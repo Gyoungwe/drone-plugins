@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
+import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+const api = await candidatePluginApi();
 const exec = promisify(execFile);
 const root = await mkdtemp(join(tmpdir(), "pi-discovery-smoke-"));
 try {
@@ -34,20 +36,45 @@ try {
 			"--no-audit",
 			"--no-fund",
 			join(root, packed.filename),
+			api.path,
 		],
 		{ maxBuffer: 4 * 1024 * 1024 },
 	);
 	const installedRoot = join(prefix, "node_modules/@gyoungwe/pi-discovery");
-	const manifest = JSON.parse(await readFile(join(installedRoot, "plugin.manifest.json"), "utf8"));
-	const packageJson = JSON.parse(await readFile(join(installedRoot, "package.json"), "utf8"));
+	const manifest = JSON.parse(
+		await readFile(join(installedRoot, "plugin.manifest.json"), "utf8"),
+	);
+	const packageJson = JSON.parse(
+		await readFile(join(installedRoot, "package.json"), "utf8"),
+	);
 	assert.deepEqual(manifest.hosts, ["native-pi", "drone-desktop"]);
 	assert.deepEqual(packageJson.pi.extensions, ["./dist/index.mjs"]);
-	const extension = await import(pathToFileURL(join(installedRoot, packageJson.pi.extensions[0])).href);
+	const extension = await import(
+		pathToFileURL(join(installedRoot, packageJson.pi.extensions[0])).href
+	);
 	const registered = new Map();
-	extension.default({ registerTool: tool => registered.set(tool.name, tool) });
+	const listeners = new Map();
+	await extension.default({
+		registerTool: (tool) => registered.set(tool.name, tool),
+		on: (name, listener) => listeners.set(name, listener),
+	});
 	assert.deepEqual([...registered.keys()].sort(), [...manifest.tools].sort());
-	assert([...registered.values()].every(tool => tool.drone.readOnly === true));
-	const status = await registered.get("discovery_status").execute("smoke", {}, undefined, undefined, { cwd: root });
+	assert(
+		[...registered.values()]
+			.filter(
+				(tool) =>
+					!["discovery_bind_workspace", "discovery_create_plan"].includes(
+						tool.name,
+					),
+			)
+			.every((tool) => tool.drone.readOnly === true),
+	);
+	const status = await registered
+		.get("discovery_status")
+		.execute("smoke", {}, undefined, undefined, {
+			cwd: root,
+			sessionManager: { getSessionId: () => "smoke-native" },
+		});
 	assert.equal(status.details.status, "unconfigured");
 	const { discoveryHostLoader } = await import(
 		pathToFileURL(
@@ -66,6 +93,7 @@ try {
 	assert.deepEqual(await host.listExplorationPlans(), []);
 	assert.deepEqual(await host.listEvaluations(), []);
 	await host.dispose();
+	await listeners.get("session_shutdown")();
 	console.log(
 		JSON.stringify({
 			package: "@gyoungwe/pi-discovery",

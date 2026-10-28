@@ -1,37 +1,35 @@
 {
-  "schemaVersion": 1,
-  "id": "drone-pi-discovery",
-  "version": "0.1.0",
-  "pi": {
-    "apiVersion": 1,
-    "minHostVersion": "1.1.0",
-    "testedHosts": [
-      "1.1.0",
-      "latest"
-    ]
-  },
-  "drone": {
-    "pluginApi": 1,
-    "resultContract": "drone-result/v3"
-  },
-  "entrypoints": {
-	"extension": "./dist/index.mjs",
-    "host": "./dist/host.mjs"
-  },
-  "capabilities": [
-    "discovery"
-  ],
-  "tools": ["discovery_status", "discovery_list_records", "discovery_search_records"],
-  "hosts": [
-	"native-pi",
-    "drone-desktop"
-  ],
-  "permissions": {
-    "filesystem": [
-      "workspace"
-    ],
-    "network": [],
-    "subprocess": [],
-    "externalWrites": false
-  }
+	"schemaVersion": 1,
+	"id": "drone-pi-discovery",
+	"version": "0.2.0",
+	"pi": {
+		"apiVersion": 1,
+		"minHostVersion": "1.1.0",
+		"testedHosts": ["1.1.0", "latest"]
+	},
+	"drone": {
+		"pluginApi": 1,
+		"resultContract": "drone-result/v3"
+	},
+	"entrypoints": {
+		"extension": "./dist/index.mjs",
+		"host": "./dist/host.mjs",
+		"desktopRuntime": "./dist/runtime.mjs",
+		"ui": "./ui/plugin.json"
+	},
+	"capabilities": ["discovery"],
+	"tools": [
+		"discovery_status",
+		"discovery_list_records",
+		"discovery_search_records",
+		"discovery_bind_workspace",
+		"discovery_create_plan"
+	],
+	"hosts": ["native-pi", "drone-desktop"],
+	"permissions": {
+		"filesystem": ["workspace", "application-state", "application-state-write"],
+		"network": [],
+		"subprocess": [],
+		"externalWrites": false
+	}
 }

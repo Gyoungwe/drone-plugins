@@ -11,12 +11,15 @@
 		"src/domain/kernel.ts": "957664f77be9a523322330f52710e7caf2e566422a7f78a340da0114c835f25a",
 		"src/domain/validation.ts": "e957d0827ed49a36fec1dff15e1c08d9387e0a0fa0f6efc00344f041a2c52a0e",
 		"src/host.ts": "bcbb9a28dc53e3216f9b15b5dcf23b199b9edf05cd7816a0a725bb3c044353f9",
-		"src/service.ts": "974f14bd6428878f5016412feae579cee5dd333e10581f9c996408e59361a2aa",
-		"src/index.ts": "29819bbbdd9b1ca9152cb5564f4048571a453c7e08be3951211155f2a615bce2",
-		"src/native-records.ts": "f60bd173441c316952018d8f1c5268d40efea4e6ca5218e0f40ba8f9e322ea66"
+		"src/service.ts": "a8606c47ecc7358aefddd462b73a49f7881647e3773d0dc34d99f6e3de547d6a",
+		"src/index.ts": "4210381cc3a1df74c491a32532db79c8e7b59871cdb5986192ead43dd7ac3aef",
+		"src/native-records.ts": "f60bd173441c316952018d8f1c5268d40efea4e6ca5218e0f40ba8f9e322ea66",
+		"src/native-runtime.ts": "2b096de3637d11caa3bcca968e3755e93b32f57bd1d18f4154d95712820bd891",
+		"src/runtime.ts": "a08c437b53334a0eadce407898e422cb9eae9f8a6352d5ded72699106dcade16"
 	},
 	"outputs": {
-		"dist/host.mjs": "1f3e1cc876d02e5aeeab4e6a8648f37aa96cdafef5e3dd2571d46cc283c4ddcc",
-		"dist/index.mjs": "56e16aa800c3ff1f6b8e9fb4e570c41606fc805569f4220c0f4ac8b0c31bcaaf"
+		"dist/host.mjs": "07d4f2942efcd5465ce4133f7948c3be3666cbabc3cd959e1938c542c9c93ebd",
+		"dist/index.mjs": "c62f4083209746dff1d6c486648ebcc10088c10a877f8341fcc901ce487f0770",
+		"dist/runtime.mjs": "8f4cfc7372916249b1b3ff6dce9d74b59710d68565e5eee800ff4e4ac42f9963"
 	}
 }
