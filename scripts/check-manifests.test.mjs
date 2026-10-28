@@ -30,6 +30,17 @@ function errors(manifest = valid, pkg = packageJson, root = packageRoot) {
 
 test("manifest checker accepts a complete declaration", () => assert.equal(errors(), ""));
 
+test("service-only requires coexist with host capabilities and never need another plugin dependency", () => {
+	assert.equal(errors({...valid, entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},requires:{hostCapabilities:["vault-read"]},drone:{...valid.drone,provides:{"audit.runtime":{version:1,operations:["read","write"]}},requires:{tasks:{service:"task.runtime",version:2}}}}), "");
+});
+for (const [declaration,expected] of [
+	[{provides:{"audit.runtime":{version:1,operations:["read","read"]}}}, /operations must be unique/],
+	[{provides:{"audit.runtime":{version:0,operations:["read"]}}}, /positive safe integer/],
+	[{requires:{tasks:{service:"task.runtime",version:1,package:"some-plugin"}}}, /only accepts service and version/],
+	[{provides:["audit.runtime"]}, /must be an object/],
+]) test(`rejects invalid service declarations ${JSON.stringify(declaration)}`,()=>assert.match(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,...declaration}}),expected));
+test("service declarations require an actual managed owner",()=>assert.match(errors({...valid,drone:{...valid.drone,provides:{"audit.runtime":{version:1,operations:["read"]}}}}),/requires desktopRuntime ownership/));
+
 const cases = [
 	["id", { id: "bad" }, "id must match"],
 	["version", { version: "9.9.9" }, "version must match"],

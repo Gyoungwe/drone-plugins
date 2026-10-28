@@ -83,6 +83,41 @@ function isUiOnly(manifest) {
 	return keys.length > 0 && keys.every((key) => key === "ui");
 }
 
+function validateServices(packageName, manifest, failures) {
+	for (const kind of ["provides", "requires"]) {
+		const declarations = manifest.drone?.[kind];
+		if (declarations === undefined) continue;
+		if (!manifest.entrypoints?.desktopRuntime)
+			failure(failures, packageName, `drone.${kind} requires desktopRuntime ownership`);
+		if (!declarations || typeof declarations !== "object" || Array.isArray(declarations)) {
+			failure(failures, packageName, `drone.${kind} must be an object`);
+			continue;
+		}
+		for (const [name, declaration] of Object.entries(declarations)) {
+			const field = `drone.${kind}.${name}`;
+			if (name.length === 0 || name.length > 128)
+				failure(failures, packageName, `${field} name must have 1–128 characters`);
+			if (!declaration || typeof declaration !== "object" || Array.isArray(declaration)) {
+				failure(failures, packageName, `${field} must be an object`);
+				continue;
+			}
+			const keys = kind === "provides" ? ["version", "operations"] : ["service", "version"];
+			if (Object.keys(declaration).some(key => !keys.includes(key)))
+				failure(failures, packageName, `${field} only accepts ${keys.join(" and ")}`);
+			if (!Number.isSafeInteger(declaration.version) || declaration.version < 1)
+				failure(failures, packageName, `${field}.version must be a positive safe integer`);
+			if (kind === "provides") {
+				const operations = declaration.operations;
+				if (!Array.isArray(operations) || operations.length === 0 || operations.some(value => typeof value !== "string" || value.length === 0 || value.length > 128))
+					failure(failures, packageName, `${field}.operations must be a nonempty array of 1–128 character strings`);
+				else if (new Set(operations).size !== operations.length)
+					failure(failures, packageName, `${field}.operations must be unique`);
+			} else if (typeof declaration.service !== "string" || declaration.service.length === 0 || declaration.service.length > 128)
+				failure(failures, packageName, `${field}.service must have 1–128 characters`);
+		}
+	}
+}
+
 export function validatePackageManifest(packageJson, manifest, packageRoot) {
 	const failures = [];
 	const packageName = packageJson.name ?? packageRoot.split(/[\\/]/u).pop();
@@ -114,6 +149,7 @@ export function validatePackageManifest(packageJson, manifest, packageRoot) {
 		for (const tool of tools) if (typeof tool !== "string" || !TOOL_RE.test(tool)) failure(failures, packageName, `invalid tool name ${String(tool)}`);
 	}
 	validatePermissions(packageName, manifest.permissions, failures);
+	validateServices(packageName, manifest, failures);
 	const droneDependencies = Object.keys(packageJson.dependencies ?? {}).filter((name) => name.startsWith("@gyoungwe/"));
 	const bundled = new Set(packageJson.bundleDependencies ?? []);
 	for (const dependency of droneDependencies) if (dependency !== "@gyoungwe/plugin-api" && !bundled.has(dependency)) failure(failures, packageName, `must not depend on another Drone plugin: ${dependency}`);
