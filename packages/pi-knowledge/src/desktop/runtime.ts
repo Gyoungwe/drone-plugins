@@ -476,6 +476,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 			return {
 				...native,
 				toolEffects: { knowledge_status: "read", knowledge_search: "read" },
+				eventEffects: { session_start: "read", session_tree: "read", tool_execution_start: "read", tool_result: "read" },
 				commandEffects: { "knowledge-review-model": "write", "obsidian-review": "write" },
 				async extension(pi) {
 					await native.extension(pi);

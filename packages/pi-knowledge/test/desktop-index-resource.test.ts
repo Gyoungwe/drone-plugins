@@ -80,6 +80,8 @@ it("Desktop complete native registration and its read tools use one real broker-
 		const tools = new Map<string, any>();
 		const session = await runtime.createNativeSession!();
 		expect(session.toolEffects).toEqual({ knowledge_status: "read", knowledge_search: "read" });
+		expect(session.eventEffects).toEqual({ session_start: "read", session_tree: "read", tool_execution_start: "read", tool_result: "read" });
+		for (const event of ["before_agent_start", "message_start", "context", "tool_execution_end"]) expect(session.eventEffects?.[event]).not.toBe("read");
 		await session.extension({ events: createEventBus(), on: () => undefined, registerTool: (tool: any) => tools.set(tool.name, tool), registerCommand: () => {} } as any);
 		const manifest = JSON.parse(await readFile(new URL("../plugin.manifest.json", import.meta.url), "utf8"));
 		expect([...tools.keys()].sort()).toEqual([...manifest.tools].sort());
