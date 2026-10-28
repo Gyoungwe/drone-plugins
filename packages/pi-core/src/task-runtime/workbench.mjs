@@ -224,6 +224,10 @@ function createTaskWorkbench({
       }
     }
     for (const t of book.tasks) {
+      // A checkpoint restores observations and the plan, never this activation's
+      // user authorization. The same live book is retained by the early return
+      // above; a fresh owner/branch requires a new actual approval.
+      delete t.executionConsent;
       for (const op of t.operations)
         if (op.state === "started") {
           op.state = "unknown";
