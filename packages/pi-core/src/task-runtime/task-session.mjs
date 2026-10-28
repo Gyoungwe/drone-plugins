@@ -22,6 +22,7 @@ function taskEntries(entries) {
 export function createTaskSession({
   persist,
   inspect,
+  evidenceFiles,
   authorize,
   readOnly,
   onCommitted,
@@ -47,6 +48,7 @@ export function createTaskSession({
   });
   const evidence = createEvidenceRecovery({
     authorize,
+    files: evidenceFiles,
     persist: () => {
       dirty = true;
     },
