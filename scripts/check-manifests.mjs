@@ -118,6 +118,37 @@ function validateServices(packageName, manifest, failures) {
 	}
 }
 
+function validateRecordAdoptions(packageName, packageVersion, manifest, failures) {
+	const declarations=manifest.drone?.recordAdoptions;
+	if(declarations===undefined)return;
+	if(!manifest.entrypoints?.desktopRuntime)failure(failures,packageName,"drone.recordAdoptions requires desktopRuntime ownership");
+	if(!declarations || typeof declarations!=="object" || Array.isArray(declarations)) {
+		failure(failures,packageName,"drone.recordAdoptions must be an object");return;
+	}
+	const stable=value=>typeof value==="string" && value.length<=128 && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u.test(value);
+	if(!stable(packageVersion))failure(failures,packageName,"record adoption requires an exact stable package version");
+	for(const [type,declaration]of Object.entries(declarations)) {
+		const field=`drone.recordAdoptions.${type}`;
+		if(type.length===0 || type.length>128)failure(failures,packageName,`${field} logical type must have 1–128 characters`);
+		if(!declaration || typeof declaration!=="object" || Array.isArray(declaration)) {
+			failure(failures,packageName,`${field} must be an object`);continue;
+		}
+		if(Object.keys(declaration).some(key=>!["legacyType","fromVersions","removeBeforeVersion"].includes(key)))failure(failures,packageName,`${field} only accepts legacyType, fromVersions and removeBeforeVersion`);
+		const legacy=declaration.legacyType;
+		if(typeof legacy!=="string" || !legacy.length || legacy.length>128)failure(failures,packageName,`${field}.legacyType must have 1–128 characters`);
+		else if(legacy.startsWith("plugin-record:") || legacy.startsWith("plugin-notice:"))failure(failures,packageName,`${field}.legacyType cannot import a source-owned namespace`);
+		const versions=declaration.fromVersions;
+		if(!Array.isArray(versions) || !versions.length || versions.some(version=>!stable(version)))failure(failures,packageName,`${field}.fromVersions must list exact supported migrator versions`);
+		else if(new Set(versions).size!==versions.length)failure(failures,packageName,`${field}.fromVersions must be unique`);
+		if(!stable(declaration.removeBeforeVersion))failure(failures,packageName,`${field}.removeBeforeVersion must be an exact stable version`);
+		else if(stable(packageVersion)) {
+			const current=packageVersion.split(".").map(BigInt),removal=declaration.removeBeforeVersion.split(".").map(BigInt);
+			const differing=current.findIndex((part,index)=>part!==removal[index]);
+			if(differing===-1 || current[differing]>removal[differing])failure(failures,packageName,`${field} must be removed before package version ${declaration.removeBeforeVersion}`);
+		}
+	}
+}
+
 export function validatePackageManifest(packageJson, manifest, packageRoot) {
 	const failures = [];
 	const packageName = packageJson.name ?? packageRoot.split(/[\\/]/u).pop();
@@ -150,6 +181,7 @@ export function validatePackageManifest(packageJson, manifest, packageRoot) {
 	}
 	validatePermissions(packageName, manifest.permissions, failures);
 	validateServices(packageName, manifest, failures);
+	validateRecordAdoptions(packageName,packageJson.version,manifest,failures);
 	const droneDependencies = Object.keys(packageJson.dependencies ?? {}).filter((name) => name.startsWith("@gyoungwe/"));
 	const bundled = new Set(packageJson.bundleDependencies ?? []);
 	for (const dependency of droneDependencies) if (dependency !== "@gyoungwe/plugin-api" && !bundled.has(dependency)) failure(failures, packageName, `must not depend on another Drone plugin: ${dependency}`);
