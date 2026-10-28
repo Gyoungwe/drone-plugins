@@ -460,7 +460,7 @@ function describeAcceptance(acceptance, verifier = acceptanceVerifier(acceptance
 // src/task-runtime/native-adapter.mjs
 import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
 import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
-import { realpath as realpath3 } from "node:fs/promises";
+import { readFile, realpath as realpath3 } from "node:fs/promises";
 import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve4, sep as sep2 } from "node:path";
 
 // src/task-runtime/consent.mjs
@@ -591,7 +591,6 @@ ${details}`, [deny, allow], { signal });
 }
 
 // src/task-runtime/evidence.mjs
-import { readFile } from "node:fs/promises";
 import { resolve as resolve3 } from "node:path";
 
 // src/task-runtime/workbench.mjs
@@ -1931,7 +1930,7 @@ function createTaskWorkbench({
 }
 
 // src/task-runtime/evidence.mjs
-function createEvidenceRecovery({ authorize, persist = () => {
+function createEvidenceRecovery({ authorize, files, persist = () => {
 } }) {
   let scope = null, taskId = null, records = [], used = 0;
   const save = () => persist({ version: 1, scope, taskId, records, used });
@@ -1956,25 +1955,28 @@ function createEvidenceRecovery({ authorize, persist = () => {
     async capture(event, cwd, binding) {
       if (!taskId || typeof event.input?.path !== "string" || records.some((r) => r.id === event.toolCallId))
         return;
+      let file;
       try {
-        const file = await inspectTaskFile(cwd, event.input.path);
-        const offset = Math.max(1, Math.floor(event.input.offset || event.input.start_line || 1));
-        const limit = Math.min(120, Math.max(1, Math.floor(event.input.limit || 120)));
-        records.push({
-          id: clean2(event.toolCallId, 100),
-          path: file.path,
-          sha256: file.sha256,
-          ...file.rootKind ? { rootKind: file.rootKind } : {},
-          ...file.absolutePath ? { absolutePath: file.absolutePath } : {},
-          offset,
-          limit,
-          binding,
-          evicted: false
-        });
-        records = records.slice(-8);
-        save();
-      } catch {
+        file = await files.inspect(cwd, event.input.path);
+      } catch (error3) {
+        console.warn("Task evidence capture unavailable:", error3.code || "file-unavailable");
+        return;
       }
+      const offset = Math.max(1, Math.floor(event.input.offset || event.input.start_line || 1));
+      const limit = Math.min(120, Math.max(1, Math.floor(event.input.limit || 120)));
+      records.push({
+        id: clean2(event.toolCallId, 100),
+        path: file.path,
+        sha256: file.sha256,
+        ...file.rootKind ? { rootKind: file.rootKind } : {},
+        ...file.absolutePath ? { absolutePath: file.absolutePath } : {},
+        offset,
+        limit,
+        binding,
+        evicted: false
+      });
+      records = records.slice(-8);
+      save();
     },
     evict(ids) {
       if (!Array.isArray(ids)) return;
@@ -1995,12 +1997,12 @@ function createEvidenceRecovery({ authorize, persist = () => {
       const binding = await bindingProvider();
       if (binding !== record.binding) throw new Error("recovery-binding-changed");
       await authorize(cwd, record.path);
-      await inspectTaskFile(cwd, record.absolutePath || record.path, {
+      await files.inspect(cwd, record.absolutePath || record.path, {
         sha256: record.sha256,
         rootKind: record.rootKind
       });
-      const text2 = (await readFile(record.absolutePath || resolve3(cwd, record.path), "utf8")).split(/\r?\n/).slice(record.offset - 1, record.offset - 1 + record.limit).join("\n").slice(0, 16e3);
-      await inspectTaskFile(cwd, record.absolutePath || record.path, {
+      const text2 = (await files.readText(record.absolutePath || resolve3(cwd, record.path))).split(/\r?\n/).slice(record.offset - 1, record.offset - 1 + record.limit).join("\n").slice(0, 16e3);
+      await files.inspect(cwd, record.absolutePath || record.path, {
         sha256: record.sha256,
         rootKind: record.rootKind
       });
@@ -2036,6 +2038,7 @@ function taskEntries(entries) {
 function createTaskSession({
   persist,
   inspect,
+  evidenceFiles,
   authorize,
   readOnly,
   onCommitted,
@@ -2057,6 +2060,7 @@ function createTaskSession({
   });
   const evidence = createEvidenceRecovery({
     authorize,
+    files: evidenceFiles,
     persist: () => {
       dirty = true;
     }
@@ -2511,6 +2515,7 @@ function registerWorkbench(pi, options = {}) {
     };
   };
   const session = createTaskSession({
+    evidenceFiles: { inspect: inspectTaskFile, readText: (path) => readFile(path, "utf8") },
     readFailure: () => options.application.readFailure(activeSessionId),
     onPersistenceFailed: (failure) => options.application.recordFailure(activeSessionId, failure),
     readOnly: (name) => {
