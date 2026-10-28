@@ -16,12 +16,9 @@ export type KernelSessionStatus =
 	| "running"
 	| "closed"
 	| "idle-timeout"
-	| "needs-container";
-export type DataClassification =
-	| "public"
-	| "internal"
-	| "controlled"
-	| "restricted";
+	| "needs-container"
+	| "cleanup-failed";
+export type DataClassification = "public" | "internal" | "controlled" | "restricted";
 export type KernelContentKind = "summary" | "plot" | "table" | "raw";
 
 export interface KernelRunnerCapabilities {
@@ -119,20 +116,12 @@ const encoder = new TextEncoder();
 
 function validClassification(value: unknown): value is DataClassification {
 	return (
-		value === "public" ||
-		value === "internal" ||
-		value === "controlled" ||
-		value === "restricted"
+		value === "public" || value === "internal" || value === "controlled" || value === "restricted"
 	);
 }
 
 function validKind(value: unknown): value is KernelContentKind {
-	return (
-		value === "summary" ||
-		value === "plot" ||
-		value === "table" ||
-		value === "raw"
-	);
+	return value === "summary" || value === "plot" || value === "table" || value === "raw";
 }
 
 function ensureOptions(options: KernelSessionOptions): void {
@@ -145,10 +134,7 @@ function ensureOptions(options: KernelSessionOptions): void {
 		options.language === "python" || options.language === "r",
 		"unsupported kernel language",
 	);
-	assertValid(
-		validClassification(options.dataClassification),
-		"invalid data classification",
-	);
+	assertValid(validClassification(options.dataClassification), "invalid data classification");
 	assertValid(
 		options.runner && typeof options.runner.run === "function",
 		"controlled runner is required",
@@ -165,10 +151,7 @@ function ensureOptions(options: KernelSessionOptions): void {
 		"runner does not support this language",
 	);
 	if (capabilities.kind !== "unavailable") {
-		assertValid(
-			capabilities.networkDisabled,
-			"kernel runner must disable network access",
-		);
+		assertValid(capabilities.networkDisabled, "kernel runner must disable network access");
 		assertValid(
 			capabilities.writesOnlyToRunDirectory,
 			"kernel runner must constrain writes to runs",
@@ -181,10 +164,7 @@ function ensureOptions(options: KernelSessionOptions): void {
 		["maxOutputBytes", options.maxOutputBytes],
 	] as const) {
 		if (value !== undefined)
-			assertValid(
-				boundedInteger(value, 1, 24 * 60 * 60_000),
-				`${label} is invalid`,
-			);
+			assertValid(boundedInteger(value, 1, 24 * 60 * 60_000), `${label} is invalid`);
 	}
 }
 
@@ -203,10 +183,7 @@ export function filterKernelOutput(
 	readonly kinds: readonly KernelContentKind[];
 } {
 	assertValid(validClassification(policy), "invalid output policy");
-	assertValid(
-		boundedInteger(maxBytes, 1, DEFAULT_MAX_OUTPUT_BYTES * 100),
-		"maxBytes is invalid",
-	);
+	assertValid(boundedInteger(maxBytes, 1, DEFAULT_MAX_OUTPUT_BYTES * 100), "maxBytes is invalid");
 	const accepted: string[] = [];
 	const kinds: KernelContentKind[] = [];
 	let redactedBytes = 0;
@@ -257,10 +234,7 @@ export function filterKernelOutput(
 	return { text, redactedBytes, blocked, kinds };
 }
 
-function notebookFor(
-	history: readonly KernelExecution[],
-	language: KernelLanguage,
-): string {
+function notebookFor(history: readonly KernelExecution[], language: KernelLanguage): string {
 	return JSON.stringify(
 		{
 			cells: history.map((execution) => ({
@@ -296,10 +270,7 @@ export class KernelSession {
 	private readonly options: Required<
 		Pick<
 			KernelSessionOptions,
-			| "idleTimeoutMs"
-			| "executionTimeoutMs"
-			| "maxExecutions"
-			| "maxOutputBytes"
+			"idleTimeoutMs" | "executionTimeoutMs" | "maxExecutions" | "maxOutputBytes"
 		>
 	> &
 		KernelSessionOptions;
@@ -318,8 +289,7 @@ export class KernelSession {
 		this.options = {
 			...options,
 			idleTimeoutMs: options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
-			executionTimeoutMs:
-				options.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS,
+			executionTimeoutMs: options.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS,
 			maxExecutions: options.maxExecutions ?? DEFAULT_MAX_EXECUTIONS,
 			maxOutputBytes: options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
 		};
@@ -332,10 +302,7 @@ export class KernelSession {
 	}
 
 	get status(): KernelStatus {
-		const remaining = Math.max(
-			0,
-			this.options.maxExecutions - this.executionCount,
-		);
+		const remaining = Math.max(0, this.options.maxExecutions - this.executionCount);
 		return {
 			sessionId: this.options.sessionId,
 			status: this.state,
@@ -351,19 +318,17 @@ export class KernelSession {
 		return this.history;
 	}
 
-	async execute(code: string): Promise<KernelExecution> {
+	async execute(code: string, signal?: AbortSignal): Promise<KernelExecution> {
 		assertValid(this.state === "ready", `kernel session is ${this.state}`);
-		assertValid(
-			nonEmptyText(code, MAX_CODE_LENGTH),
-			"kernel code is empty or too large",
-		);
+		assertValid(nonEmptyText(code, MAX_CODE_LENGTH), "kernel code is empty or too large");
 		assertValid(
 			this.executionCount < this.options.maxExecutions,
 			"kernel execution budget exceeded",
 		);
 		const controller = new AbortController();
 		this.executionController = controller;
-		const execution = this.executeActive(code, controller);
+		signal?.throwIfAborted();
+		const execution = this.executeActive(code, controller, signal);
 		this.activeExecution = execution;
 		try {
 			return await execution;
@@ -376,6 +341,7 @@ export class KernelSession {
 	private async executeActive(
 		code: string,
 		controller: AbortController,
+		callerSignal?: AbortSignal,
 	): Promise<KernelExecution> {
 		this.state = "running";
 		this.executionCount += 1;
@@ -389,7 +355,9 @@ export class KernelSession {
 		let execution: KernelExecution;
 		try {
 			const result = await this.options.runner.run({
-				signal: controller.signal,
+				signal: callerSignal
+					? AbortSignal.any([controller.signal, callerSignal])
+					: controller.signal,
 				requestId: id,
 				language: this.options.language,
 				code,
@@ -433,13 +401,9 @@ export class KernelSession {
 				...(filtered.blocked ? { blockedReason: "output-policy" } : {}),
 			};
 		} catch (error) {
-			if (
-				error instanceof Error &&
-				"code" in error &&
-				error.code === "DISCOVERY_CLEANUP_FAILED"
-			) {
+			if (error instanceof Error && "code" in error && error.code === "DISCOVERY_CLEANUP_FAILED") {
 				this.cleanupFailure = error;
-				this.state = "closed";
+				this.state = "cleanup-failed";
 				throw error;
 			}
 			execution = {
@@ -459,7 +423,15 @@ export class KernelSession {
 						? "timeout"
 						: controller.signal.aborted
 							? "cancelled"
-							: "runner-failure",
+							: error instanceof Error &&
+									"code" in error &&
+									error.code === "EXECUTION_IMAGE_NOT_CACHED"
+								? "image-not-cached"
+								: error instanceof Error &&
+										"code" in error &&
+										error.code === "EXECUTION_IMAGE_MISMATCH"
+									? "image-mismatch"
+									: "runner-failure",
 			};
 		} finally {
 			clearTimeout(timer);
@@ -496,11 +468,12 @@ export class KernelSession {
 		if (this.closing) return this.closing;
 		if (this.cleanupFailure) return Promise.reject(this.cleanupFailure);
 		if (this.idleTimer) clearTimeout(this.idleTimer);
-		this.state = reason;
 		this.executionController?.abort(new Error("kernel-closed"));
-		this.closing = this.activeExecution
-			? this.activeExecution.then(() => undefined)
-			: Promise.resolve();
+		this.closing = (async () => {
+			await this.activeExecution;
+			if (this.idleTimer) clearTimeout(this.idleTimer);
+			this.state = reason;
+		})();
 		return this.closing;
 	}
 
@@ -512,10 +485,7 @@ export class KernelSession {
 		if (this.idleTimer) clearTimeout(this.idleTimer);
 		if (this.state !== "ready") return;
 		this.expiresAt = this.now() + this.options.idleTimeoutMs;
-		this.idleTimer = setTimeout(
-			() => this.close("idle-timeout"),
-			this.options.idleTimeoutMs,
-		);
+		this.idleTimer = setTimeout(() => this.close("idle-timeout"), this.options.idleTimeoutMs);
 	}
 }
 
@@ -538,10 +508,7 @@ export function prepareKernel(
 			status: "needs-container",
 			reason: "a container runtime is required for production kernel execution",
 		};
-	if (
-		!runner.capabilities.networkDisabled ||
-		!runner.capabilities.writesOnlyToRunDirectory
-	)
+	if (!runner.capabilities.networkDisabled || !runner.capabilities.writesOnlyToRunDirectory)
 		return {
 			status: "needs-container",
 			reason: "runner sandbox guarantees are incomplete",
@@ -591,8 +558,7 @@ export class SubprocessFixtureRunner implements ControlledKernelRunner {
 			let stderr = "";
 			const append = (value: Buffer, target: "stdout" | "stderr") => {
 				const text = value.toString("utf8");
-				if (target === "stdout")
-					stdout = `${stdout}${text}`.slice(0, request.maxOutputBytes);
+				if (target === "stdout") stdout = `${stdout}${text}`.slice(0, request.maxOutputBytes);
 				else stderr = `${stderr}${text}`.slice(0, request.maxOutputBytes);
 			};
 			child.stdout.on("data", (value: Buffer) => append(value, "stdout"));
@@ -613,11 +579,7 @@ export class SubprocessFixtureRunner implements ControlledKernelRunner {
 						.split(/\r?\n/)
 						.every((line) => line.length === 0 || line.startsWith("[summary]"))
 						? "summary"
-						: stdout
-									.split(/\r?\n/)
-									.every(
-										(line) => line.length === 0 || line.startsWith("[plot]"),
-									)
+						: stdout.split(/\r?\n/).every((line) => line.length === 0 || line.startsWith("[plot]"))
 							? "plot"
 							: "raw";
 					outputs.push({

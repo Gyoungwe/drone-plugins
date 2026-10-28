@@ -1,14 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import {
-	access,
-	mkdir,
-	mkdtemp,
-	readFile,
-	rm,
-	symlink,
-	writeFile,
-} from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -43,9 +35,15 @@ test("native entry registers exactly its declared tools with explicit write meta
 		[...registered.values()]
 			.filter(
 				(tool) =>
-					!["discovery_bind_workspace", "discovery_create_plan"].includes(
-						tool.name,
-					),
+					![
+						"discovery_bind_workspace",
+						"discovery_create_plan",
+						"discovery_cancel_execution",
+						"discovery_create_kernel",
+						"discovery_execute_kernel",
+						"discovery_close_kernel",
+						"discovery_reconcile_executions",
+					].includes(tool.name),
 			)
 			.every((tool) => tool.drone.readOnly === true),
 	);
@@ -54,8 +52,7 @@ test("native entry registers exactly its declared tools with explicit write meta
 test("first-run status is unconfigured and creates no journal", async () => {
 	const root = await mkdtemp(join(tmpdir(), "discovery-native-first-"));
 	try {
-		const status = (await call(await tools(), "discovery_status", root))
-			.details;
+		const status = (await call(await tools(), "discovery_status", root)).details;
 		assert.equal(status.status, "unconfigured");
 		assert.equal(status.execution, "unavailable");
 		assert.equal(status.inquiry, "unavailable");
@@ -75,10 +72,7 @@ test("the same extension uses each calling workspace and leaves original journal
 			'[ {"findingId":"finding-a", "questions":[{"question":"Batch explanation?"}]} ]\n';
 		const file = join(journal(a), "critics.json");
 		await writeFile(file, source);
-		await writeFile(
-			join(journal(b), "critics.json"),
-			'[{"findingId":"finding-b"}]',
-		);
+		await writeFile(join(journal(b), "critics.json"), '[{"findingId":"finding-b"}]');
 		const registered = await tools();
 		const hash = (value) => createHash("sha256").update(value).digest("hex");
 		const before = hash(await readFile(file));
@@ -215,8 +209,8 @@ test("native plan writing binds the actual workspace and excludes a second nativ
 			"plan-native",
 		);
 		assert.equal(
-			(await call(first, "discovery_list_records", root, { journal: "plans" }))
-				.details.records[0].id,
+			(await call(first, "discovery_list_records", root, { journal: "plans" })).details.records[0]
+				.id,
 			"plan-native",
 		);
 		await assert.rejects(
@@ -235,8 +229,8 @@ test("native plan writing binds the actual workspace and excludes a second nativ
 		).details;
 		assert.equal(recovered.readiness, "ready");
 		assert.equal(
-			(await call(second, "discovery_list_records", root, { journal: "plans" }))
-				.details.records[0].id,
+			(await call(second, "discovery_list_records", root, { journal: "plans" })).details.records[0]
+				.id,
 			"plan-native",
 		);
 	} finally {
@@ -265,10 +259,7 @@ test("refuses to bind mixed legacy project identities without replacing journal 
 			/conflicting project identities/,
 		);
 		assert.equal(await readFile(path, "utf8"), original);
-		await assert.rejects(
-			access(join(journal(root), "workspace-binding.json")),
-			{ code: "ENOENT" },
-		);
+		await assert.rejects(access(join(journal(root), "workspace-binding.json")), { code: "ENOENT" });
 	} finally {
 		await registered.dispose();
 		await rm(root, { recursive: true, force: true });

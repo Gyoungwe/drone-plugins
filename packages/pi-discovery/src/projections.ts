@@ -4,10 +4,7 @@ import type {
 	DiscoveryRunnerCapabilities,
 	DiscoveryQuestionPrior,
 } from "./ports.js";
-import type {
-	CriticReviewResult,
-	MultipathAssessment,
-} from "./domain/critic.js";
+import type { CriticReviewResult, MultipathAssessment } from "./domain/critic.js";
 import type { DiscoveryExplorationBudget } from "./domain/exploration.js";
 import type { DiscoveryEvaluationRun } from "./domain/evaluation.js";
 export type DiscoveryCapabilities = DiscoveryRunnerCapabilities;
@@ -23,7 +20,8 @@ export interface DiscoveryKernelSession {
 		| "running"
 		| "closed"
 		| "idle-timeout"
-		| "needs-container";
+		| "needs-container"
+		| "cleanup-failed";
 	readonly executionCount: number;
 	readonly remainingExecutions: number;
 	readonly expiresAt?: string;

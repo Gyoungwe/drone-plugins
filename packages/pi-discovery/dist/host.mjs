@@ -702,10 +702,7 @@ function ensureOptions(options) {
     options.language === "python" || options.language === "r",
     "unsupported kernel language"
   );
-  assertValid(
-    validClassification(options.dataClassification),
-    "invalid data classification"
-  );
+  assertValid(validClassification(options.dataClassification), "invalid data classification");
   assertValid(
     options.runner && typeof options.runner.run === "function",
     "controlled runner is required"
@@ -720,10 +717,7 @@ function ensureOptions(options) {
     "runner does not support this language"
   );
   if (capabilities.kind !== "unavailable") {
-    assertValid(
-      capabilities.networkDisabled,
-      "kernel runner must disable network access"
-    );
+    assertValid(capabilities.networkDisabled, "kernel runner must disable network access");
     assertValid(
       capabilities.writesOnlyToRunDirectory,
       "kernel runner must constrain writes to runs"
@@ -736,18 +730,12 @@ function ensureOptions(options) {
     ["maxOutputBytes", options.maxOutputBytes]
   ]) {
     if (value !== void 0)
-      assertValid(
-        boundedInteger(value, 1, 24 * 60 * 6e4),
-        `${label} is invalid`
-      );
+      assertValid(boundedInteger(value, 1, 24 * 60 * 6e4), `${label} is invalid`);
   }
 }
 function filterKernelOutput(outputs, policy, maxBytes = DEFAULT_MAX_OUTPUT_BYTES) {
   assertValid(validClassification(policy), "invalid output policy");
-  assertValid(
-    boundedInteger(maxBytes, 1, DEFAULT_MAX_OUTPUT_BYTES * 100),
-    "maxBytes is invalid"
-  );
+  assertValid(boundedInteger(maxBytes, 1, DEFAULT_MAX_OUTPUT_BYTES * 100), "maxBytes is invalid");
   const accepted = [];
   const kinds = [];
   let redactedBytes = 0;
@@ -841,10 +829,7 @@ var KernelSession = class {
     this.armIdleTimer();
   }
   get status() {
-    const remaining = Math.max(
-      0,
-      this.options.maxExecutions - this.executionCount
-    );
+    const remaining = Math.max(0, this.options.maxExecutions - this.executionCount);
     return {
       sessionId: this.options.sessionId,
       status: this.state,
@@ -856,19 +841,17 @@ var KernelSession = class {
   get executions() {
     return this.history;
   }
-  async execute(code) {
+  async execute(code, signal) {
     assertValid(this.state === "ready", `kernel session is ${this.state}`);
-    assertValid(
-      nonEmptyText(code, MAX_CODE_LENGTH),
-      "kernel code is empty or too large"
-    );
+    assertValid(nonEmptyText(code, MAX_CODE_LENGTH), "kernel code is empty or too large");
     assertValid(
       this.executionCount < this.options.maxExecutions,
       "kernel execution budget exceeded"
     );
     const controller = new AbortController();
     this.executionController = controller;
-    const execution = this.executeActive(code, controller);
+    signal?.throwIfAborted();
+    const execution = this.executeActive(code, controller, signal);
     this.activeExecution = execution;
     try {
       return await execution;
@@ -877,7 +860,7 @@ var KernelSession = class {
       this.executionController = void 0;
     }
   }
-  async executeActive(code, controller) {
+  async executeActive(code, controller, callerSignal) {
     this.state = "running";
     this.executionCount += 1;
     this.armIdleTimer();
@@ -890,7 +873,7 @@ var KernelSession = class {
     let execution;
     try {
       const result = await this.options.runner.run({
-        signal: controller.signal,
+        signal: callerSignal ? AbortSignal.any([controller.signal, callerSignal]) : controller.signal,
         requestId: id,
         language: this.options.language,
         code,
@@ -931,7 +914,7 @@ var KernelSession = class {
     } catch (error) {
       if (error instanceof Error && "code" in error && error.code === "DISCOVERY_CLEANUP_FAILED") {
         this.cleanupFailure = error;
-        this.state = "closed";
+        this.state = "cleanup-failed";
         throw error;
       }
       execution = {
@@ -945,7 +928,7 @@ var KernelSession = class {
         contentKinds: [],
         producedBytes: 0,
         redactedBytes: 0,
-        blockedReason: controller.signal.reason instanceof Error && controller.signal.reason.message === "runner-timeout" ? "timeout" : controller.signal.aborted ? "cancelled" : "runner-failure"
+        blockedReason: controller.signal.reason instanceof Error && controller.signal.reason.message === "runner-timeout" ? "timeout" : controller.signal.aborted ? "cancelled" : error instanceof Error && "code" in error && error.code === "EXECUTION_IMAGE_NOT_CACHED" ? "image-not-cached" : error instanceof Error && "code" in error && error.code === "EXECUTION_IMAGE_MISMATCH" ? "image-mismatch" : "runner-failure"
       };
     } finally {
       clearTimeout(timer);
@@ -980,9 +963,12 @@ var KernelSession = class {
     if (this.closing) return this.closing;
     if (this.cleanupFailure) return Promise.reject(this.cleanupFailure);
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.state = reason;
     this.executionController?.abort(new Error("kernel-closed"));
-    this.closing = this.activeExecution ? this.activeExecution.then(() => void 0) : Promise.resolve();
+    this.closing = (async () => {
+      await this.activeExecution;
+      if (this.idleTimer) clearTimeout(this.idleTimer);
+      this.state = reason;
+    })();
     return this.closing;
   }
   now() {
@@ -992,10 +978,7 @@ var KernelSession = class {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.state !== "ready") return;
     this.expiresAt = this.now() + this.options.idleTimeoutMs;
-    this.idleTimer = setTimeout(
-      () => this.close("idle-timeout"),
-      this.options.idleTimeoutMs
-    );
+    this.idleTimer = setTimeout(() => this.close("idle-timeout"), this.options.idleTimeoutMs);
   }
 };
 
@@ -1068,13 +1051,17 @@ var DiscoveryService = class {
   plans = [];
   evaluations = [];
   initialized;
+  creations = Promise.resolve();
+  sessionWrites = Promise.resolve();
+  sessionsRevision = 0;
+  savedSessionsRevision = 0;
   disposed = false;
   executions = /* @__PURE__ */ new Map();
+  executionSignals = /* @__PURE__ */ new Map();
   disposal;
   constructor(options) {
     this.projectId = safeProjectId(options.projectId);
-    if (!isAbsolute(options.projectRoot))
-      throw new Error("discovery projectRoot must be absolute");
+    if (!isAbsolute(options.projectRoot)) throw new Error("discovery projectRoot must be absolute");
     this.projectRoot = resolve(options.projectRoot);
     this.options = options;
     this.sessionsStore = options.services.journal("sessions");
@@ -1103,10 +1090,7 @@ var DiscoveryService = class {
           if (safeSessionId(session.sessionId) && session.runDirectory.startsWith("runs/"))
             this.sessionMeta.set(session.sessionId, session);
         } catch (error) {
-          console.warn(
-            "Ignored invalid discovery session journal entry",
-            error
-          );
+          console.warn("Ignored invalid discovery session journal entry", error);
         }
       }
       this.critics.splice(0, this.critics.length, ...critics);
@@ -1126,8 +1110,37 @@ var DiscoveryService = class {
     const runner = await this.runnerFor(language);
     return toCapabilities(runner.capabilities);
   }
-  async persistSessions() {
-    await this.sessionsStore.write([...this.sessionMeta.values()]);
+  writeSessions(write) {
+    const pending = this.sessionWrites.then(write);
+    this.sessionWrites = pending.then(
+      () => void 0,
+      () => void 0
+    );
+    return pending;
+  }
+  persistSessions() {
+    return this.writeSessions(async () => {
+      const revision = this.sessionsRevision;
+      await this.sessionsStore.write([...this.sessionMeta.values()]);
+      this.savedSessionsRevision = revision;
+    });
+  }
+  /** Called only by an explicit legitimate runtime reconcile operation, never by dispose. */
+  async persistObservedKernelStates() {
+    await this.init();
+    for (const [id, session] of this.sessions) {
+      const meta = this.sessionMeta.get(id);
+      if (!meta) throw new Error("Active discovery session has no journal metadata");
+      if (meta.status !== session.status.status || meta.executionCount !== session.status.executionCount) {
+        this.sessionMeta.set(id, {
+          ...meta,
+          status: session.status.status,
+          executionCount: session.status.executionCount
+        });
+        this.sessionsRevision++;
+      }
+    }
+    if (this.savedSessionsRevision !== this.sessionsRevision) await this.persistSessions();
   }
   sessionProjection(id) {
     const session = this.sessions.get(id);
@@ -1167,13 +1180,20 @@ var DiscoveryService = class {
   }
   async recordDiscovery(input) {
     await this.init();
-    if (!this.options.services.inquiry)
-      throw new Error("inquiry ledger is not configured");
+    if (!this.options.services.inquiry) throw new Error("inquiry ledger is not configured");
     if (input.projectId !== this.projectId)
       throw new Error("discovery project does not match inquiry project");
     await recordDiscoveryToInquiry(this.options.services.inquiry, input);
   }
-  async createKernelSession(input) {
+  createKernelSession(input) {
+    const pending = this.creations.then(() => this.createKernel(input));
+    this.creations = pending.then(
+      () => void 0,
+      () => void 0
+    );
+    return pending;
+  }
+  async createKernel(input) {
     await this.init();
     const sessionId = safeSessionId(input.sessionId);
     if (this.sessionMeta.has(sessionId))
@@ -1183,7 +1203,6 @@ var DiscoveryService = class {
       kind: "create-kernel-session",
       projectId: this.projectId
     });
-    await this.options.services.files.prepareDirectory(runDirectory);
     const runner = await this.runnerFor(input.language);
     if (this.disposed) throw new Error("discovery service is disposed");
     const options = {
@@ -1199,8 +1218,7 @@ var DiscoveryService = class {
       ...input.maxOutputBytes === void 0 ? {} : { maxOutputBytes: input.maxOutputBytes }
     };
     const session = new KernelSession(options);
-    this.sessions.set(sessionId, session);
-    this.sessionMeta.set(sessionId, {
+    const metadata = {
       sessionId,
       runDirectory,
       language: input.language,
@@ -1209,50 +1227,65 @@ var DiscoveryService = class {
       executionCount: session.status.executionCount,
       capabilities: runner.capabilities,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    await this.persistSessions();
+    };
+    try {
+      await this.writeSessions(async () => {
+        const revision = this.sessionsRevision;
+        await this.sessionsStore.write([...this.sessionMeta.values(), metadata]);
+        this.savedSessionsRevision = revision;
+        if (this.disposed) throw new Error("Discovery service was disposed during kernel creation");
+        this.sessions.set(sessionId, session);
+        this.sessionMeta.set(sessionId, metadata);
+      });
+    } catch (error) {
+      await session.close();
+      throw error;
+    }
     return this.sessionProjection(sessionId);
   }
-  async executeKernel(sessionId, code) {
+  async executeKernel(sessionId, code, signal) {
     await this.init();
     const id = safeSessionId(sessionId);
     const session = this.sessions.get(id);
-    if (!session)
-      throw new Error(
-        "Discovery kernel session is not active; create a new session"
-      );
+    if (!session) throw new Error("Discovery kernel session is not active; create a new session");
     await this.authorize({
       kind: "execute-kernel",
       projectId: this.projectId,
       sessionId: id
     });
     if (this.disposed) throw new Error("discovery service is disposed");
-    if (this.executions.has(id))
-      throw new Error("discovery kernel execution is already running");
-    const pending = this.executeSession(id, code, session);
+    if (this.executions.has(id)) throw new Error("discovery kernel execution is already running");
+    signal?.throwIfAborted();
+    const pending = this.executeSession(id, code, session, signal);
     this.executions.set(id, pending);
+    if (signal) this.executionSignals.set(id, signal);
     try {
       return await pending;
     } finally {
-      if (this.executions.get(id) === pending) this.executions.delete(id);
+      if (this.executions.get(id) === pending) {
+        this.executions.delete(id);
+        this.executionSignals.delete(id);
+      }
     }
   }
-  async executeSession(id, code, session) {
-    const execution = await session.execute(code);
+  async executeSession(id, code, session, signal) {
+    const execution = await session.execute(code, signal);
+    signal?.throwIfAborted();
     const meta = this.sessionMeta.get(id);
-    if (meta)
-      this.sessionMeta.set(id, {
-        ...meta,
-        status: session.status.status,
-        executionCount: session.status.executionCount
-      });
+    if (!meta) throw new Error("Active discovery session has no journal metadata");
+    this.sessionMeta.set(id, {
+      ...meta,
+      status: session.status.status,
+      executionCount: session.status.executionCount
+    });
+    this.sessionsRevision++;
     await this.persistSessions();
     await this.options.services.onExecution({
       sessionId: id,
       projectId: this.projectId,
       cwd: this.projectRoot,
-      runDirectory: this.sessionMeta.get(id)?.runDirectory ?? "runs",
-      language: this.sessionMeta.get(id)?.language ?? "unknown",
+      runDirectory: meta.runDirectory,
+      language: meta.language,
       code,
       execution
     });
@@ -1262,16 +1295,30 @@ var DiscoveryService = class {
     await this.init();
     const id = safeSessionId(sessionId);
     const session = this.sessions.get(id);
-    if (!session)
-      throw new Error(
-        "Discovery kernel session is not active; create a new session"
-      );
+    if (!session) throw new Error("Discovery kernel session is not active; create a new session");
     await this.authorize({
       kind: "export-kernel",
       projectId: this.projectId,
       sessionId: id
     });
     return session.export();
+  }
+  /** Resource-only shutdown: no capability, caller replacement or journal write is borrowed. */
+  async disposeKernelSession(sessionId) {
+    const id = safeSessionId(sessionId);
+    const session = this.sessions.get(id);
+    const execution = this.executions.get(id), signal = this.executionSignals.get(id);
+    await session?.close();
+    const [completed] = await Promise.allSettled([execution]);
+    if (completed.status === "rejected" && !signal?.aborted) throw completed.reason;
+    const meta = this.sessionMeta.get(id);
+    if (meta && session)
+      this.sessionMeta.set(id, {
+        ...meta,
+        status: session.status.status,
+        executionCount: session.status.executionCount
+      });
+    this.sessionsRevision++;
   }
   async closeKernelSession(sessionId) {
     await this.init();
@@ -1281,16 +1328,7 @@ var DiscoveryService = class {
       projectId: this.projectId,
       sessionId: id
     });
-    const session = this.sessions.get(id);
-    await session?.close();
-    await this.executions.get(id);
-    const meta = this.sessionMeta.get(id);
-    if (meta)
-      this.sessionMeta.set(id, {
-        ...meta,
-        status: session?.status.status ?? "closed",
-        executionCount: session?.status.executionCount ?? meta.executionCount
-      });
+    await this.disposeKernelSession(id);
     await this.persistSessions();
   }
   async createExplorationPlan(input) {
@@ -1317,10 +1355,7 @@ var DiscoveryService = class {
   }
   async runCritic(request) {
     await this.init();
-    const result = await runCriticReview(
-      request,
-      this.options.services.criticProvider
-    );
+    const result = await runCriticReview(request, this.options.services.criticProvider);
     const review = {
       findingId: request.findingId,
       ...result,
@@ -1351,14 +1386,10 @@ var DiscoveryService = class {
       projectId: this.projectId,
       planId: plan.id
     });
-    const assessment = await executeMultiPath(
-      createMultiPathPlan(plan),
-      executor,
-      {
-        projectId: this.projectId,
-        inquiry: this.options.services.inquiry
-      }
-    );
+    const assessment = await executeMultiPath(createMultiPathPlan(plan), executor, {
+      projectId: this.projectId,
+      inquiry: this.options.services.inquiry
+    });
     const record = {
       planId: plan.id,
       findingId: plan.findingId,
@@ -1375,9 +1406,7 @@ var DiscoveryService = class {
   }
   async listMultipathAssessments() {
     await this.init();
-    return this.multipaths.map(
-      ({ recordedAt: _recordedAt, ...value }) => value
-    );
+    return this.multipaths.map(({ recordedAt: _recordedAt, ...value }) => value);
   }
   async runEvaluation(cases, evaluator, options = {}) {
     await this.init();
@@ -1431,12 +1460,17 @@ var DiscoveryService = class {
     return this.disposal;
   }
   async disposeSessions() {
+    const sessionClosures = [...this.sessions.values()].map((session) => session.close());
+    const executions = [...this.executions].map(([id, pending]) => ({
+      pending,
+      signal: this.executionSignals.get(id)
+    }));
     const settled = await Promise.allSettled([
-      ...Array.from(this.sessions.values(), (session) => session.close()),
-      ...this.executions.values()
+      ...sessionClosures,
+      ...executions.map((item) => item.pending)
     ]);
     const failures = settled.filter(
-      (result) => result.status === "rejected"
+      (result, index) => result.status === "rejected" && (index < sessionClosures.length || !executions[index - sessionClosures.length]?.signal?.aborted)
     );
     if (failures.length)
       throw new AggregateError(
@@ -1445,15 +1479,13 @@ var DiscoveryService = class {
       );
     for (const [id, session] of this.sessions) {
       const meta = this.sessionMeta.get(id);
-      if (!meta)
-        throw new Error("Active discovery session has no journal metadata");
+      if (!meta) throw new Error("Active discovery session has no journal metadata");
       this.sessionMeta.set(id, {
         ...meta,
         status: session.status.status,
         executionCount: session.status.executionCount
       });
     }
-    if (this.sessions.size) await this.persistSessions();
     this.sessions.clear();
   }
 };

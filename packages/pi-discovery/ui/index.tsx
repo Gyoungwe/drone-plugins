@@ -6,6 +6,7 @@ import type {
 } from "@gyoungwe/plugin-api/runtime";
 import type { DiscoveryWorkspaceBinding } from "../src/runtime.js";
 import type { DiscoveryExplorationPlan } from "../src/projections.js";
+import { KernelPanel } from "./KernelPanel.js";
 
 const host = (window as unknown as { DroneUI: DroneUiRuntime }).DroneUI;
 interface Overview {
@@ -24,8 +25,7 @@ const copy = {
 		select: "Select a real workspace session.",
 		empty:
 			"Authorize a discovery state directory when enabling this plugin. To keep Desktop records, select the existing hashed discovery directory itself.",
-		existing:
-			"Existing journals will be preserved. Bind them only to their actual workspace.",
+		existing: "Existing journals will be preserved. Bind them only to their actual workspace.",
 		bind: "Bind this directory",
 		take: "Take ownership and preserve records",
 		bound: "Workspace journals",
@@ -39,30 +39,27 @@ const copy = {
 		busy: "Waiting for authorization…",
 		refresh: "Refresh",
 		unavailable:
-			"Kernel execution, critic, multipath and evaluation are awaiting their controlled host ports. This view does not execute code.",
+			"Critic, multipath, evaluation and Inquiry integration are still being migrated. Execution results alone do not certify scientific validity.",
 		plans: "Plans",
 		noPlans: "No plans yet.",
 	},
 	zh: {
 		title: "探索",
 		select: "请先选择一个真实工作区会话。",
-		empty:
-			"启用插件时请授权探索状态目录。若要接续桌面记录，请选择已有的 discovery 哈希目录本身。",
+		empty: "启用插件时请授权探索状态目录。若要接续桌面记录，请选择已有的 discovery 哈希目录本身。",
 		existing: "已有日志将原样保留。请只绑定到它们实际所属的工作区。",
 		bind: "绑定此目录",
 		take: "接管写者并保留已有记录",
 		bound: "工作区日志",
 		plan: "创建探索计划",
-		budget:
-			"预算：最多 2 次执行、30 秒、64 KiB 输出及 2 个成本单位。保存不会执行代码。",
+		budget: "预算：最多 2 次执行、30 秒、64 KiB 输出及 2 个成本单位。保存不会执行代码。",
 		hypothesis: "假设 ID",
 		candidate: "候选检验",
 		create: "保存计划",
 		loading: "正在读取…",
 		busy: "等待授权…",
 		refresh: "刷新",
-		unavailable:
-			"内核执行、批评者、多路径和评估仍等待受控宿主端口接入。此页面不会执行代码。",
+		unavailable: "批评者、多路径、评估及 Inquiry 接入仍在迁移。执行结果本身不能证明科学有效性。",
 		plans: "计划",
 		noPlans: "暂无计划。",
 	},
@@ -108,8 +105,7 @@ function WorkspacePanel() {
 		};
 		const load = () => {
 			void read().then(undefined, (cause) => {
-				if (live)
-					setError(cause instanceof Error ? cause.message : String(cause));
+				if (live) setError(cause instanceof Error ? cause.message : String(cause));
 			});
 		};
 		load();
@@ -153,15 +149,10 @@ function WorkspacePanel() {
 				<p>{t.select}</p>
 			) : (
 				<>
-					<p className="break-all text-xs text-muted">
-						{overview.scope.workspaceDirectory}
-					</p>
+					<p className="break-all text-xs text-muted">{overview.scope.workspaceDirectory}</p>
 					{overview.roots.length === 0 && <p>{t.empty}</p>}
 					{overview.roots.map(({ root, binding, hasExistingData }) => (
-						<article
-							key={root.handle}
-							className="rounded-lg border border-border p-3"
-						>
+						<article key={root.handle} className="rounded-lg border border-border p-3">
 							<p className="break-all">{root.path}</p>
 							{hasExistingData && !binding && <p>{t.existing}</p>}
 							{root.access === "read-write" &&
@@ -249,6 +240,7 @@ function WorkspacePanel() {
 							<button disabled={busy}>{t.create}</button>
 						</form>
 					)}
+					{overview.readiness === "ready" && <KernelPanel />}
 					<h3 className="font-medium">{t.plans}</h3>
 					{plans.length === 0 ? (
 						<p>{t.noPlans}</p>
@@ -271,8 +263,6 @@ function WorkspacePanel() {
 	);
 }
 export const DiscoveryPanel = memo(function DiscoveryPanel() {
-	const sessionId = host.stores.useSessionsStore(
-		(state) => state.activeSessionId,
-	);
+	const sessionId = host.stores.useSessionsStore((state) => state.activeSessionId);
 	return <WorkspacePanel key={sessionId} />;
 });
