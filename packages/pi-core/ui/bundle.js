@@ -15,6 +15,10 @@ function uiCompatibility() {
 
 // ui/copy.ts
 var zh = {
+  "storage.unknown": "\u8FD9\u6761\u5386\u53F2\u8BB0\u5F55\u6CA1\u6709\u5B58\u50A8\u56DE\u6267\uFF0C\u65E0\u6CD5\u786E\u8BA4\u5DF2\u4FDD\u5B58\u3002",
+  "storage.memory": "\u4EC5\u4FDD\u7559\u5728\u5F53\u524D\u5185\u5B58\u4F1A\u8BDD\uFF0C\u672A\u4FDD\u5B58\u5230\u78C1\u76D8\uFF1B\u91CD\u65B0\u52A0\u8F7D\u540E\u9700\u8981\u91CD\u65B0\u6388\u6743\u3002",
+  "storage.deferred": "\u68C0\u67E5\u70B9\u5C1A\u672A\u843D\u76D8\uFF0C\u5916\u90E8\u5199\u5165\u6682\u4E0D\u53EF\u7528\u3002",
+  "storage.failed": "\u4F1A\u8BDD\u5B58\u50A8\u5931\u8D25\uFF0C\u663E\u793A\u6700\u8FD1\u786E\u8BA4\u7684\u8BB0\u5F55\uFF1B\u8BF7\u4ECE\u78C1\u76D8\u91CD\u65B0\u6253\u5F00\u3002",
   "taskRow.running": "\u4EFB\u52A1\u4ECD\u5728\u6267\u884C\uFF1B\u5B8C\u6210\u8FDB\u5EA6\u4F1A\u968F\u7ED3\u679C\u66F4\u65B0\uFF0C\u65E0\u9700\u91CD\u590D\u53D1\u8D77\u3002",
   "taskRow.unconfirmed": "\u8FD8\u6709\u51E0\u9879\u6CA1\u786E\u8BA4\u5B8C\u6210\uFF1B\u8FD9\u662F\u8F83\u65E9\u7684\u8BB0\u5F55\uFF0C\u5148\u6838\u5BF9\u4E00\u4E0B\u5DF2\u6709\u7ED3\u679C\uFF0C\u522B\u91CD\u590D\u751F\u6210\u3002",
   "taskRow.noDeliverables": "\u8FD8\u6CA1\u7EA6\u5B9A\u8981\u4EA4\u4ED8\u4EC0\u4E48\uFF0C\u6682\u4E0D\u663E\u793A\u8FDB\u5EA6\u3002",
@@ -36,6 +40,10 @@ var zh = {
   empty: "\u6B64\u4F1A\u8BDD\u8FD8\u6CA1\u6709\u4EFB\u52A1\u8BB0\u5F55\u3002"
 };
 var en = {
+  "storage.unknown": "This historical record has no storage receipt; saved state is unconfirmed.",
+  "storage.memory": "Live-only in this memory session, not saved to disk; reload requires fresh authorization.",
+  "storage.deferred": "The checkpoint is not on disk yet; external writes are unavailable.",
+  "storage.failed": "Session storage failed. Showing the last confirmed state; reopen from disk.",
   "taskRow.running": "The task is still running; acceptance progress updates as results come in \u2014 no need to start it again.",
   "taskRow.unconfirmed": "Some items are not confirmed yet; this is an older record \u2014 check the existing results before generating them again.",
   "taskRow.noDeliverables": "No deliverables have been agreed yet, so there is no progress to show.",
@@ -67,51 +75,6 @@ function useTaskText() {
 
 // generated-style:./styles/generated
 var taskStyles = '/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */\n@layer drone-task-properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){:where(.drone-task-ui) *,:where(.drone-task-ui) :before,:where(.drone-task-ui) :after,:where(.drone-task-ui) ::backdrop{--drone-task-tw-space-y-reverse:0;--drone-task-tw-border-style:solid;--drone-task-tw-leading:initial;--drone-task-tw-font-weight:initial;--drone-task-tw-duration:initial;--drone-task-tw-ease:initial}}}@layer drone-task-theme{:where(.drone-task-ui),:where(.drone-task-ui){--spacing:.25rem;--text-xs:.75rem;--text-xs--line-height:calc(1 / .75);--font-weight-medium:500;--ease-out:cubic-bezier(0, 0, .2, 1);--default-transition-duration:.15s;--default-transition-timing-function:cubic-bezier(.4, 0, .2, 1)}}@layer drone-task-utilities{:where(.drone-task-ui) .mt-0\\.5{margin-top:calc(var(--spacing) * .5)}:where(.drone-task-ui) .mt-1{margin-top:var(--spacing)}:where(.drone-task-ui) .mt-2{margin-top:calc(var(--spacing) * 2)}:where(.drone-task-ui) .mt-3{margin-top:calc(var(--spacing) * 3)}:where(.drone-task-ui) .ml-5{margin-left:calc(var(--spacing) * 5)}:where(.drone-task-ui) .flex{display:flex}:where(.drone-task-ui) .h-0\\.5{height:calc(var(--spacing) * .5)}:where(.drone-task-ui) .h-full{height:100%}:where(.drone-task-ui) .min-h-0{min-height:0}:where(.drone-task-ui) .w-full{width:100%}:where(.drone-task-ui) .max-w-full{max-width:100%}:where(.drone-task-ui) .min-w-0{min-width:0}:where(.drone-task-ui) .shrink-0{flex-shrink:0}:where(.drone-task-ui) .cursor-pointer{cursor:pointer}:where(.drone-task-ui) .list-disc{list-style-type:disc}:where(.drone-task-ui) .flex-wrap{flex-wrap:wrap}:where(.drone-task-ui) .items-center{align-items:center}:where(.drone-task-ui) .items-start{align-items:flex-start}:where(.drone-task-ui) .justify-between{justify-content:space-between}:where(.drone-task-ui) .gap-2{gap:calc(var(--spacing) * 2)}:where(.drone-task-ui) :where(.space-y-0\\.5>:not(:last-child)){--drone-task-tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * .5) * var(--drone-task-tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * .5) * calc(1 - var(--drone-task-tw-space-y-reverse)))}:where(.drone-task-ui) .gap-x-2{column-gap:calc(var(--spacing) * 2)}:where(.drone-task-ui) .truncate{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}:where(.drone-task-ui) .overflow-auto{overflow:auto}:where(.drone-task-ui) .overflow-hidden{overflow:hidden}:where(.drone-task-ui) .rounded{border-radius:.25rem}:where(.drone-task-ui) .rounded-full{border-radius:3.40282e38px}:where(.drone-task-ui) .rounded-md{border-radius:8px}:where(.drone-task-ui) .rounded-xl{border-radius:14px}:where(.drone-task-ui) .border{border-style:var(--drone-task-tw-border-style);border-width:1px}:where(.drone-task-ui) .border-t{border-top-style:var(--drone-task-tw-border-style);border-top-width:1px}:where(.drone-task-ui) .border-b{border-bottom-style:var(--drone-task-tw-border-style);border-bottom-width:1px}:where(.drone-task-ui) .border-border,:where(.drone-task-ui) .border-border\\/70{border-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){:where(.drone-task-ui) .border-border\\/70{border-color:color-mix(in oklab, var(--color-border) 70%, transparent)}}:where(.drone-task-ui) .border-warn\\/35{border-color:var(--color-warn)}@supports (color:color-mix(in lab, red, red)){:where(.drone-task-ui) .border-warn\\/35{border-color:color-mix(in oklab, var(--color-warn) 35%, transparent)}}:where(.drone-task-ui) .bg-hover{background-color:var(--color-hover)}:where(.drone-task-ui) .bg-ok{background-color:var(--color-ok)}:where(.drone-task-ui) .bg-surface{background-color:var(--color-surface)}:where(.drone-task-ui) .bg-warn,:where(.drone-task-ui) .bg-warn\\/10{background-color:var(--color-warn)}@supports (color:color-mix(in lab, red, red)){:where(.drone-task-ui) .bg-warn\\/10{background-color:color-mix(in oklab, var(--color-warn) 10%, transparent)}}:where(.drone-task-ui) .p-3{padding:calc(var(--spacing) * 3)}:where(.drone-task-ui) .px-2{padding-inline:calc(var(--spacing) * 2)}:where(.drone-task-ui) .px-3{padding-inline:calc(var(--spacing) * 3)}:where(.drone-task-ui) .py-0\\.5{padding-block:calc(var(--spacing) * .5)}:where(.drone-task-ui) .py-1{padding-block:var(--spacing)}:where(.drone-task-ui) .py-2{padding-block:calc(var(--spacing) * 2)}:where(.drone-task-ui) .pt-3{padding-top:calc(var(--spacing) * 3)}:where(.drone-task-ui) .pl-4{padding-left:calc(var(--spacing) * 4)}:where(.drone-task-ui) .text-left{text-align:left}:where(.drone-task-ui) .text-xs{font-size:var(--text-xs);line-height:var(--drone-task-tw-leading,var(--text-xs--line-height))}:where(.drone-task-ui) .text-\\[12px\\]{font-size:12px}:where(.drone-task-ui) .text-\\[13px\\]{font-size:13px}:where(.drone-task-ui) .leading-4{--drone-task-tw-leading:calc(var(--spacing) * 4);line-height:calc(var(--spacing) * 4)}:where(.drone-task-ui) .leading-5{--drone-task-tw-leading:calc(var(--spacing) * 5);line-height:calc(var(--spacing) * 5)}:where(.drone-task-ui) .font-medium{--drone-task-tw-font-weight:var(--font-weight-medium);font-weight:var(--font-weight-medium)}:where(.drone-task-ui) .break-words{overflow-wrap:break-word}:where(.drone-task-ui) .break-all{word-break:break-all}:where(.drone-task-ui) .whitespace-pre-wrap{white-space:pre-wrap}:where(.drone-task-ui) .text-err{color:var(--color-err)}:where(.drone-task-ui) .text-ink{color:var(--color-ink)}:where(.drone-task-ui) .text-ink-2{color:var(--color-ink-2)}:where(.drone-task-ui) .text-ink-dim{color:var(--color-ink-dim)}:where(.drone-task-ui) .text-ink-faint{color:var(--color-ink-faint)}:where(.drone-task-ui) .text-link{color:var(--link)}:where(.drone-task-ui) .text-ok{color:var(--color-ok)}:where(.drone-task-ui) .text-warn{color:var(--color-warn)}:where(.drone-task-ui) .line-through{text-decoration-line:line-through}:where(.drone-task-ui) .underline{text-decoration-line:underline}:where(.drone-task-ui) .underline-offset-2{text-underline-offset:2px}:where(.drone-task-ui) .transition-\\[width\\]{transition-property:width;transition-timing-function:var(--drone-task-tw-ease,var(--default-transition-timing-function));transition-duration:var(--drone-task-tw-duration,var(--default-transition-duration))}:where(.drone-task-ui) .duration-200{--drone-task-tw-duration:.2s;transition-duration:.2s}:where(.drone-task-ui) .ease-out{--drone-task-tw-ease:var(--ease-out);transition-timing-function:var(--ease-out)}:where(.drone-task-ui) .last\\:border-0:last-child{border-style:var(--drone-task-tw-border-style);border-width:0}@media (hover:hover){:where(.drone-task-ui) .hover\\:bg-hover:hover{background-color:var(--color-hover)}:where(.drone-task-ui) .hover\\:underline:hover{text-decoration-line:underline}}:where(.drone-task-ui) .disabled\\:opacity-40:disabled{opacity:.4}@media (prefers-reduced-motion:reduce){:where(.drone-task-ui) .motion-reduce\\:transition-none{transition-property:none}}}@property --drone-task-tw-space-y-reverse{syntax:"*";inherits:false;initial-value:0}@property --drone-task-tw-border-style{syntax:"*";inherits:false;initial-value:solid}@property --drone-task-tw-leading{syntax:"*";inherits:false}@property --drone-task-tw-font-weight{syntax:"*";inherits:false}@property --drone-task-tw-duration{syntax:"*";inherits:false}@property --drone-task-tw-ease{syntax:"*";inherits:false}\n\n.drone-task-ui { min-width: 0; }\n';
-
-// ui/components/TaskDecisionCard.tsx
-import { useState } from "react";
-
-// ui/format-card-text.ts
-var MARKERS = [
-  { pattern: /[-*•][ \t]+/ },
-  { pattern: /\d+[.)、][ \t]+/ },
-  { pattern: /[一二三四五六七八九十]+[、.][ \t]+/ }
-];
-function countMatches(value, pattern) {
-  return value.match(new RegExp(pattern.source, "g"))?.length ?? 0;
-}
-function markerAfterColon(value) {
-  const match = value.match(
-    /[:：][ \t]*(?:[-*•][ \t]+|\d+[.)、][ \t]+|[一二三四五六七八九十]+[、.][ \t]+)/
-  );
-  if (!match) return void 0;
-  return MARKERS.find(
-    (marker) => new RegExp(`^${marker.pattern.source}`).test(
-      match[0].replace(/^[:：][ \t]*/, "")
-    )
-  );
-}
-function formatLine(line) {
-  const normalized = line.replace(/[ \t]+/g, " ").trim();
-  if (!normalized) return "";
-  const colonMarker = markerAfterColon(normalized);
-  const repeatedMarker = MARKERS.find(
-    (marker2) => countMatches(normalized, marker2.pattern) >= 2
-  );
-  const marker = colonMarker ?? repeatedMarker;
-  if (!marker) return normalized;
-  const withColonBreak = colonMarker ? normalized.replace(
-    new RegExp(`([:\uFF1A])[ 	]*(?=${marker.pattern.source})`),
-    "$1\n"
-  ) : normalized;
-  return withColonBreak.replace(
-    new RegExp(`[ 	]+(?=${marker.pattern.source})`, "g"),
-    "\n"
-  );
-}
-function formatCardText(value) {
-  return value.replace(/\r\n?/g, "\n").split("\n").map(formatLine).join("\n").trim();
-}
 
 // ui/presentation.ts
 function taskActionArguments(view, taskId, action, extra = {}) {
@@ -164,9 +127,9 @@ var TASK_STATE_LABELS_EN = {
 };
 var TASK_REASON_TEXT = {
   "task-authorization-required": "\u8BA1\u5212\u5DF2\u7ECF\u51C6\u5907\u597D\uFF0C\u7B49\u4F60\u70B9\u5934\u3002\u786E\u8BA4\u4E00\u6B21\uFF0C\u540E\u9762\u5C31\u81EA\u52A8\u505A\u5B8C\uFF0C\u4E0D\u518D\u53CD\u590D\u6253\u6270\u3002",
-  "automatic-recovery": "\u521A\u624D\u4E2D\u65AD\u4E86\u4E00\u4E0B\uFF0C\u5DF2\u7ECF\u4ECE\u4E0A\u6B21\u4FDD\u5B58\u7684\u5730\u65B9\u63A5\u7740\u505A\uFF0C\u4E0D\u7528\u4F60\u64CD\u4F5C\u3002",
+  "automatic-recovery": "\u521A\u624D\u4E2D\u65AD\u540E\u5DF2\u91CD\u65B0\u8BFB\u53D6\u8BB0\u5F55\uFF1B\u540E\u7EED\u64CD\u4F5C\u6309\u5F53\u524D\u6388\u6743\u5904\u7406\u3002",
   "automatic-stage-checkpoint": "\u8FDB\u5C55\u5DF2\u4FDD\u5B58\uFF0C\u6B63\u5728\u63A5\u7740\u505A\u4E0B\u4E00\u90E8\u5206\u3002",
-  "automatic-handoff": "\u8FD9\u4E00\u6B65\u5DF2\u4FDD\u5B58\uFF0C\u6309\u4F60\u4E4B\u524D\u7684\u6388\u6743\u63A5\u7740\u505A\u5269\u4E0B\u7684\uFF0C\u4E0D\u7528\u518D\u786E\u8BA4\u3002",
+  "automatic-handoff": "\u8FD9\u4E00\u6B65\u7684\u8FDB\u5C55\u5DF2\u4FDD\u5B58\uFF0C\u540E\u7EED\u6267\u884C\u6309\u5F53\u524D\u6388\u6743\u8303\u56F4\u5904\u7406\u3002",
   "total-budget": "\u8FD9\u4E2A\u4EFB\u52A1\u7684\u6B65\u6570\u5DF2\u7ECF\u7528\u5B8C\uFF0C\u505A\u51FA\u6765\u7684\u7ED3\u679C\u90FD\u4FDD\u7559\u7740\u3002\u60F3\u7EE7\u7EED\u505A\uFF0C\u8BF7\u91CD\u65B0\u63CF\u8FF0\u9700\u6C42\u5F00\u4E00\u4E2A\u65B0\u4EFB\u52A1\u3002",
   "stage-budget": "\u6700\u8FD1\u4E00\u6BB5\u6CA1\u6709\u505A\u51FA\u65B0\u8FDB\u5C55\uFF0C\u5148\u505C\u4E0B\u6765\u4FDD\u7559\u7ED3\u679C\uFF0C\u907F\u514D\u7A7A\u8F6C\u3002",
   "budget-review-required": "\u8FD9\u4E00\u6BB5\u7684\u6B65\u6570\u7528\u5B8C\u4E86\u3002\u5148\u770B\u770B\u76EE\u524D\u7684\u7ED3\u679C\uFF0C\u786E\u8BA4\u540E\u53EF\u4EE5\u5728\u4EFB\u52A1\u9762\u677F\u7EE7\u7EED\u3002",
@@ -177,16 +140,16 @@ var TASK_REASON_TEXT = {
   "user-action-cancelled": "\u4F60\u8DF3\u8FC7\u4E86\u4E00\u4E2A\u9700\u8981\u4F60\u5904\u7406\u7684\u4E8B\u9879\uFF0C\u4EFB\u52A1\u5148\u505C\u7740\u3002\u60F3\u7EE7\u7EED\u65F6\u518D\u8BF4\u4E00\u58F0\u5C31\u884C\u3002",
   "wiki-rejected-or-stale": "Wiki \u4FEE\u6539\u6CA1\u6709\u901A\u8FC7\u5BA1\u9605\uFF08\u6216\u8005\u6765\u6E90\u5185\u5BB9\u53D8\u4E86\uFF09\uFF0C\u8FD9\u4E00\u9879\u8FD8\u4E0D\u7B97\u5B8C\u6210\u3002",
   "verified-stage-checkpoint": "\u6709\u4E00\u9879\u4EA4\u4ED8\u5DF2\u7ECF\u786E\u8BA4\u5B8C\u6210\uFF0C\u63A5\u7740\u505A\u4E0B\u4E00\u9879\u3002",
-  "session-restored": "\u4F1A\u8BDD\u5DF2\u6062\u590D\uFF0C\u4ECE\u4E0A\u6B21\u4FDD\u5B58\u7684\u8FDB\u5EA6\u63A5\u7740\u6765\u3002",
+  "session-restored": "\u5DF2\u4ECE\u78C1\u76D8\u8BFB\u53D6\u5148\u524D\u4EFB\u52A1\u8BB0\u5F55\uFF1B\u540E\u7EED\u6267\u884C\u9700\u8981\u5F53\u524D\u4F1A\u8BDD\u6388\u6743\u3002",
   "legacy-checkpoint-unreviewed": "\u8FD9\u662F\u4ECE\u65E7\u7248\u672C\u5E26\u8FC7\u6765\u7684\u4EFB\u52A1\u8BB0\u5F55\uFF0C\u4E4B\u524D\u505A\u4E86\u4EC0\u4E48\u8FD8\u6CA1\u6838\u5BF9\u8FC7\u3002",
   "user-cancelled": "\u4F60\u5DF2\u53D6\u6D88\u8FD9\u4E2A\u4EFB\u52A1\u3002",
   "user-archived": "\u4EFB\u52A1\u5DF2\u5F52\u6863\u3002"
 };
 var TASK_REASON_TEXT_EN = {
   "task-authorization-required": "The plan is ready for your approval. One approval covers the agreed work.",
-  "automatic-recovery": "The saved checkpoint was restored; work is continuing without another approval.",
+  "automatic-recovery": "The saved checkpoint was read again; further actions use current authorization.",
   "automatic-stage-checkpoint": "Progress was saved and the next part is continuing.",
-  "automatic-handoff": "This step was saved; the remaining work continues under the existing authorization.",
+  "automatic-handoff": "This step was saved; further work uses the current authorization scope.",
   "total-budget": "The task reached its call limit. Existing results are retained; start a new task to continue.",
   "stage-budget": "Recent steps made no new progress. Work paused to preserve results and avoid repeating effects.",
   "budget-review-required": "This stage reached its call limit. Review the saved results before continuing.",
@@ -197,7 +160,7 @@ var TASK_REASON_TEXT_EN = {
   "user-action-cancelled": "A requested user action was skipped. The task remains paused.",
   "wiki-rejected-or-stale": "The Wiki update was rejected or its sources changed; this item is not accepted.",
   "verified-stage-checkpoint": "One deliverable was checked; work continues with the next item.",
-  "session-restored": "The session resumed from its saved checkpoint.",
+  "session-restored": "The saved task record was restored; further execution needs current-session authorization.",
   "legacy-checkpoint-unreviewed": "This older checkpoint has not been reconciled yet.",
   "user-cancelled": "You cancelled this task.",
   "user-archived": "The task was archived."
@@ -283,8 +246,92 @@ function taskNeedsUser(task) {
   );
 }
 
+// ui/storage.ts
+function taskStorage(view) {
+  const value = view.storage;
+  if (!value || typeof value !== "object" || !("mode" in value) || !("state" in value))
+    return null;
+  if (value.mode !== "persistent" && value.mode !== "memory" || value.state !== "durable" && value.state !== "deferred" && value.state !== "needs-reopen")
+    return null;
+  return { mode: value.mode, state: value.state };
+}
+var savedReasons = /* @__PURE__ */ new Set([
+  "automatic-recovery",
+  "automatic-stage-checkpoint",
+  "automatic-handoff",
+  "session-restored"
+]);
+function storageTaskReason(view, reason, language) {
+  if (reason && savedReasons.has(reason) && taskStorage(view)?.state !== "durable")
+    return language === "zh" ? "\u5F53\u524D\u662F\u5B9E\u65F6\u4EFB\u52A1\u8BB0\u5F55\uFF0C\u5C1A\u65E0\u5DF2\u843D\u76D8\u56DE\u6267\u3002" : "This is live task progress without a confirmed disk receipt.";
+  return explainTaskReason(reason, language);
+}
+
+// ui/components/TaskStorageNotice.tsx
+import { jsx } from "react/jsx-runtime";
+function TaskStorageNotice({ view }) {
+  const t = useTaskText();
+  const storage = taskStorage(view);
+  if (storage?.state === "durable") return null;
+  const key = !storage ? "storage.unknown" : storage.state === "needs-reopen" ? "storage.failed" : storage.mode === "memory" ? "storage.memory" : "storage.deferred";
+  return /* @__PURE__ */ jsx(
+    "p",
+    {
+      className: "mt-2 text-xs text-warn",
+      role: "status",
+      "data-task-storage": storage?.state || "unknown",
+      children: t(key)
+    }
+  );
+}
+
 // ui/components/TaskDecisionCard.tsx
-import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+import { useState } from "react";
+
+// ui/format-card-text.ts
+var MARKERS = [
+  { pattern: /[-*•][ \t]+/ },
+  { pattern: /\d+[.)、][ \t]+/ },
+  { pattern: /[一二三四五六七八九十]+[、.][ \t]+/ }
+];
+function countMatches(value, pattern) {
+  return value.match(new RegExp(pattern.source, "g"))?.length ?? 0;
+}
+function markerAfterColon(value) {
+  const match = value.match(
+    /[:：][ \t]*(?:[-*•][ \t]+|\d+[.)、][ \t]+|[一二三四五六七八九十]+[、.][ \t]+)/
+  );
+  if (!match) return void 0;
+  return MARKERS.find(
+    (marker) => new RegExp(`^${marker.pattern.source}`).test(
+      match[0].replace(/^[:：][ \t]*/, "")
+    )
+  );
+}
+function formatLine(line) {
+  const normalized = line.replace(/[ \t]+/g, " ").trim();
+  if (!normalized) return "";
+  const colonMarker = markerAfterColon(normalized);
+  const repeatedMarker = MARKERS.find(
+    (marker2) => countMatches(normalized, marker2.pattern) >= 2
+  );
+  const marker = colonMarker ?? repeatedMarker;
+  if (!marker) return normalized;
+  const withColonBreak = colonMarker ? normalized.replace(
+    new RegExp(`([:\uFF1A])[ 	]*(?=${marker.pattern.source})`),
+    "$1\n"
+  ) : normalized;
+  return withColonBreak.replace(
+    new RegExp(`[ 	]+(?=${marker.pattern.source})`, "g"),
+    "\n"
+  );
+}
+function formatCardText(value) {
+  return value.replace(/\r\n?/g, "\n").split("\n").map(formatLine).join("\n").trim();
+}
+
+// ui/components/TaskDecisionCard.tsx
+import { Fragment, jsx as jsx2, jsxs } from "react/jsx-runtime";
 function TaskDecisionCard({
   task,
   view,
@@ -310,13 +357,13 @@ function TaskDecisionCard({
     }
   };
   const content = /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("h4", { className: "text-[13px] font-medium leading-5 text-ink", children: formatCardText(decision.title) }),
-    /* @__PURE__ */ jsx("p", { className: "mt-1 whitespace-pre-wrap text-[12px] leading-5 text-ink", children: formatCardText(decision.stop) }),
-    /* @__PURE__ */ jsx("p", { className: "whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.done) }),
-    /* @__PURE__ */ jsx("p", { className: "whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.remaining) }),
-    decision.cannotComplete && /* @__PURE__ */ jsx("p", { className: "mt-1 whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.cannotComplete) }),
+    /* @__PURE__ */ jsx2("h4", { className: "text-[13px] font-medium leading-5 text-ink", children: formatCardText(decision.title) }),
+    /* @__PURE__ */ jsx2("p", { className: "mt-1 whitespace-pre-wrap text-[12px] leading-5 text-ink", children: formatCardText(decision.stop) }),
+    /* @__PURE__ */ jsx2("p", { className: "whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.done) }),
+    /* @__PURE__ */ jsx2("p", { className: "whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.remaining) }),
+    decision.cannotComplete && /* @__PURE__ */ jsx2("p", { className: "mt-1 whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.cannotComplete) }),
     /* @__PURE__ */ jsxs("div", { className: "mt-2 flex flex-wrap gap-2", children: [
-      decision.canComplete && decision.completeActionId && /* @__PURE__ */ jsx(
+      decision.canComplete && decision.completeActionId && /* @__PURE__ */ jsx2(
         "button",
         {
           type: "button",
@@ -332,7 +379,7 @@ function TaskDecisionCard({
           children: decision.completeLabel
         }
       ),
-      decision.canDefer && /* @__PURE__ */ jsx(
+      decision.canDefer && /* @__PURE__ */ jsx2(
         "button",
         {
           type: "button",
@@ -342,7 +389,7 @@ function TaskDecisionCard({
           children: decision.deferLabel
         }
       ),
-      decision.canEnd && /* @__PURE__ */ jsx(
+      decision.canEnd && /* @__PURE__ */ jsx2(
         "button",
         {
           type: "button",
@@ -354,8 +401,8 @@ function TaskDecisionCard({
       )
     ] }),
     /* @__PURE__ */ jsxs("details", { className: "mt-2", children: [
-      /* @__PURE__ */ jsx("summary", { className: "cursor-pointer text-xs text-ink-dim", children: decision.detailsLabel }),
-      /* @__PURE__ */ jsx("ul", { className: "mt-1 list-disc space-y-0.5 pl-4", children: decision.details.map((line) => /* @__PURE__ */ jsx(
+      /* @__PURE__ */ jsx2("summary", { className: "cursor-pointer text-xs text-ink-dim", children: decision.detailsLabel }),
+      /* @__PURE__ */ jsx2("ul", { className: "mt-1 list-disc space-y-0.5 pl-4", children: decision.details.map((line) => /* @__PURE__ */ jsx2(
         "li",
         {
           className: "whitespace-pre-wrap text-xs leading-4 text-ink-dim",
@@ -364,10 +411,10 @@ function TaskDecisionCard({
         line
       )) })
     ] }),
-    error && /* @__PURE__ */ jsx("p", { role: "alert", className: "mt-1 whitespace-pre-wrap text-xs text-err", children: formatCardText(error) })
+    error && /* @__PURE__ */ jsx2("p", { role: "alert", className: "mt-1 whitespace-pre-wrap text-xs text-err", children: formatCardText(error) })
   ] });
   if (decision.mode === "line") {
-    return /* @__PURE__ */ jsx(
+    return /* @__PURE__ */ jsx2(
       "p",
       {
         className: embedded ? "mt-2 whitespace-pre-wrap text-[12px] text-ink-dim" : "mt-2 text-[12px] text-ink-dim",
@@ -376,14 +423,14 @@ function TaskDecisionCard({
       }
     );
   }
-  return embedded ? /* @__PURE__ */ jsx(
+  return embedded ? /* @__PURE__ */ jsx2(
     "div",
     {
       className: "mt-3 border-t border-border/70 pt-3",
       "data-testid": "task-decision",
       children: content
     }
-  ) : /* @__PURE__ */ jsx(
+  ) : /* @__PURE__ */ jsx2(
     "section",
     {
       className: "mt-2 rounded-xl border border-warn/35 bg-surface px-3 py-2",
@@ -394,7 +441,7 @@ function TaskDecisionCard({
 }
 
 // ui/TaskMessage.tsx
-import { Fragment as Fragment2, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+import { Fragment as Fragment2, jsx as jsx3, jsxs as jsxs2 } from "react/jsx-runtime";
 function TaskMessageContent({
   message,
   sessionId,
@@ -411,7 +458,8 @@ function TaskMessageContent({
   const ordinaryText = Boolean(message.text && !message.hostStatus);
   if (latest?.id !== message.id) return ordinaryText ? renderDefault() : null;
   return /* @__PURE__ */ jsxs2(Fragment2, { children: [
-    tasksForDecision(view).map((task) => /* @__PURE__ */ jsx2(
+    /* @__PURE__ */ jsx3(TaskStorageNotice, { view }),
+    tasksForDecision(view).map((task) => /* @__PURE__ */ jsx3(
       TaskDecisionCard,
       {
         task,
@@ -430,7 +478,7 @@ function TaskMessageContent({
 import { useState as useState2 } from "react";
 
 // ui/components/MilestoneEvidence.tsx
-import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
+import { jsx as jsx4, jsxs as jsxs3 } from "react/jsx-runtime";
 function MilestoneEvidence({
   milestone,
   sessionId
@@ -446,11 +494,11 @@ function MilestoneEvidence({
     ([key, value]) => !["kind", "path", "sha256"].includes(key) && typeof value === "string" && value
   );
   return /* @__PURE__ */ jsxs3("div", { className: "ml-5 mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-dim", children: [
-    /* @__PURE__ */ jsx3("span", { children: evidence?.summary || state }),
-    evidence?.note && /* @__PURE__ */ jsx3("span", { className: "text-ink-faint", children: evidence.note }),
-    state !== "found" && evidence?.reason && !evidence.summary && /* @__PURE__ */ jsx3("span", { children: evidence.reason }),
-    fields.map(([key, value]) => /* @__PURE__ */ jsx3("code", { className: "break-all text-ink-faint", title: key, children: value }, key)),
-    evidence?.links?.filter((link) => link.kind !== "note").map((link) => /* @__PURE__ */ jsx3(
+    /* @__PURE__ */ jsx4("span", { children: evidence?.summary || state }),
+    evidence?.note && /* @__PURE__ */ jsx4("span", { className: "text-ink-faint", children: evidence.note }),
+    state !== "found" && evidence?.reason && !evidence.summary && /* @__PURE__ */ jsx4("span", { children: evidence.reason }),
+    fields.map(([key, value]) => /* @__PURE__ */ jsx4("code", { className: "break-all text-ink-faint", title: key, children: value }, key)),
+    evidence?.links?.filter((link) => link.kind !== "note").map((link) => /* @__PURE__ */ jsx4(
       "button",
       {
         type: "button",
@@ -500,7 +548,7 @@ function taskArtifactLinks(task) {
 }
 
 // ui/components/TaskArtifactLinks.tsx
-import { jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
+import { jsx as jsx5, jsxs as jsxs4 } from "react/jsx-runtime";
 function TaskArtifactLinks({
   task,
   sessionId
@@ -543,14 +591,14 @@ function TaskArtifactLinks({
           },
           file.href
         )),
-        files.length > 6 && /* @__PURE__ */ jsx4("span", { children: t("taskArtifacts.more", { count: files.length - 6 }) })
+        files.length > 6 && /* @__PURE__ */ jsx5("span", { children: t("taskArtifacts.more", { count: files.length - 6 }) })
       ]
     }
   );
 }
 
 // ui/components/TaskRow.tsx
-import { jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
+import { jsx as jsx6, jsxs as jsxs5 } from "react/jsx-runtime";
 function operationStateLabel(state, zh2) {
   const labels = {
     queued: ["\u6392\u961F\u4E2D", "queued"],
@@ -577,7 +625,7 @@ function TaskRow({
   const [busy, setBusy] = useState2(false), [error, setError] = useState2("");
   const done = task.milestones.filter((m) => m.state === "completed").length;
   const pct = task.milestones.length ? Math.round(done / task.milestones.length * 100) : 0;
-  const reason = explainTaskReason(task.reason, language);
+  const reason = storageTaskReason(view, task.reason, language);
   const presentation = taskDeliveryPresentation(task, agentActive, language);
   const pendingReview2 = task.actions.some(
     (action) => action.kind === "review" && action.state === "pending"
@@ -585,14 +633,14 @@ function TaskRow({
   const remainingSummary = (agentActive ? t("taskRow.running") : task.remainingSummary) || (task.milestones.length ? t("taskRow.unconfirmed") : t("taskRow.noDeliverables"));
   return /* @__PURE__ */ jsxs5("article", { className: "border-b border-border px-2 py-2 last:border-0", children: [
     /* @__PURE__ */ jsxs5("div", { className: "flex items-start justify-between gap-2", children: [
-      /* @__PURE__ */ jsx5("h4", { className: "min-w-0 break-words text-[12px] font-medium leading-4", children: task.goal }),
-      /* @__PURE__ */ jsx5("span", { className: "shrink-0 rounded-full border border-border px-2 py-0.5 text-xs", children: presentation.label })
+      /* @__PURE__ */ jsx6("h4", { className: "min-w-0 break-words text-[12px] font-medium leading-4", children: task.goal }),
+      /* @__PURE__ */ jsx6("span", { className: "shrink-0 rounded-full border border-border px-2 py-0.5 text-xs", children: presentation.label })
     ] }),
     /* @__PURE__ */ jsxs5("p", { className: "mt-0.5 text-xs text-ink-dim", children: [
       t("taskRow.steps", { n: task.budget.calls }),
       task.milestones.length > 0 && t("taskRow.accepted", { done, total: task.milestones.length })
     ] }),
-    task.milestones.length > 0 && /* @__PURE__ */ jsx5(
+    task.milestones.length > 0 && /* @__PURE__ */ jsx6(
       "div",
       {
         className: "mt-1 h-0.5 overflow-hidden rounded-full bg-hover",
@@ -605,7 +653,7 @@ function TaskRow({
           done,
           total: task.milestones.length
         }),
-        children: /* @__PURE__ */ jsx5(
+        children: /* @__PURE__ */ jsx6(
           "div",
           {
             className: `h-full rounded-full transition-[width] duration-200 ease-out motion-reduce:transition-none ${pct < 100 ? "bg-warn" : "bg-ok"}`,
@@ -614,8 +662,8 @@ function TaskRow({
         )
       }
     ),
-    reason && /* @__PURE__ */ jsx5("p", { className: "mt-1 truncate text-xs text-ink-dim", title: reason, children: reason }),
-    /* @__PURE__ */ jsx5(
+    reason && /* @__PURE__ */ jsx6("p", { className: "mt-1 truncate text-xs text-ink-dim", title: reason, children: reason }),
+    /* @__PURE__ */ jsx6(
       "p",
       {
         className: "mt-1 truncate text-xs leading-4",
@@ -624,7 +672,7 @@ function TaskRow({
         children: remainingSummary
       }
     ),
-    presentation.canContinue && !pendingReview2 && /* @__PURE__ */ jsx5(
+    presentation.canContinue && !pendingReview2 && /* @__PURE__ */ jsx6(
       "button",
       {
         type: "button",
@@ -649,20 +697,20 @@ function TaskRow({
         children: t("taskRow.continue")
       }
     ),
-    error && /* @__PURE__ */ jsx5("p", { role: "alert", className: "text-xs text-err", children: error }),
-    /* @__PURE__ */ jsx5(TaskArtifactLinks, { task, sessionId }),
+    error && /* @__PURE__ */ jsx6("p", { role: "alert", className: "text-xs text-err", children: error }),
+    /* @__PURE__ */ jsx6(TaskArtifactLinks, { task, sessionId }),
     !!task.milestones.length && /* @__PURE__ */ jsxs5("details", { className: "mt-2", children: [
-      /* @__PURE__ */ jsx5("summary", { className: "cursor-pointer text-xs text-ink-dim", children: t("taskRow.milestones", { done, total: task.milestones.length }) }),
-      /* @__PURE__ */ jsx5("ul", { className: "mt-1 space-y-0.5", children: task.milestones.map((m) => /* @__PURE__ */ jsxs5("li", { className: "text-xs leading-4", children: [
+      /* @__PURE__ */ jsx6("summary", { className: "cursor-pointer text-xs text-ink-dim", children: t("taskRow.milestones", { done, total: task.milestones.length }) }),
+      /* @__PURE__ */ jsx6("ul", { className: "mt-1 space-y-0.5", children: task.milestones.map((m) => /* @__PURE__ */ jsxs5("li", { className: "text-xs leading-4", children: [
         /* @__PURE__ */ jsxs5("div", { className: "flex items-start gap-2", children: [
-          /* @__PURE__ */ jsx5(
+          /* @__PURE__ */ jsx6(
             "span",
             {
               className: m.state === "completed" ? "text-ok" : "text-ink-dim",
               children: m.state === "completed" ? "\u2713" : "\u25CB"
             }
           ),
-          /* @__PURE__ */ jsx5(
+          /* @__PURE__ */ jsx6(
             "span",
             {
               className: m.state === "completed" ? "text-ink-dim line-through" : "",
@@ -670,13 +718,13 @@ function TaskRow({
             }
           )
         ] }),
-        /* @__PURE__ */ jsx5(MilestoneEvidence, { milestone: m, sessionId })
+        /* @__PURE__ */ jsx6(MilestoneEvidence, { milestone: m, sessionId })
       ] }, m.id)) })
     ] }),
     !!task.operations.length && /* @__PURE__ */ jsxs5("details", { className: "mt-2", children: [
-      /* @__PURE__ */ jsx5("summary", { className: "cursor-pointer text-xs text-ink-dim", children: t("taskRow.operations", { n: task.operations.length }) }),
-      /* @__PURE__ */ jsx5("ul", { className: "mt-1 space-y-0.5", children: task.operations.slice(-12).map((o) => /* @__PURE__ */ jsxs5("li", { className: "truncate text-xs text-ink-dim", children: [
-        /* @__PURE__ */ jsx5("code", { children: o.tool }),
+      /* @__PURE__ */ jsx6("summary", { className: "cursor-pointer text-xs text-ink-dim", children: t("taskRow.operations", { n: task.operations.length }) }),
+      /* @__PURE__ */ jsx6("ul", { className: "mt-1 space-y-0.5", children: task.operations.slice(-12).map((o) => /* @__PURE__ */ jsxs5("li", { className: "truncate text-xs text-ink-dim", children: [
+        /* @__PURE__ */ jsx6("code", { children: o.tool }),
         " \xB7 ",
         operationStateLabel(o.state, zh2)
       ] }, o.id)) })
@@ -685,7 +733,7 @@ function TaskRow({
 }
 
 // ui/TaskPanel.tsx
-import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
+import { jsx as jsx7, jsxs as jsxs6 } from "react/jsx-runtime";
 function TaskPanelContent() {
   const sessionId = useSessionsStore((state) => state.activeSessionId);
   const readOnly = useSessionsStore(
@@ -700,9 +748,10 @@ function TaskPanelContent() {
   const view = latest?.kind === "assistant" ? latest.taskView : void 0;
   const attention = view?.tasks.filter(taskNeedsUser).length || 0;
   return /* @__PURE__ */ jsxs6("section", { className: "min-h-0 overflow-auto p-3", "data-testid": "task-panel", children: [
-    /* @__PURE__ */ jsx6("h3", { className: "text-[13px] font-medium text-ink", children: t("panelTitle") }),
-    attention > 0 && /* @__PURE__ */ jsx6("p", { className: "mt-1 text-[12px] text-warn", children: t("attention", { count: attention }) }),
-    view?.tasks.length ? view.tasks.map((task) => /* @__PURE__ */ jsx6(
+    /* @__PURE__ */ jsx7("h3", { className: "text-[13px] font-medium text-ink", children: t("panelTitle") }),
+    view && /* @__PURE__ */ jsx7(TaskStorageNotice, { view }),
+    attention > 0 && /* @__PURE__ */ jsx7("p", { className: "mt-1 text-[12px] text-warn", children: t("attention", { count: attention }) }),
+    view?.tasks.length ? view.tasks.map((task) => /* @__PURE__ */ jsx7(
       TaskRow,
       {
         task,
@@ -712,15 +761,15 @@ function TaskPanelContent() {
         readOnly
       },
       task.id
-    )) : /* @__PURE__ */ jsx6("p", { className: "mt-3 text-[12px] text-ink-dim", children: t("empty") })
+    )) : /* @__PURE__ */ jsx7("p", { className: "mt-3 text-[12px] text-ink-dim", children: t("empty") })
   ] });
 }
 
 // ui/entry.tsx
-import { jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
+import { jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
 function Surface({ children }) {
   return /* @__PURE__ */ jsxs7("div", { className: "drone-task-ui", children: [
-    /* @__PURE__ */ jsx7("style", { "data-drone-task-styles": true, children: taskStyles }),
+    /* @__PURE__ */ jsx8("style", { "data-drone-task-styles": true, children: taskStyles }),
     children
   ] });
 }
@@ -732,16 +781,16 @@ function Incompatible() {
   ] });
 }
 function TaskPanel() {
-  return /* @__PURE__ */ jsx7(Surface, { children: uiCompatibility().status === "compatible" ? /* @__PURE__ */ jsx7(TaskPanelContent, {}) : /* @__PURE__ */ jsx7(Incompatible, {}) });
+  return /* @__PURE__ */ jsx8(Surface, { children: uiCompatibility().status === "compatible" ? /* @__PURE__ */ jsx8(TaskPanelContent, {}) : /* @__PURE__ */ jsx8(Incompatible, {}) });
 }
 function TaskMessage(props) {
   if (typeof props.renderDefault !== "function")
-    return /* @__PURE__ */ jsx7(Surface, { children: /* @__PURE__ */ jsx7(Incompatible, {}) });
+    return /* @__PURE__ */ jsx8(Surface, { children: /* @__PURE__ */ jsx8(Incompatible, {}) });
   if (props.message.kind !== "assistant" || !props.message.taskView)
     return props.renderDefault();
   if (uiCompatibility().status !== "compatible")
-    return /* @__PURE__ */ jsx7(Surface, { children: /* @__PURE__ */ jsx7(Incompatible, {}) });
-  return /* @__PURE__ */ jsx7(Surface, { children: /* @__PURE__ */ jsx7(TaskMessageContent, { ...props }) });
+    return /* @__PURE__ */ jsx8(Surface, { children: /* @__PURE__ */ jsx8(Incompatible, {}) });
+  return /* @__PURE__ */ jsx8(Surface, { children: /* @__PURE__ */ jsx8(TaskMessageContent, { ...props }) });
 }
 export {
   TaskMessage,
