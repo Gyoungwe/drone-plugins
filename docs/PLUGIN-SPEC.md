@@ -241,3 +241,11 @@ commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpo
 `pi-core` 的候选 `dist/managed-runtime.mjs` 复用同一 TaskSession/TaskController；生产清单尚未设置 desktopRuntime/provides。候选 `task.runtime@1` 数据操作为 status(null)、pause({reason})、advanceStage(null)、takeReport(null)；status 返回 `{snapshot,render,storage}`，其他操作 await 同一 actor，advanceStage 另返回真实 advanced，takeReport 另返回一次性的 report。snapshot 只投影任务/里程碑/预算/待处理操作的可展示字段，不输出 executionConsent、writeRoots、compute、planApproved 或 proof。
 
 状态仅由实际 SDK native attachment 建立，app 无选定会话或该 SDK entry 未 attach 时明确不可用，不猜测焦点会话。own namespace/current branch 的 records 经过真实回读，memory/deferred 不伪装 durable，写失败/取消后的 needs-reopen 不能被 SDK reload 清掉。完整 native 工具、文件验收、一次实际任务授权、host-queued 自动续作和旧 startup 删除仍未完成；此数据切片不得作为完整插件切换或正式安装包 GUI 验收。
+
+### 原始二进制状态（未发布 API 1.3 候选）
+
+`permissions.filesystem` 的 `binary-state-read` / `binary-state-write` 独立于 application-state 与 files 权限；write 仅隐含 binary read。宿主每次 activation 另选目录并交付 `kind: "binary-state"` opaque root。JSON/file root 不可用于 binary 端口，binary root 亦不提供 JSON 或文本权限。
+
+`state.readBinary({root,path})` 返回 missing/version:null 或 value/base64/version:SHA256。`state.writeBinary({root,path,base64,expectedVersion,assertAbsent})` 仅在该文件父目录持有真实 `state.reserve` 独占租约、用户逐次批准、raw-byte CAS 与最多 8 个同根 absence 条件满足后原子替换，并回读确认。decoded 上限固定 4 MiB；超限明确拒绝，不自动转换、拆分或改变原库。二进制内容不透明，批准页展示实际 scope、路径、旧/新 SHA、字节数和 absence 条件，不能冒充逻辑 diff。
+
+提交点前取消保留原字节并清理本次临时文件；提交点后取消/回读失败返回 `EBINARYWRITEOUTCOMEUNKNOWN`，新的合法 caller 须回读 SHA 核对，不能盲目重试。临时文件清理失败保留 writer lease。原 SQLite schema、备份、WAL/SHM/journal 拒绝及领域恢复由插件维护；此合同本身不证明 Inquiry 完整迁移通过。

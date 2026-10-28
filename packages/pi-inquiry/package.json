@@ -1,0 +1,65 @@
+{
+	"name": "@gyoungwe/pi-inquiry",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./models": "./src/models.ts",
+		"./storage": "./src/storage.ts",
+		"./sqlite-storage": "./src/storage.ts",
+		"./lineage": "./src/lineage.ts",
+		"./provenance": "./src/provenance.ts",
+		"./reproducibility": "./src/reproducibility.ts",
+		"./workspace": "./src/workspace.ts",
+		"./wasm-storage": {
+			"types": "./src/wasm-storage.ts",
+			"import": "./dist/wasm-storage.mjs"
+		},
+		"./host": {
+			"types": "./src/index.ts",
+			"import": "./dist/host.mjs"
+		},
+		"./domain": {
+			"types": "./src/domain.ts",
+			"import": "./dist/domain.mjs"
+		},
+		"./ledger-owner": {
+			"types": "./src/ledger-owner.ts",
+			"import": "./dist/ledger-owner.mjs"
+		},
+		"./runtime": {
+			"types": "./src/runtime.ts",
+			"import": "./dist/runtime.mjs"
+		}
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"build": "node scripts/build.mjs",
+		"build:check": "node scripts/build.mjs --check",
+		"check:domain": "npm run typecheck && npm run build:check && npm test"
+	},
+	"dependencies": {
+		"sql.js": "1.15.2",
+		"typebox": "1.3.27",
+		"@gyoungwe/plugin-api": "^1.3.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.0.0",
+		"typescript": "^5.9.0",
+		"vitest": "^3.2.0",
+		"@types/sql.js": "1.4.11"
+	},
+	"description": "Unpublished canonical Inquiry domain migration candidate",
+	"files": [
+		"src",
+		"dist",
+		"build-manifest.json",
+		"plugin.manifest.json",
+		"README.md"
+	],
+	"license": "MIT"
+}
