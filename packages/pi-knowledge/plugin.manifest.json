@@ -14,6 +14,7 @@
     "pluginApi": 1,
     "resultContract": "drone-result/v3",
     "deliveryProjection": "required",
+    "nativeChildSessions": "read-only",
     "requires": {
       "tasks": {
         "service": "task.runtime",

@@ -47,8 +47,8 @@ import {
 	type KnowledgeRejectReviewInput,
 	type KnowledgeApplyReviewInput,
 } from "./contract.js";
-import type { PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
-import type { PluginNativeRuntimeFactory } from "@gyoungwe/plugin-api/native";
+import type { PluginNativeSessionFacts, PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
+import type { PluginNativeRuntimeFactory, PluginNativeSession } from "@gyoungwe/plugin-api/native";
 import { parseKnowledgeBinding, projectIdentity, type KnowledgeBinding } from "../core/config.js";
 import { createKnowledgeOwnerLifecycle } from "../core/owner-lifecycle.js";
 import { createKnowledgeReadModel, type KnowledgeReadOwner } from "./read-model.js";
@@ -123,6 +123,9 @@ async function projectFor(
 }
 
 /** One granted knowledge owner composes the same native interface, services and UI operations. */
+/** Every hook the read-only knowledge interface registers in a child session. */
+const CHILD_SESSION_EVENTS = ["session_start", "session_tree", "before_agent_start", "context", "message_start", "tool_execution_start", "tool_execution_end", "tool_result"] as const;
+
 const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	const states = context.resources.filter((resource) => resource.kind === "state");
 	if (states.length !== 1)
@@ -462,18 +465,33 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 					),
 			},
 		},
-		createNativeSession: () => {
+		createNativeSession: async (facts?: PluginNativeSessionFacts) => {
 			const sessionPorts = createManagedKnowledgeSessionPorts(context.capabilities);
-			const migrateRecovery = createKnowledgeRecoveryMigration(context.capabilities, config);
-			const native = createManagedNativeSession(owner, {
+			const composition = {
 				session: sessionPorts.ports,
-				registerReadTools: pi => registerDesktopKnowledgeNativeReadTools(pi, owner, native => projectFor(context.capabilities, native.cwd)),
-				project: async cwd => {
+				registerReadTools: (pi: any) => registerDesktopKnowledgeNativeReadTools(pi, owner, (native: { cwd: string }) => projectFor(context.capabilities, native.cwd)),
+				project: async (cwd: string) => {
 					const project = await projectFor(context.capabilities, cwd);
 					if (project === null) throw new Error("Knowledge native session has no workspace project");
 					return project;
 				},
-			});
+			};
+			if (facts?.kind === "child") {
+				// The host fact is not a grant: "none" never touches the Vault binding, and "read"
+				// still needs this package's own subagent policy before any Vault tool is offered.
+				const readable = facts.files === "read" && (await readKnowledgeBinding())?.subagentPolicy === "read-local";
+				const child = createManagedNativeSession(owner, { ...composition, child: readable ? "read" : "evidence" });
+				const session: PluginNativeSession = {
+					...child,
+					toolEffects: readable ? { knowledge_status: "read", knowledge_search: "read" } : {},
+					// A child is read-only: its hooks get read capabilities only, so any write attempt fails at the broker.
+					eventEffects: Object.fromEntries(CHILD_SESSION_EVENTS.map(event => [event, "read" as const])),
+					commandEffects: {},
+				};
+				return session;
+			}
+			const migrateRecovery = createKnowledgeRecoveryMigration(context.capabilities, config);
+			const native = createManagedNativeSession(owner, composition);
 			let unregister: (() => void) | undefined;
 			return {
 				...native,

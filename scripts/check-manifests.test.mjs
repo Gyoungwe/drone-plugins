@@ -137,3 +137,8 @@ for (const token of ["binary-state-read", "binary-state-write"]) {
  assert.equal(errors({...valid,permissions:{...valid.permissions,filesystem:[token]}}), "");
  });
 }
+test("read-only child session support is an explicit desktopRuntime declaration",()=>assert.equal(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,nativeChildSessions:"read-only"}}),""));
+test("rejects child session support that is writable or has no managed owner",()=>{
+	assert.match(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,nativeChildSessions:"write"}}),/must be "read-only"/);
+	assert.match(errors({...valid,drone:{...valid.drone,nativeChildSessions:"read-only"}}),/requires desktopRuntime ownership/);
+});

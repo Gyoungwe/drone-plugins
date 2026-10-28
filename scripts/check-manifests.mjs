@@ -120,6 +120,13 @@ function validateServices(packageName, manifest, failures) {
 	}
 }
 
+function validateNativeChildSessions(packageName, manifest, failures) {
+	const declared=manifest.drone?.nativeChildSessions;
+	if(declared===undefined)return;
+	if(declared!=="read-only")failure(failures,packageName,'drone.nativeChildSessions must be "read-only" when declared');
+	if(!manifest.entrypoints?.desktopRuntime)failure(failures,packageName,"drone.nativeChildSessions requires desktopRuntime ownership");
+}
+
 function validateRecordAdoptions(packageName, packageVersion, manifest, failures) {
 	const declarations=manifest.drone?.recordAdoptions;
 	if(declarations===undefined)return;
@@ -184,6 +191,7 @@ export function validatePackageManifest(packageJson, manifest, packageRoot) {
 	validatePermissions(packageName, manifest.permissions, failures);
 	validateServices(packageName, manifest, failures);
 	validateRecordAdoptions(packageName,packageJson.version,manifest,failures);
+	validateNativeChildSessions(packageName,manifest,failures);
 	const droneDependencies = Object.keys(packageJson.dependencies ?? {}).filter((name) => name.startsWith("@gyoungwe/"));
 	const bundled = new Set(packageJson.bundleDependencies ?? []);
 	for (const dependency of droneDependencies) if (dependency !== "@gyoungwe/plugin-api" && !bundled.has(dependency)) failure(failures, packageName, `must not depend on another Drone plugin: ${dependency}`);

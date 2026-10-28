@@ -104,6 +104,7 @@ packages/<name>/
 | `drone.provides` | API 1.3 候选：`{service:{version:正整数,operations:非空唯一操作名数组}}`；须有 `desktopRuntime` |
 | `drone.requires` | API 1.3 候选：`{alias:{service:服务合同名,version:正整数}}`；不接受包名或 npm 依赖，须有 `desktopRuntime` |
 | `drone.recordAdoptions` | 临时 API 1.3 候选：`{logicalType:{legacyType,fromVersions:[精确稳定版本],removeBeforeVersion:删除版本}}`；须有 `desktopRuntime`，到删除版本清单即不合格 |
+| `drone.nativeChildSessions` | 只接受 `"read-only"`，须有 `desktopRuntime`。声明后宿主才把本包 native 入口加载进子代理子会话，并以 `{kind:"child",readOnly:true,files:"none"\|"read"}` 调用 `createNativeSession`；`files` 只是宿主事实，不授根或权限，插件须据此只注册只读能力。未声明的包不进入子会话 |
 | `entrypoints` | 至少一项；每个路径必须存在，并且包含在 `files` 里。`host` 只供宿主组合根使用（§6.1） |
 | `capabilities` | 来自固定词表（§4.1）；不在词表内的值视为错误 |
 | `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |

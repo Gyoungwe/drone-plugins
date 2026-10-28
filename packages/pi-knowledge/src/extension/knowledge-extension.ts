@@ -91,6 +91,11 @@ interface ManagedSessionComposition {
 	readonly session: KnowledgeInterfaceSessionPorts;
 	readonly project: typeof currentProject;
 	readonly registerReadTools: (pi: any) => void;
+	/**
+	 * Host child session. "evidence": only label the child's answer as unverified material, without Vault
+	 * tools. "read": the existing read-only interface (read tools, read-only specialists, evidence-only publication).
+	 */
+	readonly child?: "evidence" | "read";
 }
 
 /** Adapt only our domain handlers, without pretending to implement the managed Pi context. */
@@ -135,9 +140,13 @@ function composeNativeSession(owner: KnowledgeSessionOwner, managed?: ManagedSes
 	let cleanup: (() => Promise<void>) | null = null;
 	const adapter = createKnowledgeNativeAdapter(owner, controller, nativePi => {
 		const pi = managed ? managedDomainPi(nativePi, managed.session) : nativePi;
+		if (managed?.child === "evidence") {
+			publication.registerAnswerPublication(pi, { getCurrent: () => null, evidenceOnly: true }).begin(false);
+			return;
+		}
 		if (managed) managed.registerReadTools(nativePi);
 		else registerNativeStatusTools(nativePi, { ...owner, services });
-		const session = knowledge.registerKnowledgeInterface(pi);
+		const session = knowledge.registerKnowledgeInterface(pi, { readOnly: managed?.child === "read" });
 		cleanup = session.dispose;
 		pi.on("before_agent_start", (event: any, context: any) => session.beforeStart(event, context));
 	}, async () => {
