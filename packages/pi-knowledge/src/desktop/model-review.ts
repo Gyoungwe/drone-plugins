@@ -91,3 +91,45 @@ export function createKnowledgeModelReviewModel(
 		},
 	};
 }
+
+/** A slash command is external user input; it never accepts caller identity or a filesystem path. */
+export function parseModelReviewCommandInput(
+	args: string,
+): Omit<KnowledgeModelReviewInput, "revision"> {
+	let input: unknown;
+	try {
+		input = JSON.parse(args);
+	} catch {
+		throw new Error(
+			"Expected model-review command JSON; raw arguments are not included in diagnostics",
+		);
+	}
+	if (!input || typeof input !== "object" || Array.isArray(input))
+		throw new Error(
+			"Expected JSON with id, expectedProposalHash, acknowledged:true and autoApply:boolean",
+		);
+	const value = input as Record<string, unknown>;
+	if (
+		Object.keys(value).some(
+			(key) =>
+				!["id", "expectedProposalHash", "acknowledged", "autoApply", "profile"].includes(key),
+		) ||
+		typeof value.id !== "string" ||
+		!/^[0-9a-f-]{36}$/.test(value.id) ||
+		typeof value.expectedProposalHash !== "string" ||
+		!/^[0-9a-f]{64}$/.test(value.expectedProposalHash) ||
+		value.acknowledged !== true ||
+		typeof value.autoApply !== "boolean" ||
+		(value.profile !== undefined && value.profile !== "knowledge-wiki-reviewer")
+	)
+		throw new Error(
+			"Expected the exact proposal ID/hash, explicit cost/data acknowledgement and autoApply choice",
+		);
+	return {
+		id: value.id,
+		expectedProposalHash: value.expectedProposalHash,
+		acknowledged: true,
+		autoApply: value.autoApply,
+		...(value.profile === undefined ? {} : { profile: "knowledge-wiki-reviewer" as const }),
+	};
+}

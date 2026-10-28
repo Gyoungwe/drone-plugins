@@ -42,3 +42,5 @@ Explicit experience navigation is available through the existing
 filters by the supplied workflow and host. Results keep `navigationOnly:true`,
 `evidenceEligible:false` and `instructionEligible:false`; this mode does not
 automatically inject memory or turn a previous repair into an execution plan.
+
+The candidate managed native adapter additionally registers `/knowledge-review-model` using the official Pi command shape. Its JSON argument contains `id`, `expectedProposalHash`, `acknowledged:true`, `autoApply:boolean` and optionally `profile:"knowledge-wiki-reviewer"`; it accepts no cwd/caller/path assertion. The command runs the same owner operation as the canonical UI, then the UI reads the durable audit through `modelReviewInfo`. The handler is void; it does not invent a command-result API or a native text receipt. This enhancement requires the matching unpublished managed-command host protocol; full default CLI model-review integration remains incomplete.

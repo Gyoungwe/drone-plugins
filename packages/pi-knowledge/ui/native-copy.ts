@@ -12,7 +12,6 @@ const zh = {
 	modelReviewInput: "输入 token",
 	modelReviewOutput: "输出 token",
 	modelReviewNotVerified: "模型意见不等于人工审核或科学认证。",
-	modelReviewApplied: "已应用并回读；请核对完整回执。",
 
 	title: "知识库",
 	settings: "设置",
@@ -135,7 +134,6 @@ const en: Record<keyof typeof zh, string> = {
 	modelReviewInput: "Input tokens",
 	modelReviewOutput: "Output tokens",
 	modelReviewNotVerified: "Model agreement is neither human review nor scientific verification.",
-	modelReviewApplied: "Applied and read back; inspect the full receipt.",
 
 	title: "Knowledge",
 	settings: "Settings",

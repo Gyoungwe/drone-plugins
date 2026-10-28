@@ -20,7 +20,7 @@ import { createBrokerReviewPolicyStorage } from "./state-policy.js";
 import { createBrokerSemanticSettings } from "./semantic-settings.js";
 import { createResourceServiceTransportFactory } from "./service-transport.js";
 import { createKnowledgeModelReview } from "../core/wiki-model-review.js";
-import { createKnowledgeModelReviewModel } from "./model-review.js";
+import { createKnowledgeModelReviewModel, parseModelReviewCommandInput } from "./model-review.js";
 import {
 	modelReviewInputSchema,
 	modelReviewResultSchema,
@@ -438,8 +438,26 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 			},
 		},
 		createNativeSession: () =>
-			createDesktopKnowledgeNativeSession(owner, (native) =>
-				projectFor(context.capabilities, native.cwd),
+			createDesktopKnowledgeNativeSession(
+				owner,
+				(native) => projectFor(context.capabilities, native.cwd),
+				async (args, native) => {
+					const input = parseModelReviewCommandInput(args);
+					const scope = (await context.capabilities.call(
+						"caller.scope",
+						null,
+					)) as import("@gyoungwe/plugin-api/runtime").PluginRuntimeScope;
+					if (scope.kind !== "session" || scope.sessionId !== native.sessionManager.getSessionId())
+						throw new Error("Model review command requires its originating live session");
+					const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+					if (!binding) throw new Error("No application knowledge Vault is bound");
+					await modelReviews.review(
+						{ ...input, revision: binding.revision },
+						await projectFor(context.capabilities, scope.workspaceDirectory),
+						{ scope, signal: native.signal, capabilities: context.capabilities },
+					);
+					context.events.changed();
+				},
 			),
 		dispose: () => owner.dispose(),
 	};

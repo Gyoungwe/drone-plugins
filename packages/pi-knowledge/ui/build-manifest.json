@@ -53,7 +53,7 @@
     "ui/knowledge/nebula-model.ts": "44e63f088ffa3bad4fd9a93c238165b07853fc149448358f1ca9a2a60ec746b4",
     "ui/knowledge/note-display.ts": "22c6b1f6375acb7cd3269641b53f8182460e5c5c57cf5b2adfa8ed981ebf862a",
     "ui/knowledge/zotero-copy.ts": "26fcff152004dfcfefc6ca0fe3f9dec81cbd33affe4653a785527a94705786c7",
-    "ui/native-copy.ts": "9771ecb3bd8db89c07f9a26802a67d4a2ece04b3332e644b9512e068c6b7dded",
+    "ui/native-copy.ts": "b9b7b7801e896f7f34d7496849b8447189cac836879fba4e5f3aea334d7a3382",
     "ui/plugin.json": "f741e57bd2ba9fb6cdf8ab4bd3c49401724e617fe65e3dfbed18a92c2e58b168",
     "ui/runtime-api.ts": "08b5d4ceaffdacabd55ab03ee118d55dce1f42eed83262a2974cc2152247435b",
     "ui/runtime-store.ts": "89c1d7e30315ae701f1d7e3bae433c7b472a0c4614d1df35693cd5f9832c5e96",
@@ -63,6 +63,6 @@
   },
   "outputs": {
     "ui/styles/generated.ts": "dc95990487f72d53b9a217f185467e6df76ec919a0ef10c909bf59e7f74b81dd",
-    "ui/bundle.js": "988f9d3071ed1712def429b036c226f0610607afe3c5fe42881074502d92ac65"
+    "ui/bundle.js": "0253daf413a97b0713cf89c5df2d6dca2caff36b5d2dd4362d57b7e33f9c462f"
   }
 }

@@ -100,6 +100,7 @@ it.each([false, true])(
 				if (revoked) throw new Error("Host grant revoked");
 				names.push(name);
 				const input = raw as any;
+				if (name === "caller.scope") return call.scope;
 				if (name === "session.inspect") return { agentActive };
 				if (name === "model.selection")
 					return {
@@ -298,6 +299,7 @@ it.each([false, true])(
 		);
 		const errors: unknown[] = [];
 		await sdk.session.bindExtensions({ onError: (error) => errors.push(error) });
+		call.scope.sessionId = sdk.session.sessionId;
 		try {
 			provider.setResponses([
 				fauxAssistantMessage(fauxToolCall("knowledge_search", { query: "orchid" })),
@@ -322,7 +324,12 @@ it.each([false, true])(
 					acknowledged: true as const,
 					autoApply: false,
 				};
-				expect(await invoke("modelReviewInfo", input)).toMatchObject({
+				const infoInput = {
+					revision: input.revision,
+					id: input.id,
+					expectedProposalHash: input.expectedProposalHash,
+				};
+				expect(await invoke("modelReviewInfo", infoInput)).toMatchObject({
 					selection: { provider: provider.provider.id },
 					lastReview: null,
 				});
@@ -347,13 +354,18 @@ it.each([false, true])(
 					},
 				};
 				provider.setResponses([fauxAssistantMessage(fauxToolCall("structured_result", decision))]);
-				expect(await invoke("modelReview", input)).toMatchObject({
-					verdict: "approve",
-					applied: false,
-					canAutoApply: true,
-					scientificallyVerified: false,
-					humanReviewed: false,
-					usage: { cost: null },
+				await sdk.session.prompt(
+					`/knowledge-review-model ${JSON.stringify({ id, expectedProposalHash: proposal.proposalHash, acknowledged: true, autoApply: false })}`,
+				);
+				expect(await invoke("modelReviewInfo", infoInput)).toMatchObject({
+					lastReview: {
+						verdict: "approve",
+						applied: false,
+						canAutoApply: true,
+						scientificallyVerified: false,
+						humanReviewed: false,
+						usage: { cost: null },
+					},
 				});
 				await expect(readFile(join(vault, proposal.path))).rejects.toHaveProperty("code", "ENOENT");
 				const canceled = new AbortController();
@@ -399,7 +411,7 @@ it.each([false, true])(
 					scientificallyVerified: false,
 					writeResult: { vaultWritten: true, reviewRecorded: true, indexed: true },
 				});
-				expect(await invoke("modelReviewInfo", input)).toMatchObject({
+				expect(await invoke("modelReviewInfo", infoInput)).toMatchObject({
 					lastReview: { auditId: (applied as any).auditId, applied: true },
 				});
 				expect(modelCalls).toBe(4);

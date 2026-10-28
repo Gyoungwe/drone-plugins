@@ -80,7 +80,7 @@ it("Desktop runtime and its two native tools use one real broker-backed index wi
 		const tools = new Map<string, any>();
 		const session = await runtime.createNativeSession!();
 		expect(session.toolEffects).toEqual({ knowledge_status: "read", knowledge_search: "read" });
-		await session.extension({ events: createEventBus(), on: () => undefined, registerTool: (tool: any) => tools.set(tool.name, tool) } as any);
+		await session.extension({ events: createEventBus(), on: () => undefined, registerTool: (tool: any) => tools.set(tool.name, tool), registerCommand: () => {} } as any);
 		expect([...tools.keys()]).toEqual(["knowledge_status", "knowledge_search"]);
 		// Application-scoped native reads have no workspace project selection.
 		const native = await tools.get("knowledge_search").execute("search", { query: "Orchid" }, undefined, undefined, { cwd: null });

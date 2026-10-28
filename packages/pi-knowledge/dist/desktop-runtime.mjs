@@ -4977,6 +4977,34 @@ function createKnowledgeModelReviewModel(owner, canWriteState, canWriteFiles) {
     }
   };
 }
+function parseModelReviewCommandInput(args) {
+  let input;
+  try {
+    input = JSON.parse(args);
+  } catch {
+    throw new Error(
+      "Expected model-review command JSON; raw arguments are not included in diagnostics"
+    );
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new Error(
+      "Expected JSON with id, expectedProposalHash, acknowledged:true and autoApply:boolean"
+    );
+  const value = input;
+  if (Object.keys(value).some(
+    (key) => !["id", "expectedProposalHash", "acknowledged", "autoApply", "profile"].includes(key)
+  ) || typeof value.id !== "string" || !/^[0-9a-f-]{36}$/.test(value.id) || typeof value.expectedProposalHash !== "string" || !/^[0-9a-f]{64}$/.test(value.expectedProposalHash) || value.acknowledged !== true || typeof value.autoApply !== "boolean" || value.profile !== void 0 && value.profile !== "knowledge-wiki-reviewer")
+    throw new Error(
+      "Expected the exact proposal ID/hash, explicit cost/data acknowledgement and autoApply choice"
+    );
+  return {
+    id: value.id,
+    expectedProposalHash: value.expectedProposalHash,
+    acknowledged: true,
+    autoApply: value.autoApply,
+    ...value.profile === void 0 ? {} : { profile: "knowledge-wiki-reviewer" }
+  };
+}
 
 // src/desktop/review-storage.ts
 function createBrokerWikiReviewPorts(capabilities, stateRoot) {
@@ -5339,10 +5367,14 @@ function createKnowledgeNativeAdapter(owner, controller, register, cleanup) {
 }
 
 // src/desktop/native.ts
-function createDesktopKnowledgeNativeSession(owner, projectFor2) {
+function createDesktopKnowledgeNativeSession(owner, projectFor2, reviewModel) {
   const controller = new AbortController();
   const reads = createKnowledgeReadModel(owner);
   const adapter = createKnowledgeNativeAdapter(owner, controller, (pi) => {
+    pi.registerCommand("knowledge-review-model", {
+      description: "Review one exact Wiki proposal with explicit JSON cost/data acknowledgement; read the audit in the knowledge review UI",
+      handler: (args, context) => reviewModel(args, context)
+    });
     pi.registerTool({
       name: "knowledge_status",
       label: "Knowledge status",
@@ -5351,7 +5383,10 @@ function createDesktopKnowledgeNativeSession(owner, projectFor2) {
       parameters: { type: "object", properties: {}, additionalProperties: false },
       async execute(_id, _input, _signal, _update, context) {
         const overview = await reads.overview(await projectFor2(context));
-        return result({ status: overview.state === "bound" ? "configured" : "unconfigured", ...overview });
+        return result({
+          status: overview.state === "bound" ? "configured" : "unconfigured",
+          ...overview
+        });
       }
     });
     pi.registerTool({
@@ -5359,18 +5394,29 @@ function createDesktopKnowledgeNativeSession(owner, projectFor2) {
       label: "Knowledge \xB7 local search",
       drone: { readOnly: true, capabilities: ["knowledge"] },
       description: "Search the configured local knowledge index. Results are excerpts, not publication proofs.",
-      parameters: { type: "object", properties: {
-        query: { type: "string", minLength: 1, maxLength: 2e3 },
-        limit: { type: "integer", minimum: 1, maximum: 12 }
-      }, required: ["query"], additionalProperties: false },
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", minLength: 1, maxLength: 2e3 },
+          limit: { type: "integer", minimum: 1, maximum: 12 }
+        },
+        required: ["query"],
+        additionalProperties: false
+      },
       async execute(_id, input, _signal, _update, context) {
         const binding = await owner.config.readKnowledgeBinding({ fresh: true });
         if (!binding) throw new Error("No application knowledge Vault is bound");
-        return result(await reads.search({ ...input, revision: binding.revision }, await projectFor2(context)));
+        return result(
+          await reads.search({ ...input, revision: binding.revision }, await projectFor2(context))
+        );
       }
     });
   });
-  return { ...adapter, toolEffects: { knowledge_status: "read", knowledge_search: "read" } };
+  return {
+    ...adapter,
+    toolEffects: { knowledge_status: "read", knowledge_search: "read" },
+    commandEffects: { "knowledge-review-model": "write" }
+  };
 }
 
 // src/desktop/runtime.ts
@@ -5707,7 +5753,24 @@ var createDesktopRuntime = async (context) => {
     },
     createNativeSession: () => createDesktopKnowledgeNativeSession(
       owner,
-      (native) => projectFor(context.capabilities, native.cwd)
+      (native) => projectFor(context.capabilities, native.cwd),
+      async (args, native) => {
+        const input = parseModelReviewCommandInput(args);
+        const scope = await context.capabilities.call(
+          "caller.scope",
+          null
+        );
+        if (scope.kind !== "session" || scope.sessionId !== native.sessionManager.getSessionId())
+          throw new Error("Model review command requires its originating live session");
+        const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+        if (!binding) throw new Error("No application knowledge Vault is bound");
+        await modelReviews.review(
+          { ...input, revision: binding.revision },
+          await projectFor(context.capabilities, scope.workspaceDirectory),
+          { scope, signal: native.signal, capabilities: context.capabilities }
+        );
+        context.events.changed();
+      }
     ),
     dispose: () => owner.dispose()
   };
