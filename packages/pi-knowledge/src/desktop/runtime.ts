@@ -123,6 +123,9 @@ async function projectFor(
 }
 
 /** One granted knowledge owner composes the same native interface, services and UI operations. */
+/** Every tool the read-only knowledge interface registers in a child session; none of them writes. */
+const CHILD_READ_TOOLS = ["knowledge_status", "knowledge_search", "research_check_answer", "research_knowledge_status", "research_prepare_knowledge", "research_read_knowledge", "research_restore_evidence", "research_resume_topic", "research_search_explainers", "research_search_knowledge", "research_task_status", "research_topics"] as const;
+
 /** Every hook the read-only knowledge interface registers in a child session. */
 const CHILD_SESSION_EVENTS = ["session_start", "session_tree", "before_agent_start", "context", "message_start", "tool_execution_start", "tool_execution_end", "tool_result"] as const;
 
@@ -477,13 +480,22 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 				},
 			};
 			if (facts?.kind === "child") {
-				// The host fact is not a grant: "none" never touches the Vault binding, and "read"
-				// still needs this package's own subagent policy before any Vault tool is offered.
-				const readable = facts.files === "read" && (await readKnowledgeBinding())?.subagentPolicy === "read-local";
-				const child = createManagedNativeSession(owner, { ...composition, child: readable ? "read" : "evidence" });
+				// The host fact is not a grant. "none" never touches the Vault binding. "read" offers the
+				// read-only interface, and every call re-reads this package's own subagent policy with the
+				// live caller the host supplies at that moment (none exists while the session is created).
+				const readable = facts.files === "read";
+				const child = createManagedNativeSession(owner, {
+					...composition,
+					child: readable ? "read" : "evidence",
+					childReadAllowed: async () => (await readKnowledgeBinding())?.subagentPolicy === "read-local",
+				});
+				if (!child.projection) throw new Error("Knowledge child session requires its publication projection");
 				const session: PluginNativeSession = {
 					...child,
-					toolEffects: readable ? { knowledge_status: "read", knowledge_search: "read" } : {},
+					// A child's answers only take the evidence-only path (label, no task report), so its
+					// finalizer runs with read capabilities; any write it attempted would fail at the broker.
+					projection: { ...child.projection, finalizeEffect: "read" },
+					toolEffects: readable ? Object.fromEntries(CHILD_READ_TOOLS.map(tool => [tool, "read" as const])) : {},
 					// A child is read-only: its hooks get read capabilities only, so any write attempt fails at the broker.
 					eventEffects: Object.fromEntries(CHILD_SESSION_EVENTS.map(event => [event, "read" as const])),
 					commandEffects: {},

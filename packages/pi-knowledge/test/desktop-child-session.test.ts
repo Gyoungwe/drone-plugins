@@ -7,7 +7,9 @@ import { createKnowledgeConfigApi } from "../src/core/config.js";
 import createDesktopRuntime from "../src/desktop/runtime.js";
 
 const roots: string[] = [];
+const closers: (() => Promise<void>)[] = [];
 afterEach(async () => {
+	for (const close of closers.splice(0)) await close();
 	for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
@@ -46,21 +48,30 @@ async function register(subagentPolicy: "none" | "read-local", facts: any) {
 	calls.length = 0;
 	const session = await runtime.createNativeSession!(facts);
 	const readsBeforeRegistration = [...calls];
+	const definitions = new Map<string, any>();
 	const tools: string[] = [];
 	const commands: string[] = [];
 	const events = new Set<string>();
 	await session.extension({
 		events: createEventBus(),
 		on: (name: string) => events.add(name),
-		registerTool: (tool: any) => tools.push(tool.name),
+		registerTool: (tool: any) => {
+			tools.push(tool.name);
+			definitions.set(tool.name, tool);
+		},
 		registerCommand: (name: string) => commands.push(name),
 		appendEntry: () => undefined,
 		getCommands: () => [],
 	} as any);
-	await session.dispose();
-	await runtime.dispose();
-	controller.abort();
-	return { session, readsBeforeRegistration, tools, commands, events: [...events] };
+	const context = { cwd: "/workspace", signal: controller.signal, sessionManager: { getSessionId: () => "child-session", getBranch: () => [] } };
+	const execute = (name: string, input: unknown) => definitions.get(name).execute("call", input, controller.signal, undefined, context);
+	const close = async () => {
+		await session.dispose();
+		await runtime.dispose();
+		controller.abort();
+	};
+	closers.push(close);
+	return { session, readsBeforeRegistration, tools, commands, events: [...events], execute };
 }
 
 it("a child without file access only labels its answer and never reads the Vault binding", async () => {
@@ -71,25 +82,32 @@ it("a child without file access only labels its answer and never reads the Vault
 	expect(child.session.toolEffects).toEqual({});
 	expect(child.session.commandEffects).toEqual({});
 	expect(child.session.projection?.finalize).toBeTypeOf("function");
+	expect(child.session.projection?.finalizeEffect).toBe("read");
 	for (const event of child.events) if (event !== "session_shutdown") expect(child.session.eventEffects?.[event]).toBe("read");
 });
 
-it("a child with read access stays evidence-only when this package's policy is none", async () => {
+it("a read child is created without a live caller and refuses Vault tools while the package policy is none", async () => {
 	const child = await register("none", { kind: "child", readOnly: true, files: "read" });
-	expect(child.readsBeforeRegistration).toEqual(["state.readJson"]);
-	expect(child.tools).toEqual([]);
+	// No live caller exists while the session is created, so the policy is never read here.
+	expect(child.readsBeforeRegistration).toEqual([]);
 	expect(child.commands).toEqual([]);
+	await expect(child.execute("knowledge_search", { query: "Orchid" })).rejects.toThrow("does not allow subagent reads");
 });
 
-it("a read-local child gets the read-only interface and no write command", async () => {
+it("a read-local child gets the read-only interface, all declared read, and no write command", async () => {
 	const child = await register("read-local", { kind: "child", readOnly: true, files: "read" });
 	const manifest = JSON.parse(await readFile(new URL("../plugin.manifest.json", import.meta.url), "utf8"));
+	expect(child.readsBeforeRegistration).toEqual([]);
 	expect(child.tools).toEqual(expect.arrayContaining(["knowledge_status", "knowledge_search"]));
-	for (const tool of child.tools) expect(manifest.tools).toContain(tool);
+	for (const tool of child.tools) {
+		expect(manifest.tools).toContain(tool);
+		expect(child.session.toolEffects?.[tool]).toBe("read");
+	}
 	expect(child.commands).toEqual([]);
-	expect(Object.values(child.session.toolEffects ?? {})).not.toContain("write");
 	// Every hook the read-only interface registers is declared read: a child session cannot obtain write effects.
 	for (const event of child.events) if (event !== "session_shutdown") expect(child.session.eventEffects?.[event]).toBe("read");
+	// The policy allows reads, so the tool proceeds past the gate to the real capabilities.
+	await expect(child.execute("knowledge_search", { query: "Orchid" })).rejects.not.toThrow("does not allow subagent reads");
 });
 
 it("the primary session keeps its full interface and write commands", async () => {

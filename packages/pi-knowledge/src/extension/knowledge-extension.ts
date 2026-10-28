@@ -96,6 +96,32 @@ interface ManagedSessionComposition {
 	 * tools. "read": the existing read-only interface (read tools, read-only specialists, evidence-only publication).
 	 */
 	readonly child?: "evidence" | "read";
+	/**
+	 * For a "read" child: this package's own policy, evaluated at each tool call and hook with the
+	 * caller the host supplies then. The host's child fact is not a grant.
+	 */
+	readonly childReadAllowed?: () => Promise<boolean>;
+}
+
+const CHILD_READ_REFUSED = "This knowledge Vault does not allow subagent reads (its subagent policy is not read-local)";
+
+/** A read child's tools refuse and its hooks stay inert unless the package policy allows reads right now. */
+function childPolicyPi(pi: any, allowed: () => Promise<boolean>) {
+	return new Proxy(pi, { get(target, property) {
+		if (property === "registerTool") return (definition: any) => target.registerTool({
+			...definition,
+			execute: async (...args: any[]) => {
+				if (!(await allowed())) throw new Error(CHILD_READ_REFUSED);
+				return definition.execute(...args);
+			},
+		});
+		if (property === "on") return (name: string, handler: any) => target.on(name,
+			name === "session_shutdown" ? handler : async (...args: any[]) => (await allowed()) ? handler(...args) : undefined);
+		if (property === "registerCommand") return (name: string) => {
+			throw new Error(`A read-only child session cannot register the ${name} command`);
+		};
+		return Reflect.get(target, property, target);
+	} });
 }
 
 /** Adapt only our domain handlers, without pretending to implement the managed Pi context. */
@@ -138,7 +164,9 @@ function composeNativeSession(owner: KnowledgeSessionOwner, managed?: ManagedSes
 		...(managed ? { available: () => true, project: managed.project, session: managed.session } : {}),
 	}, owner.extensionHost);
 	let cleanup: (() => Promise<void>) | null = null;
-	const adapter = createKnowledgeNativeAdapter(owner, controller, nativePi => {
+	if (managed?.child === "read" && !managed.childReadAllowed) throw new Error("A read child session requires the package read policy");
+	const adapter = createKnowledgeNativeAdapter(owner, controller, sessionPi => {
+		const nativePi = managed?.child === "read" && managed.childReadAllowed ? childPolicyPi(sessionPi, managed.childReadAllowed) : sessionPi;
 		const pi = managed ? managedDomainPi(nativePi, managed.session) : nativePi;
 		if (managed?.child === "evidence") {
 			publication.registerAnswerPublication(pi, { getCurrent: () => null, evidenceOnly: true }).begin(false);
