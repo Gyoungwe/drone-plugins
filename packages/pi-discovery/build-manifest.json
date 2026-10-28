@@ -13,13 +13,14 @@
 		"src/host.ts": "bcbb9a28dc53e3216f9b15b5dcf23b199b9edf05cd7816a0a725bb3c044353f9",
 		"src/service.ts": "a8086f0bfd733c26da9e4b93beb2189723a02243d8ada728c32d0be60a5aa31a",
 		"src/index.ts": "4210381cc3a1df74c491a32532db79c8e7b59871cdb5986192ead43dd7ac3aef",
+		"src/inquiry-provider.ts": "d4b63121d2d08951af25fd529577084fbef0ea2e5fbdd41c315da63ad9b0c30b",
 		"src/native-records.ts": "f60bd173441c316952018d8f1c5268d40efea4e6ca5218e0f40ba8f9e322ea66",
-		"src/native-runtime.ts": "af6f3b9d5335bc4bf5f51a946331650e7f77bebd35548708d5606a445c89bb72",
-		"src/runtime.ts": "5121e7e191f062f1057980193705196908c2d680bbb7c167d13dc6d30794f738"
+		"src/native-runtime.ts": "895bfc69cd6585068862fadb0488721ca6eeee50caf752c5346c8d24e83071b2",
+		"src/runtime.ts": "38f818e257cab6baf6ecd04bea1a36fd0863bcf4ca5a71ff8e4dc64977131fbf"
 	},
 	"outputs": {
 		"dist/host.mjs": "33d79915fe96e0853b6c3caae1c0af5c30e8cec50cc11ad5693acf51b8469171",
-		"dist/index.mjs": "18f3e6d36cb8737d94bd564c4d16ba27b9f0ccee73d8ebeca27e2f37a2289ac0",
-		"dist/runtime.mjs": "22d6c4a861b348ac6ea22c0342d11de597d744ba1093ffbb0b921e4ccf487d96"
+		"dist/index.mjs": "c3959b23657ad3f9c64243038985f28ad76c168dadec0c2e4959b021eee12ce5",
+		"dist/runtime.mjs": "ed620e5e4a37ece5dd876704aaa6e20b1ad4fd4a069dc61501e48f48112c7599"
 	}
 }
