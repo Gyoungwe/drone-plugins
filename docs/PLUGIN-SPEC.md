@@ -172,6 +172,7 @@ commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpo
 - API 1.3 候选的可选服务使用 `drone.requires` 的 alias → service/version 合同；这不改变禁止 plugin-to-plugin import/`dependencies` 的规则。`drone.provides` 只列本包 `desktopRuntime.operations` 的公开 JSON 操作名，不能放函数、包路径或授权对象。声明从同一份实际安装包来源解析，受 content hash 与启停生命周期约束；不能从 UI 清单建立第二套 provider catalog。
 - `provider.inspect({alias})` 为 read，明确返回 available/absent/disabled/unavailable/incompatible/ambiguous；多个同版本 enabled 提供者必须拒绝选择，不能默认取第一个。`provider.read` / `provider.write` 接收 `{alias,operation,input}`；操作必须同时在提供者声明和实际 runtime 中存在，read 不得调用 write。版本是精确服务合同版本，不是 npm 版本范围。
 - 服务在实际提供者 owner 内执行，原 caller、同一 live SDK session、原窗口批准和取消作用域由宿主决定。短调用 lease 必须排空并清理，已有 native/UI 绑定时共享同一 application owner，无其他绑定时该纯服务 owner 仅活本次调用，状态须显式持久化。嵌套调用携带 host-only source/operation 链，循环拒绝；函数和身份不经 JSON 传送。普通 JSON 返回值不授予文件、模型或任务写入批准；特权角色须另行提供真实不可伪造的回执与消费验证，本片没有开放。
+- `provider.native({alias,operation,input:JSON})` 仅能从实际 SDK `message_start` / `tool_execution_end` 在途 native hook 调用。接收 native adapter 用 `nativeOperations` 声明 event/effect/inputSchema/resultSchema/execute；宿主只选同一 live SDK entry 已绑定的接收 attachment，缺失不可隐式 attach。实际 event 由私有 courier 传入，普通 operation/tool/command/bootstrap、普通 provider.read/write 和复制的 JSON event/nonce 均不能取得该来源。调用上限来自实际原 hook effect，read 不能升级 write；写操作仍经实际来源授权与写后回读，取消/换代/清理失败拒绝成功回执。此角色不授予文件根、模型、执行 consent 或科学证明，实际 host-queued 自动续作身份仍未实现。
 - 共享的类型和合同只能放进 `@gyoungwe/plugin-api`，不得从另一个插件包里取。
 
 ### 6.3 聚合包
