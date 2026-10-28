@@ -1,0 +1,15 @@
+{
+	"name": "discovery-workspace",
+	"version": "0.2.0",
+	"description": "Workspace discovery journals and exploration plans",
+	"droneUi": 2,
+	"main": "index.tsx",
+	"contributions": [
+		{
+			"id": "discovery",
+			"region": "panel.tab",
+			"title": "Discovery",
+			"export": "DiscoveryPanel"
+		}
+	]
+}

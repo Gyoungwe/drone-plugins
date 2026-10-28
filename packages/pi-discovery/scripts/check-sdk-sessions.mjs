@@ -14,6 +14,8 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+const api = await candidatePluginApi();
 const args = process.argv.slice(2);
 assert.equal(
 	args[0],
@@ -82,6 +84,7 @@ try {
 			),
 		);
 		dependencies["@gyoungwe/pi-discovery"] = `file:${tarball}`;
+		dependencies["@gyoungwe/plugin-api"] = `file:${api.path}`;
 		writeFileSync(
 			join(prefix, "package.json"),
 			JSON.stringify({ private: true, type: "module", dependencies }),

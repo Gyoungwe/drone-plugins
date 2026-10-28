@@ -62,6 +62,8 @@ packages/<name>/
 
 ---
 
+候选 1.3 的 `roots.describe(null)` 只描述本 activation 已批准根；`state.reserve({root,path})` 只为已批准且已存在的 JSON 状态目录保留独占写者，不需要派生 resource 子进程，也不授权 Vault 正文或任意文件。宿主与标准原生适配共用 `@gyoungwe/plugin-api/node/reservations` 的本机同用户 `state-writers` 协议，协调目录属于 application-state；只有域、在途工作和资源成功关闭后才释放，失败保留并要求显式恢复。API 根/UI/runtime 合同不引入 Node；独立 Node 子路径不改变插件权限。此能力仍是未发布候选，不能把源码/fixture 检查写成正式安装包支持。
+
 ## 4. `plugin.manifest.json`
 
 ```json

@@ -1175,14 +1175,14 @@ var DiscoveryService = class {
   }
   async createKernelSession(input) {
     await this.init();
-    await this.authorize({
-      kind: "create-kernel-session",
-      projectId: this.projectId
-    });
     const sessionId = safeSessionId(input.sessionId);
     if (this.sessionMeta.has(sessionId))
       throw new Error(`Discovery session already exists: ${sessionId}`);
     const runDirectory = safeRunDirectory(this.projectRoot, input.runDirectory);
+    await this.authorize({
+      kind: "create-kernel-session",
+      projectId: this.projectId
+    });
     await this.options.services.files.prepareDirectory(runDirectory);
     const runner = await this.runnerFor(input.language);
     if (this.disposed) throw new Error("discovery service is disposed");
@@ -1307,8 +1307,8 @@ var DiscoveryService = class {
       rankedCandidateIds: ranked.map((candidate) => candidate.id),
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
+    await this.plansStore.write([...this.plans, plan]);
     this.plans.push(plan);
-    await this.plansStore.write(this.plans);
     return plan;
   }
   async listExplorationPlans() {

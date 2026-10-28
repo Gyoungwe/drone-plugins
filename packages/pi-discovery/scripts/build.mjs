@@ -11,7 +11,7 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const inputs = {};
 const outputs = {};
 
-for (const entry of ["host", "index"]) {
+for (const entry of ["host", "index", "runtime"]) {
 	const outputPath = join(distRoot, `${entry}.mjs`);
 	const result = await build({
 		absWorkingDir: packageRoot,
@@ -21,6 +21,7 @@ for (const entry of ["host", "index"]) {
 		format: "esm",
 		platform: "node",
 		packages: "bundle",
+		external: ["@gyoungwe/plugin-api/node/reservations"],
 		metafile: true,
 		write: false,
 		logLevel: "silent",

@@ -12,32 +12,50 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import register from "../dist/index.mjs";
+import register, { nativeDiscoveryExtension } from "../dist/index.mjs";
 
-function tools() {
+async function tools(options) {
 	const registered = new Map();
-	register({ registerTool: (tool) => registered.set(tool.name, tool) });
+	const listeners = new Map();
+	const pi = {
+		registerTool: (tool) => registered.set(tool.name, tool),
+		on: (name, listener) => listeners.set(name, listener),
+	};
+	if (options) await nativeDiscoveryExtension(pi, options);
+	else await register(pi);
+	registered.dispose = () => listeners.get("session_shutdown")?.();
 	return registered;
 }
 const call = (registered, name, cwd, input = {}) =>
-	registered.get(name).execute("test", input, undefined, undefined, { cwd });
+	registered.get(name).execute("test", input, undefined, undefined, {
+		cwd,
+		sessionManager: { getSessionId: () => "unit-session" },
+	});
 const journal = (cwd) => join(cwd, "runs/.drone-discovery");
 
-test("native entry registers exactly its declared read-only tools", async () => {
+test("native entry registers exactly its declared tools with explicit write metadata", async () => {
 	const manifest = JSON.parse(
 		await readFile(new URL("../plugin.manifest.json", import.meta.url), "utf8"),
 	);
-	const registered = tools();
+	const registered = await tools();
 	assert.deepEqual([...registered.keys()].sort(), [...manifest.tools].sort());
 	assert(
-		[...registered.values()].every((tool) => tool.drone.readOnly === true),
+		[...registered.values()]
+			.filter(
+				(tool) =>
+					!["discovery_bind_workspace", "discovery_create_plan"].includes(
+						tool.name,
+					),
+			)
+			.every((tool) => tool.drone.readOnly === true),
 	);
 });
 
 test("first-run status is unconfigured and creates no journal", async () => {
 	const root = await mkdtemp(join(tmpdir(), "discovery-native-first-"));
 	try {
-		const status = (await call(tools(), "discovery_status", root)).details;
+		const status = (await call(await tools(), "discovery_status", root))
+			.details;
 		assert.equal(status.status, "unconfigured");
 		assert.equal(status.execution, "unavailable");
 		assert.equal(status.inquiry, "unavailable");
@@ -61,7 +79,7 @@ test("the same extension uses each calling workspace and leaves original journal
 			join(journal(b), "critics.json"),
 			'[{"findingId":"finding-b"}]',
 		);
-		const registered = tools();
+		const registered = await tools();
 		const hash = (value) => createHash("sha256").update(value).digest("hex");
 		const before = hash(await readFile(file));
 		assert.equal(
@@ -112,7 +130,7 @@ test("corrupt and oversized journals fail visibly without rewriting data", async
 		for (const content of ["{bad", "{}", "[null]", " ".repeat(1_048_577)]) {
 			await writeFile(path, content);
 			await assert.rejects(
-				call(tools(), "discovery_list_records", root, {
+				call(await tools(), "discovery_list_records", root, {
 					journal: "evaluations",
 				}),
 			);
@@ -131,11 +149,13 @@ test("journal symlinks cannot expose another workspace and record listing is bou
 		await writeFile(outside, '[{"id":"outside"}]');
 		await symlink(outside, join(journal(root), "critics.json"));
 		await assert.rejects(
-			call(tools(), "discovery_list_records", root, { journal: "critics" }),
+			call(await tools(), "discovery_list_records", root, {
+				journal: "critics",
+			}),
 			/symlink/,
 		);
 		await assert.rejects(
-			call(tools(), "discovery_list_records", root, {
+			call(await tools(), "discovery_list_records", root, {
 				journal: "../../outside",
 			}),
 			/Unknown discovery journal/,
@@ -145,12 +165,140 @@ test("journal symlinks cannot expose another workspace and record listing is bou
 			JSON.stringify(Array.from({ length: 40 }, (_, id) => ({ id }))),
 		);
 		const listed = (
-			await call(tools(), "discovery_list_records", root, { journal: "plans" })
+			await call(await tools(), "discovery_list_records", root, {
+				journal: "plans",
+			})
 		).details;
 		assert.equal(listed.records.length, 32);
 		assert.equal(listed.count, 40);
 		assert.equal(listed.truncated, true);
 	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("native plan writing binds the actual workspace and excludes a second native owner until disposal", async () => {
+	const root = await mkdtemp(join(tmpdir(), "discovery-native-writer-"));
+	const first = await tools({ leaseDirectory: join(root, "leases") });
+	const second = await tools({ leaseDirectory: join(root, "leases") });
+	try {
+		const bound = (
+			await call(first, "discovery_bind_workspace", root, {
+				root: "native-state",
+				acknowledgeExistingData: false,
+			})
+		).details;
+		assert.equal(bound.readiness, "ready");
+		const input = {
+			id: "plan-native",
+			hypothesisId: "hypothesis-native",
+			prior: { direction: "unknown", recordedAt: new Date().toISOString() },
+			budget: {
+				maxExecutions: 2,
+				maxWallTimeMs: 30000,
+				maxOutputBytes: 65536,
+				maxCostUnits: 2,
+			},
+			candidates: [
+				{
+					id: "candidate-native",
+					statement: "Read-only scientific test",
+					surprise: 0.5,
+					estimatedCost: 1,
+					expectedExplanationsExcluded: 1,
+					credibility: 0.5,
+				},
+			],
+		};
+		assert.equal(
+			(await call(first, "discovery_create_plan", root, input)).details.id,
+			"plan-native",
+		);
+		assert.equal(
+			(await call(first, "discovery_list_records", root, { journal: "plans" }))
+				.details.records[0].id,
+			"plan-native",
+		);
+		await assert.rejects(
+			call(second, "discovery_bind_workspace", root, {
+				root: "native-state",
+				acknowledgeExistingData: true,
+			}),
+			/already reserved/,
+		);
+		await first.dispose();
+		const recovered = (
+			await call(second, "discovery_bind_workspace", root, {
+				root: "native-state",
+				acknowledgeExistingData: true,
+			})
+		).details;
+		assert.equal(recovered.readiness, "ready");
+		assert.equal(
+			(await call(second, "discovery_list_records", root, { journal: "plans" }))
+				.details.records[0].id,
+			"plan-native",
+		);
+	} finally {
+		await first.dispose();
+		await second.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("refuses to bind mixed legacy project identities without replacing journal bytes", async () => {
+	const root = await mkdtemp(join(tmpdir(), "discovery-native-mixed-"));
+	const registered = await tools({ leaseDirectory: join(root, "leases") });
+	try {
+		await mkdir(journal(root), { recursive: true });
+		const path = join(journal(root), "plans.json");
+		const original = JSON.stringify([
+			{ id: "old-a", projectId: "project-a" },
+			{ id: "old-b", projectId: "project-b" },
+		]);
+		await writeFile(path, original);
+		await assert.rejects(
+			call(registered, "discovery_bind_workspace", root, {
+				root: "native-state",
+				acknowledgeExistingData: true,
+			}),
+			/conflicting project identities/,
+		);
+		assert.equal(await readFile(path, "utf8"), original);
+		await assert.rejects(
+			access(join(journal(root), "workspace-binding.json")),
+			{ code: "ENOENT" },
+		);
+	} finally {
+		await registered.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("an explicit retry after repairing a corrupt journal creates a fresh owner", async () => {
+	const root = await mkdtemp(join(tmpdir(), "discovery-native-repair-"));
+	const registered = await tools({ leaseDirectory: join(root, "leases") });
+	try {
+		await mkdir(journal(root), { recursive: true });
+		await writeFile(join(journal(root), "critics.json"), "{bad");
+		await assert.rejects(
+			call(registered, "discovery_bind_workspace", root, {
+				root: "native-state",
+				acknowledgeExistingData: true,
+			}),
+		);
+		await writeFile(join(journal(root), "critics.json"), "[]");
+		assert.equal(
+			(
+				await call(registered, "discovery_bind_workspace", root, {
+					root: "native-state",
+					acknowledgeExistingData: true,
+				})
+			).details.readiness,
+			"ready",
+		);
+	} finally {
+		await registered.dispose();
 		await rm(root, { recursive: true, force: true });
 	}
 });
