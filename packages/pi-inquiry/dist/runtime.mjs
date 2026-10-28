@@ -9103,6 +9103,10 @@ async function createInquiryWasmEngine(wasmBinary) {
 
 // src/runtime.ts
 var name = typebox_exports.String({ minLength: 1, maxLength: 128 });
+var readMetadata = {
+  drone: { capabilities: ["research", "provenance"], readOnly: true }
+};
+var writeMetadata = { drone: { capabilities: ["research", "provenance"] } };
 var object = typebox_exports.Record(typebox_exports.String(), typebox_exports.Unknown());
 var readSchema = typebox_exports.Union([
   typebox_exports.Object(
@@ -9276,7 +9280,7 @@ async function createInquiryRuntimeWithEngine(context, engine) {
       metadata: raw.kind === "value" ? engine.inspect(new Uint8Array(Buffer.from(raw.base64, "base64"))) : null
     };
   };
-  const owned = async (scope, available) => {
+  const owned = async (scope, available, reconcileMetadata = false) => {
     const binding = await lookup(scope, available);
     if (!binding)
       throw new Error("Inquiry workspace needs an explicit root binding");
@@ -9292,10 +9296,15 @@ async function createInquiryRuntimeWithEngine(context, engine) {
       throw new Error(
         "Inquiry workspace already has another active root owner"
       );
-    if (current && current.owner.bindingVersion !== binding.version)
-      throw new Error(
-        "Inquiry metadata changed outside this owner; explicit recovery is required"
-      );
+    if (current && current.owner.bindingVersion !== binding.version) {
+      if (!reconcileMetadata)
+        throw new Error(
+          "Inquiry metadata changed; explicit reconciliation is required"
+        );
+      await current.owner.dispose();
+      owners.delete(scope.workspaceId);
+      current = void 0;
+    }
     if (!current) {
       current = {
         owner: new InquiryLedgerOwner(engine, capabilities, binding, root),
@@ -9323,6 +9332,7 @@ async function createInquiryRuntimeWithEngine(context, engine) {
           scope,
           roots: available,
           projectId: binding?.value.projectId ?? null,
+          canRestoreOriginal: binding !== null && binding.value.originalVersion !== null,
           authority: "plugin-asserted-or-imported",
           unavailable: ["rerun-executor", "workspace-promotion-file-port"]
         };
@@ -9431,7 +9441,7 @@ async function createInquiryRuntimeWithEngine(context, engine) {
           existingData: raw.kind === "value"
         };
       }
-      const owner = await owned(scope, available);
+      const owner = await owned(scope, available, input.action === "reconcile");
       let value;
       if (input.action === "reconcile") value = await owner.reconcile(signal);
       else if (input.action === "restoreOriginal")
@@ -9493,7 +9503,58 @@ async function createInquiryRuntimeWithEngine(context, engine) {
       return { value, authority: "plugin-asserted-or-imported" };
     });
   };
+  const createNativeSession = () => {
+    let disposed = false;
+    return {
+      toolEffects: { inquiry_read: "read", inquiry_write: "write" },
+      extension(pi) {
+        pi.registerTool({
+          name: "inquiry_read",
+          label: "Inquiry \xB7 read",
+          description: "Read only this actual workspace\u2019s explicitly bound Inquiry ledger. Imported/asserted records are not host provenance proofs.",
+          parameters: typebox_exports.Object(
+            { request: readSchema },
+            { additionalProperties: false }
+          ),
+          annotations: { readOnlyHint: true },
+          ...readMetadata,
+          async execute(_id, input) {
+            if (disposed)
+              throw new Error("Inquiry native projection is disposed");
+            const value = await read(input.request);
+            return {
+              content: [{ type: "text", text: JSON.stringify(value) }],
+              details: value
+            };
+          }
+        });
+        pi.registerTool({
+          name: "inquiry_write",
+          label: "Inquiry \xB7 write",
+          description: "Explicitly bind, update, reconcile or restore this workspace\u2019s original Inquiry SQLite ledger. Every host write still requires its own approved root, version and caller checks.",
+          parameters: typebox_exports.Object(
+            { request: writeSchema },
+            { additionalProperties: false }
+          ),
+          ...writeMetadata,
+          async execute(_id, input, signal) {
+            if (disposed)
+              throw new Error("Inquiry native projection is disposed");
+            const value = await write(input.request, signal ?? context.signal);
+            return {
+              content: [{ type: "text", text: JSON.stringify(value) }],
+              details: value
+            };
+          }
+        });
+      },
+      async dispose() {
+        disposed = true;
+      }
+    };
+  };
   return {
+    createNativeSession,
     operations: {
       "inquiry.read": {
         inputSchema: readSchema,

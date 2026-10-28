@@ -26,12 +26,14 @@ for (const [entry, name] of [
 	["domain", "domain"],
 	["ledger-owner", "ledger-owner"],
 	["runtime", "runtime"],
+	["native-entry", "index"],
 	["wasm-storage", "wasm-storage"],
 ]) {
 	const result = await build({
 		absWorkingDir: root,
 		entryPoints: [`src/${entry}.ts`],
 		bundle: true,
+		external: ["@gyoungwe/plugin-api", "@gyoungwe/plugin-api/*"],
 		platform: "node",
 		format: "esm",
 		write: false,
