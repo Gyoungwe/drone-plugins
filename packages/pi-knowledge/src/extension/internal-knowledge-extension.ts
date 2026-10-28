@@ -6,7 +6,7 @@ import type { KnowledgeExtensionHost } from "@gyoungwe/plugin-api/knowledge";
 import * as compatibilityConfig from "../core/config.js";
 import {
 	continuesTopic,
-	currentProject,
+	currentProject as compatibilityProject,
 	explainerTopicId,
 	result,
 	sessionIdentity,
@@ -28,9 +28,23 @@ import { searchExperiences } from "../core/experience-store.js";
 import * as compatibilityUi from "../core/ui-state.js";
 import * as compatibilityWiki from "../core/wiki-review.js";
 
+export interface KnowledgeInterfaceSessionPorts {
+	initialize(context: any): Promise<void>;
+	inspect(context: any): Promise<{ agentActive: boolean; projectTrusted: boolean; readOnly: boolean }>;
+	taskRuntime(): any;
+	registerAcceptance(definition: any): () => void;
+	readRecords(context: any): Promise<{ state: "durable" | "deferred" | "needs-reopen"; error: string | null; records: { type: string; data: any }[] }>;
+	appendRecord(type: string, data: unknown, context: any): Promise<{ durability: "durable" | "deferred" }>;
+	select(title: string, options: string[], context: any): Promise<string | undefined>;
+	notify(content: string, context: any): Promise<void>;
+}
+
 export interface KnowledgeInterfaceDependencies {
  host: Pick<compatibilityHost.KnowledgeRuntimeHost, "publishExplainer" | "deliveryContract">;
- config: compatibilityConfig.KnowledgeConfigApi;
+ config: Pick<compatibilityConfig.KnowledgeConfigApi, "readKnowledgeBinding" | "withKnowledgeBinding">;
+ available?: () => boolean;
+ project?: typeof compatibilityProject;
+ session?: KnowledgeInterfaceSessionPorts;
  services: Pick<ReturnType<typeof compatibilityServices.createKnowledgeServicePool>, "getKnowledgeService">;
  publication: ReturnType<typeof compatibilityPublication.createKnowledgePublication>;
  delivery: Pick<typeof compatibilityDelivery, "saveSpecialistExplainer">;
@@ -42,7 +56,9 @@ export interface KnowledgeInterfaceDependencies {
 
 function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencies, initialHost: KnowledgeExtensionHost, legacyRuntimeHandshake: boolean) {
 	const { publishExplainer, deliveryContract } = dependencies.host;
-	const { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } = dependencies.config;
+	const { readKnowledgeBinding, withKnowledgeBinding } = dependencies.config;
+	const knowledgeAvailable = dependencies.available ?? (() => Boolean((dependencies.config as compatibilityConfig.KnowledgeConfigApi).knowledgeDirectory()));
+	const currentProject = dependencies.project ?? compatibilityProject;
 	const { getKnowledgeService } = dependencies.services;
 	const { registerAnswerPublication } = dependencies.publication;
 	const { saveSpecialistExplainer } = dependencies.delivery;
@@ -161,14 +177,18 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 		// Managed read-only sessions use a separate two-tool adapter.
 		if (!readOnly) {
 			const declaration = { version: 1, kind: "wiki_review", definition: registerWikiReviewAcceptance() };
-			const publishAcceptance = () => pi.events.emit("drone:acceptance-verifier/v1", declaration);
-			removeAcceptance = pi.events.on("drone:acceptance-verifier/request/v1", (payload) => {
-				if (payload?.version === 1) publishAcceptance();
-			});
+			if (dependencies.session) removeAcceptance = dependencies.session.registerAcceptance(declaration.definition);
+			else {
+				const publishAcceptance = () => pi.events.emit("drone:acceptance-verifier/v1", declaration);
+				removeAcceptance = pi.events.on("drone:acceptance-verifier/request/v1", (payload) => {
+					if (payload?.version === 1) publishAcceptance();
+				});
+				publishAcceptance();
+			}
 			pi.on("session_shutdown", () => removeAcceptance?.());
-			publishAcceptance();
 		}
 		const getTaskRuntime = () => {
+			if (dependencies.session) return dependencies.session.taskRuntime();
 			if (readOnly || !pi.events) return null;
 			let taskRuntime = null;
 			// Consume only a task owner already registered on this session's official Pi event bus.
@@ -183,24 +203,31 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			taskRuntime?.configure?.({ readKnowledgeBinding });
 			return taskRuntime;
 		};
-		getTaskRuntime();
-		pi.on("session_start", getTaskRuntime);
+		if (!dependencies.session) getTaskRuntime();
+		pi.on("session_start", async (_event, context) => {
+			if (dependencies.session) await dependencies.session.initialize(context);
+			getTaskRuntime();
+		});
 		pi.on("session_tree", getTaskRuntime);
 		const recovery = new Map();
 		let recoveryScope = null;
-		const saveRecovery = () => {
-			if (recoveryScope)
-				pi.appendEntry?.("drone-knowledge-recovery-v1", {
-					scope: recoveryScope,
-					records: [...recovery.values()].slice(-8),
-				});
+		const saveRecovery = async (ctx) => {
+			if (!recoveryScope) return;
+			const data = { scope: recoveryScope, records: [...recovery.values()].slice(-8) };
+			if (dependencies.session) {
+				const receipt = await dependencies.session.appendRecord("drone-knowledge-recovery-v1", data, ctx);
+				if (receipt.durability !== "durable") throw new Error("Knowledge recovery checkpoint is deferred; no durable recovery was recorded");
+			} else pi.appendEntry("drone-knowledge-recovery-v1", data);
 		};
-		const attachRecovery = (ctx) => {
+		const attachRecovery = async (ctx) => {
 			const scope = `${sessionIdentity(ctx)}:${resolve(ctx.cwd)}`;
 			if (scope === recoveryScope) return;
+			const result = dependencies.session ? await dependencies.session.readRecords(ctx) : null;
+			if (result?.state === "needs-reopen") throw new Error("Session records need reopening before knowledge recovery");
+			const entries = result ? result.records.map(record => ({ customType: record.type, data: record.data })) : ctx.sessionManager.getBranch();
 			recoveryScope = scope;
 			recovery.clear();
-			for (const e of ctx.sessionManager?.getBranch?.() || [])
+			for (const e of entries)
 				if (
 					e.customType === "drone-knowledge-recovery-v1" &&
 					e.data?.scope === scope &&
@@ -213,20 +240,20 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 							recovery.set(r.id, r);
 				}
 		};
-		pi.events?.on?.("drone:context-evicted", (e) => {
+		if (!dependencies.session) pi.events.on("drone:context-evicted", async (e) => {
 			let changed = false;
 			for (const r of recovery.values())
 				if (r.sessionId === e.sessionId && e.toolCallIds?.includes(r.id)) {
 					r.evicted = true;
 					changed = true;
 				}
-			if (changed) saveRecovery();
+			if (changed) await saveRecovery();
 		});
-		pi.on("session_tree", (_e, ctx) => {
+		pi.on("session_tree", async (_e, ctx) => {
 			recoveryScope = null;
-			attachRecovery(ctx);
+			await attachRecovery(ctx);
 		});
-		if (!knowledgeDirectory())
+		if (!knowledgeAvailable())
 			return {
 				setupCompleted: () => {},
 				beforeStart: async () => ({}),
@@ -806,8 +833,8 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			observer: {
 				updateFlow: updateKnowledgeFlow,
 				noteRead: noteKnowledgeRead,
-				recordRead: (_id, ctx, c, page, p) => {
-					attachRecovery(ctx);
+				recordRead: async (_id, ctx, c, page, p) => {
+					await attachRecovery(ctx);
 					if (page.hash && page.text) {
 						recovery.set(_id, {
 							id: _id,
@@ -823,7 +850,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 							used: false,
 						});
 						while (recovery.size > 8) recovery.delete(recovery.keys().next().value);
-						saveRecovery();
+						await saveRecovery(ctx);
 					}
 				},
 			},
@@ -841,7 +868,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				additionalProperties: false,
 			},
 			execute: async (_id, input, _s, _u, ctx) => {
-				attachRecovery(ctx);
+				await attachRecovery(ctx);
 				const r = recovery.get(input.receipt_id),
 					c = await ensureTurn(ctx);
 				if (
@@ -866,7 +893,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				});
 				r.used = true;
 				r.evicted = false;
-				saveRecovery();
+				await saveRecovery(ctx);
 				noteKnowledgeRead(ctx, page);
 				return result(page);
 			},
@@ -1249,9 +1276,9 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			pi.registerCommand("obsidian-review", {
 				description: "Obsidian MCP · 审核 Wiki 修改候选（research-vault skill）",
 				handler: async (args, ctx) => {
-					if (!ctx.hasUI) throw new Error("Wiki review requires an interactive UI");
-					if (requestWikiReviewUi(ctx, args.trim())) return;
-					if (ctx.sessionManager?.getSessionId?.() && knowledgeDirectory()) {
+					if (!dependencies.session && !ctx.hasUI) throw new Error("Wiki review requires an interactive UI");
+					if (!dependencies.session && requestWikiReviewUi(ctx, args.trim())) return;
+					if (!dependencies.session && ctx.sessionManager?.getSessionId?.() && knowledgeAvailable()) {
 						notifyKnowledgeUi(
 							"请在 Wiki 审核弹窗中确认或拒绝候选。对话可以继续。",
 							"info",
@@ -1267,7 +1294,8 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 					if (!id) {
 						const pending = await listWikiProposals(service, project);
 						if (!pending.items.length) {
-							pi.sendMessage({
+							if (dependencies.session) await dependencies.session.notify(JSON.stringify(pending), ctx);
+							else pi.sendMessage({
 								customType: "obsidian-review",
 								display: true,
 								content: JSON.stringify(pending),
@@ -1275,7 +1303,9 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 							return;
 						}
 						const options = pending.items.map((item) => `${item.id} · ${item.title}`);
-						const selected = await ctx.ui.select("Obsidian · 选择待审核 Wiki", options);
+						const selected = dependencies.session
+							? await dependencies.session.select("Obsidian · 选择待审核 Wiki", options, ctx)
+							: await ctx.ui.select("Obsidian · 选择待审核 Wiki", options);
 						if (!selected) return;
 						id = selected.split(" · ")[0];
 					}
@@ -1291,11 +1321,10 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 						preview.after,
 						"人工正文与批注保留；来源或目标变化会拒绝写入。",
 					].join("\n\n");
-					const choice = await ctx.ui.select(`Obsidian · 审核具体 Wiki 修改\n\n${text}`, [
-						"确认应用此候选",
-						"拒绝此候选",
-						"取消",
-					]);
+					const options = ["确认应用此候选", "拒绝此候选", "取消"];
+					const choice = dependencies.session
+						? await dependencies.session.select(`Obsidian · 审核具体 Wiki 修改\n\n${text}`, options, ctx)
+						: await ctx.ui.select(`Obsidian · 审核具体 Wiki 修改\n\n${text}`, options);
 					if (!choice || choice === "取消") return;
 					const output = await decideWikiProposal(
 						service,
@@ -1304,7 +1333,8 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 						preview.proposalHash,
 						choice === "确认应用此候选" ? "apply" : "reject",
 					);
-					pi.sendMessage({
+					if (dependencies.session) await dependencies.session.notify(JSON.stringify(output, null, 2), ctx);
+					else pi.sendMessage({
 						customType: "obsidian-review",
 						display: true,
 						content: JSON.stringify(output, null, 2),
@@ -1380,7 +1410,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 		}
 		pi.on("session_shutdown", dispose);
 		pi.on("context", async (event, ctx) => {
-			if (!knowledgeDirectory() || !bootstrap) return;
+			if (!knowledgeAvailable() || !bootstrap) return;
 			try {
 				const binding = await readKnowledgeBinding({ fresh: true });
 				if (
@@ -1455,6 +1485,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 		return {
 			dispose,
 			async beforeStart(event, ctx) {
+				if (dependencies.session) await dependencies.session.initialize(ctx);
 				const nextSessionId = sessionIdentity(ctx);
 				const newSession = sessionScopeId !== nextSessionId;
 				sessionScopeId = nextSessionId;
@@ -1474,7 +1505,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				explainerArchived = false;
 				specialists.begin(event.prompt || "");
 				feedback.begin();
-				if (!knowledgeDirectory()) {
+				if (!knowledgeAvailable()) {
 					publication.begin(false);
 					return {};
 				}
@@ -1549,7 +1580,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				});
 			},
 			async withTurnBinding(ctx, operation) {
-				if (!knowledgeDirectory()) return operation();
+				if (!knowledgeAvailable()) return operation();
 				const c = requireTurn(ctx);
 				return withKnowledgeBinding(c.binding, operation);
 			},

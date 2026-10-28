@@ -101,7 +101,9 @@ it.each([false, true])(
 				names.push(name);
 				const input = raw as any;
 				if (name === "caller.scope") return call.scope;
-				if (name === "session.inspect") return { agentActive };
+				if (name === "session.inspect") return { agentActive, projectTrusted: sdk.session.settingsManager.isProjectTrusted(), readOnly: false };
+				// This fixture declares no task service. Production installed-source routing is covered by host gates.
+				if (name === "provider.inspect") return { state: "absent", service: "task.runtime", requestedVersion: 1, provider: null };
 				if (name === "model.selection")
 					return {
 						provider: provider.provider.id,

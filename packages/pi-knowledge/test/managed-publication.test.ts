@@ -3,7 +3,7 @@ import { createManagedKnowledgePublication } from "../src/core/publication.js";
 
 it("registers one authoritative finalizer and runs the existing publication algorithm once without an ordinary final-message hook", async () => {
 	const publication = createManagedKnowledgePublication(
-		{ publicationKnowledgeFlow() {}, updateKnowledgeFlow() {} },
+		{ async publicationKnowledgeFlow() {}, updateKnowledgeFlow() {} },
 		{ readReviewMode: async () => "strict" },
 		new AbortController().signal,
 	);
@@ -26,7 +26,7 @@ it("registers one authoritative finalizer and runs the existing publication algo
 
 it("allows genuine historical object identity for display without minting a live proof, and rejects identical strangers", () => {
 	const publication = createManagedKnowledgePublication(
-		{ publicationKnowledgeFlow() {}, updateKnowledgeFlow() {} },
+		{ async publicationKnowledgeFlow() {}, updateKnowledgeFlow() {} },
 		{ readReviewMode: async () => "strict" },
 		new AbortController().signal,
 	);

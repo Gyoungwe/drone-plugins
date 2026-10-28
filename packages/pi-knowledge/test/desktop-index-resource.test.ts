@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
@@ -11,7 +11,7 @@ import createDesktopRuntime from "../src/desktop/runtime.js";
 import { createKnowledgeRuntimeStore } from "../ui/runtime-store.js";
 import type { KnowledgeOverview, KnowledgeSearchResult } from "../src/desktop/contract.js";
 
-it("Desktop runtime and its two native tools use one real broker-backed index without background Vault access", async () => {
+it("Desktop complete native registration and its read tools use one real broker-backed index without background Vault access", async () => {
 	const root = await realpath(await mkdtemp(join(tmpdir(), "knowledge-resource-entry-")));
 	const vault = join(root, "Vault");
 	const storage = join(root, "cache");
@@ -81,7 +81,8 @@ it("Desktop runtime and its two native tools use one real broker-backed index wi
 		const session = await runtime.createNativeSession!();
 		expect(session.toolEffects).toEqual({ knowledge_status: "read", knowledge_search: "read" });
 		await session.extension({ events: createEventBus(), on: () => undefined, registerTool: (tool: any) => tools.set(tool.name, tool), registerCommand: () => {} } as any);
-		expect([...tools.keys()]).toEqual(["knowledge_status", "knowledge_search"]);
+		const manifest = JSON.parse(await readFile(new URL("../plugin.manifest.json", import.meta.url), "utf8"));
+		expect([...tools.keys()].sort()).toEqual([...manifest.tools].sort());
 		// Application-scoped native reads have no workspace project selection.
 		const native = await tools.get("knowledge_search").execute("search", { query: "Orchid" }, undefined, undefined, { cwd: null });
 		const fromUi = await runtime.operations.search.execute({ query: "Orchid", revision: binding.revision }, call) as KnowledgeSearchResult;

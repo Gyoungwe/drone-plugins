@@ -59,7 +59,18 @@ import {
 	setReviewPolicyInputSchema,
 	type KnowledgeSetReviewPolicyInput,
 } from "./contract.js";
-import { createDesktopKnowledgeNativeSession } from "./native.js";
+import { registerDesktopKnowledgeNativeReadTools } from "./native.js";
+import { createManagedNativeSession } from "../extension/knowledge-extension.js";
+import { createKnowledgeUi } from "../core/ui-state.js";
+import { createKnowledgeSpecialistHost } from "../core/specialist-host.js";
+import { createKnowledgeSpecialistTools } from "../core/specialists.js";
+import { createTopicMemoryApi } from "../core/topic-memory.js";
+import { createSpecialistDelivery } from "../core/specialist-delivery.js";
+import { createBrokerKnowledgeState } from "./native-state.js";
+import { createBrokerTopicMemoryStorage } from "./topic-storage.js";
+import { createBrokerSpecialistSettingsStorage } from "./specialist-settings-storage.js";
+import { createManagedKnowledgeSessionPorts } from "./session-ports.js";
+import { createBrokerKnowledgeSpecialist } from "./specialist-model.js";
 import {
 	overviewInputSchema,
 	overviewResultSchema,
@@ -110,7 +121,7 @@ async function projectFor(
 	return projectIdentity(workspace, (document as Record<string, unknown>).knowledgeProjectId);
 }
 
-/** Desktop read-only slice: one granted index resource shared by UI and native tools. */
+/** One granted knowledge owner composes the same native interface, services and UI operations. */
 const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	const states = context.resources.filter((resource) => resource.kind === "state");
 	if (states.length !== 1)
@@ -138,6 +149,14 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 		},
 	};
 	const host = createKnowledgeRuntimeHost();
+	const storage = createBrokerKnowledgeState(context.capabilities, state);
+	const ui = createKnowledgeUi(host, undefined, {
+		read: () => storage.read("answer-metrics.json"),
+		write: (value, version) => storage.write("answer-metrics.json", value, version),
+	});
+	const unsubscribeUi = ui.subscribeKnowledgeUi(() => context.events.changed());
+	const specialists = createKnowledgeSpecialistHost(host, config, ui, createBrokerSpecialistSettingsStorage(storage));
+	const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
 	const semantic = createBrokerSemanticSettings(context.capabilities, state);
 	const policy = createStoredKnowledgeReviewPolicy(
 		createBrokerReviewPolicyStorage(context.capabilities, state),
@@ -150,11 +169,14 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	);
 	const services = createKnowledgeServicePool(host, config, semantic, policy, transports);
 	const lifecycle = createKnowledgeOwnerLifecycle({
+		beforeDrain: () => specialists.dispose(),
 		async dispose() {
 			// No live-caller capability is created during shutdown. The host closes all
 			// activation resources, then service views settle against that real barrier.
 			await transports.dispose();
 			await services.dispose();
+			unsubscribeUi();
+			ui.dispose();
 		},
 	});
 	const reviewIo = createBrokerWikiReviewPorts(context.capabilities, state);
@@ -174,7 +196,9 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 			throw new Error("Invalid knowledge specialist settings");
 		return document;
 	});
-	const owner = { config, services, wiki, modelReview, ...lifecycle };
+	const topics = createTopicMemoryApi(host, undefined, createBrokerTopicMemoryStorage({ state: storage, files: reviewIo.files }));
+	const delivery = createSpecialistDelivery(host, config);
+	const owner = { config, services, wiki, modelReview, host, reviewPolicy: policy, ui, topics, delivery, specialistTools, extensionHost: {}, ...lifecycle };
 	const modelReviews = createKnowledgeModelReviewModel(
 		owner,
 		states[0].access === "read-write",
@@ -437,28 +461,44 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 					),
 			},
 		},
-		createNativeSession: () =>
-			createDesktopKnowledgeNativeSession(
-				owner,
-				(native) => projectFor(context.capabilities, native.cwd),
-				async (args, native) => {
-					const input = parseModelReviewCommandInput(args);
-					const scope = (await context.capabilities.call(
-						"caller.scope",
-						null,
-					)) as import("@gyoungwe/plugin-api/runtime").PluginRuntimeScope;
-					if (scope.kind !== "session" || scope.sessionId !== native.sessionManager.getSessionId())
-						throw new Error("Model review command requires its originating live session");
-					const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-					if (!binding) throw new Error("No application knowledge Vault is bound");
-					await modelReviews.review(
-						{ ...input, revision: binding.revision },
-						await projectFor(context.capabilities, scope.workspaceDirectory),
-						{ scope, signal: native.signal, capabilities: context.capabilities },
-					);
-					context.events.changed();
+		createNativeSession: () => {
+			const sessionPorts = createManagedKnowledgeSessionPorts(context.capabilities);
+			const native = createManagedNativeSession(owner, {
+				session: sessionPorts.ports,
+				registerReadTools: pi => registerDesktopKnowledgeNativeReadTools(pi, owner, native => projectFor(context.capabilities, native.cwd)),
+				project: async cwd => {
+					const project = await projectFor(context.capabilities, cwd);
+					if (project === null) throw new Error("Knowledge native session has no workspace project");
+					return project;
 				},
-			),
+			});
+			let unregister: (() => void) | undefined;
+			return {
+				...native,
+				toolEffects: { knowledge_status: "read", knowledge_search: "read" },
+				commandEffects: { "knowledge-review-model": "write", "obsidian-review": "write" },
+				async extension(pi) {
+					await native.extension(pi);
+					pi.on("session_start", (_event, caller) => {
+						unregister = specialists.registerKnowledgeSpecialistHost(caller.sessionManager.getSessionId(), createBrokerKnowledgeSpecialist(context.capabilities));
+					});
+					pi.registerCommand("knowledge-review-model", {
+						description: "Review one exact Wiki proposal with explicit JSON cost/data acknowledgement; read the audit in the knowledge review UI",
+						async handler(args, caller) {
+							const input = parseModelReviewCommandInput(args);
+							const scope = await context.capabilities.call("caller.scope", null) as import("@gyoungwe/plugin-api/runtime").PluginRuntimeScope;
+							if (scope.kind !== "session" || scope.sessionId !== caller.sessionManager.getSessionId()) throw new Error("Model review command requires its originating live session");
+							const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+							if (!binding) throw new Error("No application knowledge Vault is bound");
+							const signal = caller.signal ? AbortSignal.any([native.signal, caller.signal]) : native.signal;
+							await modelReviews.review({ ...input, revision: binding.revision }, await projectFor(context.capabilities, scope.workspaceDirectory), { scope, signal, capabilities: context.capabilities });
+							context.events.changed();
+						},
+					});
+				},
+				async dispose() { unregister?.(); await native.dispose(); },
+			};
+		},
 		dispose: () => owner.dispose(),
 	};
 };

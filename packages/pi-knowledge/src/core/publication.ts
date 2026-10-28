@@ -319,9 +319,9 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 			const cwd = ctx?.cwd;
 			const signal = ctx?.signal;
 			const flowCtx = { sessionId };
-			const report = (message) => {
+			const report = async (message) => {
 				if (message[FIELD]?.status !== "tool-only" && message[FIELD]?.reason !== "model-error")
-					publicationKnowledgeFlow(flowCtx, message[FIELD]);
+					await publicationKnowledgeFlow(flowCtx, message[FIELD]);
 				return { message };
 			};
 			const blocks = Array.isArray(message.content) ? message.content : [];

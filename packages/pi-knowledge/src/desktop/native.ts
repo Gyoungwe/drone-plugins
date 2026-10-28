@@ -10,13 +10,28 @@ export function createDesktopKnowledgeNativeSession(
 	reviewModel: (args: string, context: any) => Promise<void>,
 ): PluginNativeSession {
 	const controller = new AbortController();
-	const reads = createKnowledgeReadModel(owner);
 	const adapter = createKnowledgeNativeAdapter(owner, controller, (pi) => {
 		pi.registerCommand("knowledge-review-model", {
 			description:
 				"Review one exact Wiki proposal with explicit JSON cost/data acknowledgement; read the audit in the knowledge review UI",
 			handler: (args: string, context: any) => reviewModel(args, context),
 		});
+		registerDesktopKnowledgeNativeReadTools(pi, owner, projectFor);
+	});
+	return {
+		...adapter,
+		toolEffects: { knowledge_status: "read", knowledge_search: "read" },
+		commandEffects: { "knowledge-review-model": "write" },
+	};
+}
+
+
+export function registerDesktopKnowledgeNativeReadTools(
+	pi: any,
+	owner: KnowledgeReadOwner,
+	projectFor: (context: any) => Promise<string | null>,
+): void {
+	const reads = createKnowledgeReadModel(owner);
 		pi.registerTool({
 			name: "knowledge_status",
 			label: "Knowledge status",
@@ -66,10 +81,4 @@ export function createDesktopKnowledgeNativeSession(
 				);
 			},
 		});
-	});
-	return {
-		...adapter,
-		toolEffects: { knowledge_status: "read", knowledge_search: "read" },
-		commandEffects: { "knowledge-review-model": "write" },
-	};
 }

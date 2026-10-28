@@ -15,7 +15,7 @@ export interface KnowledgeSearchParameters { query: string; kind?: "knowledge" |
 export interface KnowledgeReadObserver<C extends KnowledgeReadContext, T extends KnowledgeReadTurn> {
  updateFlow?(ctx: C, update: {phase: string; error?: string | null}): void;
  noteRead?(ctx: C, page: Awaited<ReturnType<KnowledgeService["read"]>>): void;
- recordRead?(id: string, ctx: C, turn: T, page: Awaited<ReturnType<KnowledgeService["read"]>>, input: KnowledgeReadParameters): void;
+ recordRead?(id: string, ctx: C, turn: T, page: Awaited<ReturnType<KnowledgeService["read"]>>, input: KnowledgeReadParameters): void | Promise<void>;
  noteSearch?(ctx: C, found: Awaited<ReturnType<KnowledgeService["search"]>>, wikiOnly: boolean): void;
 }
 export interface KnowledgeReadDependencies<C extends KnowledgeReadContext, T extends KnowledgeReadTurn> {
@@ -81,7 +81,7 @@ export function createKnowledgeReadTool<C extends KnowledgeReadContext, T extend
 						maxChars: p.max_chars,
 					});
 					observer?.noteRead?.(ctx, page);
-					observer?.recordRead?.(_id, ctx, c, page, p);
+					await observer?.recordRead?.(_id, ctx, c, page, p);
 					// 双向链接：把出链/反链一并返回，省去 agent 再去搜索邻居笔记的往返
 					let links;
 					if (page.hash && !page.missing && (p.start_line ?? 1) === 1) {
