@@ -17,3 +17,5 @@
 未完成项：真实 managed eviction 后的 reread 闭环、child scope、全树/未打开历史、task privileged provider 组合、explainer archive、旧 host 领域算法删除与正式安装包 GUI。当前文本不宣称这些已完成。
 
 最终冻结：source `512043e`（前置 read effects `331a19f`、timer 修复 `bb26228`），official build `05cf187`；最终 knowledge tar SHA256 `850513debaed231e52263497407fc85618d33e6efb4eca214af9e71d9d06bec4`，同 API `79b5d34ad78355129beb52a09dc63fa445d9ddb82bb1f3d05ccd6ce056eed9aa`。最终相同 tar 的完整 publication、migration、共享 owner shutdown 三项实际 SDK 通过，日志 `/tmp/knowledge-adoption-frozen-packed.log`。这替代上一段临时 `6ec6…` 包作为本批最终回执；上一条仍是 timer RED→GREEN 的历史事实。
+
+诊断后继：source `02973ed` / official build `af91f79` 删除 probe 的笼统 catch，配置/绑定/内部错误继续上抛；唯一已定义的 600ms optional deadline 使用固定无正文警告并保持普通聊天，finally 清 timer。source 446/446 与 TSC 通过；新 tar `8b06ea6973338ec9ea39c1f637d589e64f272ca25fb2f26aea398f60d3134772` 的实际 migration、共享 owner close 通过；完整 publication→新 branch→全树 HTML 历史/私有协议回归通过。native official SDK smoke、带实际匹配私有 API 的 UI clean-install smoke 通过；GUI 未运行。
