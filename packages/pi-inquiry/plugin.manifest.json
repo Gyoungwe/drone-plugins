@@ -12,10 +12,14 @@
 			}
 		}
 	},
-	"entrypoints": { "desktopRuntime": "./dist/runtime.mjs" },
-	"capabilities": ["research", "provenance"],
-	"tools": [],
-	"hosts": ["drone-desktop"],
+	"entrypoints": {
+		"desktopRuntime": "./dist/runtime.mjs",
+		"extension": "./dist/index.mjs",
+		"ui": "./ui/plugin.json"
+	},
+	"capabilities": ["research", "provenance", "ui"],
+	"tools": ["inquiry_read", "inquiry_write"],
+	"hosts": ["drone-desktop", "native-pi"],
 	"permissions": {
 		"filesystem": [
 			"application-state",
@@ -26,5 +30,10 @@
 		"network": [],
 		"subprocess": [],
 		"externalWrites": false
+	},
+	"pi": {
+		"apiVersion": 1,
+		"minHostVersion": "1.1.0",
+		"testedHosts": ["1.1.0"]
 	}
 }

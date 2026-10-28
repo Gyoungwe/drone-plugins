@@ -516,3 +516,80 @@ it("refuses a second actual workspace binding to the same original directory wit
 		await runtime.dispose();
 	}
 });
+
+it("requires explicit reconciliation when pending metadata committed but its cancelled caller never received the new version", async () => {
+	const invocation = new AbortController();
+	let losePendingReply = true;
+	const actualPorts: PluginRuntimeCapabilities = {
+		async call(name, input, signal) {
+			const result = await ports.call(name, input, signal);
+			if (
+				name === "state.writeJson" &&
+				losePendingReply &&
+				(input as { value: { intent?: { status: string } } }).value.intent
+					?.status === "pending"
+			) {
+				losePendingReply = false;
+				invocation.abort(
+					new Error("Caller cancelled after actual metadata commit"),
+				);
+				throw invocation.signal.reason;
+			}
+			return result;
+		},
+	};
+	const runtime = await createInquiryRuntimeWithEngine(
+		{
+			applicationId: "app",
+			signal: controller.signal,
+			resources: [],
+			capabilities: actualPorts,
+			events: { changed() {} },
+		},
+		engine,
+	);
+	const scope = {
+		kind: "session" as const,
+		workspaceId,
+		workspaceDirectory: directory,
+		sessionId: "actual-fixture-sdk",
+	};
+	const context = {
+		scope,
+		signal: controller.signal,
+		capabilities: actualPorts,
+	};
+	try {
+		await expect(
+			runtime.operations["inquiry.write"].execute(
+				{ action: "recordQuestion", record: question("cancelled-before-db") },
+				{ ...context, signal: invocation.signal },
+			),
+		).rejects.toThrow("after actual metadata commit");
+		expect((await state()).value.intent?.status).toBe("pending");
+		expect(await readFile(join(binary, "ledger.sqlite"))).toEqual(initial);
+		await expect(
+			runtime.operations["inquiry.read"].execute(
+				{ action: "snapshot" },
+				context,
+			),
+		).rejects.toThrow("explicit reconciliation");
+		const writes = binaryWrites;
+		expect(
+			await runtime.operations["inquiry.write"].execute(
+				{ action: "reconcile" },
+				context,
+			),
+		).toMatchObject({ value: { state: "not-committed" } });
+		expect((await state()).value.intent?.status).toBe("not-committed");
+		expect(binaryWrites).toBe(writes);
+		expect(
+			await runtime.operations["inquiry.read"].execute(
+				{ action: "snapshot" },
+				context,
+			),
+		).toMatchObject({ value: { questions: [{ id: "original" }] } });
+	} finally {
+		await runtime.dispose();
+	}
+});

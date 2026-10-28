@@ -3,10 +3,13 @@
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
-	"main": "./src/index.ts",
-	"types": "./src/index.ts",
+	"main": "./dist/index.mjs",
+	"types": "./src/native-entry.ts",
 	"exports": {
-		".": "./src/index.ts",
+		".": {
+			"types": "./src/native-entry.ts",
+			"import": "./dist/index.mjs"
+		},
 		"./models": "./src/models.ts",
 		"./storage": "./src/storage.ts",
 		"./sqlite-storage": "./src/storage.ts",
@@ -33,6 +36,10 @@
 		"./runtime": {
 			"types": "./src/runtime.ts",
 			"import": "./dist/runtime.mjs"
+		},
+		"./native": {
+			"types": "./src/native-runtime.ts",
+			"import": "./dist/index.mjs"
 		}
 	},
 	"scripts": {
@@ -51,7 +58,8 @@
 		"@types/node": "^22.0.0",
 		"typescript": "^5.9.0",
 		"vitest": "^3.2.0",
-		"@types/sql.js": "1.4.11"
+		"@types/sql.js": "1.4.11",
+		"@types/react": "^19.2.0"
 	},
 	"description": "Unpublished canonical Inquiry domain migration candidate",
 	"files": [
@@ -59,7 +67,16 @@
 		"dist",
 		"build-manifest.json",
 		"plugin.manifest.json",
-		"README.md"
+		"README.md",
+		"ui"
 	],
-	"license": "MIT"
+	"license": "MIT",
+	"pi": {
+		"extensions": [
+			"./dist/index.mjs"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
+	}
 }

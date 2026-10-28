@@ -1,9 +1,12 @@
 import { readFile } from "node:fs/promises";
 import type {
+	PluginNativeRuntimeFactory,
+	PluginNativeRuntimeInstance,
+	PluginNativeSession,
+} from "@gyoungwe/plugin-api/native";
+import type {
 	PluginBinaryStateReadResult,
-	PluginRuntimeFactory,
 	PluginRuntimeFactoryContext,
-	PluginRuntimeInstance,
 	PluginRuntimeRootDescription,
 	PluginRuntimeScope,
 	PluginStateReadResult,
@@ -26,6 +29,10 @@ import type {
 import { createInquiryWasmEngine } from "./wasm-storage.js";
 
 const name = Type.String({ minLength: 1, maxLength: 128 });
+const readMetadata = {
+	drone: { capabilities: ["research", "provenance"], readOnly: true },
+};
+const writeMetadata = { drone: { capabilities: ["research", "provenance"] } };
 const object = Type.Record(Type.String(), Type.Unknown());
 const readSchema = Type.Union([
 	Type.Object(
@@ -132,7 +139,7 @@ type WriteInput = Static<typeof writeSchema>;
 export async function createInquiryRuntimeWithEngine(
 	context: PluginRuntimeFactoryContext,
 	engine: InquiryWasmEngine,
-): Promise<PluginRuntimeInstance> {
+): Promise<PluginNativeRuntimeInstance> {
 	const capabilities = context.capabilities,
 		owners = new Map<
 			string,
@@ -234,6 +241,7 @@ export async function createInquiryRuntimeWithEngine(
 	const owned = async (
 		scope: Exclude<PluginRuntimeScope, { kind: "application" }>,
 		available: readonly PluginRuntimeRootDescription[],
+		reconcileMetadata = false,
 	) => {
 		const binding = await lookup(scope, available);
 		if (!binding)
@@ -254,10 +262,15 @@ export async function createInquiryRuntimeWithEngine(
 			throw new Error(
 				"Inquiry workspace already has another active root owner",
 			);
-		if (current && current.owner.bindingVersion !== binding.version)
-			throw new Error(
-				"Inquiry metadata changed outside this owner; explicit recovery is required",
-			);
+		if (current && current.owner.bindingVersion !== binding.version) {
+			if (!reconcileMetadata)
+				throw new Error(
+					"Inquiry metadata changed; explicit reconciliation is required",
+				);
+			await current.owner.dispose();
+			owners.delete(scope.workspaceId);
+			current = undefined;
+		}
 		if (!current) {
 			current = {
 				owner: new InquiryLedgerOwner(engine, capabilities, binding, root),
@@ -289,6 +302,8 @@ export async function createInquiryRuntimeWithEngine(
 					scope,
 					roots: available,
 					projectId: binding?.value.projectId ?? null,
+					canRestoreOriginal:
+						binding !== null && binding.value.originalVersion !== null,
 					authority: "plugin-asserted-or-imported",
 					unavailable: ["rerun-executor", "workspace-promotion-file-port"],
 				};
@@ -401,7 +416,7 @@ export async function createInquiryRuntimeWithEngine(
 					existingData: raw.kind === "value",
 				};
 			}
-			const owner = await owned(scope, available);
+			const owner = await owned(scope, available, input.action === "reconcile");
 			let value: unknown;
 			if (input.action === "reconcile") value = await owner.reconcile(signal);
 			else if (input.action === "restoreOriginal")
@@ -467,7 +482,61 @@ export async function createInquiryRuntimeWithEngine(
 			return { value, authority: "plugin-asserted-or-imported" };
 		});
 	};
+	const createNativeSession = (): PluginNativeSession => {
+		let disposed = false;
+		return {
+			toolEffects: { inquiry_read: "read", inquiry_write: "write" },
+			extension(pi) {
+				pi.registerTool({
+					name: "inquiry_read",
+					label: "Inquiry · read",
+					description:
+						"Read only this actual workspace’s explicitly bound Inquiry ledger. Imported/asserted records are not host provenance proofs.",
+					parameters: Type.Object(
+						{ request: readSchema },
+						{ additionalProperties: false },
+					),
+					annotations: { readOnlyHint: true },
+					...readMetadata,
+					async execute(_id, input) {
+						if (disposed)
+							throw new Error("Inquiry native projection is disposed");
+						const value = await read(input.request);
+						return {
+							content: [{ type: "text", text: JSON.stringify(value) }],
+							details: value,
+						};
+					},
+				});
+				pi.registerTool({
+					name: "inquiry_write",
+					label: "Inquiry · write",
+					description:
+						"Explicitly bind, update, reconcile or restore this workspace’s original Inquiry SQLite ledger. Every host write still requires its own approved root, version and caller checks.",
+					parameters: Type.Object(
+						{ request: writeSchema },
+						{ additionalProperties: false },
+					),
+					...writeMetadata,
+					async execute(_id, input, signal) {
+						if (disposed)
+							throw new Error("Inquiry native projection is disposed");
+						const value = await write(input.request, signal ?? context.signal);
+						return {
+							content: [{ type: "text", text: JSON.stringify(value) }],
+							details: value,
+						};
+					},
+				});
+			},
+			async dispose() {
+				disposed = true;
+			},
+		};
+	};
+
 	return {
+		createNativeSession,
 		operations: {
 			"inquiry.read": {
 				inputSchema: readSchema,
@@ -499,7 +568,9 @@ export async function createInquiryRuntimeWithEngine(
 		},
 	};
 }
-export const createInquiryRuntime: PluginRuntimeFactory = async (context) =>
+export const createInquiryRuntime: PluginNativeRuntimeFactory = async (
+	context,
+) =>
 	createInquiryRuntimeWithEngine(
 		context,
 		await createInquiryWasmEngine(
