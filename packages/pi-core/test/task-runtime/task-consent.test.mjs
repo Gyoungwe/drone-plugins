@@ -182,7 +182,7 @@ async function registered({ withPlan = true } = {}) {
 		cwd: dir,
 		ui: { select: vi.fn(async () => "同意本次请求") },
 		isIdle: () => idle.value,
-		sessionManager: { getSessionId: () => "session-a", getBranch: () => entries },
+		sessionManager: { getSessionFile: () => undefined, getSessionId: () => "session-a", getBranch: () => entries },
 	};
 	const j = registerWorkbench(pi);
 	await events.session_start({}, ctx);
@@ -402,7 +402,7 @@ it("readback can verify a user-approved data directory outside the session cwd, 
 			},
 		},
 	};
-	const ctx = { cwd: project, sessionManager: { getSessionId: () => "s", getBranch: () => entries } };
+	const ctx = { cwd: project, sessionManager: { getSessionFile: () => undefined, getSessionId: () => "s", getBranch: () => entries } };
 	const j = registerWorkbench(pi);
 	await handlers.session_start({}, ctx);
 	await j.begin("分析指定数据目录");

@@ -1,6 +1,7 @@
 /** A package application owns failed-storage state across native adapter reloads.
  * SDK extension subscriptions are revoked on reload and cannot retain authority.
- * Standalone Pi has no public application-generation port; that cutover is S2.
+ * Standalone reload reconstructs this fence from the public SDK branch/JSONL
+ * boundary in native-storage.mjs; no event-bus or process-global keeper is used.
  */
 export function createTaskApplicationState() {
   const failures = new Map();

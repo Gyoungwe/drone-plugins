@@ -170,7 +170,7 @@ test("task session attachment never borrows another owner from a session-manager
 	const first = host(), restored = host();
 	const original = first.readJournal();
 	assert.notEqual(restored.readJournal(), original);
-	const manager = { getSessionId: () => "restored", getBranch: () => [] };
+	const manager = { getSessionFile: () => undefined, getSessionId: () => "restored", getBranch: () => [] };
 	Object.defineProperty(manager, "__drone_task_workbench_v2", { value: { version: 2, journal: original } });
 	for (const handler of restored.hooks.get("session_start") || []) await handler({}, { cwd: process.cwd(), sessionManager: manager });
 	assert.notEqual(restored.readJournal(), original);
