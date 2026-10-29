@@ -28,8 +28,8 @@ var KeyedScheduler = class {
     if (this.#disposed) throw new Error("Runtime scheduler has been disposed");
     const previous = this.#tails.get(key) || Promise.resolve();
     let unlock;
-    const gate = new Promise((resolve7) => {
-      unlock = resolve7;
+    const gate = new Promise((resolve8) => {
+      unlock = resolve8;
     });
     const tail = previous.then(() => gate);
     this.#tails.set(key, tail);
@@ -301,10 +301,9 @@ function describeAcceptance(acceptance, verifier = acceptanceVerifier(acceptance
 }
 
 // src/task-runtime/native-adapter.mjs
-import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
-import { createHash as createHash4, randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID as randomUUID3 } from "node:crypto";
 import { readFile, realpath as realpath3 } from "node:fs/promises";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve4, sep as sep2 } from "node:path";
+import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve5, sep as sep2 } from "node:path";
 
 // src/task-runtime/consent.mjs
 import { createHash } from "node:crypto";
@@ -347,6 +346,57 @@ async function resolveWriteRoots(cwd, paths = []) {
   return roots;
 }
 
+// src/task-runtime/context-ui.mjs
+var contextUi = {
+  hasUI: (ctx) => !!ctx.ui?.select,
+  select: (ctx, text2, options, signal) => ctx.ui.select(text2, options, { signal }),
+  input: (ctx, title, placeholder, signal) => ctx.ui.input(title, placeholder, { signal }),
+  idle: (ctx) => !ctx.isIdle || ctx.isIdle()
+};
+
+// src/task-runtime/native-storage.mjs
+import { readFileSync } from "node:fs";
+function readNativeSessionStorage(manager) {
+  const branch = manager.getBranch();
+  const file = manager.getSessionFile();
+  const mode = file ? "persistent" : "memory";
+  const deferred = () => ({ mode, state: "deferred", entries: branch, code: null });
+  const failed = (code, entries2 = []) => ({ mode, state: "needs-reopen", entries: entries2, code });
+  if (!file) return deferred();
+  let content;
+  try {
+    content = readFileSync(file, "utf8");
+  } catch (error4) {
+    if (error4.code === "ENOENT" && !branch.some((entry) => entry.type === "message" && ["user", "assistant"].includes(entry.message.role))) return deferred();
+    return failed(error4.code === "ENOENT" ? "SESSION_FILE_MISSING" : "SESSION_FILE_UNREADABLE");
+  }
+  const rows = /* @__PURE__ */ new Map();
+  for (const [index, line] of content.split("\n").entries()) {
+    if (!line.length) continue;
+    let row;
+    try {
+      row = JSON.parse(line);
+    } catch {
+      return failed(`SESSION_JSONL_INVALID_LINE_${index + 1}`);
+    }
+    if (!row || typeof row !== "object" || typeof row.id !== "string") return failed(`SESSION_JSONL_INVALID_LINE_${index + 1}`);
+    rows.set(row.id, row);
+  }
+  if (rows.get(manager.getSessionId())?.type !== "session") return failed("SESSION_FILE_IDENTITY_MISMATCH");
+  const entries = [];
+  for (const entry of branch) {
+    const row = rows.get(entry.id);
+    if (JSON.stringify(row) !== JSON.stringify(entry)) return failed("SESSION_BRANCH_NOT_PERSISTED", entries);
+    entries.push(row);
+  }
+  return { mode, state: "durable", entries, code: null };
+}
+
+// src/task-runtime/workbench-adapter.mjs
+import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
+import { createHash as createHash4, randomUUID as randomUUID2 } from "node:crypto";
+import { resolve as resolve4 } from "node:path";
+
 // src/task-runtime/ask-authorization.mjs
 var TASK_TOTAL_CALLS = 192;
 function computeAuthorizationDetails(compute) {
@@ -364,7 +414,7 @@ function computeAuthorizationDetails(compute) {
     return null;
   return `\u8BA1\u7B97\u8303\u56F4\uFF1A\u4E3B\u673A ${hosts.join(", ")}\uFF1B\u8FDC\u7A0B\u8BFB\u53D6 ${remoteRead.join(", ") || "\u672A\u58F0\u660E"}\uFF1B\u8FDC\u7A0B\u5199\u5165 ${remoteWrite.join(", ") || "\u672A\u58F0\u660E"}\uFF1B\u6700\u591A ${budget.maxCoreHours} \u6838\u65F6\u3001\u5355\u4F5C\u4E1A ${budget.maxWalltimeMinutes} \u5206\u949F\u3001${budget.maxConcurrentJobs} \u4E2A\u5E76\u53D1\u4F5C\u4E1A\u3001${budget.maxDiskGb} GiB\u3002${compute.agentCode === true ? "\u5141\u8BB8\u6C99\u7BB1\u4E2D\u7684 Agent \u6A21\u5757\u3002" : "\u4E0D\u5141\u8BB8 Agent \u7F16\u5199\u6A21\u5757\u3002"}`;
 }
-function createTaskAuthorization(journal, checkBinding = async () => null) {
+function createTaskAuthorization(journal, checkBinding = async () => null, ui = contextUi) {
   const pending = /* @__PURE__ */ new Map();
   return async function ask(input, ctx, signal = ctx.signal) {
     const view = journal.view();
@@ -373,6 +423,20 @@ function createTaskAuthorization(journal, checkBinding = async () => null) {
       throw new Error("Task changed. Refresh before requesting authorization.");
     if (["completed", "cancelled", "archived"].includes(task.state))
       throw new Error("Task is no longer awaiting authorization.");
+    if (input.action === "authorize-task" && ui.authorizeTask) {
+      const binding = await checkBinding();
+      if ((binding ?? null) !== (task.binding ?? null))
+        throw new Error("Task context or knowledge binding changed; ask again in the current context.");
+      const granted = await ui.authorizeTask(ctx, task, {
+        contractHash: contractHash(task),
+        maxCalls: TASK_TOTAL_CALLS,
+        maxAutoResumes: MAX_AUTO_RESUMES,
+        compute: computeAuthorizationDetails(task.compute)
+      }, signal);
+      if (!granted || signal?.aborted) return false;
+      if (!hasTaskConsent(task, TASK_TOTAL_CALLS)) await journal.command({ ...input, action: "authorize-task" });
+      return true;
+    }
     if (input.action === "authorize-task" && hasTaskConsent(task, TASK_TOTAL_CALLS) && (await checkBinding() ?? null) === (task.binding ?? null))
       return true;
     const action = input.action === "ask-authorization" ? task.actions.find(
@@ -388,7 +452,7 @@ function createTaskAuthorization(journal, checkBinding = async () => null) {
     const key = `${scope}:${task.id}:${view.revision}:${input.action}:${input.actionId || input.operationId || ""}`;
     if (pending.has(key)) return pending.get(key);
     const operation = (async () => {
-      if (!ctx.ui?.select || signal?.aborted) return false;
+      if (!ui.hasUI(ctx) || signal?.aborted) return false;
       const binding = await checkBinding();
       const allow = "\u540C\u610F\u672C\u6B21\u8BF7\u6C42", deny = "\u6682\u4E0D\u6388\u6743";
       const rebind = action?.kind === "rebind" ? action : null;
@@ -415,9 +479,9 @@ ${task.milestones.map((m) => `- ${m.title}\uFF1A${acceptanceLabel(m)}`).join("\n
         input.action === "confirm-outcome" ? "\u8FD9\u91CC\u53EA\u8BB0\u5F55\u4F60\u5DF2\u6838\u5BF9\u8FC7\u8FD9\u4E00\u6B65\u7684\u7ED3\u679C\uFF0C\u4E0D\u4F1A\u91CD\u65B0\u6267\u884C\u5B83\u3002" : rebind ? "\u8FD9\u53EA\u6539\u53D8\u8FD9\u4E00\u9879\u6309\u54EA\u7BC7\u6587\u732E\u6838\u5BF9\uFF0C\u4E0D\u6269\u5927\u53EF\u5199\u76EE\u5F55\u6216\u5176\u5B83\u6743\u9650\u3002" : "\u540C\u610F\u540E\u5B83\u4F1A\u81EA\u5DF1\u505A\u5B8C\u8FD9\u4E9B\u4E8B\uFF0C\u4E2D\u9014\u4E0D\u518D\u53CD\u590D\u95EE\u4F60\uFF1B\u505A\u522B\u7684\u3001\u5220\u4E1C\u897F\u6216\u78B0\u654F\u611F\u6587\u4EF6\u4ECD\u4F1A\u5148\u5F81\u5F97\u4F60\u540C\u610F\u3002\u4F60\u968F\u65F6\u53EF\u4EE5\u505C\u6B62\u3002",
         "\u4E0D\u60F3\u7EE7\u7EED\u5C31\u9009\u201C\u6682\u4E0D\u6388\u6743\u201D\u6216\u76F4\u63A5\u5173\u6389\uFF0C\u90FD\u4E0D\u4F1A\u5F00\u59CB\u6267\u884C\u3002"
       ].join("\n\n");
-      const selected = await ctx.ui.select(`${title}
+      const selected = await ui.select(ctx, `${title}
 
-${details}`, [deny, allow], { signal });
+${details}`, [deny, allow], signal);
       if (selected !== allow || signal?.aborted) return false;
       if (journal.scope() !== scope || await checkBinding() !== binding)
         throw new Error("Task context or knowledge binding changed; ask again in the current context.");
@@ -610,7 +674,7 @@ import { createHash as createHash2 } from "node:crypto";
 // src/task-runtime/pdf-identity.mjs
 import { Worker } from "node:worker_threads";
 async function readPdfIdentity(bytes) {
-  return new Promise((resolve7, reject) => {
+  return new Promise((resolve8, reject) => {
     const worker = new Worker(new URL("./pdf-worker.mjs", import.meta.url), {
       workerData: { bytes },
       resourceLimits: { maxOldGenerationSizeMb: 128 }
@@ -623,7 +687,7 @@ async function readPdfIdentity(bytes) {
       clearTimeout(timer);
       void worker.terminate();
       if (result.error) reject(new Error(`PDF identity requires manual inspection: ${result.error}`));
-      else resolve7(result);
+      else resolve8(result);
     });
     worker.once("error", () => {
       clearTimeout(timer);
@@ -1998,8 +2062,8 @@ function createTaskSession({
   const execute = (signal, operation) => {
     const previous = tail;
     let release;
-    tail = new Promise((resolve7) => {
-      release = resolve7;
+    tail = new Promise((resolve8) => {
+      release = resolve8;
     });
     const combined = signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal;
     return (async () => {
@@ -2187,46 +2251,8 @@ function createTaskController(session, readSignal) {
   return { journal, evidence };
 }
 
-// src/task-runtime/native-storage.mjs
-import { readFileSync } from "node:fs";
-function readNativeSessionStorage(manager) {
-  const branch = manager.getBranch();
-  const file = manager.getSessionFile();
-  const mode = file ? "persistent" : "memory";
-  const deferred = () => ({ mode, state: "deferred", entries: branch, code: null });
-  const failed = (code, entries2 = []) => ({ mode, state: "needs-reopen", entries: entries2, code });
-  if (!file) return deferred();
-  let content;
-  try {
-    content = readFileSync(file, "utf8");
-  } catch (error4) {
-    if (error4.code === "ENOENT" && !branch.some((entry) => entry.type === "message" && ["user", "assistant"].includes(entry.message.role))) return deferred();
-    return failed(error4.code === "ENOENT" ? "SESSION_FILE_MISSING" : "SESSION_FILE_UNREADABLE");
-  }
-  const rows = /* @__PURE__ */ new Map();
-  for (const [index, line] of content.split("\n").entries()) {
-    if (!line.length) continue;
-    let row;
-    try {
-      row = JSON.parse(line);
-    } catch {
-      return failed(`SESSION_JSONL_INVALID_LINE_${index + 1}`);
-    }
-    if (!row || typeof row !== "object" || typeof row.id !== "string") return failed(`SESSION_JSONL_INVALID_LINE_${index + 1}`);
-    rows.set(row.id, row);
-  }
-  if (rows.get(manager.getSessionId())?.type !== "session") return failed("SESSION_FILE_IDENTITY_MISMATCH");
-  const entries = [];
-  for (const entry of branch) {
-    const row = rows.get(entry.id);
-    if (JSON.stringify(row) !== JSON.stringify(entry)) return failed("SESSION_BRANCH_NOT_PERSISTED", entries);
-    entries.push(row);
-  }
-  return { mode, state: "durable", entries, code: null };
-}
-
 // src/task-runtime/progress-action.mjs
-function createTaskProgression(journal, { askAuthorization, checkBinding, continueAuthorized, prepareRemaining, send, getGeneration = () => 0 }) {
+function createTaskProgression(journal, { askAuthorization, checkBinding, continueAuthorized, prepareRemaining, send, ui = contextUi, getGeneration = () => 0 }) {
   const pending = /* @__PURE__ */ new Map();
   return async (input, ctx) => {
     const key = `${journal.scope()}:${input.taskId}:${input.revision}`;
@@ -2236,18 +2262,18 @@ function createTaskProgression(journal, { askAuthorization, checkBinding, contin
       const scope = journal.scope(), binding = await checkBinding();
       const validate = async () => {
         const view = journal.view(), task2 = view.tasks.find((t) => t.id === input.taskId);
-        if (!task2 || view.revision !== input.revision || journal.scope() !== scope || getGeneration() !== generation || await checkBinding() !== binding || ctx.signal?.aborted || ctx.isIdle && !ctx.isIdle())
+        if (!task2 || view.revision !== input.revision || journal.scope() !== scope || getGeneration() !== generation || await checkBinding() !== binding || ctx.signal?.aborted || !await ui.idle(ctx))
           throw new Error("\u4EFB\u52A1\u7684\u60C5\u51B5\u521A\u53D1\u751F\u4E86\u53D8\u5316\uFF0C\u8BF7\u5237\u65B0\u770B\u4E00\u4E0B\u6700\u65B0\u72B6\u6001\u518D\u64CD\u4F5C\u3002");
         if (["completed", "cancelled", "archived"].includes(task2.state))
           throw new Error("\u8FD9\u4E2A\u4EFB\u52A1\u5DF2\u7ECF\u7ED3\u675F\u4E86\uFF0C\u53BB\u770B\u770B\u4EA4\u4ED8\u7684\u7ED3\u679C\u5427\uFF1B\u60F3\u518D\u505A\u7C7B\u4F3C\u7684\u4E8B\u5C31\u91CD\u65B0\u63CF\u8FF0\u4E00\u6B21\u9700\u6C42\u3002");
         return task2;
       };
       const task = await validate();
-      if (!ctx.ui?.select) return;
+      if (!ui.hasUI(ctx)) return;
       if (!task.executionConsent && task.milestones.length) {
         if (await askAuthorization({ ...input, action: "authorize-task" }, ctx)) {
           send("\u4F60\u5DF2\u786E\u8BA4\uFF0C\u63A5\u7740\u5B8C\u6210\u5269\u4E0B\u7684\u4EA4\u4ED8\u3002");
-          continueAuthorized(ctx);
+          await continueAuthorized(ctx);
         }
         return;
       }
@@ -2256,7 +2282,7 @@ function createTaskProgression(journal, { askAuthorization, checkBinding, contin
         if (await askAuthorization({ ...input, action: "ask-authorization", actionId: action.id }, ctx)) {
           await journal.command({ taskId: task.id, revision: journal.view().revision, action: "select" });
           send("\u4F60\u5DF2\u540C\u610F\u8FD9\u9879\u65B0\u589E\u7684\u5185\u5BB9\uFF0C\u7EE7\u7EED\u5F80\u4E0B\u505A\u3002");
-          continueAuthorized(ctx);
+          await continueAuthorized(ctx);
         }
         return;
       }
@@ -2272,19 +2298,20 @@ ${task.reason ? `\u76EE\u524D\u7684\u60C5\u51B5\uFF1A${explainReason(task.reason
       const proceed = file ? "\u63D0\u4EA4\u6240\u9700\u6587\u4EF6" : review ? "\u6211\u5DF2\u4EB2\u81EA\u770B\u8FC7\u8FD9\u4E9B\u5185\u5BB9" : uncertain ? "\u5148\u6838\u5BF9\u4E0A\u6B21\u6CA1\u7ED3\u679C\u7684\u64CD\u4F5C" : "\u63A5\u7740\u505A\u5B8C\u5269\u4E0B\u7684";
       const unsupportedReview = action?.kind === "review" && !review || ["binding-changed", "total-budget"].includes(task.reason);
       const choices = unsupportedReview ? ["\u6682\u4E0D\u5904\u7406", "\u4EC5\u6838\u5BF9\u5DF2\u6709\u4EA7\u7269"] : ["\u6682\u4E0D\u5904\u7406", "\u4EC5\u6838\u5BF9\u5DF2\u6709\u4EA7\u7269", proceed];
-      const selected = await ctx.ui.select(report, choices, { signal: ctx.signal });
+      const selected = await ui.select(ctx, report, choices, ctx.signal);
       if (!choices.includes(selected) || selected === "\u6682\u4E0D\u5904\u7406" || ctx.signal?.aborted) return;
       await validate();
       let path;
       if (file && selected === proceed) {
-        path = await ctx.ui.input(
+        path = await ui.input(
+          ctx,
           `ask_user \xB7 \u63D0\u4EA4\u6587\u4EF6
 
 ${action.title}
 ${action.reason}
 \u8BF7\u628A\u6587\u4EF6\u7684\u5B8C\u6574\u8DEF\u5F84\u586B\u5728\u4E0B\u9762\u3002\u7A0B\u5E8F\u4F1A\u81EA\u5DF1\u6838\u5BF9\u8FD9\u4EFD\u6587\u4EF6\u5BF9\u4E0D\u5BF9\uFF0C\u4E0D\u4F1A\u76F2\u76EE\u91C7\u7528\u3002`,
           "\u5B8C\u6574\u6587\u4EF6\u8DEF\u5F84",
-          { signal: ctx.signal }
+          ctx.signal
         );
         if (!path?.trim() || ctx.signal?.aborted) return;
         await validate();
@@ -2305,7 +2332,7 @@ ${action.reason}
         return;
       send();
       if (selected === "\u4EC5\u6838\u5BF9\u5DF2\u6709\u4EA7\u7269" || uncertain || journal.snapshot()?.state === "completed") return;
-      if (journal.authorization()) continueAuthorized(ctx);
+      if (journal.authorization()) await continueAuthorized(ctx);
       else if (!task.milestones.length) await prepareRemaining();
     })();
     pending.set(key, run);
@@ -2380,113 +2407,45 @@ function shouldAskToContinue(task) {
   return (task.progressCount || 0) > (task.lastResumeProgress || 0);
 }
 
-// src/task-runtime/native-adapter.mjs
-function registerWorkbench(pi, options = {}) {
+// src/task-runtime/workbench-adapter.mjs
+function registerWorkbenchAdapter(pi, ports, options = {}) {
   const invocation = new AsyncLocalStorage2();
   const bindCallback = (handler, contextIndex = 1) => (...args) => withHostRuntime(pi, () => invocation.run(args[contextIndex], () => handler(...args)));
   const on = (name, handler) => pi.on(name, bindCallback(handler));
-  const onEvent = (name, handler) => pi.events?.on?.(name, bindCallback(handler));
-  let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || (() => pi?.drone?.readKnowledgeBinding?.() || null);
+  const onEvent = (name, handler) => ports.onHostEvent?.(name, bindCallback(handler));
+  let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || ports.readKnowledgeBinding;
   let pendingStatus = null;
   let providerTurnOpen = false;
-  const authorize = async (cwd, path) => {
-    const ctx = invocation.getStore() || context;
-    if (!ctx || !pi.events?.emit)
-      throw new Error("Current read-permission adapter unavailable; refusing recovery read.");
-    const signal = ctx.signal;
-    signal?.throwIfAborted();
-    let handled = false;
-    const allowed = await new Promise((resolveResult, reject) => {
-      const stop = () => signal?.removeEventListener("abort", abort);
-      const respond = (allowed2) => {
-        stop();
-        resolveResult(allowed2);
-      };
-      const abort = () => {
-        stop();
-        reject(signal.reason);
-      };
-      signal?.addEventListener("abort", abort, { once: true });
-      pi.events.emit("drone:task-read-check", {
-        cwd,
-        path: resolve4(cwd, path),
-        sessionId: ctx.sessionManager.getSessionId(),
-        resolve: respond,
-        claim: () => {
-          handled = true;
-        }
-      });
-      if (!handled) respond(false);
-    });
-    signal?.throwIfAborted();
-    if (!allowed) throw new Error("Current permission policy denied this read.");
-  };
-  const inspect = async (cwd, path, expected = {}) => {
-    const binding = await readKnowledgeBinding();
-    if (journal.snapshot()?.reason === "binding-changed")
-      throw new Error("Knowledge binding changed; this task cannot inspect the new destination.");
-    const declaredBinding = journal.snapshot()?.binding;
-    if (declaredBinding !== void 0 && declaredBinding !== (binding ? `${binding.vaultId}:${binding.revision}` : null))
-      throw new Error("Knowledge binding changed; reconcile the original task scope first.");
-    const vault = binding?.vault ? await realpath3(binding.vault) : null;
-    const requestedRoot = expected.rootKind || "workspace";
-    if (requestedRoot === "vault" && !vault)
-      throw new Error("Vault file acceptance requires a current knowledge binding.");
-    const base = requestedRoot === "vault" ? vault : cwd;
-    const full = resolve4(base, path);
-    const contains2 = (root2) => {
-      const rel = relative3(root2, full);
-      return !!rel && !isAbsolute3(rel) && rel !== ".." && !rel.startsWith(`..${sep2}`);
-    };
-    if (requestedRoot === "vault" && !contains2(vault))
-      throw new Error("Vault artifact must remain inside the bound Vault.");
-    const approvedRoot = journal.readRoots().find(contains2);
-    const root = requestedRoot === "vault" ? vault : approvedRoot || cwd;
-    await authorize(cwd, full);
-    if (approvedRoot && relative3(approvedRoot, await realpath3(approvedRoot)) !== "")
-      throw new Error("Approved directory identity changed.");
-    const rootKind = vault && contains2(vault) ? "vault" : requestedRoot;
-    const artifact = await inspectTaskFile(root, full, { ...expected, rootKind });
-    return {
-      ...artifact,
-      path: rootKind === "vault" ? relative3(vault, artifact.absolutePath).replaceAll("\\", "/") : (isAbsolute3(path) ? artifact.absolutePath : relative3(cwd, artifact.absolutePath)).replaceAll(
-        "\\",
-        "/"
-      )
-    };
-  };
+  const currentContext = () => invocation.getStore() || context;
+  const authorize = (cwd, path) => ports.authorizeRead(currentContext(), cwd, path);
+  const inspect = (cwd, path, expected = {}) => ports.inspect(currentContext(), cwd, path, expected, {
+    journal,
+    readKnowledgeBinding: () => readKnowledgeBinding(),
+    authorize
+  });
   const session = createTaskSession({
-    evidenceFiles: { inspect: inspectTaskFile, readText: (path) => readFile(path, "utf8") },
+    evidenceFiles: ports.evidenceFiles,
     readFailure: () => options.application.readFailure(activeSessionId),
     onPersistenceFailed: (failure) => options.application.recordFailure(activeSessionId, failure),
     readOnly: (name) => {
-      const declared = pi.getAllTools().find((tool2) => tool2.name === name)?.annotations?.readOnlyHint;
+      const declared = ports.readOnlyHint(name);
       return declared !== void 0 ? declared : withHostRuntime(pi, () => isReadOnlyTool(name));
     },
-    persist: async (record, signal) => {
-      signal.throwIfAborted();
-      const ctx = invocation.getStore() || context;
-      const before = readNativeSessionStorage(ctx.sessionManager);
-      if (before.state === "needs-reopen") throw new Error(`Task storage needs-reopen: ${before.code}`);
-      await pi.appendEntry(record.customType, record.data);
-      signal.throwIfAborted();
-      const after = readNativeSessionStorage(ctx.sessionManager);
-      if (after.state === "needs-reopen") throw new Error(`Task storage needs-reopen: ${after.code}`);
-      return { mode: after.mode, state: after.state };
-    },
+    persist: (record, signal) => ports.persist(currentContext(), record, signal),
     onChanged: () => send(),
     inspect,
     authorize
   });
   const { journal, evidence } = createTaskController(session, () => invocation.getStore()?.signal);
-  const askAuthorization = createTaskAuthorization(journal, () => bindingKey());
+  journal.status = () => session.status();
+  const askAuthorization = createTaskAuthorization(journal, () => bindingKey(), ports);
   currentRuntime().registerDisposable({ dispose: () => session.close() });
   const attach = async (ctx, force = false) => {
     options.onJournalAttached?.(journal);
     context = ctx;
     activeSessionId = ctx.sessionManager.getSessionId();
     const scope = createHash4("sha256").update(`${activeSessionId}\0${resolve4(ctx.cwd)}`).digest("hex");
-    const storage = readNativeSessionStorage(ctx.sessionManager);
+    const storage = await ports.storage(ctx);
     if (!options.application.readFailure(activeSessionId)) {
       await session.turn({ kind: "attach", scope, entries: storage.entries, storage, force }, ctx.signal);
       if (storage.state === "needs-reopen") options.application.recordFailure(activeSessionId, {
@@ -2511,31 +2470,37 @@ function registerWorkbench(pi, options = {}) {
       return;
     }
     pendingStatus = null;
-    try {
-      return pi.sendMessage(
-        {
-          customType: "drone-task-status",
-          display: true,
-          content,
-          details: { operational: true, reportId: randomUUID2(), command, taskView: journal.view(), taskStorage: state.storage }
-        },
-        { triggerTurn: false }
-      );
-    } catch (error4) {
+    const failed = (error4) => {
       options.application.recordFailure(activeSessionId, { state: "needs-reopen", message: error4.message, lastCommitted: state });
       throw error4;
+    };
+    try {
+      const posted = ports.post(currentContext(), { content, command, view: journal.view(), storage: state.storage });
+      return posted instanceof Promise ? posted.catch((error4) => {
+        try {
+          failed(error4);
+        } catch {
+        }
+      }) : posted;
+    } catch (error4) {
+      failed(error4);
     }
   };
   let handoffGeneration = 0;
   let handoffTimer;
   let automaticTurn = false;
   let continuationToken = null;
-  journal.isAutoContinuation = (message) => !!(message?.role === "custom" && message.customType === "drone-task-autocontinue" && continuationToken && message.details?.nonce === continuationToken && message.details?.taskId === journal.snapshot()?.id && journal.authorization());
+  let continuationPending = false;
+  journal.isAutoContinuation = (message) => {
+    const id = ports.continuationId(message);
+    return !!(id && (id === continuationToken || continuationPending) && message.details?.taskId === journal.snapshot()?.id && journal.authorization());
+  };
   const cancelHandoff = () => {
     handoffGeneration++;
     clearTimeout(handoffTimer);
     automaticTurn = false;
     continuationToken = null;
+    continuationPending = false;
   };
   currentRuntime().registerDisposable({ dispose: cancelHandoff });
   const continueAuthorized = (ctx) => {
@@ -2547,7 +2512,7 @@ function registerWorkbench(pi, options = {}) {
         return;
       let idle;
       try {
-        idle = !ctx.isIdle || ctx.isIdle();
+        idle = ports.inlineHandoff || await ports.idle(ctx);
       } catch {
         cancelHandoff();
         return;
@@ -2571,15 +2536,12 @@ function registerWorkbench(pi, options = {}) {
         prepared = true;
         automaticTurn = true;
         continuationToken = randomUUID2();
-        pi.sendMessage(
-          {
-            customType: "drone-task-autocontinue",
-            display: false,
-            details: { taskId, nonce: continuationToken },
-            content: `Continue the user-authorized task: ${journal.snapshot().goal}. Scope: ${journal.snapshot().authorizationSummary}. Use saved results, verify uncertain effects before any retry, and complete the remaining deliverables. Do not request routine stage approval. Respect declined installs and all permission/validation gates. If blocked, explain each remaining deliverable: actual evidence, confirmed blocker (or explicitly unknown cause), next action, and whether the user must decide. Use task_status for the latest remaining summary. Resolve routine gaps autonomously; create a specific task_wait only for genuinely needed input/approval. Never change acceptance criteria or mark an item complete to fill the progress bar.`
-          },
-          { triggerTurn: true, deliverAs: "followUp" }
-        );
+        continuationPending = true;
+        try {
+          continuationToken = await ports.continueTask(ctx, { taskId, nonce: continuationToken, prompt: `Continue the user-authorized task: ${journal.snapshot().goal}. Scope: ${journal.snapshot().authorizationSummary}. Use saved results, verify uncertain effects before any retry, and complete the remaining deliverables. Do not request routine stage approval. Respect declined installs and all permission/validation gates. If blocked, explain each remaining deliverable: actual evidence, confirmed blocker (or explicitly unknown cause), next action, and whether the user must decide. Use task_status for the latest remaining summary. Resolve routine gaps autonomously; create a specific task_wait only for genuinely needed input/approval. Never change acceptance criteria or mark an item complete to fill the progress bar.` });
+        } finally {
+          continuationPending = false;
+        }
       } catch (e) {
         if (generation !== handoffGeneration || context !== ctx || journal.snapshot()?.id !== taskId || ["completed", "cancelled", "archived"].includes(journal.snapshot()?.state))
           return;
@@ -2587,6 +2549,7 @@ function registerWorkbench(pi, options = {}) {
         send(`\u6CA1\u80FD\u81EA\u52A8\u63A5\u7740\u505A\uFF1A${clean2(e.message)}\u3002\u5DF2\u6709\u7684\u7ED3\u679C\u90FD\u5728\uFF0C\u6CA1\u6709\u91CD\u590D\u6267\u884C\u4EFB\u4F55\u64CD\u4F5C\u3002`);
       }
     };
+    if (ports.inlineHandoff) return handoff().catch(cancelHandoff);
     handoffTimer = setTimeout(() => void handoff().catch(cancelHandoff), 0);
   };
   on("session_shutdown", () => {
@@ -2600,8 +2563,7 @@ function registerWorkbench(pi, options = {}) {
   });
   const prepare = async (query, ctx) => {
     await attach(ctx);
-    const entries = ctx.sessionManager.getBranch();
-    const caps = [...entries].reverse().find((e) => e.customType === "drone-capability-checkpoint-v1")?.data?.capabilities || [];
+    const caps = await ports.capabilities(ctx);
     const result = await journal.begin(query, caps, await bindingKey());
     halted = false;
     return result;
@@ -2625,7 +2587,7 @@ function registerWorkbench(pi, options = {}) {
   on("input", async (event, ctx) => {
     if (session.status().persistence) {
       halted = true;
-      ctx.ui.notify(session.status().render, "error");
+      await ports.notifyError(ctx, session.status().render);
       return { action: "handled" };
     }
     if (!event.images?.length && isTaskStatusQuery(event.text)) {
@@ -2634,7 +2596,7 @@ function registerWorkbench(pi, options = {}) {
       return { action: "handled" };
     }
     cancelHandoff();
-    if (ctx.isIdle && !ctx.isIdle()) return { action: "continue" };
+    if (!await ports.idle(ctx)) return { action: "continue" };
     try {
       const result = await prepare(event.text, ctx);
       if (result.selectionRequired || result.blocked) {
@@ -2645,7 +2607,7 @@ function registerWorkbench(pi, options = {}) {
       prepared = true;
     } catch (e) {
       halted = true;
-      if (session.status().persistence) ctx.ui.notify(session.status().render, "error");
+      if (session.status().persistence) await ports.notifyError(ctx, session.status().render);
       else send(`\u4EFB\u52A1\u672A\u5F00\u59CB\uFF1A${clean2(e.message)}
 ${journal.render()}`);
       return { action: "handled" };
@@ -2703,7 +2665,8 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       halted = true;
     }
   });
-  const refreshStorage = (ctx) => session.turn({ kind: "storage", storage: readNativeSessionStorage(ctx.sessionManager) }, ctx.signal);
+  const refreshStorage = async (ctx) => session.turn({ kind: "storage", storage: await ports.storage(ctx) }, ctx.signal);
+  journal.refresh = (signal) => refreshStorage({ signal });
   on("context", async (event, ctx) => {
     await refreshStorage(ctx);
     return { messages: restoreTaskToolOrder(event.messages) };
@@ -2763,13 +2726,13 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       if (last?.knowledgePublication?.status === "blocked" && last.stopReason !== "error" && await journal.reserveContinuation(last.knowledgePublication.reason)) {
         send("\u521A\u624D\u505C\u4E86\u4E00\u4E0B\uFF0C\u6B63\u5728\u6309\u4F60\u4E4B\u524D\u7684\u6388\u6743\u63A5\u7740\u505A\uFF1A\u5148\u6838\u5BF9\u5DF2\u6709\u7ED3\u679C\uFF0C\u518D\u7EE7\u7EED\u5269\u4E0B\u7684\u90E8\u5206\uFF0C\u4E0D\u7528\u4F60\u518D\u786E\u8BA4\u3002");
         if (activeSessionId !== turnSessionId || context !== turnContext) return;
-        continueAuthorized(turnContext);
+        await continueAuthorized(turnContext);
         return;
       }
       if (last?.stopReason !== "error" && !ctx?.signal?.aborted && await journal.reserveHandoff()) {
         send();
         if (activeSessionId !== turnSessionId || context !== turnContext) return;
-        continueAuthorized(turnContext);
+        await continueAuthorized(turnContext);
         return;
       }
       const snapshot2 = journal.snapshot();
@@ -2865,7 +2828,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     },
     ["goal", "summary", "milestones"],
     async (input, ctx, signal) => {
-      const writeRoots = await resolveWriteRoots(ctx.cwd, input.writeDirectories || []);
+      const writeRoots = await ports.writeRoots(ctx.cwd, input.writeDirectories || []);
       const result = await journal.plan({ ...input, writeRoots });
       send("\u8BA1\u5212\u5DF2\u7ECF\u51C6\u5907\u597D\uFF0C\u9A6C\u4E0A\u4F1A\u5F39\u51FA\u4E00\u4E2A\u786E\u8BA4\u6846\uFF0C\u540C\u610F\u540E\u5F00\u59CB\u6267\u884C\u3002");
       const authorized = await askAuthorization(
@@ -2940,15 +2903,16 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     askAuthorization,
     checkBinding: bindingKey,
     continueAuthorized,
-    prepareRemaining: () => pi.sendUserMessage("\u7EE7\u7EED", { expandPromptTemplates: false }),
-    send
+    prepareRemaining: () => ports.sendUserMessage(currentContext(), "\u7EE7\u7EED", { expandPromptTemplates: false }),
+    send,
+    ui: ports
   });
   pi.registerCommand("task-action", {
     description: "\u4EFB\u52A1\u9762\u677F\u7684\u7248\u672C\u5316\u7528\u6237\u64CD\u4F5C\uFF1B\u4E0D\u6388\u4E88\u65B0\u6743\u9650",
     handler: bindCallback(singleFlightCommand(async (args, ctx) => {
       cancelHandoff();
       await attach(ctx);
-      if (ctx.isIdle && !ctx.isIdle())
+      if (!await ports.idle(ctx))
         throw new Error("Stop the agent before changing tasks or inspecting recovery files.");
       if (args.length > 6e3) throw new Error("Task command too large.");
       if (!args.trim()) {
@@ -2966,7 +2930,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
           return;
         }
         const authorizedTask = journal.view().tasks.find((task) => task.id === input.taskId);
-        pi.events?.emit?.("drone:decision-record/v1", {
+        ports.decision?.({
           id: `task-authorization:${input.taskId}:${input.revision}`,
           kind: "task-authorization",
           summary: authorizedTask?.authorizationSummary || authorizedTask?.goal || "Task authorization approved",
@@ -2974,7 +2938,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
           at: (/* @__PURE__ */ new Date()).toISOString()
         });
         send("\u5DF2\u786E\u8BA4\uFF0C\u63A5\u4E0B\u6765\u4F1A\u81EA\u52A8\u505A\u5B8C\u5E76\u4EA4\u4ED8\u7ED3\u679C\u3002\u4F60\u968F\u65F6\u53EF\u4EE5\u505C\uFF1B\u8981\u505A\u8BA1\u5212\u4E4B\u5916\u7684\u4E8B\u4ECD\u4F1A\u5148\u95EE\u4F60\u3002");
-        continueAuthorized(ctx);
+        await continueAuthorized(ctx);
         return;
       }
       if (["approve-plan", "next-stage", "ask-authorization", "confirm-outcome"].includes(input.action)) {
@@ -2982,7 +2946,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
         send(accepted ? "\u5DF2\u8BB0\u5F55\u4F60\u7684\u786E\u8BA4\u3002" : "\u4F60\u6CA1\u6709\u786E\u8BA4\uFF0C\u4E00\u5207\u4FDD\u6301\u539F\u6837\u3002");
         if (accepted) {
           await journal.command({ taskId: input.taskId, revision: journal.view().revision, action: "select" });
-          continueAuthorized(ctx);
+          await continueAuthorized(ctx);
         }
         return;
       }
@@ -2993,7 +2957,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
           send();
           if (accepted) {
             if (action?.kind === "rebind")
-              pi.events?.emit?.("drone:decision-record/v1", {
+              ports.decision?.({
                 id: `rebind:${input.taskId}:${input.actionId}`,
                 kind: "rebind",
                 summary: action.title || "Rebind approved",
@@ -3001,7 +2965,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
                 at: (/* @__PURE__ */ new Date()).toISOString()
               });
             await journal.command({ taskId: input.taskId, revision: journal.view().revision, action: "select" });
-            continueAuthorized(ctx);
+            await continueAuthorized(ctx);
           }
           return;
         }
@@ -3018,13 +2982,126 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
           return;
         }
         send();
-        pi.sendUserMessage("\u7EE7\u7EED", { expandPromptTemplates: true });
+        await ports.sendUserMessage(ctx, "\u7EE7\u7EED", { expandPromptTemplates: true });
         return;
       } else await journal.command(input);
       send(void 0, "task-action");
     }))
   });
   return journal;
+}
+
+// src/task-runtime/native-adapter.mjs
+var AUTO_CONTINUE = "drone-task-autocontinue";
+function nativePorts(pi) {
+  return {
+    readKnowledgeBinding: () => pi?.drone?.readKnowledgeBinding?.() || null,
+    onHostEvent: (name, handler) => pi.events?.on?.(name, handler),
+    readOnlyHint: (name) => pi.getAllTools().find((tool) => tool.name === name)?.annotations?.readOnlyHint,
+    storage: (ctx) => readNativeSessionStorage(ctx.sessionManager),
+    persist: async (ctx, record, signal) => {
+      signal.throwIfAborted();
+      const before = readNativeSessionStorage(ctx.sessionManager);
+      if (before.state === "needs-reopen") throw new Error(`Task storage needs-reopen: ${before.code}`);
+      await pi.appendEntry(record.customType, record.data);
+      signal.throwIfAborted();
+      const after = readNativeSessionStorage(ctx.sessionManager);
+      if (after.state === "needs-reopen") throw new Error(`Task storage needs-reopen: ${after.code}`);
+      return { mode: after.mode, state: after.state };
+    },
+    post: (_ctx, { content, command, view, storage }) => pi.sendMessage(
+      {
+        customType: "drone-task-status",
+        display: true,
+        content,
+        details: { operational: true, reportId: randomUUID3(), command, taskView: view, taskStorage: storage }
+      },
+      { triggerTurn: false }
+    ),
+    notifyError: (ctx, text2) => ctx.ui.notify(text2, "error"),
+    ...contextUi,
+    capabilities: (ctx) => [...ctx.sessionManager.getBranch()].reverse().find((e) => e.customType === "drone-capability-checkpoint-v1")?.data?.capabilities || [],
+    continueTask: (_ctx, { taskId, prompt, nonce }) => {
+      pi.sendMessage(
+        { customType: AUTO_CONTINUE, display: false, details: { taskId, nonce }, content: prompt },
+        { triggerTurn: true, deliverAs: "followUp" }
+      );
+      return nonce;
+    },
+    continuationId: (message) => message?.role === "custom" && message.customType === AUTO_CONTINUE ? message.details?.nonce : void 0,
+    sendUserMessage: (_ctx, text2, options) => pi.sendUserMessage(text2, options),
+    decision: (record) => pi.events?.emit?.("drone:decision-record/v1", record),
+    writeRoots: resolveWriteRoots,
+    authorizeRead: async (ctx, cwd, path) => {
+      if (!ctx || !pi.events?.emit)
+        throw new Error("Current read-permission adapter unavailable; refusing recovery read.");
+      const signal = ctx.signal;
+      signal?.throwIfAborted();
+      let handled = false;
+      const allowed = await new Promise((resolveResult, reject) => {
+        const stop = () => signal?.removeEventListener("abort", abort);
+        const respond = (allowed2) => {
+          stop();
+          resolveResult(allowed2);
+        };
+        const abort = () => {
+          stop();
+          reject(signal.reason);
+        };
+        signal?.addEventListener("abort", abort, { once: true });
+        pi.events.emit("drone:task-read-check", {
+          cwd,
+          path: resolve5(cwd, path),
+          sessionId: ctx.sessionManager.getSessionId(),
+          resolve: respond,
+          claim: () => {
+            handled = true;
+          }
+        });
+        if (!handled) respond(false);
+      });
+      signal?.throwIfAborted();
+      if (!allowed) throw new Error("Current permission policy denied this read.");
+    },
+    inspect: async (_ctx, cwd, path, expected, { journal, readKnowledgeBinding, authorize }) => {
+      const binding = await readKnowledgeBinding();
+      if (journal.snapshot()?.reason === "binding-changed")
+        throw new Error("Knowledge binding changed; this task cannot inspect the new destination.");
+      const declaredBinding = journal.snapshot()?.binding;
+      if (declaredBinding !== void 0 && declaredBinding !== (binding ? `${binding.vaultId}:${binding.revision}` : null))
+        throw new Error("Knowledge binding changed; reconcile the original task scope first.");
+      const vault = binding?.vault ? await realpath3(binding.vault) : null;
+      const requestedRoot = expected.rootKind || "workspace";
+      if (requestedRoot === "vault" && !vault)
+        throw new Error("Vault file acceptance requires a current knowledge binding.");
+      const base = requestedRoot === "vault" ? vault : cwd;
+      const full = resolve5(base, path);
+      const contains2 = (root2) => {
+        const rel = relative3(root2, full);
+        return !!rel && !isAbsolute3(rel) && rel !== ".." && !rel.startsWith(`..${sep2}`);
+      };
+      if (requestedRoot === "vault" && !contains2(vault))
+        throw new Error("Vault artifact must remain inside the bound Vault.");
+      const approvedRoot = journal.readRoots().find(contains2);
+      const root = requestedRoot === "vault" ? vault : approvedRoot || cwd;
+      await authorize(cwd, full);
+      if (approvedRoot && relative3(approvedRoot, await realpath3(approvedRoot)) !== "")
+        throw new Error("Approved directory identity changed.");
+      const rootKind = vault && contains2(vault) ? "vault" : requestedRoot;
+      const artifact = await inspectTaskFile(root, full, { ...expected, rootKind });
+      return {
+        ...artifact,
+        path: rootKind === "vault" ? relative3(vault, artifact.absolutePath).replaceAll("\\", "/") : (isAbsolute3(path) ? artifact.absolutePath : relative3(cwd, artifact.absolutePath)).replaceAll(
+          "\\",
+          "/"
+        )
+      };
+    },
+    evidenceFiles: { inspect: inspectTaskFile, readText: (path) => readFile(path, "utf8") }
+  };
+}
+function registerWorkbench(pi, options = {}) {
+  return registerWorkbenchAdapter(pi, nativePorts(pi), options);
 }
 
 // src/task-runtime/runtime.mjs
@@ -3493,7 +3570,7 @@ Use local evidence first, preserve source URIs and hashes, and report blocked/un
 // src/native-task-readback.ts
 import { createHash as createHash5 } from "node:crypto";
 import { realpath as realpath4 } from "node:fs/promises";
-import { isAbsolute as isAbsolute4, relative as relative4, resolve as resolve5, sep as sep3 } from "node:path";
+import { isAbsolute as isAbsolute4, relative as relative4, resolve as resolve6, sep as sep3 } from "node:path";
 var contains = (root, file) => {
   const path = relative4(root, file);
   return path !== "" && !isAbsolute4(path) && path !== ".." && !path.startsWith(`..${sep3}`);
@@ -3509,13 +3586,13 @@ function registerNativeTaskReadback(pi, journal, currentContext) {
     if (desktopOwnsPermissions || !ctx || !request || typeof request.sessionId !== "string" || request.sessionId !== ctx.sessionManager?.getSessionId() || typeof request.cwd !== "string" || request.cwd !== ctx.cwd || typeof request.path !== "string" || typeof request.claim !== "function" || typeof request.resolve !== "function")
       return;
     request.claim();
-    const scope = createHash5("sha256").update(`${request.sessionId}\0${resolve5(request.cwd)}`).digest("hex");
+    const scope = createHash5("sha256").update(`${request.sessionId}\0${resolve6(request.cwd)}`).digest("hex");
     const taskId = journal.snapshot()?.id;
     const current = () => !desktopOwnsPermissions && currentContext() === ctx && ctx.sessionManager?.getSessionId() === request.sessionId && ctx.cwd === request.cwd && ctx.hasUI !== false && !!ctx.ui?.select && !ctx.signal?.aborted && journal.scope() === scope && journal.snapshot()?.id === taskId;
     const check = async () => {
       if (!current()) return false;
       const roots = journal.readRoots();
-      const root = roots.find((candidate) => contains(candidate, resolve5(request.cwd, request.path)));
+      const root = roots.find((candidate) => contains(candidate, resolve6(request.cwd, request.path)));
       if (!root) return false;
       const canonicalRoot = await realpath4(root);
       return current() && journal.readRoots().includes(root) && canonicalRoot === root;
@@ -8311,13 +8388,13 @@ import { stat as stat2 } from "node:fs/promises";
 
 // src/path.ts
 import { homedir as homedir2 } from "node:os";
-import { isAbsolute as isAbsolute5, join as join2, resolve as resolve6 } from "node:path";
+import { isAbsolute as isAbsolute5, join as join2, resolve as resolve7 } from "node:path";
 var UNICODE_SPACES = /[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF]/g;
 function resolveToolPath(rawPath, cwd, home = homedir2()) {
   let path = rawPath.replace(UNICODE_SPACES, " ");
   if (path === "~") path = home;
   else if (path.startsWith("~/")) path = join2(home, path.slice(2));
-  return isAbsolute5(path) ? path : resolve6(cwd, path);
+  return isAbsolute5(path) ? path : resolve7(cwd, path);
 }
 
 // src/tools/deliver-files.ts
