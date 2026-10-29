@@ -112,6 +112,8 @@ packages/<name>/
 | `requires.hostCapabilities` | 依赖的宿主能力，由 `negotiateCapabilities` 协商；缺失时插件必须返回 `degraded` 或 `incompatible`，不能抛错 |
 | `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`、`application-state`、`application-state-write`）、`network`（主机名列表或已配置服务边界 `configured-services`）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
 
+**官方 Pi 格式合规（2026-10-29）。** 每个声明 `pi` 的包都必须能被官方 Pi 的包管理器当作来源解析并加载（等同 `pi -e <包目录>`）：扩展无加载错误、声明的技能可发现，并在按包自身方式配置后注册其 `plugin.manifest.json` 声明的全部工具（如 pi-knowledge 需先有知识目录，未配置时只提供 `/drone-init` 与状态/检索工具）。`npm run check:pi-format` 自动检查 `packages/` 下全部这类包，已纳入 `npm run check`。这只证明格式与可加载性，不要求在原生 Pi 中完成领域闭环。
+
 `application-state` 只声明宿主明确指定的插件状态目录及已登记的本机资源协调目录，不能推导出整个 HOME 的权限。0.3 knowledge 候选把既有配置/SQLite 状态和 `~/.drone/runtime-leases/knowledge-writers` 的本机同用户租约列入此范围；host/broker 必须另行验证具体 root 与操作。新增词表不代表旧宿主已经支持或自动授予该能力，尚未接通时只能保留候选/未验收状态。
 
 候选受管 Desktop 的 `application-state` 只允许读取用户明确选择的状态根；`application-state-write` 是另一个显式声明，要求启用时展示状态 JSON 读写并取得独立写 grant。旧只读授权不能自动升级。状态写入仅经 `state.writeJson`：限定 `.json` 文件、版本比较、原子写和写后回读，仍受逐调用 write 效果授权约束，bootstrap 禁止写入。该声明不授权 Vault 正文、任意文件或外部服务写入；状态根之外的副作用仍必须单独声明并获批。候选实现与真实安装包验收未完成前不能记为发布支持。
