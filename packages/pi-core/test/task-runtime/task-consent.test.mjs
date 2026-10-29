@@ -442,6 +442,8 @@ it("a late preparation failure cannot reopen a task cancelled during the async h
 		);
 	await approve();
 	vi.advanceTimersByTime(0);
+	// The handoff first asks the adapter whether the session is idle (a host port may be async).
+	for (let i = 0; i < 3; i++) await Promise.resolve();
 	expect(pi.drone.readKnowledgeBinding).toHaveBeenCalledTimes(3);
 	await commands["task-action"].handler(
 		Buffer.from(
