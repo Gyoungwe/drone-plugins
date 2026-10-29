@@ -30,6 +30,26 @@ function errors(manifest = valid, pkg = packageJson, root = packageRoot) {
 
 test("manifest checker accepts a complete declaration", () => assert.equal(errors(), ""));
 
+test("service-only requires coexist with host capabilities and never need another plugin dependency", () => {
+	assert.equal(errors({...valid, entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},requires:{hostCapabilities:["vault-read"]},drone:{...valid.drone,provides:{"audit.runtime":{version:1,operations:["read","write"]}},requires:{tasks:{service:"task.runtime",version:2}}}}), "");
+});
+for (const [declaration,expected] of [
+	[{provides:{"audit.runtime":{version:1,operations:["read","read"]}}}, /operations must be unique/],
+	[{provides:{"audit.runtime":{version:0,operations:["read"]}}}, /positive safe integer/],
+	[{requires:{tasks:{service:"task.runtime",version:1,package:"some-plugin"}}}, /only accepts service and version/],
+	[{provides:["audit.runtime"]}, /must be an object/],
+]) test(`rejects invalid service declarations ${JSON.stringify(declaration)}`,()=>assert.match(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,...declaration}}),expected));
+test("service declarations require an actual managed owner",()=>assert.match(errors({...valid,drone:{...valid.drone,provides:{"audit.runtime":{version:1,operations:["read"]}}}}),/requires desktopRuntime ownership/));
+
+test("temporary legacy migrations declare exact supported versions and a future removal version",()=>assert.equal(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,recordAdoptions:{recovery:{legacyType:"legacy-recovery-v1",fromVersions:["0.2.0","0.2.1"],removeBeforeVersion:"2.0.0"}}}}),""));
+for(const [declaration,expected] of [
+	[{legacyType:"plugin-record:other:private",fromVersions:["0.2.1"],removeBeforeVersion:"2.0.0"},/source-owned namespace/],
+	[{legacyType:"legacy-v1",fromVersions:["0.2.x"],removeBeforeVersion:"2.0.0"},/exact supported/],
+	[{legacyType:"legacy-v1",fromVersions:["0.2.1"],removeBeforeVersion:"1.2.3"},/must be removed before/],
+	[{legacyType:"legacy-v1",fromVersions:["0.2.1"],removeBeforeVersion:"2.0.0",arbitraryTypes:["another"]},/only accepts/],
+])test(`rejects unsafe or expired record adoption ${JSON.stringify(declaration)}`,()=>assert.match(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,recordAdoptions:{recovery:declaration}}}),expected));
+test("legacy record migration requires a managed owner",()=>assert.match(errors({...valid,drone:{...valid.drone,recordAdoptions:{recovery:{legacyType:"legacy-v1",fromVersions:["0.2.1"],removeBeforeVersion:"2.0.0"}}}}),/requires desktopRuntime ownership/));
+
 const cases = [
 	["id", { id: "bad" }, "id must match"],
 	["version", { version: "9.9.9" }, "version must match"],
@@ -91,4 +111,34 @@ test("rejects a readWrite write permission when external writes are disabled", (
 		},
 	};
 	assert.match(errors(manifest), /externalWrites=false conflicts/);
+});
+
+// This is a bounded declared scope, not a general home-directory grant.
+test("accepts application-state and rejects invented broad state roots", () => {
+	assert.equal(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state"] } }), "");
+	assert.equal(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state-write"] } }), "");
+	assert.equal(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["configured-vault-write"] } }), "");
+	assert.match(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state/**"] } }), /invalid value/);
+	assert.match(errors({ ...valid, permissions: { ...valid.permissions, filesystem: ["application-state-write/**"] } }), /invalid value/);
+});
+
+
+test("resources must have a Desktop owner and real packaged entries", () => {
+ const entrypoints = { desktopRuntime: "./dist/index.mjs", resources: { index: "./dist/index.mjs" } };
+ assert.equal(errors({ ...valid, entrypoints }), "");
+ assert.match(errors({ ...valid, entrypoints: { resources: entrypoints.resources } }), /resources require desktopRuntime/);
+ assert.match(errors({ ...valid, entrypoints: { ...entrypoints, resources: { index: "./dist/missing.mjs" } } }), /does not exist/);
+ assert.match(errors({ ...valid, entrypoints: { ...entrypoints, resources: [] } }), /nonempty resource IDs/);
+ assert.match(errors({ ...valid, entrypoints: { ...entrypoints, resources: { "": "./dist/index.mjs" } } }), /nonempty resource IDs/);
+});
+
+for (const token of ["binary-state-read", "binary-state-write"]) {
+ test(`accepts independent ${token} without JSON or file permissions`, () => {
+ assert.equal(errors({...valid,permissions:{...valid.permissions,filesystem:[token]}}), "");
+ });
+}
+test("read-only child session support is an explicit desktopRuntime declaration",()=>assert.equal(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,nativeChildSessions:"read-only"}}),""));
+test("rejects child session support that is writable or has no managed owner",()=>{
+	assert.match(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,nativeChildSessions:"write"}}),/must be "read-only"/);
+	assert.match(errors({...valid,drone:{...valid.drone,nativeChildSessions:"read-only"}}),/requires desktopRuntime ownership/);
 });

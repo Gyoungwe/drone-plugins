@@ -9,10 +9,12 @@ Drone 的独立插件 workspace。它承载可独立安装、升级、禁用和�
 | 包 | 目的 | 状态 |
 |---|---|---|
 | `@gyoungwe/pi-research` | 研究证据与来源闭环 | 公开 0.2.0，自包含核心与真实会话验收见发布记录 |
-| `@gyoungwe/pi-knowledge` | 原生 Pi 知识 / Vault 闭环 | 公开 0.2.1； artifact、manifest、package-local build/check/smoke 已通过 |
+| `@gyoungwe/pi-knowledge` | 原生 Pi 知识 / Vault 与同包可选 UI | 公开 0.2.1；0.3.0 同包 UI 为未发布候选，见下方迁移记录 |
 | `@gyoungwe/pi-analysis` | 原生 Pi 科学分析 adapter/readiness 门禁 | 自包含 bundle、manifest、registration test、tarball + Pi loader smoke 已通过 |
-| `@gyoungwe/desktop-ui-pack` | 知识整页、审阅浮层和研究界面 | `knowledge.page` / `knowledge.surface` / `app.overlay`，0.2.0 候选，正式 GUI 验收待补 |
-| `@gyoungwe/research-suite` | 聚合包 | 公开 0.1.10，捆绑 pi-core / pi-knowledge / pi-research |
+| `@gyoungwe/desktop-ui-pack` | 研究状态面板 | 公开 0.2.0 仍含历史知识 UI；0.3.0 候选把知识贡献迁给 pi-knowledge，未发布 |
+| `@gyoungwe/research-suite` | 聚合包 | 公开 0.1.11；未发布 0.2.0 候选组合 core 0.1.9 / knowledge 0.3.0 / research 0.2.0 |
+
+2026-10-29 原生架构候选新增 `pi-inquiry@0.1.0`：原 SQLite 领域代码保留 Git 历史，同包标准 Pi 入口、受管理 runtime 与可选 UI 共用原格式 SQL/WASM owner。根构建和完整检查已登记该包；当前来源与实际 SDK/UI 范围见 [Inquiry 候选记录](docs/inquiry-sqlite-migration-candidate.md)。它尚未发布，宿主旧 Inquiry 投影/rerun 路径及正式安装包验收仍未完成。
 
 ## 开发门槛
 
@@ -29,3 +31,13 @@ Knowledge category precedence and the 0.2.1 / suite 0.1.10 source candidates are
 2026-10-25 的 0.2.1 / 0.2.0 / 0.1.10 正式发布、公开包验收与完整性回读见 [发布记录](docs/knowledge-research-npm-2026-10-25.md)。三个版本均已公开，其他账户与平台边界保持未完成。
 
 知识整页迁移、候选合同和原生 suite 收口状态见 [2026-10-25 候选验收](docs/knowledge-page-closure-2026-10-25.md)。
+
+2026-10-26 原生 Pi 同包知识 UI 迁移子项、旧 UI 停用顺序与尚未完成的后端边界见 [迁移记录](docs/knowledge-ui-co-package-2026-10-26.md)。这不是新版本发布或整个 P2 完成声明。
+
+P2 后台依赖、通用能力、单写者和旧数据接管方案见 [知识 runtime 迁移计划](docs/native-knowledge-runtime-plan.md)。其中基础修复、显式 owner 与完整原生组合已有真实 SDK 回归；Desktop 只读概览/搜索与两原生工具已通过同 owner、授权 broker、双受限进程和实际 SDK 派发；完整 Desktop 业务、旧桥与宿主后台退出仍未完成。
+
+同 owner 的知识正文/双向链接/图谱/分类/jobs 阅读闭包与 CLI transport 抽取见 [阅读闭包候选](docs/native-knowledge-reading-2026-10-26.md)；这仍不代表完整 Desktop 迁移或正式发布。
+
+审核策略的异步状态端口、独立授权设置写入和剩余 owner 边界见 [状态与设置候选](docs/native-knowledge-state-2026-10-26.md)。
+
+候选审阅列表、精确只读预览、真实 coordinator 范围与剩余审核写入见 [审阅阅读候选](docs/native-knowledge-review-2026-10-26.md)。

@@ -1,11 +1,39 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { getResearchRun, listResearchRuns } from "../../src/core/research-run-ui.js";
 
 describe("research run UI projection", () => {
+	it("invalidates the projected delivery when final body bytes are edited", async () => {
+		const resultsRoot = await mkdtemp(join(tmpdir(), "research-body-version-"));
+		try {
+			const runDir = join(resultsRoot, "topic", "run-one");
+			await mkdir(runDir, { recursive: true });
+			const body = "A limited statement.\n";
+			await writeFile(join(runDir, "SUMMARY.md"), body);
+			await writeFile(
+				join(runDir, "metadata.json"),
+				JSON.stringify({
+					run_id: "run-one",
+					delivery_receipt: {
+						version: 1,
+						bodySha256: createHash("sha256").update(body).digest("hex"),
+						semanticAssessment: { status: "model-assessed" },
+					},
+				}),
+			);
+			expect((await getResearchRun({ resultsRoot, runDir })).delivery.status).toBe("body-matched");
+			await writeFile(join(runDir, "SUMMARY.md"), "A broadened statement.\n");
+			expect((await getResearchRun({ resultsRoot, runDir })).delivery).toMatchObject({
+				status: "body-changed",
+				scientificallyVerified: false,
+			});
+		} finally {
+			await rm(resultsRoot, { recursive: true, force: true });
+		}
+	});
 	it("lists a run and exposes its route, sources and structured claims", async () => {
 		const root = await mkdtemp(join(tmpdir(), "drone-research-ui-"));
 		const run = join(root, "demo", "run-20261004-abc123");

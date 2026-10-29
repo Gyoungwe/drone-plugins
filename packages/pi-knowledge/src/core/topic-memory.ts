@@ -2,10 +2,18 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { runRuntimeExclusive } from "./runtime-host.js";
+import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
 import { compareClaimSets } from "./claim-conflicts.js";
-import { knowledgeDirectory } from "./config.js";
+import { knowledgeDirectory, type KnowledgeConfigApi } from "./config.js";
 import { canRead, readNoteFile, validateNote } from "./files.js";
+
+export interface TopicMemoryStorage {
+	readonly key: string;
+	read(): Promise<unknown | null>;
+	write(value: unknown, expectedRevision: number): Promise<void>;
+	readSource(path: string): ReturnType<typeof readNoteFile>;
+}
+export type TopicMemoryStorageFactory = (binding: import("./config.js").KnowledgeBinding, project: string) => TopicMemoryStorage;
 
 export const TOPIC_MEMORY_VERSION = 1;
 export const TOPIC_MEMORY_LIMITS = Object.freeze({
@@ -81,7 +89,14 @@ async function ensureWithin(root, target) {
 }
 function blank(vaultId, project) {
 	const now = new Date().toISOString();
-	return { version: TOPIC_MEMORY_VERSION, vaultId, project, revision: 0, updatedAt: now, topics: [] };
+	return {
+		version: TOPIC_MEMORY_VERSION,
+		vaultId,
+		project,
+		revision: 0,
+		updatedAt: now,
+		topics: [],
+	};
 }
 function validateSource(source, project = null) {
 	if (
@@ -185,7 +200,10 @@ function normalizeTopic(topic, binding, project) {
 		history: Array.isArray(topic.history)
 			? topic.history
 					.slice(-TOPIC_MEMORY_LIMITS.maxHistory)
-					.map((entry) => ({ summary: text(entry?.summary, 800), updatedAt: text(entry?.updatedAt, 40) }))
+					.map((entry) => ({
+						summary: text(entry?.summary, 800),
+						updatedAt: text(entry?.updatedAt, 40),
+					}))
 					.filter((entry) => entry.summary)
 			: [],
 		vaultId: typeof binding === "string" ? binding : binding?.vaultId,
@@ -214,14 +232,23 @@ function normalizeClaim(claim, project) {
 		subject: text(claim.subject, 180),
 		predicate: text(claim.predicate, 180),
 		...(value ? { value } : {}),
-		...["organism", "tissue", "stage", "method"].reduce((result, key) => {
+		...["organism", "tissue", "stage", "method", "endpoint", "unit"].reduce((result, key) => {
 			const value = text(claim[key], 180);
 			if (value) result[key] = value;
 			return result;
 		}, {}),
+		...(claim.direction !== undefined
+			? {
+					direction: ["increase", "decrease", "affirmed", "negated", "unknown"].includes(claim.direction)
+						? claim.direction
+						: "unknown",
+				}
+			: {}),
+		...(Number.isFinite(claim.effect) ? { effect: claim.effect } : {}),
 		sourcePath,
 		sourceHash,
 		...(claim.location ? { location: text(claim.location, 120) } : {}),
+		...(claim.limitations ? { limitations: text(claim.limitations, 4000) } : {}),
 		relation,
 	};
 }
@@ -253,6 +280,15 @@ function normalizeConflict(conflict, project) {
 		previousSourcePath: text(conflict.previousSourcePath, 240),
 		incomingSourcePath: text(conflict.incomingSourcePath, 240),
 		detectedAt: text(conflict.detectedAt, 40),
+		...(conflict.comparisonVersion === 2
+			? {
+					comparisonVersion: 2,
+					previousSourceHash: text(conflict.previousSourceHash, 64),
+					incomingSourceHash: text(conflict.incomingSourceHash, 64),
+					missingConditions: conflict.missingConditions,
+					differingConditions: conflict.differingConditions,
+				}
+			: {}),
 	};
 	if (!["contradicts", "supports", "refines", "supersedes", "unresolved"].includes(result.relation))
 		return null;
@@ -279,7 +315,10 @@ function validateDocument(value, vaultId, project) {
 		throw new Error("Corrupt topic memory; refusing overwrite");
 	if (value.topics.length > TOPIC_MEMORY_LIMITS.maxTopics)
 		throw new Error("Topic memory exceeds its bounded record limit");
-	return { ...value, topics: value.topics.map((topic) => normalizeTopic(topic, vaultId, project)) };
+	return {
+		...value,
+		topics: value.topics.map((topic) => normalizeTopic(topic, vaultId, project)),
+	};
 }
 async function readDocument(path, vaultId, project) {
 	try {
@@ -298,7 +337,10 @@ async function atomicWrite(path, value) {
 	await mkdir(dirname(path), { recursive: true, mode: 0o700 });
 	const temp = join(dirname(path), `.${randomUUID()}.tmp`);
 	try {
-		await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+		await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, {
+			flag: "wx",
+			mode: 0o600,
+		});
 		await rename(temp, path);
 	} finally {
 		await unlink(temp).catch((error) => {
@@ -306,26 +348,6 @@ async function atomicWrite(path, value) {
 		});
 	}
 }
-async function withLock(path, operation) {
-	return runRuntimeExclusive("topic-memory", path, operation);
-}
-function tokens(value) {
-	return new Set(
-		text(value, 6000)
-			.toLowerCase()
-			.split(/[^\p{L}\p{N}]+/u)
-			.filter((x) => x.length > 2),
-	);
-}
-function overlap(a, b) {
-	const left = tokens(a),
-		right = tokens(b);
-	if (!left.size || !right.size) return 0;
-	let common = 0;
-	for (const item of left) if (right.has(item)) common++;
-	return common / Math.max(left.size, right.size);
-}
-
 export function classifyTopic(existing, incoming) {
 	if (!existing) return "new";
 	if (
@@ -346,25 +368,34 @@ export function classifyTopic(existing, incoming) {
 		compareClaimSets(previousClaims, incomingClaims).some((comparison) => comparison.blocking)
 	)
 		return "conflict-candidate";
-	if (overlap(existing.summary, incoming.summary) < 0.12 && overlap(existing.title, incoming.title) < 0.2)
-		return "conflict-candidate";
+	// Text similarity cannot establish a scientific contradiction.
 	return "additional";
 }
 
-/** @param {Record<string, any>} [options] */
-export function createTopicMemory({ binding, project, directory = knowledgeDirectory() } = {}) {
+function createTopicMemoryWithHost(
+	runtime: Pick<KnowledgeRuntimeHost, "runRuntimeExclusive">,
+	config: Pick<KnowledgeConfigApi, "knowledgeDirectory">,
+	{ binding, project, directory = config?.knowledgeDirectory() } = {},
+	storageFactory?: TopicMemoryStorageFactory,
+) {
 	if (!binding?.vaultId) throw new Error("Topic memory requires a bound Vault");
 	const scope = { vaultId: binding.vaultId, project: projectKey(project) };
-	const path = memoryPath(directory, scope.vaultId, scope.project);
-	const check = async () => ensureWithin(directory, path);
+	const storage = storageFactory?.(binding, scope.project);
+	const path = storage ? storage.key : memoryPath(directory, scope.vaultId, scope.project);
 	const read = async () => {
-		await check();
+		if (storage) {
+			const value = await storage.read();
+			if (value === null) return blank(scope.vaultId, scope.project);
+			if (Buffer.byteLength(JSON.stringify(value)) > TOPIC_MEMORY_LIMITS.maxFileBytes)
+				throw new Error("Topic memory file exceeds size limit");
+			return validateDocument(value, scope.vaultId, scope.project);
+		}
+		await ensureWithin(directory, path);
 		return readDocument(path, scope.vaultId, scope.project);
 	};
 	const mutate = async (expectedRevision, updater) =>
-		withLock(path, async () => {
-			await check();
-			const current = await readDocument(path, scope.vaultId, scope.project);
+		runtime.runRuntimeExclusive("topic-memory", path, async () => {
+			const current = await read();
 			if (
 				expectedRevision !== undefined &&
 				expectedRevision !== null &&
@@ -393,7 +424,8 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 				const evict = new Set(archived.slice(-remove).map((topic) => topic.id));
 				value.topics = value.topics.filter((topic) => !evict.has(topic.id));
 			}
-			await atomicWrite(path, value);
+			if (storage) await storage.write(value, current.revision);
+			else await atomicWrite(path, value);
 			return value;
 		});
 	const compact = (topic) => ({
@@ -444,7 +476,11 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 				entities: value.entities.slice(0, 6),
 			});
 		if (output.length > TOPIC_MEMORY_LIMITS.maxContextChars)
-			output = JSON.stringify({ id: value.id, title: value.title, entities: value.entities.slice(0, 3) });
+			output = JSON.stringify({
+				id: value.id,
+				title: value.title,
+				entities: value.entities.slice(0, 3),
+			});
 		return output;
 	};
 	return {
@@ -491,7 +527,7 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 						stale.push({ path: source.path, reason: "out-of-scope" });
 						continue;
 					}
-					const current = await readNoteFile(binding.vault, source.path);
+					const current = storage ? await storage.readSource(source.path) : await readNoteFile(binding.vault, source.path);
 					if (current.hash !== source.hash) stale.push({ path: source.path, reason: "changed" });
 				} catch {
 					stale.push({ path: source.path, reason: "missing-or-invalid" });
@@ -505,7 +541,10 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 				});
 			}
 			return {
-				topic: { ...compact(topic), status: stale.length ? "stale" : topic.status },
+				topic: {
+					...compact(topic),
+					status: stale.length ? "stale" : topic.status,
+				},
 				stale,
 				status: stale.length ? "stale" : topic.status,
 			};
@@ -556,6 +595,11 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 						conflicts: [
 							...(previous?.conflicts || []),
 							...claimComparisons.map((comparison) => ({
+								comparisonVersion: 2,
+								previousSourceHash: comparison.previous.sourceHash,
+								incomingSourceHash: comparison.incoming.sourceHash,
+								missingConditions: comparison.missingConditions,
+								differingConditions: comparison.differingConditions,
 								relation: comparison.relation,
 								confidence: comparison.confidence,
 								reason: comparison.reason,
@@ -607,7 +651,12 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 					(input.topicId ? value.topics.find((topic) => topic.id === text(input.topicId, 120)) : null);
 				const classification = classifyTopic(existing, input);
 				if (classification === "duplicate") {
-					receipt = { classification, revision: value.revision, topic: compact(existing), changed: false };
+					receipt = {
+						classification,
+						revision: value.revision,
+						topic: compact(existing),
+						changed: false,
+					};
 					value.__topicNoop = true;
 					return value;
 				}
@@ -624,6 +673,11 @@ export function createTopicMemory({ binding, project, directory = knowledgeDirec
 					: [];
 				claimComparisons = compareClaimSets(priorClaims, incomingClaims);
 				const conflictRecords = claimComparisons.map((comparison) => ({
+					comparisonVersion: 2,
+					previousSourceHash: comparison.previous.sourceHash,
+					incomingSourceHash: comparison.incoming.sourceHash,
+					missingConditions: comparison.missingConditions,
+					differingConditions: comparison.differingConditions,
 					relation: comparison.relation,
 					confidence: comparison.confidence,
 					reason: comparison.reason,
@@ -727,21 +781,36 @@ export function topicRunHash(summary, sources = []) {
 	);
 }
 
-export async function listTopics(options = {}) {
-	return (await createTopicMemory(options).list(options.query || "")).topics;
+/** Topic state belongs to the composed owner's directory and exclusive-write queue. */
+export function createTopicMemoryApi(
+	runtime: Pick<KnowledgeRuntimeHost, "runRuntimeExclusive">,
+	config: Pick<KnowledgeConfigApi, "knowledgeDirectory"> | undefined,
+	storageFactory?: TopicMemoryStorageFactory,
+) {
+	const createTopicMemory = (options = {}) => createTopicMemoryWithHost(runtime, config, options, storageFactory);
+	async function listTopics(options = {}) {
+		return (await createTopicMemory(options).list(options.query || "")).topics;
+	}
+
+	async function readTopic(options = {}) {
+		return (await createTopicMemory(options).get(options.topic || options.id || "")).matches;
+	}
+
+	async function updateTopic(options = {}) {
+		const { binding, project, directory, expectedRevision, ...input } = options;
+		if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
+		return createTopicMemory({ binding, project, directory }).update(input, expectedRevision);
+	}
+
+	async function archiveTopic(options = {}) {
+		if (!Number.isSafeInteger(options.expectedRevision)) throw new Error("expectedRevision is required");
+		return createTopicMemory(options).archive(options.id, options.expectedRevision);
+	}
+
+	return { createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic };
 }
 
-export async function readTopic(options = {}) {
-	return (await createTopicMemory(options).get(options.topic || options.id || "")).matches;
-}
-
-export async function updateTopic(options = {}) {
-	const { expectedRevision, ...input } = options;
-	if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
-	return createTopicMemory(options).update(input, expectedRevision);
-}
-
-export async function archiveTopic(options = {}) {
-	if (!Number.isSafeInteger(options.expectedRevision)) throw new Error("expectedRevision is required");
-	return createTopicMemory(options).archive(options.id, options.expectedRevision);
-}
+// pi-knowledge 0.2 compatibility. Remove once every native/Desktop consumer uses
+// the same explicitly composed 0.3 runtime owner instead of module facades.
+export const { createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic } =
+	createTopicMemoryApi(compatibilityKnowledgeRuntimeHost, { knowledgeDirectory });

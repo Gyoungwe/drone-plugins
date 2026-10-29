@@ -62,6 +62,8 @@ packages/<name>/
 
 ---
 
+候选 1.3 的 `roots.describe(null)` 只描述本 activation 已批准根；`state.reserve({root,path})` 只为已批准且已存在的 JSON 状态目录保留独占写者，不需要派生 resource 子进程，也不授权 Vault 正文或任意文件。宿主与标准原生适配共用 `@gyoungwe/plugin-api/node/reservations` 的本机同用户 `state-writers` 协议，协调目录属于 application-state；只有域、在途工作和资源成功关闭后才释放，失败保留并要求显式恢复。API 根/UI/runtime 合同不引入 Node；独立 Node 子路径不改变插件权限。此能力仍是未发布候选，不能把源码/fixture 检查写成正式安装包支持。
+
 ## 4. `plugin.manifest.json`
 
 ```json
@@ -99,14 +101,40 @@ packages/<name>/
 | `pi.apiVersion`、`pi.minHostVersion` | 必填；`testedHosts` 列出 CI 实际跑过的 Pi 版本 |
 | `drone.pluginApi` | 必须为 `1` |
 | `drone.resultContract` | 必须为 `drone-result/v3` |
+| `drone.provides` | API 1.3 候选：`{service:{version:正整数,operations:非空唯一操作名数组}}`；须有 `desktopRuntime` |
+| `drone.requires` | API 1.3 候选：`{alias:{service:服务合同名,version:正整数}}`；不接受包名或 npm 依赖，须有 `desktopRuntime` |
+| `drone.recordAdoptions` | 临时 API 1.3 候选：`{logicalType:{legacyType,fromVersions:[精确稳定版本],removeBeforeVersion:删除版本}}`；须有 `desktopRuntime`，到删除版本清单即不合格 |
+| `drone.nativeChildSessions` | 只接受 `"read-only"`，须有 `desktopRuntime`。声明后宿主才把本包 native 入口加载进子代理子会话，并以 `{kind:"child",readOnly:true,files:"none"\|"read"}` 调用 `createNativeSession`；`files` 只是宿主事实，不授根或权限，插件须据此只注册只读能力。未声明的包不进入子会话 |
 | `entrypoints` | 至少一项；每个路径必须存在，并且包含在 `files` 里。`host` 只供宿主组合根使用（§6.1） |
 | `capabilities` | 来自固定词表（§4.1）；不在词表内的值视为错误 |
 | `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
 | `hosts` | `native-pi`、`drone-desktop` 的非空子集；只写 `drone-desktop` 时必须在 README 说明原因 |
 | `requires.hostCapabilities` | 依赖的宿主能力，由 `negotiateCapabilities` 协商；缺失时插件必须返回 `degraded` 或 `incompatible`，不能抛错 |
-| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`）、`network`（主机名列表）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
+| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`、`application-state`、`application-state-write`）、`network`（主机名列表或已配置服务边界 `configured-services`）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
+
+**官方 Pi 格式合规（2026-10-29）。** 每个声明 `pi` 的包都必须能被官方 Pi 的包管理器当作来源解析并加载（等同 `pi -e <包目录>`）：扩展无加载错误、声明的技能可发现，并在按包自身方式配置后注册其 `plugin.manifest.json` 声明的全部工具（如 pi-knowledge 需先有知识目录，未配置时只提供 `/drone-init` 与状态/检索工具）。`npm run check:pi-format` 自动检查 `packages/` 下全部这类包，已纳入 `npm run check`。这只证明格式与可加载性，不要求在原生 Pi 中完成领域闭环。
+
+`application-state` 只声明宿主明确指定的插件状态目录及已登记的本机资源协调目录，不能推导出整个 HOME 的权限。0.3 knowledge 候选把既有配置/SQLite 状态和 `~/.drone/runtime-leases/knowledge-writers` 的本机同用户租约列入此范围；host/broker 必须另行验证具体 root 与操作。新增词表不代表旧宿主已经支持或自动授予该能力，尚未接通时只能保留候选/未验收状态。
+
+候选受管 Desktop 的 `application-state` 只允许读取用户明确选择的状态根；`application-state-write` 是另一个显式声明，要求启用时展示状态 JSON 读写并取得独立写 grant。旧只读授权不能自动升级。状态写入仅经 `state.writeJson`：限定 `.json` 文件、版本比较、原子写和写后回读，仍受逐调用 write 效果授权约束，bootstrap 禁止写入。该声明不授权 Vault 正文、任意文件或外部服务写入；状态根之外的副作用仍必须单独声明并获批。候选实现与真实安装包验收未完成前不能记为发布支持。
+
+候选 API 1.3 的受管运行时使用 `entrypoints.desktopRuntime`；`entrypoints.resources` 为 `{resourceId: relativeEntry}` 映射，ID 非空、每个入口必须是包内实际文件且随 npm 包发布，声明资源时必须声明其 Desktop owner。资源在独立进程中运行，SQLite 等写目录由宿主选定；manifest 不赋予 Vault 或任意路径权限。
+
+同包 UI 的 `droneUi: 2` 需要宿主已验证 installed desktopRuntime 来源；v1-only 宿主应在加载前拒绝。原生 `PluginNativeSession.toolEffects` 明确声明每个工具的 read/write 效果，未声明时宿主按写操作处理，不能依赖插件自定义 metadata 推断。可信 scope 的 `workspaceId` 是身份标识，`workspaceDirectory` 才是实际目录；两者都来自宿主，目录值本身不赋予文件访问权。API 1.3 尚未发布时只允许记录指纹的私有验收，正式最低依赖及公开 clean install 仍是发布门禁。
 
 manifest 是声明，不是安全边界：外部写入、远程执行、删除和发布仍由宿主授权。宿主会在安装确认和插件详情中展示 `permissions` 与 `tools`。
+
+临时旧会话记录导入只能通过两项 write 能力 `session.records.adoption.inspect({type})` / `commit({type,legacyId,legacyHash,data})`。inspect 只在真实用户批准后返回已声明精确旧 tag 的当前 branch 最新候选，并明确 creator/packageVersion=unknown；fromVersions 只是当前迁移器支持范围，不能证明旧记录来自哪个包或版本。不能导入 `plugin-record:` / `plugin-notice:` 的其他来源 namespace。普通 records.read 没有 legacyTypes 参数。
+
+### 实际会话工具与事件链（1.3 候选）
+
+`session.tools(null)` 是 read，逐次读取实际 SDK 的工具配置，只返回 `[{name,readOnlyHint:boolean|null}]`；缺少 hint 时为 null，工具名称不产生权限。无当前真实会话时拒绝；这个异步能力不模拟同步 `pi.getAllTools()`，也不要求模型网络声明。
+
+`session.records.read(null)` 的 mode 只来自真实 SDK：persistent 与 memory 分开，lazy persistent 仍可能 deferred，memory 是明确未落盘的 live-only。checkpoint 恢复不得从 executionConsent/roots/proof 等 JSON 取得当前 owner/source/session 授权；storage 展示扩展应由插件自己的 view/decoder 实现，不能向宿主添加领域状态字段或用 UI 状态授予权限。
+
+managed native 新增 input、tool_call、turn_start、turn_end，复用 eventEffects（除 session_start 外默认 write）与真实 caller/权限/取消。input 的 transform/handled 和工具参数就地变更由实际 SDK 按注册顺序传递。turn_end 暂只支持 null、空对象、continue 布尔结果；返回 entries 或就地修改 event.entries 均明确拒绝，不能绕过 source-owned session.records 追加其他来源检查点。完整 owned boundary draft broker、任务一次授权和自动续作仍须单独实现，不得用 continue 布尔或恢复的 JSON proof 代替授权。宿主对应真实 SDK 与受限进程证据见 Drone `docs/pluginization/native-plugin-chain-events-evidence.md`。
+
+commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpoint，保存新 namespace 并真实持久化回读；原记录保留。hash 仅用于并发核对，不是授权/provenance token；已有 own-source checkpoint 后 inspect 不再暴露旧值。deferred/needs-reopen 不能称导入完成。迁移器必须按具体旧数据格式与真实 scope 验证，导入的 approved、roots、proof 等 JSON 不能变成 live 文件/模型/执行许可或科学验收 proof，必须重新获取当前真实授权与 opaque 执行回执。Core 目标支持 0.1.9/0.2.0 的旧全局检查点并在 0.3.0 前移除此临时声明，Knowledge 支持 0.2.0/0.2.1 并在 0.4.0 前移除；具体生产迁移器仍须单独验收，不能用通用端口 fixture 代替。
 
 宿主加载能力插件时，应把 manifest 的 `permissions` 传给
 `createPermissionedHostPort`（来自 `@gyoungwe/plugin-api`）。该适配器在调用
@@ -116,7 +144,7 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 
 ### 4.1 能力词表
 
-取自现有第一方插件已经在用的值：`knowledge`、`research`、`search`、`evidence-context`、`analysis`、`planning`、`files`、`evidence`、`provenance`、`replay`、`connectors`、`read-only`、`provenance-receipts`、`ui`。新增词条需要同时修改本表和 `scripts/check-manifests.mjs`；检查器会校验能力词表。
+取自现有第一方插件已经在用的值：`knowledge`、`research`、`search`、`evidence-context`、`analysis`、`planning`、`files`、`evidence`、`provenance`、`replay`、`connectors`、`read-only`、`provenance-receipts`、`ui`、`core`。`core` 表示提供通用宿主工具工厂的基础包；新增词条需要同时修改本表和 `scripts/check-manifests.mjs`；检查器会校验能力词表。
 
 ---
 
@@ -145,7 +173,11 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 ### 6.2 插件 → 插件
 
 - 插件之间**不得**互相 import，也不得把另一个 Drone 插件写进 `dependencies`。
-- 需要别的插件提供的能力时，声明在 `requires.hostCapabilities` 中，由宿主协商；对方不存在时走降级路径。
+- 宿主能力继续声明在 `requires.hostCapabilities` 中，由宿主协商；对方不存在时走降级路径。
+- API 1.3 候选的可选服务使用 `drone.requires` 的 alias → service/version 合同；这不改变禁止 plugin-to-plugin import/`dependencies` 的规则。`drone.provides` 只列本包 `desktopRuntime.operations` 的公开 JSON 操作名，不能放函数、包路径或授权对象。声明从同一份实际安装包来源解析，受 content hash 与启停生命周期约束；不能从 UI 清单建立第二套 provider catalog。
+- `provider.inspect({alias})` 为 read，明确返回 available/absent/disabled/unavailable/incompatible/ambiguous；多个同版本 enabled 提供者必须拒绝选择，不能默认取第一个。`provider.read` / `provider.write` 接收 `{alias,operation,input}`；操作必须同时在提供者声明和实际 runtime 中存在，read 不得调用 write。版本是精确服务合同版本，不是 npm 版本范围。
+- 服务在实际提供者 owner 内执行，原 caller、同一 live SDK session、原窗口批准和取消作用域由宿主决定。短调用 lease 必须排空并清理，已有 native/UI 绑定时共享同一 application owner，无其他绑定时该纯服务 owner 仅活本次调用，状态须显式持久化。嵌套调用携带 host-only source/operation 链，循环拒绝；函数和身份不经 JSON 传送。普通 JSON 返回值不授予文件、模型或任务写入批准；特权角色须另行提供真实不可伪造的回执与消费验证，本片没有开放。
+- `provider.native({alias,operation,input:JSON})` 仅能从实际 SDK `message_start` / `tool_execution_end` 在途 native hook 调用。接收 native adapter 用 `nativeOperations` 声明 event/effect/inputSchema/resultSchema/execute；宿主只选同一 live SDK entry 已绑定的接收 attachment，缺失不可隐式 attach。实际 event 由私有 courier 传入，普通 operation/tool/command/bootstrap、普通 provider.read/write 和复制的 JSON event/nonce 均不能取得该来源。调用上限来自实际原 hook effect，read 不能升级 write；写操作仍经实际来源授权与写后回读，取消/换代/清理失败拒绝成功回执。此角色不授予文件根、模型、执行 consent 或科学证明，实际 host-queued 自动续作身份仍未实现。
 - 共享的类型和合同只能放进 `@gyoungwe/plugin-api`，不得从另一个插件包里取。
 
 ### 6.3 聚合包
@@ -204,3 +236,25 @@ manifest 是声明，不是安全边界：外部写入、远程执行、删除�
 - [ ] `plugins.lock.json` 已更新；干净 checkout、不设 `DRONE_PLUGINS_DIR` 时，`npm ci → fetch:plugins → lint → typecheck → test → check:arch → build → check:extensions -- --strict` 全部通过
 - [x] 宿主独立性检查：源码扫描可选插件 import，并验证空插件安装根
 - [ ] 真机：功能可见可用；禁用插件后界面回到默认状态
+
+候选 API 1.3 的 `model.selection` / `model.generate` 仅对安装包实际 `permissions.network` 声明 `configured-services` 的 source 提供；不授权任意网络 URL。模型由真实会话/已有明确配置的模型偏好解析，不能回退 provider；每次 generate 都显示真实选择、输出预算、数据出口和可能费用，并单独取得批准。运行时不将思考、父对话或凭据交给插件；缺失用量/有效定价保持未知。该声明变化会撤销既有绑定，不能由 renderer 自报或旧授权暗中升级。
+
+### 候选 canonical task 数据服务（尚未登记生产清单）
+
+`pi-core` 的候选 `dist/managed-runtime.mjs` 复用同一 TaskSession/TaskController；生产清单尚未设置 desktopRuntime/provides。候选 `task.runtime@1` 数据操作为 status(null)、pause({reason})、advanceStage(null)、takeReport(null)；status 返回 `{snapshot,render,storage}`，其他操作 await 同一 actor，advanceStage 另返回真实 advanced，takeReport 另返回一次性的 report。snapshot 只投影任务/里程碑/预算/待处理操作的可展示字段，不输出 executionConsent、writeRoots、compute、planApproved 或 proof。
+
+状态仅由实际 SDK native attachment 建立，app 无选定会话或该 SDK entry 未 attach 时明确不可用，不猜测焦点会话。own namespace/current branch 的 records 经过真实回读，memory/deferred 不伪装 durable，写失败/取消后的 needs-reopen 不能被 SDK reload 清掉。完整 native 工具、文件验收、一次实际任务授权、host-queued 自动续作和旧 startup 删除仍未完成；此数据切片不得作为完整插件切换或正式安装包 GUI 验收。
+
+### 原始二进制状态（未发布 API 1.3 候选）
+
+`permissions.filesystem` 的 `binary-state-read` / `binary-state-write` 独立于 application-state 与 files 权限；write 仅隐含 binary read。宿主每次 activation 另选目录并交付 `kind: "binary-state"` opaque root。JSON/file root 不可用于 binary 端口，binary root 亦不提供 JSON 或文本权限。
+
+`state.readBinary({root,path})` 返回 missing/version:null 或 value/base64/version:SHA256。`state.writeBinary({root,path,base64,expectedVersion,assertAbsent})` 仅在该文件父目录持有真实 `state.reserve` 独占租约、用户逐次批准、raw-byte CAS 与最多 8 个同根 absence 条件满足后原子替换，并回读确认。decoded 上限固定 4 MiB；超限明确拒绝，不自动转换、拆分或改变原库。二进制内容不透明，批准页展示实际 scope、路径、旧/新 SHA、字节数和 absence 条件，不能冒充逻辑 diff。
+
+提交点前取消保留原字节并清理本次临时文件；提交点后取消/回读失败返回 `EBINARYWRITEOUTCOMEUNKNOWN`，新的合法 caller 须回读 SHA 核对，不能盲目重试。临时文件清理失败保留 writer lease。原 SQLite schema、备份、WAL/SHM/journal 拒绝及领域恢复由插件维护；此合同本身不证明 Inquiry 完整迁移通过。
+
+### 通用已批准文件二进制快照（候选 1.3）
+
+`files.readBinary({root,path})` 仅使用已实际批准的 files root 和受限相对路径，read effect，不新增权限标志，不接受 JSON state / binary-state root。返回完整 `{base64,sha256,bytes,version}`，原字节最多 8 MiB、base64 最多 11184812；超限、文件/目录身份改变或取消明确失败，不截断、不返回迟到快照。hash/version 是数据，不能当作写入/执行/科学证明授权。
+
+插件自己运行 canonical 文件验收算法；当前 magic/hash 读取切片不等于真实 PDF DOI/title 身份验收。`pi-core` 的 PDF Worker/依赖仍需迁到同插件真实 resource 解析器，不能从 guest 开 Node Worker 或从宿主 app.asar 猜依赖；全 managed 文件接受闭环和生产 owner 切换仍未完成。

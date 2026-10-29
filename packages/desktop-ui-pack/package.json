@@ -1,7 +1,7 @@
 {
   "name": "@gyoungwe/desktop-ui-pack",
-  "version": "0.2.0",
-  "description": "Knowledge workspace, review overlays and research UI for Drone Desktop",
+  "version": "0.3.0",
+  "description": "Optional research status panel for Drone Desktop",
   "repository": {
     "type": "git",
     "url": "https://github.com/Gyoungwe/drone-plugins.git",
@@ -26,8 +26,7 @@
     "smoke": "node scripts/smoke.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "check": "npm run build:check && npm run typecheck && npm test && npm run smoke",
-    "test:styles": "node scripts/check-styles.mjs"
+    "check": "npm run build:check && npm run typecheck && npm test && npm run smoke"
   },
   "peerDependencies": {
     "@gyoungwe/plugin-api": ">=1.2.0 <2.0.0"
@@ -36,12 +35,5 @@
     "@gyoungwe/plugin-api": {
       "optional": true
     }
-  },
-  "dependencies": {
-    "graphology": "^0.26.0",
-    "graphology-communities-louvain": "^2.0.2",
-    "graphology-layout-forceatlas2": "^0.10.1",
-    "graphology-types": "^0.24.8",
-    "sigma": "^3.0.3"
   }
 }

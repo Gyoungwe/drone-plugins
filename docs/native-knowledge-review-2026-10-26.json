@@ -1,0 +1,125 @@
+{
+  "date": "2026-10-26",
+  "status": "PARTIAL",
+  "published": false,
+  "scope": "P2 pending review reading/preview closure; decisions, full Desktop service and native hooks remain unfinished",
+  "previousEvidence": "native-knowledge-state-2026-10-26.json",
+  "candidates": [
+    {
+      "name": "@gyoungwe/pi-knowledge",
+      "version": "0.3.0",
+      "sha256": "fb8a0c39138096b14cdbea1da8f56dbb5e7f7eb2b81758da2eb3e10b6fe2bc1d",
+      "integrity": "sha512-Q15S3aYiXMKcDpkXBrmdUdnNFblKGAN5P4j/MnNDp5Mxq0GvbKP0SKlWzsxeIfxTV284lzuXqVZ2oqpHube0KQ==",
+      "files": 250
+    },
+    {
+      "name": "@gyoungwe/desktop-ui-pack",
+      "version": "0.3.0",
+      "sha256": "557cbd5ab4e9f6ec855e15cad90fb607639f88a13fc6e0bcc2af9bbc9a1b762e",
+      "integrity": "sha512-nH94HCWu6zRKlH85cuVhBK3iRBOHni+j3NspyUFZUl4BlCiE0Ep3Qx6n9jjL9zRdp5i23VG39ZxxcUUeGeEBaA==",
+      "files": 9
+    },
+    {
+      "name": "@gyoungwe/research-suite",
+      "version": "0.2.0",
+      "sha256": "b88f7cc51114e0a9677ad64407c2227344e45e1c93b61cf59110a8212316932c",
+      "integrity": "sha512-IY1U2rkxexQBx+LaTeVv19Kn0/QSe0ZWgYg4YEtH1yI3SOWM0xuzuaa6SAeI1PY+AcrLHnFnyHFyc4VePIko7A==",
+      "files": 1313
+    }
+  ],
+  "candidateApi": {
+    "version": "1.3.0",
+    "sha256": "202a7572e4dae9a6ea77bd14191d7c98666b7c0570a92ed68aec6ede66b85622",
+    "publicRegistryInstall": false
+  },
+  "knowledgeBuildManifestSha256": "33537eaf8216e65f05cd282b409cb4635f1258b7bfca39c95a452cd2bb5878bd",
+  "operations": {
+    "reviews": "read",
+    "previewReview": "read"
+  },
+  "authority": {
+    "projectFromTrustedCaller": true,
+    "bindingRevisionRequired": true,
+    "expectedProposalHashRequired": true,
+    "previewGrantsWriteAuthority": false,
+    "modelReadTicketsCreated": false,
+    "pendingNullFallsBackToReviewed": false,
+    "permissionErrorsBecomeEmpty": false
+  },
+  "packageGate": {
+    "status": "PASS",
+    "command": "npm run check:pi-knowledge",
+    "testFiles": 77,
+    "tests": 471,
+    "logSha256": "a3e4caa592d766bdd0b6b4bb3aab945822632797f70588bee275563cec47a8f4"
+  },
+  "packedCoordinatorGate": {
+    "status": "PASS",
+    "sdk": "1.1.0",
+    "nativeModelDispatch": true,
+    "reviewOperationsViaActualCoordinator": true,
+    "applicationProjectlessEmpty": true,
+    "crossProjectRejected": true,
+    "staleAndTamperedProposalRejected": true,
+    "exactProtectedContentAndSourceReceipts": true,
+    "sourceAndTargetChangesDetected": true,
+    "reviewFilesUnchanged": true,
+    "childrenExited": true,
+    "reservationsReleased": true,
+    "reportSha256": "1cd6cca347a65a4a878528ac814589cf31185a2f319aa1813a2693aac3946d53",
+    "logSha256": "73dc1dcde76aab6d83cd0d08eedc77a0b9cb6f8e1da65b0c685a9b4ebbec1ac9"
+  },
+  "formalGui": {
+    "status": "NOT_RUN",
+    "next": "combined with full service migration; 68012bd settings GUI is separate evidence"
+  },
+  "observations": [
+    {
+      "id": "pdf-clean-install-optional-native",
+      "status": "UNRESOLVED_NOT_REPRODUCED",
+      "failureLogSha256": "ac48c5c95867ef90159ca8ea5c36c88f4894338d7cc146972caf18749f45f5c4",
+      "diagnosticLogSha256": "5cb65148e379e3bba10a0b49013ec6b2de4ad5775ccbe7bb48d3a1c2b775ae4e",
+      "facts": "One original PDF clean-install lacked canvas native module. Isolated verbose reinstall passed; new lock declares canvas-darwin-arm64 1.0.13 optional, matching os/cpu, HTTP 200 download and real .node file. Original failing temp root was deleted by existing gate; cause not established."
+    },
+    {
+      "id": "reading-cleanup-aggregate-error",
+      "status": "UNRESOLVED_NOT_REPRODUCED",
+      "priorEvidence": "native-knowledge-reading-2026-10-26.json"
+    }
+  ],
+  "remaining": [
+    "full Desktop service pool/resource transport",
+    "semantic state and metrics ports",
+    "full native hooks/publication and model capabilities",
+    "review apply/reject and write authorization",
+    "binding initialization/switch lifecycle",
+    "complete Home/domain UI",
+    "old host knowledge facade removal",
+    "public API 1.3 and plugin release"
+  ],
+  "finalRelatedGates": {
+    "status": "PASS",
+    "strategy": "Full workspace gate passed before final null-document fix; final package build/check and affected install/PDF/pack gates rerun, unchanged package gates retained from full run. One failed PDF install remains an unresolved observation.",
+    "fullWorkspaceBeforeFinalReaderFix": {
+      "logSha256": "30f50236e37946d77f4cdd1c93fb8156b7e0f363302a4b6d5b20cd91a7efd448",
+      "status": "PASS"
+    },
+    "finalBuild": {
+      "logSha256": "9fc227cff4f30ddd731250051578e385c6bfb9002fdec1ba682369685e697130",
+      "status": "PASS"
+    },
+    "originalPdfGate": {
+      "logSha256": "cea70757abc2e1826f6caaf503cc7082b2c0a57b2e4eedee4dd8c1d3f0251557",
+      "status": "PASS"
+    },
+    "cleanInstall": {
+      "logSha256": "b62277bb67199bac55f9941b86063a619b21daebcc0561f58a9faececa8f91be",
+      "status": "PASS"
+    },
+    "packCheck": {
+      "logSha256": "052e6acedbb3585fc887ec9459b4b985bd2a847788981f368381a6c09418a6ea",
+      "status": "PASS"
+    }
+  },
+  "boundedList": "Existing pending directory scan limited to first 100 sorted proposal filenames; total is that bounded scoped result, not an unbounded archive count."
+}

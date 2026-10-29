@@ -16,8 +16,10 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 async function checkOutput() {
 	const outputPath = join(distRoot, "index.mjs");
-	if (!existsSync(outputPath)) throw new Error("pi-evidence dist/index.mjs is missing");
+	const hostOutputPath = join(distRoot, "host.mjs");
+	if (!existsSync(outputPath) || !existsSync(hostOutputPath)) throw new Error("pi-evidence dist/index.mjs and dist/host.mjs are required");
 	const output = await readFile(outputPath, "utf8");
+	const hostOutput = await readFile(hostOutputPath, "utf8");
 	for (const pattern of [
 		/(?:from|import\s*\(|require\s*\()["']electron["']/u,
 		/(?:from|import\s*\(|require\s*\()["']@drone\/(?:backend|desktop)["']/u,
@@ -26,8 +28,10 @@ async function checkOutput() {
 		/(?:from|import\s*\(|require\s*\()["']\.\.\/\.\./u,
 	]) {
 		if (pattern.test(output)) throw new Error(`pi-evidence bundle contains forbidden import: ${pattern}`);
+		if (pattern.test(hostOutput)) throw new Error(`pi-evidence host bundle contains forbidden import: ${pattern}`);
 	}
 	for (const name of [
+		"evidence_validate_analysis_plan",
 		"evidence_validate_manifest",
 		"evidence_validate_capsule",
 		"evidence_verify_replay",
@@ -41,20 +45,23 @@ if (!check) {
 	await rm(distRoot, { recursive: true, force: true });
 	await mkdir(distRoot, { recursive: true });
 	const buildResult = await build({
-		entryPoints: [join(packageRoot, "src/index.ts")],
-		outfile: join(distRoot, "index.mjs"),
+		entryPoints: [join(packageRoot, "src/index.ts"), join(packageRoot, "src/host.ts")],
+		outdir: distRoot,
 		bundle: true,
 		format: "esm",
 		platform: "node",
 		packages: "bundle",
+		outExtension: { ".js": ".mjs" },
 		metafile: true,
 		sourcemap: false,
 		logLevel: "silent",
 	});
-	let output = await readFile(join(distRoot, "index.mjs"), "utf8");
-	if (!output.startsWith("// @ts-nocheck")) {
-		output = `// @ts-nocheck\n${output}`;
-		await writeFile(join(distRoot, "index.mjs"), output, "utf8");
+	for (const outputFile of ["index.mjs", "host.mjs"]) {
+		let output = await readFile(join(distRoot, outputFile), "utf8");
+		if (!output.startsWith("// @ts-nocheck")) {
+			output = `// @ts-nocheck\n${output}`;
+			await writeFile(join(distRoot, outputFile), output, "utf8");
+		}
 	}
 	const inputHash = createHash("sha256");
 	for (const input of Object.keys(buildResult.metafile?.inputs || {}).sort()) {
@@ -71,7 +78,10 @@ if (!check) {
 				version: 1,
 				generator: "packages/pi-evidence/scripts/build.mjs",
 				inputsSha256: inputHash.digest("hex"),
-				outputs: { "dist/index.mjs": sha256(await readFile(join(distRoot, "index.mjs"))) },
+				outputs: {
+					"dist/index.mjs": sha256(await readFile(join(distRoot, "index.mjs"))),
+					"dist/host.mjs": sha256(await readFile(join(distRoot, "host.mjs"))),
+				},
 			},
 			null,
 			"\t",

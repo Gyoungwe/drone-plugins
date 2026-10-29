@@ -1,0 +1,30 @@
+{
+  "artifactSource": "ui/entry.tsx",
+  "inputs": {
+    "package.json": "294e58f1e233f47ed064095a9d2d96c243d787077bb13b876860a4ef1b8e0b7b",
+    "plugin.manifest.json": "ba5f6790b0950c1a8d9947d1343ae625531360d970a2f10ac58988290a28f2d2",
+    "scripts/build-ui.mjs": "b851b9ba2adddf4b5606f48b820ad012bc6f32b46246d3cc490664b8e06a407b",
+    "ui/TaskMessage.tsx": "976c7c6b7279835972d63427fab42dfaf76d0c068e0738516163f706b9e7a09b",
+    "ui/TaskPanel.tsx": "cee07982330c0c360fae53b0afe60a552e01cf6158ac66a2575e15547c4cee85",
+    "ui/api.ts": "4aaef66502ca4ae0382cec8aae9bbce2b711b5697ab3f1f210203fac53488dd6",
+    "ui/artifacts.ts": "a25f3108a9b7973adf5dc0702ba7511e8c2648f4d267dbd9f2454e820dd68e78",
+    "ui/components/MilestoneEvidence.tsx": "bc3eb223586ca672288b7de931d8cd8f8f5c07c5ae2b9f2c6d27a6424e0482a4",
+    "ui/components/TaskArtifactLinks.tsx": "7cd0fcea420b9ee542c589a747a3f6a3ab486986ce78629ee31f47e8b7c1ad88",
+    "ui/components/TaskDecisionCard.tsx": "497a5fddb3fcae0c99f7b3209670dd4ff173bc0d1c82144a3d4e9e4fa434aa94",
+    "ui/components/TaskRow.tsx": "dbafc96394382f918f7f2a1d2f76c4298658a4b2186f5249dde9653b08eab881",
+    "ui/components/TaskStorageNotice.tsx": "3ab978652ec526e711574a49281148dd57e6415d13ab2dac3c44c8704f953f9d",
+    "ui/copy.ts": "f3f8e0f0a535e91cff1a364a3e3d4f7924549d3474659b2601ef277bb8cbd69c",
+    "ui/entry.tsx": "b5547b362ad2110978cd42a43356b4107fd2e39f71f002f272f9cba0ee67fe20",
+    "ui/env.d.ts": "59e2c4bb774ef4938f774fd602493c9372d54bb29fadded4223bde9bf18dd34f",
+    "ui/format-card-text.ts": "d112ad259cdb58d987b1e395d56b3dc8b2076321e1356d0052942e5fbe36e874",
+    "ui/plugin.json": "e9d506aedfa3408f4005bb811d712a4725e2b4519782d569dbbb0ce69f55b0a0",
+    "ui/presentation.ts": "c7135c2c3d732e2ea41380732162d02815b39205c8fb5476daaef52728d90746",
+    "ui/storage.ts": "a32a8da1d2e63260f52241bcc4808d738389fcc15723b68cac6248c592a3807a",
+    "ui/styles/task.css": "3d6b07b7ceb1ca6711ce19d5b521cde36440e8b0318f6ac5950ffd702dd4142a",
+    "ui/styles/utilities.css": "27498dee9f54ec6b3f2a6d0658024bfd00043f4651659f9458c956b70767f699"
+  },
+  "outputs": {
+    "ui/styles/generated.ts": "4091e050f042079398f6aa7829320350df3f343064eabf2ccd2a05b7df6b7b32",
+    "ui/bundle.js": "194257171667e12f29c489692ee4806edc3e8c4e38dbb40e24d077430b5ca477"
+  }
+}

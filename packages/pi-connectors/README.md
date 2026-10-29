@@ -7,6 +7,7 @@
 - read-only generic MCP discovery/invocation
 - institutional access and approved browser handoffs
 - declared public search providers
+- public arXiv and Semantic Scholar paper search (read-only declarations)
 - approved browser source reads
 
 The package is intentionally transport-free. Its tools only list or inspect connector declarations. A host composition root owns network requests, credential lookup, browser sessions, writes, deletes, readback, and retry policy through `ConnectorExecutionPort`. Credential fields are opaque references; secrets are never part of a descriptor or receipt.

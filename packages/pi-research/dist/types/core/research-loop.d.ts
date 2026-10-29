@@ -1,3 +1,4 @@
+import { type PreparedResearchDelivery, type ResearchDeliveryCopy, type ResearchDeliveryReceipt, type ResearchSummaryAssessment } from "./research-delivery.js";
 export declare const RESEARCH_STAGES: readonly string[];
 export declare const RESEARCH_DOCUMENT_KIND = "drone.research.run";
 export interface ResearchLoopWorkspace {
@@ -18,6 +19,19 @@ export interface ResearchLoopPorts {
 }
 /** Each host owns one loop instance. No ledger or queue is shared across hosts. */
 export declare function createResearchLoop(ports: ResearchLoopPorts): {
+    prepareResearchDelivery: ({ cwd, runDir, markdown, }: {
+        cwd: string;
+        runDir: string;
+        markdown: string;
+    }) => Promise<PreparedResearchDelivery>;
+    commitResearchDelivery: ({ cwd, runDir, prepared, copies, assessment, memoryClaims, }: {
+        cwd: string;
+        runDir: string;
+        prepared: PreparedResearchDelivery;
+        copies: readonly ResearchDeliveryCopy[];
+        assessment?: ResearchSummaryAssessment;
+        memoryClaims?: readonly Record<string, unknown>[];
+    }) => Promise<ResearchDeliveryReceipt>;
     startResearchRun: ({ cwd, project, resultSlug, query, requiresProvenance, }?: any) => Promise<{
         run_dir: string;
         metadata: any;

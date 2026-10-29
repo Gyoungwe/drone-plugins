@@ -1,23 +1,54 @@
 {
   "schemaVersion": 1,
   "id": "drone-pi-knowledge",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "pi": {
     "apiVersion": 1,
     "minHostVersion": "1.1.0",
-    "testedHosts": ["1.1.0", "latest"]
+    "testedHosts": [
+      "1.1.0",
+      "latest"
+    ]
   },
   "drone": {
     "pluginApi": 1,
-    "resultContract": "drone-result/v3"
+    "resultContract": "drone-result/v3",
+    "deliveryProjection": "required",
+    "nativeChildSessions": "read-only",
+    "requires": {
+      "tasks": {
+        "service": "task.runtime",
+        "version": 1
+      }
+    },
+    "recordAdoptions": {
+      "drone-knowledge-recovery-v1": {
+        "legacyType": "drone-knowledge-recovery-v1",
+        "fromVersions": [
+          "0.2.0",
+          "0.2.1"
+        ],
+        "removeBeforeVersion": "0.4.0"
+      }
+    }
   },
   "entrypoints": {
     "extension": "./dist/index.mjs",
     "worker": "./lib/knowledge/runtime/worker.mjs",
     "host": "./dist/host.mjs",
-    "skills": "./skills"
+    "skills": "./skills",
+    "ui": "./ui/plugin.json",
+    "desktopRuntime": "./dist/desktop-runtime.mjs",
+    "resources": {
+      "index": "./lib/knowledge/runtime/desktop-index.mjs"
+    }
   },
-  "capabilities": ["knowledge", "search", "evidence-context"],
+  "capabilities": [
+    "knowledge",
+    "search",
+    "evidence-context",
+    "ui"
+  ],
   "tools": [
     "knowledge_status",
     "knowledge_search",
@@ -39,11 +70,27 @@
     "research_propose_wiki_update",
     "research_wiki_review_status"
   ],
-  "hosts": ["native-pi", "drone-desktop"],
+  "hosts": [
+    "native-pi",
+    "drone-desktop"
+  ],
   "permissions": {
-    "filesystem": ["workspace", "configured-vault"],
-    "network": [],
+    "filesystem": [
+      "workspace",
+      "configured-vault",
+      "configured-vault-write",
+      "application-state",
+      "application-state-write"
+    ],
+    "network": [
+      "configured-services"
+    ],
     "subprocess": [],
-    "externalWrites": true
+    "externalWrites": true,
+    "readWrite": {
+      "read": true,
+      "write": true,
+      "delete": true
+    }
   }
 }

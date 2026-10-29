@@ -10,22 +10,27 @@ import { verifyLiteratureReceipt } from "../../src/core/literature-receipt.js";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 let loop, config, owners;
 const workspace = async () => config;
-const saveWorkspaceConfig = async (_cwd, patch) => { Object.assign(config, patch); };
-const startResearchRun = input => loop.startResearchRun(input);
-const updateResearchLoop = input => loop.updateResearchLoop(input);
-const observeResearchReceipt = input => loop.observeResearchReceipt(input);
-const completeResearchGate = input => loop.completeResearchGate(input);
-const resetResearchReceipts = input => loop.resetResearchReceipts(input);
+const saveWorkspaceConfig = async (_cwd, patch) => {
+	Object.assign(config, patch);
+};
+const startResearchRun = (input) => loop.startResearchRun(input);
+const updateResearchLoop = (input) => loop.updateResearchLoop(input);
+const observeResearchReceipt = (input) => loop.observeResearchReceipt(input);
+const completeResearchGate = (input) => loop.completeResearchGate(input);
+const resetResearchReceipts = (input) => loop.resetResearchReceipts(input);
 function createResearchReceiptJournal(cwd) {
- return createJournal(cwd, {ports: {
-  workspace,
-  status: (cwd, runDir) => loop.updateResearchLoop({cwd, runDir, action: "status"}),
-  flush: (cwd, runDir) => loop.flushResearchReceipts({cwd, runDir}),
-  reset: (cwd, runDir) => loop.resetResearchReceipts({cwd, runDir}),
-  observeExecution: observeExecutionReceipt,
-  observeResearch: event => loop.observeResearchReceipt(event),
-  isJournalTool: () => true, owners,
- }});
+	return createJournal(cwd, {
+		ports: {
+			workspace,
+			status: (cwd, runDir) => loop.updateResearchLoop({ cwd, runDir, action: "status" }),
+			flush: (cwd, runDir) => loop.flushResearchReceipts({ cwd, runDir }),
+			reset: (cwd, runDir) => loop.resetResearchReceipts({ cwd, runDir }),
+			observeExecution: observeExecutionReceipt,
+			observeResearch: (event) => loop.observeResearchReceipt(event),
+			isJournalTool: () => true,
+			owners,
+		},
+	});
 }
 
 let journals = [];
@@ -35,10 +40,15 @@ beforeEach(async () => {
 	vi.stubEnv("PI_RESEARCH_DESKTOP_CONFIG", undefined);
 	cwd = await realpath(await mkdtemp(join(tmpdir(), "drone-research-loop-")));
 	await mkdir(join(cwd, "results"), { recursive: true });
- config = { resultsRoot: join(cwd, "results"), obsidianVault: null, knowledgeBindingRevision: 0 };
- owners = new Map();
- const archivePorts = {workspace, publishSourceNote: async () => ({}), exclusive: (_key, work) => work()};
- loop = createResearchLoop({workspace, resolveProject: async () => "host-project", verifyLiteratureReceipt, sourceStatus: input => sourceStatus(input, archivePorts)});
+	config = { resultsRoot: join(cwd, "results"), obsidianVault: null, knowledgeBindingRevision: 0 };
+	owners = new Map();
+	const archivePorts = { workspace, publishSourceNote: async () => ({}), exclusive: (_key, work) => work() };
+	loop = createResearchLoop({
+		workspace,
+		resolveProject: async () => "host-project",
+		verifyLiteratureReceipt,
+		sourceStatus: (input) => sourceStatus(input, archivePorts),
+	});
 	const started = await startResearchRun({
 		cwd,
 		project: "research-workbench",
@@ -307,6 +317,170 @@ function binding(p, claim = "Limited method claim") {
 		sources: [{ path: p.path, start_line: 4, end_line: 4, quote: "Result and limitations." }],
 	};
 }
+it("rechecks a completed run before delivery and binds actual written bytes", async () => {
+	const p = await localPaper();
+	await noteRead(p);
+	await identity(p);
+	await completeResearchGate({ cwd, runDir, claimBindings: [binding(p)] });
+	const prepared = await loop.prepareResearchDelivery({ cwd, runDir, markdown: "Limited result. " });
+	const summary = join(runDir, "SUMMARY.md");
+	await writeFile(summary, prepared.body);
+	const receipt = await loop.commitResearchDelivery({
+		cwd,
+		runDir,
+		prepared,
+		copies: [{ role: "run", path: summary }],
+	});
+	expect(receipt).toMatchObject({
+		bodySha256: createHash("sha256")
+			.update(await readFile(summary))
+			.digest("hex"),
+		scientificallyVerified: false,
+	});
+	await writeFile(join(p.vault, p.path), `${p.text}\nChanged after complete.`);
+	await expect(loop.prepareResearchDelivery({ cwd, runDir, markdown: "Another summary" })).rejects.toThrow(
+		/changed|not read/,
+	);
+	expect(await readFile(summary, "utf8")).toBe(prepared.body);
+});
+
+it("does not commit stale or mismatched summary readback", async () => {
+	const p = await localPaper();
+	await noteRead(p);
+	await identity(p);
+	await completeResearchGate({ cwd, runDir, claimBindings: [binding(p)] });
+	const prepared = await loop.prepareResearchDelivery({ cwd, runDir, markdown: "Limited result." });
+	const summary = join(runDir, "SUMMARY.md");
+	await writeFile(summary, "Different body\n");
+	await expect(
+		loop.commitResearchDelivery({ cwd, runDir, prepared, copies: [{ role: "run", path: summary }] }),
+	).rejects.toThrow("readback differs");
+	expect(JSON.parse(await readFile(join(runDir, "metadata.json"), "utf8")).delivery_receipt).toBeUndefined();
+	resetResearchReceipts({ cwd, runDir });
+	await expect(loop.prepareResearchDelivery({ cwd, runDir, markdown: "Limited result." })).rejects.toThrow(
+		/changed|receipt|not read/,
+	);
+});
+
+it("keeps disjoint observed ranges without inventing the unread gap", async () => {
+	const p = await localPaper();
+	await noteRead(p, { startLine: 1, endLine: 1, text: "# Paper" });
+	await noteRead(p, { startLine: 4, endLine: 4, text: "Result and limitations." });
+	await identity(p);
+	const first = {
+		...binding(p, "The title is Paper"),
+		sources: [{ path: p.path, start_line: 1, end_line: 1, quote: "# Paper" }],
+	};
+	const done = await completeResearchGate({ cwd, runDir, claimBindings: [first, binding(p)] });
+	expect(done.evidence_gate.claim_bindings.map((claim) => claim.sources[0].read_receipt_id)).toHaveLength(2);
+	expect(done.evidence_gate.claim_bindings[0].sources[0].read_receipt_id).not.toBe(
+		done.evidence_gate.claim_bindings[1].sources[0].read_receipt_id,
+	);
+	await expect(
+		completeResearchGate({
+			cwd,
+			runDir,
+			claimBindings: [
+				{ ...first, sources: [{ path: p.path, start_line: 1, end_line: 4, quote: "# Paper" }] },
+			],
+		}),
+	).rejects.toThrow("unread gaps");
+	await expect(
+		completeResearchGate({
+			cwd,
+			runDir,
+			claimBindings: [
+				{ ...first, sources: [{ path: p.path, start_line: 2, end_line: 2, quote: p.proof.doi }] },
+			],
+		}),
+	).rejects.toThrow("outside the observed read");
+});
+
+it("keeps earlier archive reads when a later read uses another alias of the same path", async () => {
+	const path = join(runDir, "sources", "ranges.md"),
+		text = "One\nUnread two\nUnread three\nFour\n";
+	await mkdir(join(runDir, "sources"), { recursive: true });
+	await writeFile(path, text);
+	await writeFile(
+		join(runDir, "sources", "download-manifest.json"),
+		JSON.stringify({
+			items: [
+				{ id: "ranges", path, status: "downloaded", sha256: createHash("sha256").update(text).digest("hex") },
+			],
+			failures: [],
+		}),
+	);
+	await observeResearchReceipt({
+		cwd,
+		runDir,
+		toolName: "research_archive_source",
+		args: { run_dir: runDir, url: "https://example.test/ranges" },
+		details: { status: "downloaded", path },
+	});
+	for (const [offset, shown, alias] of [
+		[1, "One", relative(cwd, path)],
+		[4, "Four", `./${relative(cwd, path)}`],
+	]) {
+		await observeResearchReceipt({
+			cwd,
+			runDir,
+			toolName: "read",
+			args: { path: alias, offset, limit: 1 },
+			details: {},
+			content: [{ type: "text", text: shown }],
+		});
+	}
+	const done = await completeResearchGate({
+		cwd,
+		runDir,
+		claimBindings: [
+			{
+				claim: "First",
+				relationship: "direct",
+				limitations: "test only",
+				sources: [{ path, start_line: 1, end_line: 1, quote: "One" }],
+			},
+			{
+				claim: "Last",
+				relationship: "direct",
+				limitations: "test only",
+				sources: [{ path, start_line: 4, end_line: 4, quote: "Four" }],
+			},
+		],
+	});
+	expect(done.evidence_gate.claim_bindings).toHaveLength(2);
+	const revised = `${text}Additional context\n`;
+	await writeFile(path, revised);
+	await writeFile(
+		join(runDir, "sources", "download-manifest.json"),
+		JSON.stringify({
+			items: [
+				{
+					id: "ranges",
+					path,
+					status: "downloaded",
+					sha256: createHash("sha256").update(revised).digest("hex"),
+				},
+			],
+			failures: [],
+		}),
+	);
+	await observeResearchReceipt({
+		cwd,
+		runDir,
+		toolName: "read",
+		args: { path },
+		details: {},
+		content: [{ type: "text", text: revised }],
+	});
+	await expect(loop.prepareResearchDelivery({ cwd, runDir, markdown: "First and last." })).rejects.toThrow(
+		"Claim evidence changed",
+	);
+	await completeResearchGate({ cwd, runDir });
+	expect(
+		(await loop.prepareResearchDelivery({ cwd, runDir, markdown: "First and last." })).claims,
+	).toHaveLength(2);
+});
 it("reuses actual current-turn note reads without pretending to archive PDFs", async () => {
 	const p = await localPaper();
 	await noteRead(p);
@@ -601,20 +775,36 @@ it("reconciliation's live verification receipt is accepted without a redundant i
 });
 
 it("resolves a missing project through the host port", async () => {
- const started = await startResearchRun({cwd, resultSlug: "direct", query: "Direct caller"});
- expect(started.metadata.project).toBe("host-project");
+	const started = await startResearchRun({ cwd, resultSlug: "direct", query: "Direct caller" });
+	expect(started.metadata.project).toBe("host-project");
 });
 it("does not finalize model-declared stages without observed source evidence", async () => {
- await expect(updateResearchLoop({cwd, runDir, action: "bind_claims", claimBindings: []})).rejects.toThrow("sources_archived before bind_claims");
- await expect(updateResearchLoop({cwd, runDir, action: "finalize"})).rejects.toThrow();
- expect((await updateResearchLoop({cwd, runDir, action: "status"})).evidence_gate.answerable).toBe(false);
+	await expect(updateResearchLoop({ cwd, runDir, action: "bind_claims", claimBindings: [] })).rejects.toThrow(
+		"sources_archived before bind_claims",
+	);
+	await expect(updateResearchLoop({ cwd, runDir, action: "finalize" })).rejects.toThrow();
+	expect((await updateResearchLoop({ cwd, runDir, action: "status" })).evidence_gate.answerable).toBe(false);
 });
 it("independent host loops cannot consume each other's observed receipts", async () => {
- const paper = await localPaper();
- await noteRead(paper);
- await identity(paper);
- const another = createResearchLoop({workspace, resolveProject: async () => "host-project", verifyLiteratureReceipt, sourceStatus: input => sourceStatus(input, {workspace, publishSourceNote: async () => ({}), exclusive: (_key, work) => work()})});
- await expect(another.completeResearchGate({cwd, runDir, claimBindings: [binding(paper)]})).rejects.toThrow();
- expect((await completeResearchGate({cwd, runDir, claimBindings: [binding(paper)]})).evidence_gate.answerable).toBe(true);
- another.dispose();
+	const paper = await localPaper();
+	await noteRead(paper);
+	await identity(paper);
+	const another = createResearchLoop({
+		workspace,
+		resolveProject: async () => "host-project",
+		verifyLiteratureReceipt,
+		sourceStatus: (input) =>
+			sourceStatus(input, {
+				workspace,
+				publishSourceNote: async () => ({}),
+				exclusive: (_key, work) => work(),
+			}),
+	});
+	await expect(
+		another.completeResearchGate({ cwd, runDir, claimBindings: [binding(paper)] }),
+	).rejects.toThrow();
+	expect(
+		(await completeResearchGate({ cwd, runDir, claimBindings: [binding(paper)] })).evidence_gate.answerable,
+	).toBe(true);
+	another.dispose();
 });

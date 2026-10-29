@@ -1,19 +1,25 @@
 import { createResearchReceiptJournal } from "./core/receipt-journal.js";
+import { CLAIM_BINDING_SCHEMA } from "./core/claim-bindings.js";
 import { createResearchLoop, type ResearchLoopPorts } from "./core/research-loop.js";
 import { observeExecutionReceipt } from "./core/run-provenance.js";
+import {
+	deliveryMemoryClaims,
+	summaryReviewPacket,
+	validateSummaryAssessment,
+	type PreparedResearchDelivery,
+	type ResearchDeliveryCopy,
+	type ResearchDeliveryReceipt,
+	type ResearchSummaryReviewPacket,
+} from "./core/research-delivery.js";
 
 export interface ResearchExtensionPorts extends ResearchLoopPorts {
- resolveSessionProject(ctx: any, requested?: string): Promise<{ project: string }>;
- describeProject(resolution: any): unknown;
- registerTool(pi: any, tool: any): void;
- run<T>(operation: () => T | Promise<T>): Promise<T>;
+	resolveSessionProject(ctx: any, requested?: string): Promise<{ project: string }>;
+	describeProject(resolution: any): unknown;
+	registerTool(pi: any, tool: any): void;
+	run<T>(operation: () => T | Promise<T>): Promise<T>;
+	reviewSummary?(ctx: any, packet: ResearchSummaryReviewPacket): Promise<unknown>;
 }
 
-const CLAIM_BINDING_SCHEMA = {
-	type: "array",
-	maxItems: 24,
-	items: { type: "object", additionalProperties: true },
-};
 const USER_QUESTION_FOCUS =
 	"Answer the user's current question. Use evidence for factual research claims, not unrelated citations for ordinary chat. For a simple factual question that can be answered from existing local knowledge, take the light path: retrieve, answer, and auto-deposit a bounded note when appropriate; do not create a task_plan or ask for write authorization just to answer. For substantive tasks, do bounded read-only preparation and consolidate scope, assumptions, needed permissions and deliverables into one task_plan for one user authorization. After authorization, carry out routine steps and recoverable checks within that scope without repeatedly asking whether to continue. Respect prior decisions, especially declined installs. New risks or scope, missing credentials and genuinely unavailable user data still require a specific request; never infer consent. At completion, explain what changed, link actual outputs or show key figures, separate execution from validation, and give one next step only if needed. Keep internal counters and tool logs out of the main answer.";
 
@@ -35,6 +41,19 @@ type Pi = {
 };
 type Loop = ReturnType<typeof createResearchLoop>;
 
+export interface ResearchDeliveryWriterResult<T> {
+	value: T;
+	copies: readonly ResearchDeliveryCopy[];
+	rollback(): Promise<void>;
+}
+export interface ResearchExtensionHandle {
+	deliver<T>(
+		ctx: any,
+		input: { runDir: string; markdown: string; claims?: unknown },
+		writer: (prepared: PreparedResearchDelivery) => Promise<ResearchDeliveryWriterResult<T>>,
+	): Promise<{ value: T; receipt: ResearchDeliveryReceipt; claims: readonly Record<string, unknown>[] }>;
+}
+
 type SessionState = {
 	journals: Map<string, ReturnType<typeof createResearchReceiptJournal>>;
 	pending: Map<
@@ -48,28 +67,31 @@ function sessionKey(ctx: any): string {
 	return ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || ctx?.cwd || "";
 }
 
-export function registerResearchExtension(pi: Pi, ports: ResearchExtensionPorts): void {
+export function registerResearchExtension(
+	pi: Pi,
+	ports: ResearchExtensionPorts,
+): ResearchExtensionHandle | undefined {
 	if (process.env.PI_SUBAGENT_CHILD === "1") return;
- const state: SessionState = { journals: new Map(), pending: new Map(), awaitingUserStart: new Set() };
- const owners = new Map<string, symbol>();
- const loop: Loop = createResearchLoop(ports);
- const run = ports.run;
- const journalPorts = {
-  workspace: ports.workspace,
-  status: async (cwd: string, runDir: string) => loop.updateResearchLoop({ cwd, runDir, action: "status" }),
-  flush: async (cwd: string, runDir: string) => loop.flushResearchReceipts({ cwd, runDir }),
-  reset: (cwd: string, runDir: string) => loop.resetResearchReceipts({ cwd, runDir }),
-  observeExecution: (event: any) => observeExecutionReceipt(event),
-  observeResearch: (event: any) => loop.observeResearchReceipt(event),
-  owners,
- };
+	const state: SessionState = { journals: new Map(), pending: new Map(), awaitingUserStart: new Set() };
+	const owners = new Map<string, symbol>();
+	const loop: Loop = createResearchLoop(ports);
+	const run = ports.run;
+	const journalPorts = {
+		workspace: ports.workspace,
+		status: async (cwd: string, runDir: string) => loop.updateResearchLoop({ cwd, runDir, action: "status" }),
+		flush: async (cwd: string, runDir: string) => loop.flushResearchReceipts({ cwd, runDir }),
+		reset: (cwd: string, runDir: string) => loop.resetResearchReceipts({ cwd, runDir }),
+		observeExecution: (event: any) => observeExecutionReceipt(event),
+		observeResearch: (event: any) => loop.observeResearchReceipt(event),
+		owners,
+	};
 	const journalFor = (ctx: any) => {
 		const key = sessionKey(ctx);
 		let journal = state.journals.get(key);
 		if (!journal) {
 			journal = createResearchReceiptJournal(ctx.cwd, {
 				sessionId: key,
-    ports: journalPorts,
+				ports: journalPorts,
 			});
 			state.journals.set(key, journal);
 		}
@@ -85,9 +107,10 @@ export function registerResearchExtension(pi: Pi, ports: ResearchExtensionPorts)
 			activity: { text: "正在检查研究证据链…", phase: "verification" },
 		},
 		description:
-			"Create or inspect a scientific evidence gate. Prefer start and status; the host advances search, inspection, archive, claims and finalize from successful tools. Structured claim_bindings with observed source excerpts are required before complete/finalize; claim_refs alone do not establish support.",
+			"Create or inspect a scientific evidence gate. Prefer start and status; result_slug determines the topic ID. The host advances search, inspection, archive, claims and finalize from successful tools. Structured claim_bindings require claim, relationship, limitations and sources with path/start_line/end_line/quote. The host supplies source hashes and read receipt IDs; never invent them. claim_refs alone do not establish support.",
 		parameters: {
 			type: "object",
+			additionalProperties: false,
 			properties: {
 				action: {
 					type: "string",
@@ -111,7 +134,11 @@ export function registerResearchExtension(pi: Pi, ports: ResearchExtensionPorts)
 				},
 				result_slug: { type: "string" },
 				query: { type: "string" },
-				requires_provenance: { type: "boolean" },
+				requires_provenance: {
+					type: "boolean",
+					description:
+						'When true, call research_record_run_manifest for this run before complete/finalize, listing actual source paths in files with role="input". start does not create the manifest. This records file snapshots, not scientific validation.',
+				},
 				source_refs: { type: "array", items: { type: "string" } },
 				claim_refs: { type: "array", items: { type: "string" } },
 				claim_bindings: CLAIM_BINDING_SCHEMA,
@@ -136,9 +163,7 @@ export function registerResearchExtension(pi: Pi, ports: ResearchExtensionPorts)
 				// One project identity per workspace (or per daily-space session); a different
 				// model-supplied project is ignored and reported back.
 				const projectResolution =
-					params.action === "start"
-						? await ports.resolveSessionProject(ctx, params.project)
-						: null;
+					params.action === "start" ? await ports.resolveSessionProject(ctx, params.project) : null;
 				const result: any = await journal.execute(runDir, async () =>
 					params.action === "start"
 						? loop.startResearchRun({
@@ -226,7 +251,7 @@ export function registerResearchExtension(pi: Pi, ports: ResearchExtensionPorts)
 				key,
 				createResearchReceiptJournal(ctx.cwd, {
 					sessionId: key,
-     ports: journalPorts,
+					ports: journalPorts,
 				}),
 			);
 			state.pending.forEach((item, id) => {
@@ -258,4 +283,42 @@ export function registerResearchExtension(pi: Pi, ports: ResearchExtensionPorts)
 			if (state.journals.size === 0) loop.dispose();
 		}),
 	);
+	return {
+		deliver: (ctx, input, writer) =>
+			run(() =>
+				journalFor(ctx).execute(input.runDir, async () => {
+					const prepared = await loop.prepareResearchDelivery({ cwd: ctx.cwd, ...input });
+					const claims = deliveryMemoryClaims(input.claims, prepared);
+					const packet = summaryReviewPacket(prepared, claims);
+					if (!ports.reviewSummary)
+						throw new Error(
+							"Summary semantic reviewer is unavailable; keep this summary as an unreviewed draft",
+						);
+					const assessment = validateSummaryAssessment(await ports.reviewSummary(ctx, packet), packet);
+					const current = await loop.prepareResearchDelivery({ cwd: ctx.cwd, ...input });
+					if (
+						current.evidenceRevision !== prepared.evidenceRevision ||
+						current.gateSha256 !== prepared.gateSha256 ||
+						current.claimsSha256 !== prepared.claimsSha256
+					)
+						throw new Error("Research evidence changed during semantic review; no summary was written");
+					const written = await writer(prepared);
+					let receipt: ResearchDeliveryReceipt;
+					try {
+						receipt = await loop.commitResearchDelivery({
+							cwd: ctx.cwd,
+							runDir: input.runDir,
+							prepared,
+							copies: written.copies,
+							assessment,
+							memoryClaims: claims,
+						});
+					} catch (error) {
+						await written.rollback();
+						throw error;
+					}
+					return { run_dir: input.runDir, value: written.value, receipt, claims };
+				}),
+			) as Promise<any>,
+	};
 }

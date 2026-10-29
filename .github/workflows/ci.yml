@@ -31,6 +31,15 @@ jobs:
       - name: Build generated package artifacts
         run: npm run build
 
+      # Candidate branches depend on a vendored, unpublished Plugin API whose integrity
+      # package-lock.json pins and npm ci verified. Point the candidate checks at that same file.
+      - name: Expose the locked candidate Plugin API
+        run: |
+          spec=$(node -p "const p=require('./package.json'); ({...p.dependencies, ...p.devDependencies})['@gyoungwe/plugin-api']")
+          case "$spec" in
+            file:*) echo "DRONE_PLUGIN_API_TARBALL=$PWD/${spec#file:}" >> "$GITHUB_ENV" ;;
+          esac
+
       - name: Run the complete repository check
         run: npm run check
 

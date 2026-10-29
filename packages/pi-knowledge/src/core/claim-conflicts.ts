@@ -7,6 +7,10 @@ export interface KnowledgeClaim {
 	tissue?: string;
 	stage?: string;
 	method?: string;
+	direction?: "increase" | "decrease" | "affirmed" | "negated" | "unknown";
+	endpoint?: string;
+	unit?: string;
+	effect?: number;
 	relation?: string;
 	[key: string]: unknown;
 }
@@ -16,6 +20,8 @@ export type ClaimComparison = {
 	confidence: "low" | "medium" | "high";
 	reason: string;
 	blocking: boolean;
+	missingConditions?: readonly string[];
+	differingConditions?: readonly string[];
 };
 
 export type ClaimSetComparison = ClaimComparison & {
@@ -47,18 +53,23 @@ const overlap = (left: unknown, right: unknown): number => {
 	return common / Math.max(a.size, b.size);
 };
 
-function polarity(value: unknown): "negative" | "positive" {
-	const text = normalize(value);
-	return /\b(?:not|no|without|does not|do not|fails|decrease|decreased|inhibits|inhibit)\b|不|无|未|抑制|降低/.test(
-		text,
-	)
-		? "negative"
-		: "positive";
+/** Only explicit cues are recognized; ordinary unmatched prose has no known direction. */
+function direction(claim: KnowledgeClaim): NonNullable<KnowledgeClaim["direction"]> {
+	if (claim.direction) return claim.direction;
+	const text = normalize(`${claim.predicate} ${claim.value || claim.claim}`);
+	const negated = /\b(?:not|no|without|fails)\b|不|未|无/.test(text);
+	const increase = /\b(?:increases?|increased|upregulated)\b|增加|升高|上调/.test(text);
+	const decrease = /\b(?:decreases?|decreased|downregulated)\b|减少|降低|下调/.test(text);
+	if ((increase && decrease) || (negated && (increase || decrease))) return "unknown";
+	if (increase) return "increase";
+	if (decrease) return "decrease";
+	if (/\b(?:activates?|promotes?|supports?)\b|激活|促进|支持/.test(text))
+		return negated ? "negated" : "affirmed";
+	return "unknown";
 }
-
-function withoutNegation(value: unknown): string {
+function comparableValue(value: unknown): string {
 	return normalize(value).replace(
-		/\b(?:does not|do not|not|no|without|fails|decreased|decrease|inhibits|inhibit)\b|不|无|未|抑制|降低/g,
+		/\b(?:does|do|not|no|without|fails|increase[sd]?|decrease[sd]?|activate[sd]?)\b|不|无|未|增加|减少|降低|升高|激活/g,
 		" ",
 	);
 }
@@ -83,6 +94,8 @@ export function compareClaims(
 		};
 	}
 	if (
+		!field(previous, "subject") ||
+		!field(previous, "predicate") ||
 		field(previous, "subject") !== field(incoming, "subject") ||
 		field(previous, "predicate") !== field(incoming, "predicate")
 	)
@@ -93,7 +106,18 @@ export function compareClaims(
 			blocking: false,
 		};
 	const conditions = ["organism", "tissue", "stage", "method"];
-	const changed = conditions.filter(
+	const optional = ["endpoint", "unit"].filter((key) => field(previous, key) || field(incoming, key));
+	const required = [...conditions, ...optional];
+	const missing = required.filter((key) => !field(previous, key) || !field(incoming, key));
+	if (missing.length)
+		return {
+			relation: "unresolved",
+			confidence: "low",
+			blocking: false,
+			missingConditions: missing,
+			reason: `缺少可比较条件（${missing.join("、")}），不能判断支持或冲突。`,
+		};
+	const changed = required.filter(
 		(key) => field(previous, key) && field(incoming, key) && field(previous, key) !== field(incoming, key),
 	);
 	if (changed.length)
@@ -101,6 +125,7 @@ export function compareClaims(
 			relation: "unresolved",
 			confidence: "medium",
 			reason: `实验条件不同（${changed.join("、")}），需要按条件并列解释。`,
+			differingConditions: changed,
 			blocking: false,
 		};
 	if (field(previous, "relation") !== "observation" || field(incoming, "relation") !== "observation")
@@ -110,8 +135,8 @@ export function compareClaims(
 			reason: "解释或假设不能直接推翻观察结果。",
 			blocking: false,
 		};
-	const priorValue = withoutNegation(`${previous.predicate} ${previous.value || previous.claim}`);
-	const nextValue = withoutNegation(`${incoming.predicate} ${incoming.value || incoming.claim}`);
+	const priorValue = comparableValue(`${previous.predicate} ${previous.value || previous.claim}`);
+	const nextValue = comparableValue(`${incoming.predicate} ${incoming.value || incoming.claim}`);
 	if (overlap(priorValue, nextValue) < 0.5)
 		return {
 			relation: "unresolved",
@@ -119,12 +144,32 @@ export function compareClaims(
 			reason: "命题内容相似度不足，交由人工判断。",
 			blocking: false,
 		};
-	if (polarity(previous.value || previous.claim) === polarity(incoming.value || incoming.claim))
+	const priorDirection = direction(previous),
+		nextDirection = direction(incoming);
+	if (priorDirection === "unknown" || nextDirection === "unknown")
+		return {
+			relation: "unresolved",
+			confidence: "low",
+			blocking: false,
+			reason: "观察方向未知，不能判断支持或冲突。",
+		};
+	if (priorDirection === nextDirection)
 		return {
 			relation: "supports",
 			confidence: "medium",
-			reason: "同条件下方向一致，可并列保留。",
 			blocking: false,
+			reason: "同条件下方向一致，可并列保留。",
+		};
+	const opposite = new Set([priorDirection, nextDirection]);
+	if (
+		!(opposite.has("increase") && opposite.has("decrease")) &&
+		!(opposite.has("affirmed") && opposite.has("negated"))
+	)
+		return {
+			relation: "unresolved",
+			confidence: "low",
+			blocking: false,
+			reason: "方向类型不同，不能直接比较。",
 		};
 	return {
 		relation: "contradicts",
@@ -142,7 +187,12 @@ export function compareClaimSets(
 	for (const incoming of incomingClaims) {
 		for (const previous of previousClaims) {
 			const result = compareClaims(previous, incoming);
-			if (result.relation !== "unresolved") comparisons.push({ previous, incoming, ...result });
+			if (
+				field(previous, "subject") &&
+				field(previous, "subject") === field(incoming, "subject") &&
+				field(previous, "predicate") === field(incoming, "predicate")
+			)
+				comparisons.push({ previous, incoming, ...result });
 		}
 	}
 	return comparisons;

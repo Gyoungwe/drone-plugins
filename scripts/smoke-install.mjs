@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { candidatePluginApi } from "./candidate-plugin-api.mjs";
 
 // Install every currently publishable package from real npm tarballs into a
 // clean prefix. The probe intentionally uses the native registration surface
@@ -14,10 +15,11 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
-const packageNames = ["pi-knowledge", "pi-research", "pi-analysis", "pi-evidence", "pi-connectors", "desktop-ui-pack", "research-suite"];
+const packageNames = ["pi-core", "pi-workbench", "pi-discovery", "pi-knowledge", "pi-research", "pi-analysis", "pi-evidence", "pi-connectors", "desktop-ui-pack", "research-suite"];
 const smokeRoot = await mkdtemp(join(tmpdir(), "drone-plugin-install-smoke-"));
 const tarballRoot = join(smokeRoot, "tarballs");
 const installRoot = join(smokeRoot, "install");
+const candidateApi = await candidatePluginApi();
 await mkdir(tarballRoot, { recursive: true });
 await mkdir(installRoot, { recursive: true });
 
@@ -44,7 +46,7 @@ try {
 			...Object.fromEntries(
 				packageNames.map((name) => [tarballs[name].packageJson.name, `file:${tarballs[name].path}`]),
 			),
-			"@gyoungwe/plugin-api": `file:${join(root, "vendor", "gyoungwe-plugin-api-1.2.0.tgz")}`,
+			"@gyoungwe/plugin-api": `file:${candidateApi.path}`,
 		},
 	};
 	await writeFile(join(installRoot, "package.json"), `${JSON.stringify(installPackage, null, 2)}\n`);
@@ -70,6 +72,8 @@ try {
 	for (const required of [
 		"package/node_modules/@gyoungwe/pi-core/dist/index.mjs",
 		"package/node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
+		"package/node_modules/@gyoungwe/pi-knowledge/ui/plugin.json",
+		"package/node_modules/@gyoungwe/pi-knowledge/ui/bundle.js",
 		"package/node_modules/@gyoungwe/pi-knowledge/lib/knowledge/runtime/.knowledge-worker-manifest.json",
 		"package/node_modules/@gyoungwe/pi-research/dist/index.mjs",
 		"package/node_modules/@gyoungwe/plugin-api/package.json",
@@ -82,6 +86,13 @@ try {
 		"research-suite tarball contains a duplicate pi-knowledge research-workflow skill",
 	);
 
+	const knowledgeUi = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/pi-knowledge/ui/plugin.json"), "utf8"));
+	const desktopUi = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/desktop-ui-pack/ui/plugin.json"), "utf8"));
+	assert.notEqual(knowledgeUi.name, desktopUi.name);
+	assert.deepEqual(knowledgeUi.contributions.map(entry => entry.region), ["knowledge.page", "knowledge.surface"]);
+	assert.deepEqual(desktopUi.contributions.map(entry => entry.region), ["panel.tab"]);
+	assert(!desktopUi.contributions.some(entry => knowledgeUi.contributions.some(knowledge => knowledge.id === entry.id)), "installed candidates duplicate knowledge contributions");
+
 	const piAnalysisRoot = join(installRoot, "node_modules", "@gyoungwe", "pi-analysis");
 	const piAnalysisPackage = JSON.parse(await readFile(join(piAnalysisRoot, "package.json"), "utf8"));
 	const piAnalysisExtensionPath = join(
@@ -91,7 +102,7 @@ try {
 		"pi-analysis",
 		piAnalysisPackage.pi.extensions[0],
 	);
-	const { DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+	const { createEventBus, DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
 	const loader = new DefaultResourceLoader({
 		cwd: installRoot,
 		agentDir: join(installRoot, "agent"),
@@ -105,7 +116,7 @@ try {
 	assert.deepEqual(loaded.errors, [], JSON.stringify(loaded.errors));
 	const piAnalysis = loaded.extensions.find((item) => item.path === piAnalysisExtensionPath);
 	assert(piAnalysis, "installed pi-analysis extension was not discovered by Pi loader");
-	assert.deepEqual([...piAnalysis.tools.keys()], ["analysis_list_adapters", "analysis_assess_readiness"]);
+	assert.deepEqual([...piAnalysis.tools.keys()], ["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"]);
 
 	async function discoverInstalled(name, expectedTools) {
 		const packageRoot = join(installRoot, "node_modules", "@gyoungwe", name);
@@ -128,6 +139,7 @@ try {
 		return extension;
 	}
 	const piEvidence = await discoverInstalled("pi-evidence", [
+		"evidence_validate_analysis_plan",
 		"evidence_validate_manifest",
 		"evidence_validate_capsule",
 		"evidence_verify_replay",
@@ -170,7 +182,7 @@ try {
 	const tools = new Map();
 	const commands = new Map();
 	const pi = {
-		events: { on() {}, emit() {} },
+		events: createEventBus(),
 		on() {},
 		appendEntry() {},
 		getCommands: () => [...commands.keys()].map((name) => ({ name })),
@@ -201,6 +213,8 @@ try {
 			JSON.stringify({
 				packages: packageNames.map((name) => tarballs[name].packageJson.name),
 				installed: true,
+				publicRegistryInstall: false,
+				candidateApi: { version: candidateApi.version, sha256: candidateApi.sha256 },
 				piKnowledgeTools: tools.size,
 				piAnalysisTools: [...piAnalysis.tools.keys()],
 				piEvidenceTools: [...piEvidence.tools.keys()],

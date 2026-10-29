@@ -10,6 +10,7 @@ export interface ClaimBindingSource {
     quote: string;
     original_location?: string;
     reading_basis?: string;
+    read_receipt_id?: string;
     originalFulltextReadThisTurn?: false;
 }
 export interface ClaimBinding {
@@ -31,13 +32,14 @@ export interface ClaimSourceRecord {
     hash: string;
 }
 export interface ClaimReadRecord {
+    receiptId?: string;
     hash: string;
     startLine: number;
     endLine: number;
     text: string;
 }
 /** Validate bounded claims against source/read receipts from the current scope. */
-export declare function validateClaimBindings(bindings: unknown, sources: readonly ClaimSourceRecord[], reads: ReadonlyMap<string, ClaimReadRecord>): ClaimBinding[];
+export declare function validateClaimBindings(bindings: unknown, sources: readonly ClaimSourceRecord[], reads: ReadonlyMap<string, ClaimReadRecord | readonly ClaimReadRecord[]>): ClaimBinding[];
 export declare function claimBindingRefs(bindings: readonly Pick<ClaimBinding, "claim" | "relationship" | "limitations" | "sources">[]): string[];
 export declare const CLAIM_BINDING_SCHEMA: {
     readonly type: "array";

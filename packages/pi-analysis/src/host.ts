@@ -40,3 +40,14 @@ export {
 	validateAdapterContract,
 } from "./registry.js";
 export { assessBulkRnaseqReadiness } from "./bulk-rnaseq.js";
+export { DESEQ2_RESULT_POLICY } from "./bulk-results.js";
+export { normalizeBulkScientificPlan, readBulkScientificPlan, scientificPlanHash } from "./bulk-scientific-plan.js";
+export type { BulkScientificPlan, BulkScientificPlanContent, BulkReference, BulkSample } from "./bulk-scientific-plan.js";
+export { BulkRnaseqNumericalComparator } from "./bulk-comparator.js";
+export { DESEQ2_NUMERICAL_POLICY } from "./bulk-numerical-policy.js";
+export type {
+	AnalysisArtifactReader, AnalysisArtifactRef, AnalysisArtifactValidation,
+	AnalysisArtifactValidationInput, AnalysisScientificPlan,
+	AnalysisNumericalComparatorPolicy, AnalysisNumericalComparator,
+	AnalysisNumericalComparisonInput, AnalysisNumericalComparison,
+} from "./analysis-contract.js";

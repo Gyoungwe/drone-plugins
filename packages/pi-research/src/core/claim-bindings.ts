@@ -12,6 +12,7 @@ export interface ClaimBindingSource {
 	quote: string;
 	original_location?: string;
 	reading_basis?: string;
+	read_receipt_id?: string;
 	originalFulltextReadThisTurn?: false;
 }
 
@@ -36,6 +37,7 @@ export interface ClaimSourceRecord {
 }
 
 export interface ClaimReadRecord {
+	receiptId?: string;
 	hash: string;
 	startLine: number;
 	endLine: number;
@@ -53,7 +55,7 @@ function text(value: unknown, label: string, max = 4000): string {
 export function validateClaimBindings(
 	bindings: unknown,
 	sources: readonly ClaimSourceRecord[],
-	reads: ReadonlyMap<string, ClaimReadRecord>,
+	reads: ReadonlyMap<string, ClaimReadRecord | readonly ClaimReadRecord[]>,
 ): ClaimBinding[] {
 	if (!Array.isArray(bindings) || bindings.length < 1 || bindings.length > 64)
 		throw new Error("Provide 1-64 structured claim_bindings");
@@ -78,19 +80,27 @@ export function validateClaimBindings(
 			const ref = rawRef as Record<string, unknown>;
 			const path = typeof ref.path === "string" ? ref.path : "";
 			const source = sources.find((candidate) => candidate.path === path);
-			const read = reads.get(path);
-			if (!source || !read || read.hash !== source.hash)
+			const observed = reads.get(path);
+			const receipts: readonly ClaimReadRecord[] = Array.isArray(observed)
+				? observed
+				: observed
+					? [observed as ClaimReadRecord]
+					: [];
+			if (!source || !receipts.some((read) => read.hash === source.hash))
 				throw new Error("Claim source was not read and identity-verified in this scope");
 			const first = ref.start_line;
 			const last = ref.end_line;
-			if (
-				!Number.isInteger(first) ||
-				!Number.isInteger(last) ||
-				(first as number) < read.startLine ||
-				(last as number) < (first as number) ||
-				(last as number) > read.endLine
-			)
-				throw new Error("Claim source range is outside the observed read");
+			const read = receipts.find(
+				(candidate) =>
+					candidate.hash === source.hash &&
+					Number.isInteger(first) &&
+					Number.isInteger(last) &&
+					(first as number) >= candidate.startLine &&
+					(last as number) >= (first as number) &&
+					(last as number) <= candidate.endLine,
+			);
+			if (!read)
+				throw new Error("Claim source range is outside the observed read; unread gaps cannot be cited");
 			const quote = text(ref.quote, "source quote", 6000);
 			const excerpt = read.text
 				.split(/\r?\n/)
@@ -108,7 +118,8 @@ export function validateClaimBindings(
 				...(ref.original_location
 					? { original_location: text(ref.original_location, "historical original location", 600) }
 					: {}),
-				reading_basis: "current-scope-literature-note",
+				reading_basis: "current-scope-observed-excerpt",
+				...(read.receiptId ? { read_receipt_id: read.receiptId } : {}),
 				originalFulltextReadThisTurn: false,
 			};
 		});

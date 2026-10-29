@@ -27,22 +27,28 @@ try {
 	const metadata = JSON.parse(packOutput.stdout.trim())[0];
 	assert(metadata?.filename?.endsWith(".tgz"), "npm pack did not produce a tarball");
 	const tarball = join(temp, metadata.filename);
+	const apiTarball = join(workspaceRoot, "vendor", "gyoungwe-plugin-api-1.2.0.tgz");
 	await execFileAsync(
 		"npm",
-		["install", "--prefix", installRoot, "--ignore-scripts", "--no-audit", "--no-fund", tarball],
+		["install", "--prefix", installRoot, "--ignore-scripts", "--no-audit", "--no-fund", apiTarball, tarball],
 		{ cwd: workspaceRoot, maxBuffer: 16 * 1024 * 1024 },
 	);
 	const packageJson = JSON.parse(
 		await readFile(join(installRoot, "node_modules/@gyoungwe/pi-analysis/package.json"), "utf8"),
 	);
+	const packageDir = join(installRoot, "node_modules/@gyoungwe/pi-analysis");
+	const manifest = JSON.parse(await readFile(join(packageDir, "plugin.manifest.json"), "utf8"));
 	assert.equal(packageJson.name, "@gyoungwe/pi-analysis");
-	assert.equal(packageJson.dependencies?.["@gyoungwe/plugin-api"], "^1.1.0");
+	assert.equal(packageJson.dependencies?.["@gyoungwe/plugin-api"], "^1.2.0");
 	assert.equal(packageJson.peerDependencies?.["@earendil-works/pi-coding-agent"], ">=1.1.0 <2.0.0");
 	assert.equal(packageJson.dependencies?.["@earendil-works/pi-coding-agent"], undefined);
-	await readFile(join(installRoot, "node_modules/@gyoungwe/plugin-api/package.json"), "utf8");
+	const apiPackage = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/plugin-api/package.json"), "utf8"));
+	assert.equal(apiPackage.version, "1.2.0");
 	await readFile(join(installRoot, "node_modules/@gyoungwe/pi-analysis/dist/index.d.ts"), "utf8");
-	const extensionPath = join(installRoot, "node_modules/@gyoungwe/pi-analysis", packageJson.pi.extensions[0]);
-	const hostPath = join(installRoot, "node_modules/@gyoungwe/pi-analysis", "dist/host.mjs");
+	assert.deepEqual(manifest.capabilities, ["analysis", "planning", "evidence-context", "files"]);
+	assert.equal(manifest.entrypoints.host, "./dist/host.mjs");
+	const extensionPath = join(packageDir, packageJson.pi.extensions[0]);
+	const hostPath = join(packageDir, manifest.entrypoints.host);
 	const host = await import(pathToFileURL(hostPath).href);
 	assert.equal(host.analysisHostLoader.contractVersion, 1);
 	assert.equal(host.analysisHostLoader.load().contractVersion, 1);
@@ -64,7 +70,12 @@ try {
 	assert.deepEqual(errors, [], JSON.stringify(errors));
 	const extension = extensions.find((item) => item.path === extensionPath);
 	assert(extension, "installed pi-analysis extension was not discovered");
-	assert.deepEqual([...extension.tools.keys()], ["analysis_list_adapters", "analysis_assess_readiness"]);
+	assert.deepEqual([...extension.tools.keys()], [
+		"analysis_list_adapters",
+		"analysis_assess_readiness",
+		"analysis_prepare_evidence",
+	]);
+	assert.deepEqual(manifest.tools, [...extension.tools.keys()]);
 	console.log(
 		JSON.stringify({
 			package: packageJson.name,

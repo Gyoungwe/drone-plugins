@@ -1,0 +1,76 @@
+{
+	"name": "@gyoungwe/pi-core",
+	"version": "0.2.0",
+	"description": "Portable task, authorization, status, delivery and memory tools for native Pi",
+	"keywords": [
+		"pi-package"
+	],
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Gyoungwe/drone-plugins.git",
+		"directory": "packages/pi-core"
+	},
+	"type": "module",
+	"main": "./dist/index.mjs",
+	"files": [
+		"dist",
+		"package.json",
+		"plugin.manifest.json",
+		"README.md",
+		"build-manifest.json",
+		"ui/plugin.json",
+		"ui/bundle.js",
+		"ui/build-manifest.json"
+	],
+	"pi": {
+		"extensions": [
+			"./dist/index.mjs"
+		]
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"default": "./dist/index.mjs"
+		},
+		"./host": {
+			"types": "./dist/host.d.ts",
+			"import": "./dist/host.mjs",
+			"default": "./dist/host.mjs"
+		},
+		"./tools/*": {
+			"types": "./dist/tools/*.d.ts",
+			"import": "./dist/tools/*.mjs",
+			"default": "./dist/tools/*.mjs"
+		},
+		"./memory": {
+			"types": "./dist/memory.d.ts",
+			"import": "./dist/memory.mjs",
+			"default": "./dist/memory.mjs"
+		}
+	},
+	"scripts": {
+		"build": "node scripts/build.mjs",
+		"build:check": "node scripts/build.mjs --check",
+		"typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
+		"test": "npm run build && node --test test/*.test.mjs && vitest run",
+		"smoke": "node scripts/smoke.mjs",
+		"check": "npm run typecheck && npm run build:check && npm run smoke && npm test"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
+	},
+	"dependencies": {
+		"@gyoungwe/plugin-api": "^1.3.0",
+		"typebox": "1.3.7"
+	},
+	"devDependencies": {
+		"esbuild": "^0.25.12",
+		"typescript": "^5.9.0"
+	},
+	"types": "./dist/index.d.ts"
+}

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "drone-research-suite",
-  "version": "0.1.11",
+  "version": "0.2.2",
   "pi": {
     "apiVersion": 1,
     "minHostVersion": "1.1.0",
@@ -17,6 +17,7 @@
   "entrypoints": {
     "extensions": [
       "./node_modules/@gyoungwe/pi-core/dist/index.mjs",
+      "./node_modules/@gyoungwe/pi-workbench/dist/index.mjs",
       "./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
       "./node_modules/@gyoungwe/pi-research/dist/index.mjs"
     ],
@@ -32,16 +33,20 @@
     "evidence-context"
   ],
   "tools": [
-    "task_status",
-    "task_plan",
-    "task_wait",
-    "task_reconcile",
-    "task_evidence_restore",
     "ask_user",
     "set_status",
     "todo",
     "deliver_files",
     "memory_save",
+    "task_status",
+    "task_plan",
+    "task_wait",
+    "task_reconcile",
+    "task_evidence_restore",
+    "workbench_plan",
+    "workbench_status",
+    "workbench_todo",
+    "workbench_memory_save",
     "knowledge_status",
     "knowledge_search",
     "research_prepare_knowledge",
@@ -75,7 +80,8 @@
   "permissions": {
     "filesystem": [
       "workspace",
-      "configured-vault"
+      "configured-vault",
+      "application-state"
     ],
     "network": [
       "api.zotero.org",

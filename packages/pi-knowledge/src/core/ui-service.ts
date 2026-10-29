@@ -28,9 +28,11 @@ import {
 	decideWikiProposal,
 	listWikiProposals,
 	previewWikiProposal,
+	stageWikiProposal,
 	undoWikiUpdate,
 	wikiHistory,
 } from "./wiki-review.js";
+export { knowledgeMaintenanceTopic } from "./maintenance-topic.js";
 
 const runtimeState = runtimeSlot("knowledge", "uiService", () => ({
 	previews: new Map(),
@@ -365,6 +367,39 @@ export async function knowledgeMaintenance({ cwd = null, action, revision, id, e
 	} finally {
 		runtimeState.maintenance.delete(key);
 	}
+}
+
+export async function knowledgeMaintenanceWiki({
+	cwd = process.cwd(),
+	sourcePath,
+	title,
+	markdown,
+	rationale,
+	revision = null,
+}) {
+	const binding = await readKnowledgeBinding({ fresh: true });
+	if (!binding) throw new Error("No application knowledge Vault is bound");
+	if (!Number.isSafeInteger(revision) || revision < 1 || binding.revision !== revision)
+		throw new Error("Knowledge binding changed; refresh maintenance before review");
+	const project = requireProject(await projectAt(cwd));
+	return withKnowledgeBinding(binding, async () => {
+		const service = await getKnowledgeService(binding);
+		const prepared = await service.prepare({ cwd, project, query: title });
+		await service.read(prepared.ticket, cwd, { path: sourcePath, maxChars: 4000 });
+		const slug = String(title ?? "")
+			.toLocaleLowerCase()
+			.replace(/[^\p{L}\p{N}]+/gu, "-")
+			.replace(/^-+|-+$/gu, "")
+			.slice(0, 120);
+		if (!slug) throw new Error("Wiki candidate title is empty");
+		return stageWikiProposal(service, prepared.ticket, cwd, {
+			path: `Wiki/${slug}.md`,
+			title,
+			markdown,
+			rationale,
+			source_paths: [sourcePath],
+		});
+	});
 }
 /** @param {Record<string, any>} options */
 export async function knowledgeOpenTarget({ cwd = null, path = null, revision }) {

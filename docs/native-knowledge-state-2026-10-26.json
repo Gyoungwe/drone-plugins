@@ -1,0 +1,109 @@
+{
+  "date": "2026-10-26",
+  "status": "PARTIAL",
+  "published": false,
+  "scope": "P2 review policy state port and Desktop preferences; complete Desktop service/hooks/Home still unfinished",
+  "previousEvidence": "native-knowledge-reading-2026-10-26.json",
+  "candidates": [
+    {
+      "name": "@gyoungwe/pi-knowledge",
+      "version": "0.3.0",
+      "sha256": "68012bd78a3b5fba644afd1ecef6f73401d0f64f4536fae9ad15a20639cbb6b3",
+      "integrity": "sha512-+tz1o3Q911kQOjGMytVIw9f7VgjC2BwtYY0LcCgIlqP1Jdg1mGyvuTYcC8jCtMwr10dKkX80OJ9e7i8/X/gIaQ==",
+      "files": 243
+    },
+    {
+      "name": "@gyoungwe/desktop-ui-pack",
+      "version": "0.3.0",
+      "sha256": "557cbd5ab4e9f6ec855e15cad90fb607639f88a13fc6e0bcc2af9bbc9a1b762e",
+      "integrity": "sha512-nH94HCWu6zRKlH85cuVhBK3iRBOHni+j3NspyUFZUl4BlCiE0Ep3Qx6n9jjL9zRdp5i23VG39ZxxcUUeGeEBaA==",
+      "files": 9
+    },
+    {
+      "name": "@gyoungwe/research-suite",
+      "version": "0.2.0",
+      "sha256": "5df09b0d799c4b3b602f9839e562f0f32a89d57e3b069d9b03751817d98d9389",
+      "integrity": "sha512-d33v8hIIWotccNUTZo6MQdM90Vf1oaaU2xanYz2fTnuwq0gQcIusC9Q9WJpD1T0aWXuU7rh4MXF2gjmX2FNMyQ==",
+      "files": 1306
+    }
+  ],
+  "candidateApi": {
+    "version": "1.3.0",
+    "sha256": "5b26a4b39e8e77d516b0c16af7ab2257093d14300ef1dff562698c0800b33b4f",
+    "publicRegistryInstall": false
+  },
+  "knowledgeSourceSha256": "9dfdca1bcb4b9cd3314e19e70423a8a34351f16666eb3f87ab478280be938297",
+  "operations": {
+    "preferences": "read",
+    "setReviewPolicy": "write"
+  },
+  "storage": {
+    "permission": "application-state-write",
+    "readOnlyGrantAutoUpgrade": false,
+    "businessDocument": "review-policy.json: {version:1,mode}",
+    "expectedVersion": "raw bytes sha256; null means missing only",
+    "bindingRevisionRequired": true,
+    "writeReadback": true,
+    "corruptState": "strict with diagnostic; overwrite refused",
+    "revokedPermission": "reject; not converted into strict success",
+    "desktopEnvironmentOverride": null,
+    "cliEnvironmentOverride": "DRONE_REVIEW_MODE=strict preserved"
+  },
+  "packageTests": {
+    "status": "PASS",
+    "files": 75,
+    "tests": 463
+  },
+  "fullPluginGate": {
+    "status": "PASS",
+    "command": "DRONE_PLUGIN_API_TARBALL=<state-private-api-1.3-tarball> npm run check",
+    "exitCode": 0,
+    "logSha256": "042cca206511a480401315583d93eda8db593794802487805d94c9f16cbceffd",
+    "knowledgeTestFiles": 75,
+    "knowledgeTests": 463
+  },
+  "packedCoordinatorGate": {
+    "status": "PASS",
+    "sdk": "1.1.0",
+    "actualModelDispatch": true,
+    "realDomainAndIndexProcesses": true,
+    "readOnlyGrantCannotWrite": true,
+    "rejectedApprovalDoesNotWrite": true,
+    "approvedWriteReadbackRawHash": true,
+    "staleVersionRejected": true,
+    "corruptJsonNotOverwritten": true,
+    "oldBindingRejected": true,
+    "persistedPolicySurvivesOwnerRestart": true,
+    "readOnlySessionCannotWrite": true,
+    "childrenExited": true,
+    "reservationsReleased": true,
+    "reportSha256": "d5e9f8fb49aa41b5dfe1591c43cd42d05d7423161fb7c8d4cd9eb5b6edaadb82",
+    "logSha256": "31326dfa27cd127a7203e7b78fd3f0f1caa77062aedfa507dd265f2e15369b88"
+  },
+  "formalInstalledSettingsGui": "NOT_RUN",
+  "remaining": [
+    "Complete Desktop service transport and owner activation drain/active replacement close separation",
+    "Semantic settings and UI metrics state ports; full Home and binding initialization",
+    "Full native hooks/publication and authorized Vault/model operations",
+    "Legacy host facade/IPC/listener removal and existing-binding upgrade",
+    "Public API 1.3 release/minimum dependency/public installation",
+    "Earlier reading cleanup observation remains UNRESOLVED_NOT_REPRODUCED",
+    "Deferred external acceptance and B8/MinerU/GROBID scopes unchanged"
+  ],
+  "packedDefaultNativeGate": {
+    "status": "PASS",
+    "sdk": "1.1.0",
+    "script": "scripts/check-native-policy-session.mjs",
+    "runs": 2,
+    "tools": [
+      "knowledge_status",
+      "research_read_knowledge",
+      "research_search_knowledge",
+      "research_check_answer"
+    ],
+    "strictPreflight": "ready",
+    "defaultOwnerLeaseReleasedAfterEachRun": true,
+    "reportSha256": "4cf3176c598ab84c88dd4d31668e24c84a29a8b2aee3dd20dd8b329118792a16",
+    "logSha256": "5088cb89b761e9e3bb4c765977e5f1125818b22ff42eeb7ce2802408ffb23e36"
+  }
+}

@@ -1,12 +1,14 @@
 import { createAnalysisContext } from "./analysis-contract.js";
 import { AssemblyAdapter } from "./assembly.js";
 import { BulkRnaseqAdapter } from "./bulk-rnaseq.js";
+import { createAnalysisEvidencePlan } from "./evidence-plan.js";
 import { AnalysisAdapterRegistry, adapterSnapshotSha256 } from "./registry.js";
 
 export * from "./assembly.js";
 export * from "./bulk-rnaseq.js";
 export * from "./registry.js";
 export * from "./analysis-contract.js";
+export * from "./evidence-plan.js";
 
 export function createAnalysisAdapterRegistry(): AnalysisAdapterRegistry {
 	return new AnalysisAdapterRegistry([new BulkRnaseqAdapter(), new AssemblyAdapter()]);
@@ -115,7 +117,53 @@ export function registerPiAnalysis(pi: any, options: PiAnalysisRegistrationOptio
 		},
 	});
 
-	return { tools: ["analysis_list_adapters", "analysis_assess_readiness"] } as const;
+	pi.registerTool({
+		name: "analysis_prepare_evidence",
+		label: "Analysis · prepare evidence",
+		description:
+			"Prepare a versioned, read-only handoff for host-owned evidence capture without executing a workflow or writing files.",
+		drone: { readOnly: true, recoverySafe: true, capabilities: ["analysis", "evidence-context", "planning"] },
+		parameters: {
+			type: "object",
+			properties: {
+				id: { type: "string", minLength: 1, maxLength: 128 },
+				question: { type: "string", minLength: 1, maxLength: 512 },
+				assay: { type: "string", minLength: 1, maxLength: 128 },
+				mode: { type: "string", enum: ["exploratory", "inferential"] },
+				adapter: {
+					type: "object",
+					properties: { id: { type: "string" }, version: { type: "string" } },
+					required: ["id", "version"],
+				},
+				spec: { type: "object" },
+				evidence: { type: "object" },
+			},
+			required: ["id", "question", "assay", "mode", "spec", "evidence"],
+		},
+		async execute(_id: string, params: any) {
+			const assay = text(params?.assay, "assay");
+			const identity = params?.adapter
+				? {
+						id: text(params.adapter.id, "adapter.id"),
+						version: text(params.adapter.version, "adapter.version"),
+					}
+				: undefined;
+			const adapter = registry.resolve(assay, identity);
+			const context = createAnalysisContext({
+				id: text(params.id, "id", 128),
+				question: text(params.question, "question", 512),
+				assay,
+				mode: mode(params.mode),
+				adapter: adapter.identity,
+			});
+			const plan = adapter.buildPlan(context, params.spec, params.evidence);
+			return result(createAnalysisEvidencePlan(context, plan));
+		},
+	});
+
+	return {
+		tools: ["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"],
+	} as const;
 }
 
 export { AssemblyAdapter, BulkRnaseqAdapter };

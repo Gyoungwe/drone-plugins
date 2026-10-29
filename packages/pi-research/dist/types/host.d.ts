@@ -1,3 +1,4 @@
+export * from "./core/research-delivery.js";
 /** Research domain implementation. Hosts inject workspace, project, authorization and transport ports. */
 export { CLAIM_BINDING_SCHEMA, type ClaimBinding, type ClaimBindingSource, type ClaimReadRecord, type ClaimSourceRecord, claimBindingRefs, validateClaimBindings, } from "./core/claim-bindings.js";
 export { detectAndSaveTemplateFromUrl, emptyInstitutionalConfig, INSTITUTIONAL_AGENT_DIR, INSTITUTIONAL_CONFIG_NAME, INSTITUTIONAL_CONFIG_PATH, type InstitutionalConfig, type InstitutionalConfigIo, loadInstitutionalConfig, normalizeInstitutionalConfig, saveInstitutionalConfig, } from "./core/institutional-access.js";
@@ -42,9 +43,13 @@ export * as zoteroSetupRuntime from "./core/zotero-setup-runtime.js";
 export * as zoteroSetup from "./core/zotero-setup.js";
 export * as zoteroWriteRuntime from "./core/zotero-write-runtime.js";
 export * as zoteroWrite from "./core/zotero-write.js";
-export { registerResearchExtension, type ResearchExtensionPorts } from "./extension.js";
+export { registerResearchExtension, type ResearchExtensionPorts, type ResearchExtensionHandle } from "./extension.js";
 export { readMethodsFacts, saveMethodsSection } from "./core/run-provenance.js";
 export { assessManualPage } from "./core/source-delivery.js";
 export { zoteroLibraryEnvValue, zoteroLibraryPath } from "./core/zotero-library.js";
 export { describeZoteroUpdatePlan, executeZoteroUpdate, prepareZoteroUpdate, receiptWithoutUpdate } from "./core/zotero-write-runtime.js";
 export * from "./evidence-gate.js";
+export { createResearchHost, registerResearchHost, researchHostLoader, type ResearchFileEntry, type ResearchHostAdapter, type ResearchHostLoader, type ResearchHostOperations, type ResearchHostPort, type ResearchHostRegistry, type ResearchResolvedRoot, type ResearchRunListInput, type ResearchRunListResult, type ResearchRunStatusInput, type ResearchRunSummary, } from "./research-host.js";
+export { createZoteroConnectorHost, createZoteroHost, registerZoteroConnectorHost, registerZoteroHost, zoteroHostLoader, type ZoteroHostAdapter, type ZoteroConnectorHostPort, type ZoteroHostLoader, type ZoteroHostOperations, type ZoteroHostPort, type ZoteroHostRegistry, } from "./zotero-host.js";
+export { createResearchConnectorHostLoader, researchConnectorHostLoader, researchWriteAdapterHostLoader, } from "./research-host.js";
+export type { ResearchConnectorContext, ResearchConnectorDescriptor, ResearchConnectorFailure, ResearchConnectorHit, ResearchConnectorHostAdapter, ResearchConnectorHostLoader, ResearchConnectorHostOptions, ResearchConnectorKind, ResearchConnectorSourceReceipt, ResearchProjectStorageItem, ResearchProjectStoragePort, ResearchSearchRequest, ResearchSearchResponse, } from "./research-host.js";

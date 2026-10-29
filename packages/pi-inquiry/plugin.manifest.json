@@ -1,0 +1,39 @@
+{
+	"schemaVersion": 1,
+	"id": "drone-pi-inquiry",
+	"version": "0.1.0",
+	"drone": {
+		"pluginApi": 1,
+		"resultContract": "drone-result/v3",
+		"provides": {
+			"inquiry.runtime": {
+				"version": 1,
+				"operations": ["inquiry.read", "inquiry.write"]
+			}
+		}
+	},
+	"entrypoints": {
+		"desktopRuntime": "./dist/runtime.mjs",
+		"extension": "./dist/index.mjs",
+		"ui": "./ui/plugin.json"
+	},
+	"capabilities": ["research", "provenance", "ui"],
+	"tools": ["inquiry_read", "inquiry_write"],
+	"hosts": ["drone-desktop", "native-pi"],
+	"permissions": {
+		"filesystem": [
+			"application-state",
+			"application-state-write",
+			"binary-state-read",
+			"binary-state-write"
+		],
+		"network": [],
+		"subprocess": [],
+		"externalWrites": false
+	},
+	"pi": {
+		"apiVersion": 1,
+		"minHostVersion": "1.1.0",
+		"testedHosts": ["1.1.0"]
+	}
+}

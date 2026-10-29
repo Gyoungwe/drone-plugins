@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "drone-desktop-ui-pack",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "pi": {
     "apiVersion": 1,
     "minHostVersion": "1.1.0"
@@ -21,19 +21,14 @@
     "drone-desktop"
   ],
   "permissions": {
-    "filesystem": [
-      "workspace-read",
-      "configured-vault"
-    ],
-    "network": [
-      "configured-services"
-    ],
+    "filesystem": [],
+    "network": [],
     "subprocess": [],
-    "externalWrites": true,
+    "externalWrites": false,
     "readWrite": {
-      "read": true,
-      "write": true,
-      "delete": true
+      "read": false,
+      "write": false,
+      "delete": false
     }
   }
 }

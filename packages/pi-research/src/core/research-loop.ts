@@ -2,6 +2,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { access, mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { claimBindingRefs, validateClaimBindings } from "./claim-bindings.js";
+import {
+	summaryBody,
+	summaryHash,
+	type PreparedResearchDelivery,
+	type ResearchDeliveryCopy,
+	type ResearchDeliveryReceipt,
+	type ResearchSummaryAssessment,
+} from "./research-delivery.js";
 
 export const RESEARCH_STAGES = Object.freeze([
 	"created",
@@ -66,7 +74,8 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 		const state = ledger(cwd, runDir),
 			result: any = [];
 		for (const [path, proof] of state.verified) {
-			const read = state.reads.get(path);
+			const reads = state.reads.get(path) || [];
+			const read = reads.at(-1);
 			if (
 				!read ||
 				read.hash !== proof.obsidian?.hash ||
@@ -101,15 +110,19 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 						startLine: read.startLine,
 						endLine: read.endLine,
 					},
+					read_receipts: reads.map((item: any) => ({
+						id: item.receiptId,
+						startLine: item.startLine,
+						endLine: item.endLine,
+					})),
 					claimSupport: "not-assessed",
 				},
 			});
 		}
 		return result;
 	}
-	async function validateReuse(cwd: any, runDir: any, gate: any) {
+	function validateReusedSourceSet(gate: any, fresh: any[]) {
 		if (!gate.reuse_count) return;
-		const fresh = await reusableSources(cwd, runDir);
 		if (
 			gate.reused_sources.length !== gate.reuse_count ||
 			gate.reused_sources.some(
@@ -127,6 +140,9 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 				"Reused source changed or current-turn receipt is missing; re-read and verify the existing note, do not re-import it",
 			);
 	}
+	async function validateReuse(cwd: any, runDir: any, gate: any) {
+		if (gate.reuse_count) validateReusedSourceSet(gate, await reusableSources(cwd, runDir));
+	}
 	async function validateStoredClaimBindings(cwd: any, runDir: any, gate: any) {
 		if (!Array.isArray(gate.claim_bindings) || gate.claim_bindings.length === 0)
 			throw new Error("Structured claim_bindings are required before answerable");
@@ -135,6 +151,135 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 			[...(await reusableSources(cwd, runDir)), ...(await archivedSourceRecords(cwd, runDir))],
 			ledger(cwd, runDir).reads,
 		);
+	}
+
+	/** Recheck the active host's observed receipts immediately before a delivery. */
+	async function prepareResearchDelivery({
+		cwd,
+		runDir,
+		markdown,
+	}: {
+		cwd: string;
+		runDir: string;
+		markdown: string;
+	}): Promise<PreparedResearchDelivery> {
+		if (typeof markdown !== "string" || !markdown.trim() || Buffer.byteLength(markdown) > 128 * 1024)
+			throw new Error("Summary must contain 1-131072 UTF-8 bytes");
+		const { path, metadataPath } = await resolveRun(cwd, runDir);
+		const metadata = await readJson(metadataPath);
+		const gate = gateOf(metadata);
+		if (gate.stage !== "answerable" || gate.status !== "ok" || !gate.answerable)
+			throw new Error("Evidence gate is closed; complete the research loop before summarizing");
+		if (!Number.isSafeInteger(metadata.revision))
+			throw new Error("Legacy research run needs fresh completion before delivery");
+		const reused = await reusableSources(cwd, path);
+		const archived = await archivedSourceRecords(cwd, path);
+		validateReusedSourceSet(gate, reused);
+		const claims = validateClaimBindings(
+			gate.claim_bindings,
+			[...reused, ...archived],
+			ledger(cwd, path).reads,
+		);
+		if (summaryHash(JSON.stringify(claims)) !== summaryHash(JSON.stringify(gate.claim_bindings)))
+			throw new Error("Claim evidence changed; complete the research loop again before delivery");
+		if (!reused.length && !archived.length)
+			throw new Error("No current verified source is available for this delivery");
+		const body = summaryBody(markdown);
+		const readReceipts = claims
+			.flatMap((claim) =>
+				claim.sources.map((source) => {
+					const read = ledger(cwd, path)
+						.reads.get(source.path)
+						.find((item: any) => item.receiptId === source.read_receipt_id);
+					return {
+						receiptId: read.receiptId,
+						path: source.path,
+						sha256: read.hash,
+						startLine: read.startLine,
+						endLine: read.endLine,
+						text: read.text,
+					};
+				}),
+			)
+			.filter(
+				(item, index, all) =>
+					all.findIndex((other) => other.path === item.path && other.receiptId === item.receiptId) === index,
+			);
+		return {
+			runId: metadata.run_id,
+			evidenceRevision: metadata.revision,
+			gateSha256: summaryHash(JSON.stringify(gate)),
+			claimsSha256: summaryHash(JSON.stringify(claims)),
+			bodySha256: summaryHash(body),
+			body,
+			claims,
+			readReceipts,
+		};
+	}
+
+	async function commitResearchDelivery({
+		cwd,
+		runDir,
+		prepared,
+		copies,
+		assessment,
+		memoryClaims = [],
+	}: {
+		cwd: string;
+		runDir: string;
+		prepared: PreparedResearchDelivery;
+		copies: readonly ResearchDeliveryCopy[];
+		assessment?: ResearchSummaryAssessment;
+		memoryClaims?: readonly Record<string, unknown>[];
+	}): Promise<ResearchDeliveryReceipt> {
+		const current = await prepareResearchDelivery({ cwd, runDir, markdown: prepared.body });
+		if (
+			current.evidenceRevision !== prepared.evidenceRevision ||
+			current.gateSha256 !== prepared.gateSha256 ||
+			current.claimsSha256 !== prepared.claimsSha256
+		)
+			throw new Error("Research evidence changed during delivery; no delivery receipt was committed");
+		const observed = [];
+		for (const copy of copies) {
+			const bytes = await readFile(copy.path);
+			const body = copy.bodyRegion ? bytes.subarray(copy.bodyRegion.start, copy.bodyRegion.end) : bytes;
+			const bodySha256 = summaryHash(body);
+			if (bodySha256 !== prepared.bodySha256)
+				throw new Error(`Summary readback differs from the prepared body: ${copy.path}`);
+			observed.push({ role: copy.role, path: copy.path, artifactSha256: summaryHash(bytes), bodySha256 });
+		}
+		if (!observed.some((copy) => copy.role === "run"))
+			throw new Error("Delivery requires a run SUMMARY readback");
+		const { metadataPath } = await resolveRun(cwd, runDir);
+		const metadata = await readJson(metadataPath);
+		if (metadata.revision !== prepared.evidenceRevision)
+			throw new Error("Research revision changed during readback");
+		const receipt: ResearchDeliveryReceipt = {
+			version: 1,
+			receiptScope: "current-session-current-turn",
+			id: randomUUID(),
+			runId: prepared.runId,
+			evidenceRevision: prepared.evidenceRevision,
+			committedRevision: prepared.evidenceRevision + 1,
+			gateSha256: prepared.gateSha256,
+			claimsSha256: prepared.claimsSha256,
+			bodySha256: prepared.bodySha256,
+			copies: observed,
+			semanticAssessment: assessment || { status: "not-reviewed" },
+			scientificallyVerified: false,
+			memoryClaimsSha256: summaryHash(JSON.stringify(memoryClaims)),
+			sources: prepared.readReceipts.map((read) => ({
+				path: read.path,
+				sha256: read.sha256,
+				readReceiptIds: [read.receiptId],
+			})),
+		};
+		metadata.revision = receipt.committedRevision;
+		metadata.summary_status = "written";
+		metadata.summary_updated_at = new Date().toISOString();
+		metadata.delivery_receipt = receipt;
+		await atomicJson(metadataPath, metadata);
+		return receipt;
 	}
 
 	function safeSlug(value: any, label: any) {
@@ -188,6 +333,18 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 		return records;
 	}
 
+	function rememberRead(cwd: string, runDir: string, aliases: readonly string[], read: any) {
+		const state = ledger(cwd, runDir);
+		const previous = aliases.map((alias) => state.reads.get(alias)).find(Boolean) || [];
+		const current = previous.filter(
+			(item: any) => item.hash === read.hash && item.vault === read.vault && item.revision === read.revision,
+		);
+		current.push({ ...read, receiptId: randomUUID() });
+		// A bounded set of real excerpts, never their enclosing unread range.
+		const receipts = current.slice(-16);
+		for (const alias of aliases) state.reads.set(alias, receipts);
+	}
+
 	async function recordArchivedRead(cwd: any, runDir: any, path: any, args: any, details: any, content: any) {
 		const absolute = resolve(cwd, path);
 		const sourcesRoot = join(resolve(cwd, runDir), "sources");
@@ -221,7 +378,7 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 			relative(cwd, absolute),
 			relative(resolve(cwd, runDir), absolute),
 		]);
-		for (const alias of aliases) ledger(cwd, runDir).reads.set(alias, read);
+		rememberRead(cwd, runDir, [...aliases], read);
 		return true;
 	}
 
@@ -325,7 +482,7 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 		const config = await loadWorkspaceConfig(cwd);
 		// No implicit "research-workbench": callers pass the resolved project; direct callers get the
 		// workspace identity from the shared resolver.
-		project = safeSlug(project || await ports.resolveProject(cwd), "project");
+		project = safeSlug(project || (await ports.resolveProject(cwd)), "project");
 		resultSlug = safeSlug(resultSlug || "research-question", "result_slug");
 		if (typeof query !== "string" || !query.trim()) throw new Error("query is required");
 		const stamp = new Date()
@@ -470,7 +627,15 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 			if (gate.archive_count + gate.reuse_count < 1 || !refs.length)
 				throw new Error("archive verification and structured claim bindings are required before answerable");
 			if (metadata.requires_provenance === true) {
-				const provenance = await readJson(join(path, "reproducibility-manifest.json"));
+				const manifestText = await readFile(join(path, "reproducibility-manifest.json"), "utf8").catch(
+					(error: NodeJS.ErrnoException) => {
+						if (error.code !== "ENOENT") throw error;
+						throw new Error(
+							'This run requires a reproducibility manifest before it can become answerable. Next action: call research_record_run_manifest with this run_dir and files listing actual source paths with role="input", then complete the research loop again.',
+						);
+					},
+				);
+				const provenance = JSON.parse(manifestText);
 				if (provenance?.version !== 1)
 					throw new Error("This run requires a reproducibility manifest before it can become answerable");
 			}
@@ -628,7 +793,7 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 				) {
 					const config = await loadWorkspaceConfig(cwd);
 					if (config.obsidianVault)
-						ledger(cwd, runDir).reads.set(path, {
+						rememberRead(cwd, runDir, [path], {
 							hash: details.hash,
 							text: details.text,
 							vault: readBinding ? readBinding.vault : await realpath(config.obsidianVault),
@@ -706,6 +871,8 @@ export function createResearchLoop(ports: ResearchLoopPorts) {
 	}
 
 	return {
+		prepareResearchDelivery,
+		commitResearchDelivery,
 		startResearchRun,
 		updateResearchLoop,
 		completeResearchGate,

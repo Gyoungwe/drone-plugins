@@ -1,0 +1,64 @@
+{
+	"schemaVersion": 1,
+	"id": "drone-pi-discovery",
+	"version": "0.2.0",
+	"pi": {
+		"apiVersion": 1,
+		"minHostVersion": "1.1.0",
+		"testedHosts": [
+			"1.1.0",
+			"latest"
+		]
+	},
+	"drone": {
+		"pluginApi": 1,
+		"resultContract": "drone-result/v3",
+		"requires": {
+			"inquiry": {
+				"service": "inquiry.runtime",
+				"version": 1
+			}
+		}
+	},
+	"entrypoints": {
+		"extension": "./dist/index.mjs",
+		"host": "./dist/host.mjs",
+		"desktopRuntime": "./dist/runtime.mjs",
+		"ui": "./ui/plugin.json"
+	},
+	"capabilities": [
+		"discovery"
+	],
+	"tools": [
+		"discovery_status",
+		"discovery_list_records",
+		"discovery_search_records",
+		"discovery_bind_workspace",
+		"discovery_create_plan",
+		"discovery_execution_environment",
+		"discovery_execution_receipt",
+		"discovery_cancel_execution",
+		"discovery_list_kernels",
+		"discovery_create_kernel",
+		"discovery_execute_kernel",
+		"discovery_close_kernel",
+		"discovery_reconcile_executions",
+		"discovery_record_inquiry"
+	],
+	"hosts": [
+		"native-pi",
+		"drone-desktop"
+	],
+	"permissions": {
+		"filesystem": [
+			"workspace",
+			"application-state",
+			"application-state-write"
+		],
+		"network": [],
+		"subprocess": [
+			"container"
+		],
+		"externalWrites": false
+	}
+}
