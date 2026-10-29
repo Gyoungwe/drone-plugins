@@ -245,9 +245,10 @@ it("uses the existing graph selection and paginates scoped jobs through the runt
 	fireEvent.click(
 		await screen.findByRole("button", { name: /A method · 方法/ }),
 	);
-	fireEvent.click(screen.getByRole("button", { name: "打开笔记" }));
+	// The selected node's detail panel renders after the selection update; wait for it.
+	fireEvent.click(await screen.findByRole("button", { name: "打开笔记" }));
 	await screen.findByText("A first page");
-	fireEvent.click(screen.getByRole("button", { name: "索引任务" }));
+	fireEvent.click(await screen.findByRole("button", { name: "索引任务" }));
 	await screen.findByText(/refresh · Library\/Methods\/a.md/);
 	fireEvent.click(screen.getByRole("button", { name: "下一页" }));
 	await screen.findByText(/refresh · Library\/Methods\/b.md/);
