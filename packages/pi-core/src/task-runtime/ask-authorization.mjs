@@ -1,5 +1,6 @@
 import { describeAcceptance, effectiveAcceptance } from "./acceptance.mjs";
-import { hasTaskConsent } from "./consent.mjs";
+import { contractHash, hasTaskConsent, MAX_AUTO_RESUMES } from "./consent.mjs";
+import { contextUi } from "./context-ui.mjs";
 const TASK_TOTAL_CALLS = 192;
 function computeAuthorizationDetails(compute) {
   if (!compute || typeof compute !== "object") return null;
@@ -16,7 +17,12 @@ function computeAuthorizationDetails(compute) {
     return null;
   return `\u8BA1\u7B97\u8303\u56F4\uFF1A\u4E3B\u673A ${hosts.join(", ")}\uFF1B\u8FDC\u7A0B\u8BFB\u53D6 ${remoteRead.join(", ") || "\u672A\u58F0\u660E"}\uFF1B\u8FDC\u7A0B\u5199\u5165 ${remoteWrite.join(", ") || "\u672A\u58F0\u660E"}\uFF1B\u6700\u591A ${budget.maxCoreHours} \u6838\u65F6\u3001\u5355\u4F5C\u4E1A ${budget.maxWalltimeMinutes} \u5206\u949F\u3001${budget.maxConcurrentJobs} \u4E2A\u5E76\u53D1\u4F5C\u4E1A\u3001${budget.maxDiskGb} GiB\u3002${compute.agentCode === true ? "\u5141\u8BB8\u6C99\u7BB1\u4E2D\u7684 Agent \u6A21\u5757\u3002" : "\u4E0D\u5141\u8BB8 Agent \u7F16\u5199\u6A21\u5757\u3002"}`;
 }
-function createTaskAuthorization(journal, checkBinding = async () => null) {
+/**
+ * `ui.select(ctx, text, options, signal)` asks the user. `ui.authorizeTask(ctx, task, request, signal)`,
+ * when the host provides it, owns the one task authorization (the host renders and keeps it); the
+ * journal then records the approval it reports.
+ */
+function createTaskAuthorization(journal, checkBinding = async () => null, ui = contextUi) {
   const pending = /* @__PURE__ */ new Map();
   return async function ask(input, ctx, signal = ctx.signal) {
     const view = journal.view();
@@ -25,6 +31,18 @@ function createTaskAuthorization(journal, checkBinding = async () => null) {
       throw new Error("Task changed. Refresh before requesting authorization.");
     if (["completed", "cancelled", "archived"].includes(task.state))
       throw new Error("Task is no longer awaiting authorization.");
+    if (input.action === "authorize-task" && ui.authorizeTask) {
+      const binding = await checkBinding();
+      if ((binding ?? null) !== (task.binding ?? null))
+        throw new Error("Task context or knowledge binding changed; ask again in the current context.");
+      const granted = await ui.authorizeTask(ctx, task, {
+        contractHash: contractHash(task), maxCalls: TASK_TOTAL_CALLS, maxAutoResumes: MAX_AUTO_RESUMES,
+        compute: computeAuthorizationDetails(task.compute),
+      }, signal);
+      if (!granted || signal?.aborted) return false;
+      if (!hasTaskConsent(task, TASK_TOTAL_CALLS)) await journal.command({ ...input, action: "authorize-task" });
+      return true;
+    }
     if (input.action === "authorize-task" && hasTaskConsent(task, TASK_TOTAL_CALLS) && (await checkBinding() ?? null) === (task.binding ?? null))
       return true;
     const action = input.action === "ask-authorization" ? task.actions.find(
@@ -40,7 +58,7 @@ function createTaskAuthorization(journal, checkBinding = async () => null) {
     const key = `${scope}:${task.id}:${view.revision}:${input.action}:${input.actionId || input.operationId || ""}`;
     if (pending.has(key)) return pending.get(key);
     const operation = (async () => {
-      if (!ctx.ui?.select || signal?.aborted) return false;
+      if (!ui.hasUI(ctx) || signal?.aborted) return false;
       const binding = await checkBinding();
       const allow = "\u540C\u610F\u672C\u6B21\u8BF7\u6C42", deny = "\u6682\u4E0D\u6388\u6743";
       const rebind = action?.kind === "rebind" ? action : null;
@@ -67,9 +85,9 @@ ${task.milestones.map((m) => `- ${m.title}\uFF1A${acceptanceLabel(m)}`).join("\n
         input.action === "confirm-outcome" ? "\u8FD9\u91CC\u53EA\u8BB0\u5F55\u4F60\u5DF2\u6838\u5BF9\u8FC7\u8FD9\u4E00\u6B65\u7684\u7ED3\u679C\uFF0C\u4E0D\u4F1A\u91CD\u65B0\u6267\u884C\u5B83\u3002" : rebind ? "\u8FD9\u53EA\u6539\u53D8\u8FD9\u4E00\u9879\u6309\u54EA\u7BC7\u6587\u732E\u6838\u5BF9\uFF0C\u4E0D\u6269\u5927\u53EF\u5199\u76EE\u5F55\u6216\u5176\u5B83\u6743\u9650\u3002" : "\u540C\u610F\u540E\u5B83\u4F1A\u81EA\u5DF1\u505A\u5B8C\u8FD9\u4E9B\u4E8B\uFF0C\u4E2D\u9014\u4E0D\u518D\u53CD\u590D\u95EE\u4F60\uFF1B\u505A\u522B\u7684\u3001\u5220\u4E1C\u897F\u6216\u78B0\u654F\u611F\u6587\u4EF6\u4ECD\u4F1A\u5148\u5F81\u5F97\u4F60\u540C\u610F\u3002\u4F60\u968F\u65F6\u53EF\u4EE5\u505C\u6B62\u3002",
         "\u4E0D\u60F3\u7EE7\u7EED\u5C31\u9009\u201C\u6682\u4E0D\u6388\u6743\u201D\u6216\u76F4\u63A5\u5173\u6389\uFF0C\u90FD\u4E0D\u4F1A\u5F00\u59CB\u6267\u884C\u3002"
       ].join("\n\n");
-      const selected = await ctx.ui.select(`${title}
+      const selected = await ui.select(ctx, `${title}
 
-${details}`, [deny, allow], { signal });
+${details}`, [deny, allow], signal);
       if (selected !== allow || signal?.aborted) return false;
       if (journal.scope() !== scope || await checkBinding() !== binding)
         throw new Error("Task context or knowledge binding changed; ask again in the current context.");
