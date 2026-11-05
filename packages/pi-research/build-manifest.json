@@ -1,9 +1,9 @@
 {
   "version": 1,
   "generator": "packages/pi-research/scripts/build.mjs",
-  "inputsSha256": "2e11233ccb6579335b49bcddc1bb1aeaa505e40dcf6bb419087767623387c2a8",
+  "inputsSha256": "9157c458a8e9541d665a843b77d9e88b01c84dab1b5cc81db0e7d6cec194d50c",
   "outputs": {
-    "dist/desktop-runtime.mjs": "a567df6c140690fe52478a512ff21d05f184abb32776ab3b4f8b5d32a81e9d65",
+    "dist/desktop-runtime.mjs": "bbb9440b76c18a51e21c6138d8fe9bff22846c41e118e9b5d03d6a8f381b9cb8",
     "dist/host.mjs": "c15f401e8d787e4935277c53c693fc18e235237edddcf882bce363c27201be5b",
     "dist/index.mjs": "00e40ccf6668aeeb4ab7421b9e2b73202d8400355471b4ea20751229f47acf72",
     "dist/types/core/claim-bindings.d.ts": "cf2ab2c03ff2ef73967de61f7f4d98ed63b598c64731aaeebb65d42204254ab4",
@@ -30,7 +30,9 @@
     "dist/types/core/zotero-setup.d.ts": "2963c92ef2ca4ad896e6ae94e1ebd68bdcfe3b7cee225b18167729b98bb2672c",
     "dist/types/core/zotero-write-runtime.d.ts": "ac01ab7215139c1715e93478304e3c2e76424ae077fba3d0304889a4157d576a",
     "dist/types/core/zotero-write.d.ts": "c6c0e5e940571d6f0a4b7f176aa8d2fc10bf6c7542c383250f98ea592a629446",
-    "dist/types/desktop/runtime.d.ts": "40eacaf58908b6828209c9befe7cffc016734fba3deebeb48d48c780d185fc59",
+    "dist/types/desktop/capability-fetch.d.ts": "9870368fbad67d412d1445eb198ee4b77e6f748de117dce74f76016838fd263c",
+    "dist/types/desktop/runtime.d.ts": "7b0c708c1e10e34bd6690a709740702aaffe2faebb1ef7ce3595d2407b7e0d8a",
+    "dist/types/desktop/zotero-tools.d.ts": "dfa3c320051c7cf35a23251ff0fe0e261ec4e0c6fd0bcdc802499b425ac11471",
     "dist/types/evidence-gate.d.ts": "4f01bdeb41824004cf332e009f79dffea3f0f377e0e49895ac01db913ea01eea",
     "dist/types/evidence-loop.d.ts": "f8a7724620e7202c0b028729cbeff7e2afb5d9efe606c2bac8f163ee939d28f7",
     "dist/types/extension.d.ts": "0f9e6cd7fb61a27243360d87aa1feab3ed99ee3f9a5de3c115968f4f0c36c365",

@@ -127,6 +127,17 @@ function validateNativeChildSessions(packageName, manifest, failures) {
 	if(!manifest.entrypoints?.desktopRuntime)failure(failures,packageName,"drone.nativeChildSessions requires desktopRuntime ownership");
 }
 
+function validateNetworkReads(packageName, manifest, failures) {
+	const reads=manifest.drone?.networkReads;
+	if(reads===undefined)return;
+	if(!manifest.entrypoints?.desktopRuntime)failure(failures,packageName,"drone.networkReads requires desktopRuntime ownership");
+	const hosts=Array.isArray(manifest.permissions?.network)?manifest.permissions.network:[];
+	if(!Array.isArray(reads)||!reads.length){failure(failures,packageName,"drone.networkReads must be a non-empty array");return;}
+	for(const entry of reads)
+		if(typeof entry!=="string"||!/^[^/\s]+\/[^\s?#]*$/.test(entry)||!hosts.includes(entry.slice(0,entry.indexOf("/"))))
+			failure(failures,packageName,`drone.networkReads entry ${JSON.stringify(entry)} must be host/path on a host in permissions.network`);
+}
+
 function validateRecordAdoptions(packageName, packageVersion, manifest, failures) {
 	const declarations=manifest.drone?.recordAdoptions;
 	if(declarations===undefined)return;
@@ -192,6 +203,7 @@ export function validatePackageManifest(packageJson, manifest, packageRoot) {
 	validateServices(packageName, manifest, failures);
 	validateRecordAdoptions(packageName,packageJson.version,manifest,failures);
 	validateNativeChildSessions(packageName,manifest,failures);
+	validateNetworkReads(packageName,manifest,failures);
 	const droneDependencies = Object.keys(packageJson.dependencies ?? {}).filter((name) => name.startsWith("@gyoungwe/"));
 	const bundled = new Set(packageJson.bundleDependencies ?? []);
 	for (const dependency of droneDependencies) if (dependency !== "@gyoungwe/plugin-api" && !bundled.has(dependency)) failure(failures, packageName, `must not depend on another Drone plugin: ${dependency}`);

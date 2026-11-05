@@ -86,6 +86,7 @@
     "network": [
       "api.zotero.org",
       "127.0.0.1",
+      "127.0.0.1:23119",
       "localhost",
       "www.ebi.ac.uk",
       "europepmc.org",

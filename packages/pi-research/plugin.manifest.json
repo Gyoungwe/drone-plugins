@@ -12,7 +12,11 @@
   },
   "drone": {
     "pluginApi": 1,
-    "resultContract": "drone-result/v3"
+    "resultContract": "drone-result/v3",
+    "networkReads": [
+      "127.0.0.1:23119/connector/ping",
+      "127.0.0.1:23119/connector/getSelectedCollection"
+    ]
   },
   "entrypoints": {
     "extension": "./dist/index.mjs",
@@ -47,8 +51,7 @@
     ],
     "network": [
       "api.zotero.org",
-      "127.0.0.1",
-      "localhost",
+      "127.0.0.1:23119",
       "www.ebi.ac.uk",
       "europepmc.org",
       "pmc-oa-opendata.s3.amazonaws.com",
