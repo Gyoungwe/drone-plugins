@@ -2560,7 +2560,17 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     }
   });
   const refreshStorage = async (ctx) => session.turn({ kind: "storage", storage: await ports.storage(ctx) }, ctx.signal);
-  journal.refresh = (signal) => refreshStorage({ signal });
+  journal.refresh = async (signal) => {
+    const storage = await ports.storage({ signal });
+    if (storage.state === "needs-reopen" && !options.application.readFailure(activeSessionId))
+      options.application.recordFailure(activeSessionId, {
+        state: "needs-reopen",
+        message: storage.code,
+        lastCommitted: session.status()
+      });
+    if (!options.application.readFailure(activeSessionId))
+      await session.turn({ kind: "storage", storage }, signal);
+  };
   on("context", async (event, ctx) => {
     await refreshStorage(ctx);
     return { messages: restoreTaskToolOrder(event.messages) };
