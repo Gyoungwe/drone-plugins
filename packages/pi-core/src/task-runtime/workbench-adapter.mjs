@@ -116,6 +116,9 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
   // While the host call that starts a continuation is in flight, its message may already be
   // delivered; only the host can create that message type, so it is recognized by type and task.
   let continuationPending = false;
+  // A host that refuses work until the run settles holds the "go on?" question for agent_settled:
+  // progressTask requires an idle session, which agent_end never is.
+  let pendingAsk = null;
   journal.isAutoContinuation = (message) => {
     const id = ports.continuationId(message);
     return !!(id && (id === continuationToken || continuationPending) && message.details?.taskId === journal.snapshot()?.id && journal.authorization());
@@ -126,6 +129,7 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
     automaticTurn = false;
     continuationToken = null;
     continuationPending = false;
+    pendingAsk = null;
   };
   currentRuntime().registerDisposable({ dispose: cancelHandoff });
   const continueAuthorized = (ctx) => {
@@ -316,7 +320,13 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
   on("turn_end", () => {
     if (!statusAfterRun) flushStatus();
   });
-  if (statusAfterRun) on("agent_settled", flushStatus);
+  if (statusAfterRun) on("agent_settled", async (_event, ctx) => {
+    await flushStatus();
+    const taskId = pendingAsk;
+    pendingAsk = null;
+    if (taskId && journal.snapshot()?.id === taskId)
+      await progressTask({ taskId, revision: journal.view().revision }, ctx);
+  });
   on("tool_call", async (event,ctx) => {
     providerTurnOpen = true;
     await refreshStorage(ctx);
@@ -374,6 +384,10 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       const snapshot = journal.snapshot();
       if (last?.stopReason !== "error" && !ctx?.signal?.aborted && shouldAskToContinue(snapshot ? journal.view().tasks.find((t) => t.id === snapshot.id) : null)) {
         await send();
+        if (statusAfterRun) {
+          pendingAsk = snapshot.id;
+          return;
+        }
         try {
           if (activeSessionId !== turnSessionId || context !== turnContext) return;
           await progressTask({ taskId: snapshot.id, revision: journal.view().revision }, turnContext);
