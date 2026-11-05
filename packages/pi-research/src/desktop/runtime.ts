@@ -1,9 +1,7 @@
-import type {
-	PluginRuntimeFactory,
-	PluginRuntimeOperation,
-	PluginRuntimeScope,
-} from "@gyoungwe/plugin-api/runtime";
+import type { PluginNativeRuntimeFactory } from "@gyoungwe/plugin-api/native";
+import type { PluginRuntimeOperation, PluginRuntimeScope } from "@gyoungwe/plugin-api/runtime";
 import { createResearchHost, type ResearchHostPort } from "../research-host.js";
+import { registerManagedZoteroTools, ZOTERO_TOOL_EFFECTS } from "./zotero-tools.js";
 
 function scopeWorkspace(scope: PluginRuntimeScope): string {
 	if (scope.kind === "application") throw new Error("Research status requires a selected workspace");
@@ -45,8 +43,11 @@ function portFor(capabilities: { call(name: string, input: unknown): Promise<unk
 	};
 }
 
-/** Read-only Desktop runtime. Host-granted roots are adapted to the public research host port. */
-const createDesktopRuntime: PluginRuntimeFactory = async context => {
+/**
+ * Desktop runtime: read-only research operations over host-granted roots, and per session the
+ * Zotero tools, whose network goes through the host.
+ */
+const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 	const adapterFor = (capabilities: { call(name: string, input: unknown): Promise<unknown> }) =>
 		createResearchHost(portFor(capabilities));
 	const operation = (name: "status" | "listRuns" | "detail"): PluginRuntimeOperation => ({
@@ -73,6 +74,12 @@ const createDesktopRuntime: PluginRuntimeFactory = async context => {
 	});
 	return {
 		operations: { status: operation("status"), listRuns: operation("listRuns"), detail: operation("detail") },
+		createNativeSession: async () => ({
+			toolEffects: ZOTERO_TOOL_EFFECTS,
+			extension: (pi: { registerTool(tool: unknown): void }) =>
+				registerManagedZoteroTools(pi, (name, input, signal) => context.capabilities.call(name, input, signal)),
+			dispose: async () => {},
+		}),
 		dispose: async () => {},
 	};
 };
