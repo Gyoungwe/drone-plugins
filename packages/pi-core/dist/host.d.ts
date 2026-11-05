@@ -61,13 +61,13 @@ export declare const taskHostLoader: {
     load: (input?: {
         readonly workbench?: WorkbenchPluginClient;
     }) => {
-        workbench?: WorkbenchPluginClient | undefined;
         contractVersion: 1;
         registerAcceptanceVerifier: (kind: string, definition: Readonly<Record<string, unknown>>) => TaskAcceptanceVerifier;
         readAcceptanceVerifier: (kind: string) => TaskAcceptanceVerifier | null;
         normalizeMilestones: typeof normalizeTaskMilestones;
         createNativeSession: () => PluginNativeSession;
         dispose: () => Promise<void>;
+        workbench?: WorkbenchPluginClient | undefined;
     };
 };
 export { normalizeTaskMilestones } from "./milestone-plan";
