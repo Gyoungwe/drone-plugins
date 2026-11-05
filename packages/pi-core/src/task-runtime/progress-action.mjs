@@ -21,7 +21,7 @@ function createTaskProgression(journal, { askAuthorization, checkBinding, contin
       if (!ui.hasUI(ctx)) return;
       if (!task.executionConsent && task.milestones.length) {
         if (await askAuthorization({ ...input, action: "authorize-task" }, ctx)) {
-          send("\u4F60\u5DF2\u786E\u8BA4\uFF0C\u63A5\u7740\u5B8C\u6210\u5269\u4E0B\u7684\u4EA4\u4ED8\u3002");
+          await send("\u4F60\u5DF2\u786E\u8BA4\uFF0C\u63A5\u7740\u5B8C\u6210\u5269\u4E0B\u7684\u4EA4\u4ED8\u3002");
           await continueAuthorized(ctx);
         }
         return;
@@ -30,7 +30,7 @@ function createTaskProgression(journal, { askAuthorization, checkBinding, contin
       if (action?.kind === "authorization") {
         if (await askAuthorization({ ...input, action: "ask-authorization", actionId: action.id }, ctx)) {
           await journal.command({ taskId: task.id, revision: journal.view().revision, action: "select" });
-          send("\u4F60\u5DF2\u540C\u610F\u8FD9\u9879\u65B0\u589E\u7684\u5185\u5BB9\uFF0C\u7EE7\u7EED\u5F80\u4E0B\u505A\u3002");
+          await send("\u4F60\u5DF2\u540C\u610F\u8FD9\u9879\u65B0\u589E\u7684\u5185\u5BB9\uFF0C\u7EE7\u7EED\u5F80\u4E0B\u505A\u3002");
           await continueAuthorized(ctx);
         }
         return;
@@ -78,7 +78,7 @@ ${action.reason}
       await journal.reconcile(ctx.cwd);
       if (journal.scope() !== scope || journal.snapshot()?.id !== task.id || getGeneration() !== generation || ctx.signal?.aborted || await checkBinding() !== binding)
         return;
-      send();
+      await send();
       if (selected === "\u4EC5\u6838\u5BF9\u5DF2\u6709\u4EA7\u7269" || uncertain || journal.snapshot()?.state === "completed") return;
       if (journal.authorization()) await continueAuthorized(ctx);
       else if (!task.milestones.length) await prepareRemaining();

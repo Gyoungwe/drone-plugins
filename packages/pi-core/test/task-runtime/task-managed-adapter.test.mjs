@@ -65,7 +65,7 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 			host.notices.push(input);
 			return { durability: "durable" };
 		},
-		"session.inspect": () => ({ agentActive: false, projectTrusted: true, readOnly: false }),
+		"session.inspect": () => ({ agentActive: host.streaming, projectTrusted: true, readOnly: false }),
 		"session.select": ({ title, options }) => {
 			host.questions.push(title);
 			const value = answer(title, options);
@@ -129,7 +129,8 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 		const result = await during(() => tools[name].execute(`${name}-1`, input, lifetime.signal, undefined, ctx));
 		return JSON.parse(result.content[0].text);
 	};
-	return { cwd, host, app, native, hooks, tools, commands, ctx, tool, close: () => app.dispose() };
+	const command = (name, args) => during(() => commands[name].handler(args, ctx));
+	return { cwd, host, app, native, hooks, tools, commands, ctx, tool, command, close: () => app.dispose() };
 }
 
 const plan = {
@@ -219,6 +220,72 @@ it("a status query outside a run posts its card while the input hook is still li
 	expect(t.host.notices).toHaveLength(before + 1);
 	const status = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
 	expect(status.storage.state).toBe("durable");
+	await t.close();
+});
+
+const taskAction = (input) => Buffer.from(JSON.stringify(input)).toString("base64url");
+
+it("the progress action posts its status inside the command, so choosing to only re-check cannot fence the task", async () => {
+	const t = await harness({ answer: (_title, options) => options.find((option) => option === "仅核对已有产物") });
+	await t.hooks.input({ text: plan.goal, images: [] }, t.ctx);
+	await t.tool("task_plan", plan);
+	const { snapshot } = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
+	const before = t.host.notices.length;
+	const { revision } = t.host.notices.at(-1).view;
+	await t.command("task-action", taskAction({ action: "progress", taskId: snapshot.id, revision }));
+	expect(t.host.questions).toHaveLength(1);
+	expect(t.host.notices.length).toBeGreaterThan(before);
+	// Let a late, unawaited post reach the host and be refused before reading the outcome.
+	await new Promise((resolveLater) => setTimeout(resolveLater, 5));
+	const status = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
+	expect(status.storage.state).toBe("durable");
+	await t.close();
+});
+
+/** Runs the task to its 17th run: the first whose end finds the automatic handoffs used up. */
+async function exhaustHandoffs(t) {
+	const milestones = Array.from({ length: 20 }, (_, i) => ({
+		id: `m${i}`,
+		title: `File ${i}`,
+		acceptance: { kind: "file", path: `out/${i}.md` },
+	}));
+	await t.hooks.input({ text: plan.goal, images: [] }, t.ctx);
+	await t.tool("task_plan", { ...plan, milestones });
+	for (let n = 0; n < 17; n++) {
+		if (n) await settle(t);
+		t.host.streaming = true;
+		await t.hooks.before_agent_start({ prompt: "继续", systemPrompt: "" }, t.ctx);
+		const write = { toolName: "write", toolCallId: `w${n}`, input: { path: `out/${n}.md`, content: "x" } };
+		await t.hooks.tool_call({ type: "tool_call", ...write }, t.ctx);
+		await writeFile(join(t.cwd, `out/${n}.md`), "x");
+		await t.hooks.tool_result({ type: "tool_result", ...write, content: [{ type: "text", text: "ok" }], isError: false }, t.ctx);
+		await t.hooks.agent_end({ messages: [{ role: "assistant", stopReason: "stop", content: [] }] }, t.ctx);
+	}
+}
+const settle = async (t) => {
+	t.host.streaming = false;
+	await t.hooks.agent_settled({ type: "agent_settled", aborted: false }, t.ctx);
+};
+
+it("when automatic handoffs run out, the question waits until the run has settled", async () => {
+	const t = await harness();
+	await exhaustHandoffs(t);
+	// The run is still active inside agent_end: nothing may be asked yet.
+	expect(t.host.continues).toHaveLength(16);
+	expect(t.host.questions).toEqual([]);
+	await settle(t);
+	expect(t.host.questions).toHaveLength(1);
+	// The default answer takes the last option, so the task goes on under the same grant.
+	expect(t.host.continues).toHaveLength(17);
+	await t.close();
+});
+
+it("a new user message drops a question still waiting for the run to settle", async () => {
+	const t = await harness();
+	await exhaustHandoffs(t);
+	await t.hooks.input({ text: "换个思路", images: [] }, t.ctx);
+	await settle(t);
+	expect(t.host.questions).toEqual([]);
 	await t.close();
 });
 
