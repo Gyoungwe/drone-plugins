@@ -36,6 +36,17 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
   let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || ports.readKnowledgeBinding;
   let pendingStatus = null;
   let providerTurnOpen = false;
+  // A host that refuses session messages until the SDK run settles holds status cards for the
+  // whole run and posts the latest one from agent_settled instead of turn_end/agent_end.
+  // The returned post must be awaited by the hook: a managed host lends capabilities only while
+  // the invocation is live.
+  const statusAfterRun = ports.statusAfterRun === true;
+  const flushStatus = () => {
+    providerTurnOpen = false;
+    const held = pendingStatus;
+    pendingStatus = null;
+    return held ? send(held.content, held.command) : undefined;
+  };
   const currentContext = () => invocation.getStore() || context;
   const authorize = (cwd, path) => ports.authorizeRead(currentContext(), cwd, path);
   const inspect = (cwd, path, expected = {}) => ports.inspect(currentContext(), cwd, path, expected, {
@@ -136,7 +147,7 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
         if (++idleChecks < 40) handoffTimer = setTimeout(() => void handoff().catch(cancelHandoff), 25);
         else {
           await journal.pause("auto-handoff-not-idle");
-          send();
+          await send();
         }
         return;
       }
@@ -145,7 +156,7 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
         if (generation !== handoffGeneration || context !== ctx || journal.snapshot()?.id !== taskId) return;
         const result = await journal.begin("\u7EE7\u7EED", [], binding);
         if (result.blocked || ["blocked", "waiting_user"].includes(journal.snapshot()?.state) || !journal.authorization()) {
-          send();
+          await send();
           return;
         }
         prepared = true;
@@ -161,7 +172,7 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
         if (generation !== handoffGeneration || context !== ctx || journal.snapshot()?.id !== taskId || ["completed", "cancelled", "archived"].includes(journal.snapshot()?.state))
           return;
         await journal.pause("auto-handoff-failed");
-        send(`\u6CA1\u80FD\u81EA\u52A8\u63A5\u7740\u505A\uFF1A${clean(e.message)}\u3002\u5DF2\u6709\u7684\u7ED3\u679C\u90FD\u5728\uFF0C\u6CA1\u6709\u91CD\u590D\u6267\u884C\u4EFB\u4F55\u64CD\u4F5C\u3002`);
+        await send(`\u6CA1\u80FD\u81EA\u52A8\u63A5\u7740\u505A\uFF1A${clean(e.message)}\u3002\u5DF2\u6709\u7684\u7ED3\u679C\u90FD\u5728\uFF0C\u6CA1\u6709\u91CD\u590D\u6267\u884C\u4EFB\u4F55\u64CD\u4F5C\u3002`);
       }
     };
     // A managed host only lends capabilities during the current invocation, so it hands off
@@ -210,7 +221,7 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
     }
     if (!event.images?.length && isTaskStatusQuery(event.text)) {
       await attach(ctx);
-      send(void 0, "task-status");
+      await send(void 0, "task-status");
       return { action: "handled" };
     }
     cancelHandoff();
@@ -218,15 +229,15 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
     try {
       const result = await prepare(event.text, ctx);
       if (result.selectionRequired || result.blocked) {
-        send();
+        await send();
         return { action: "handled" };
       }
-      if (result.deferredReview && !result.stageReleased) send();
+      if (result.deferredReview && !result.stageReleased) await send();
       prepared = true;
     } catch (e) {
       halted = true;
       if(session.status().persistence) await ports.notifyError(ctx, session.status().render);
-      else send(`任务未开始：${clean(e.message)}
+      else await send(`任务未开始：${clean(e.message)}
 ${journal.render()}`);
       return { action: "handled" };
     }
@@ -277,15 +288,24 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       const result = await prepare(query, ctx);
       if (result.selectionRequired || result.blocked) {
         halted = true;
-        send();
+        await send();
       }
     } catch {
       halted = true;
     }
   });
   const refreshStorage = async ctx => session.turn({kind:"storage",storage:await ports.storage(ctx)},ctx.signal);
-  // Re-read the actual session records before serving status outside a hook.
-  journal.refresh = signal => refreshStorage({ signal });
+  // Re-read the actual session records before serving status outside a hook. A fenced session is
+  // never advanced here: status() then reports the last committed task with needs-reopen.
+  journal.refresh = async signal => {
+    const storage = await ports.storage({ signal });
+    if (storage.state === "needs-reopen" && !options.application.readFailure(activeSessionId))
+      options.application.recordFailure(activeSessionId, {
+        state: "needs-reopen", message: storage.code, lastCommitted: session.status(),
+      });
+    if (!options.application.readFailure(activeSessionId))
+      await session.turn({ kind: "storage", storage }, signal);
+  };
   on("context", async (event,ctx) => {
     await refreshStorage(ctx);
     return { messages: restoreTaskToolOrder(event.messages) };
@@ -294,9 +314,9 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     providerTurnOpen = true;
   });
   on("turn_end", () => {
-    providerTurnOpen = false;
-    if (pendingStatus !== null) send(pendingStatus.content, pendingStatus.command);
+    if (!statusAfterRun) flushStatus();
   });
+  if (statusAfterRun) on("agent_settled", flushStatus);
   on("tool_call", async (event,ctx) => {
     providerTurnOpen = true;
     await refreshStorage(ctx);
@@ -329,34 +349,31 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     if (!turnContext || !turnSessionId || turnSessionId !== (ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId))
       return;
     const last = [...event.messages || []].reverse().find((m) => m.role === "assistant");
-    providerTurnOpen = false;
-    const held = pendingStatus;
-    pendingStatus = null;
-    if (held) send(held.content, held.command);
+    if (!statusAfterRun) flushStatus();
     if (last?.stopReason === "aborted" || ctx?.signal?.aborted || /was aborted|request aborted/i.test(last?.errorMessage || "")) {
       cancelHandoff();
       await journal.pause("user-aborted");
-      send();
+      await send();
       return;
     }
     await journal.settle();
     if (journal.authorization()) {
       await journal.reconcile(turnContext.cwd);
       if (last?.knowledgePublication?.status === "blocked" && last.stopReason !== "error" && await journal.reserveContinuation(last.knowledgePublication.reason)) {
-        send("\u521A\u624D\u505C\u4E86\u4E00\u4E0B\uFF0C\u6B63\u5728\u6309\u4F60\u4E4B\u524D\u7684\u6388\u6743\u63A5\u7740\u505A\uFF1A\u5148\u6838\u5BF9\u5DF2\u6709\u7ED3\u679C\uFF0C\u518D\u7EE7\u7EED\u5269\u4E0B\u7684\u90E8\u5206\uFF0C\u4E0D\u7528\u4F60\u518D\u786E\u8BA4\u3002");
+        await send("\u521A\u624D\u505C\u4E86\u4E00\u4E0B\uFF0C\u6B63\u5728\u6309\u4F60\u4E4B\u524D\u7684\u6388\u6743\u63A5\u7740\u505A\uFF1A\u5148\u6838\u5BF9\u5DF2\u6709\u7ED3\u679C\uFF0C\u518D\u7EE7\u7EED\u5269\u4E0B\u7684\u90E8\u5206\uFF0C\u4E0D\u7528\u4F60\u518D\u786E\u8BA4\u3002");
         if (activeSessionId !== turnSessionId || context !== turnContext) return;
         await continueAuthorized(turnContext);
         return;
       }
       if (last?.stopReason !== "error" && !ctx?.signal?.aborted && await journal.reserveHandoff()) {
-        send();
+        await send();
         if (activeSessionId !== turnSessionId || context !== turnContext) return;
         await continueAuthorized(turnContext);
         return;
       }
       const snapshot = journal.snapshot();
       if (last?.stopReason !== "error" && !ctx?.signal?.aborted && shouldAskToContinue(snapshot ? journal.view().tasks.find((t) => t.id === snapshot.id) : null)) {
-        send();
+        await send();
         try {
           if (activeSessionId !== turnSessionId || context !== turnContext) return;
           await progressTask({ taskId: snapshot.id, revision: journal.view().revision }, turnContext);
@@ -365,7 +382,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
         return;
       }
     }
-    send();
+    await send();
   });
   const tool = (name, description, properties, required, execute) => pi.registerTool({
     name,
@@ -449,13 +466,13 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     async (input, ctx, signal) => {
       const writeRoots = await ports.writeRoots(ctx.cwd, input.writeDirectories || []);
       const result = await journal.plan({ ...input, writeRoots });
-      send("\u8BA1\u5212\u5DF2\u7ECF\u51C6\u5907\u597D\uFF0C\u9A6C\u4E0A\u4F1A\u5F39\u51FA\u4E00\u4E2A\u786E\u8BA4\u6846\uFF0C\u540C\u610F\u540E\u5F00\u59CB\u6267\u884C\u3002");
+      await send("\u8BA1\u5212\u5DF2\u7ECF\u51C6\u5907\u597D\uFF0C\u9A6C\u4E0A\u4F1A\u5F39\u51FA\u4E00\u4E2A\u786E\u8BA4\u6846\uFF0C\u540C\u610F\u540E\u5F00\u59CB\u6267\u884C\u3002");
       const authorized = await askAuthorization(
         { taskId: journal.snapshot().id, revision: journal.view().revision, action: "authorize-task" },
         ctx,
         signal
       );
-      send(authorized ? "\u4F60\u5DF2\u786E\u8BA4\uFF0C\u5F00\u59CB\u6267\u884C\u8FD9\u4E2A\u4EFB\u52A1\u3002" : "\u4F60\u6CA1\u6709\u786E\u8BA4\uFF0C\u4EFB\u52A1\u5148\u505C\u5728\u539F\u5730\uFF0C\u4E0D\u4F1A\u6539\u52A8\u4EFB\u4F55\u6587\u4EF6\u3002");
+      await send(authorized ? "\u4F60\u5DF2\u786E\u8BA4\uFF0C\u5F00\u59CB\u6267\u884C\u8FD9\u4E2A\u4EFB\u52A1\u3002" : "\u4F60\u6CA1\u6709\u786E\u8BA4\uFF0C\u4EFB\u52A1\u5148\u505C\u5728\u539F\u5730\uFF0C\u4E0D\u4F1A\u6539\u52A8\u4EFB\u4F55\u6587\u4EF6\u3002");
       return {
         milestones: result,
         authorized,
@@ -489,7 +506,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
         ctx,
         signal
       );
-      send(
+      await send(
         authorized ? action.kind === "rebind" ? "\u5DF2\u6309\u4F60\u7684\u786E\u8BA4\u66F4\u6362\u8FD9\u4E00\u9879\u5BF9\u5E94\u7684\u6587\u732E\uFF0C\u63A5\u4E0B\u6765\u6309\u65B0 DOI \u6838\u5BF9\u3002" : "\u597D\u7684\uFF0C\u8FD9\u9879\u5DF2\u7ECF\u4F60\u786E\u8BA4\uFF0C\u7EE7\u7EED\u5F80\u4E0B\u505A\u3002" : "\u4F60\u6CA1\u6709\u786E\u8BA4\uFF0C\u8FD9\u9879\u5148\u7559\u7740\uFF0C\u4E0D\u4F1A\u66FF\u4F60\u505A\u51B3\u5B9A\u3002"
       );
       return { ...action, state: authorized ? "acknowledged" : "pending", authorized };
@@ -514,7 +531,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     description: "\u4EFB\u52A1\u5DE5\u4F5C\u53F0\uFF1A\u65E0\u6A21\u578B\u72B6\u6001\u3001\u4EFB\u52A1\u9009\u62E9\u3001\u4EA7\u7269\u4E0E\u4EBA\u5DE5\u52A8\u4F5C",
     handler: bindCallback(async (_args, ctx) => {
       await attach(ctx);
-      send(void 0, "task-status");
+      await send(void 0, "task-status");
     })
   });
   const progressTask = createTaskProgression(journal, {
@@ -535,7 +552,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
         throw new Error("Stop the agent before changing tasks or inspecting recovery files.");
       if (args.length > 6e3) throw new Error("Task command too large.");
       if (!args.trim()) {
-        send("\u4EFB\u52A1\u52A8\u4F5C\u4E3A\u7A7A\uFF1A\u8BF7\u4ECE\u4EFB\u52A1\u9762\u677F\u53D1\u8D77\u5177\u4F53\u64CD\u4F5C\uFF1B\u8FD9\u6761\u6D88\u606F\u4E0D\u4F1A\u6539\u53D8\u4EFB\u52A1\u6216\u6388\u6743\u3002", "task-action");
+        await send("\u4EFB\u52A1\u52A8\u4F5C\u4E3A\u7A7A\uFF1A\u8BF7\u4ECE\u4EFB\u52A1\u9762\u677F\u53D1\u8D77\u5177\u4F53\u64CD\u4F5C\uFF1B\u8FD9\u6761\u6D88\u606F\u4E0D\u4F1A\u6539\u53D8\u4EFB\u52A1\u6216\u6388\u6743\u3002", "task-action");
         return;
       }
       const input = JSON.parse(Buffer.from(args.trim(), "base64url").toString("utf8"));
@@ -545,7 +562,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       }
       if (input.action === "authorize-task") {
         if (!await askAuthorization(input, ctx)) {
-          send("\u4F60\u6CA1\u6709\u786E\u8BA4\uFF0C\u4EFB\u52A1\u4E0D\u4F1A\u5F00\u59CB\u3002\u60F3\u6267\u884C\u7684\u65F6\u5019\u518D\u70B9\u4E00\u6B21\u5C31\u884C\u3002");
+          await send("\u4F60\u6CA1\u6709\u786E\u8BA4\uFF0C\u4EFB\u52A1\u4E0D\u4F1A\u5F00\u59CB\u3002\u60F3\u6267\u884C\u7684\u65F6\u5019\u518D\u70B9\u4E00\u6B21\u5C31\u884C\u3002");
           return;
         }
         const authorizedTask = journal.view().tasks.find((task) => task.id === input.taskId);
@@ -556,13 +573,13 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
           basis: [`task:${input.taskId}`, `revision:${input.revision}`],
           at: (/* @__PURE__ */ new Date()).toISOString()
         });
-        send("\u5DF2\u786E\u8BA4\uFF0C\u63A5\u4E0B\u6765\u4F1A\u81EA\u52A8\u505A\u5B8C\u5E76\u4EA4\u4ED8\u7ED3\u679C\u3002\u4F60\u968F\u65F6\u53EF\u4EE5\u505C\uFF1B\u8981\u505A\u8BA1\u5212\u4E4B\u5916\u7684\u4E8B\u4ECD\u4F1A\u5148\u95EE\u4F60\u3002");
+        await send("\u5DF2\u786E\u8BA4\uFF0C\u63A5\u4E0B\u6765\u4F1A\u81EA\u52A8\u505A\u5B8C\u5E76\u4EA4\u4ED8\u7ED3\u679C\u3002\u4F60\u968F\u65F6\u53EF\u4EE5\u505C\uFF1B\u8981\u505A\u8BA1\u5212\u4E4B\u5916\u7684\u4E8B\u4ECD\u4F1A\u5148\u95EE\u4F60\u3002");
         await continueAuthorized(ctx);
         return;
       }
       if (["approve-plan", "next-stage", "ask-authorization", "confirm-outcome"].includes(input.action)) {
         const accepted = await askAuthorization(input, ctx);
-        send(accepted ? "\u5DF2\u8BB0\u5F55\u4F60\u7684\u786E\u8BA4\u3002" : "\u4F60\u6CA1\u6709\u786E\u8BA4\uFF0C\u4E00\u5207\u4FDD\u6301\u539F\u6837\u3002");
+        await send(accepted ? "\u5DF2\u8BB0\u5F55\u4F60\u7684\u786E\u8BA4\u3002" : "\u4F60\u6CA1\u6709\u786E\u8BA4\uFF0C\u4E00\u5207\u4FDD\u6301\u539F\u6837\u3002");
         if (accepted) {
           await journal.command({ taskId: input.taskId, revision: journal.view().revision, action: "select" });
           await continueAuthorized(ctx);
@@ -573,7 +590,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
         const action = journal.view().tasks.find((t) => t.id === input.taskId)?.actions.find((a) => a.id === input.actionId);
         if (["authorization", "rebind"].includes(action?.kind)) {
           const accepted = await askAuthorization({ ...input, action: "ask-authorization" }, ctx);
-          send();
+          await send();
           if (accepted) {
             if (action?.kind === "rebind")
               ports.decision?.({
@@ -597,14 +614,14 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
         await journal.command({ ...input, action: "select" });
         const result = await journal.begin("\u7EE7\u7EED", [], await bindingKey());
         if (result.blocked || journal.snapshot()?.state === "blocked" || journal.snapshot()?.state === "waiting_user") {
-          send();
+          await send();
           return;
         }
-        send();
+        await send();
         await ports.sendUserMessage(ctx, "\u7EE7\u7EED", { expandPromptTemplates: true });
         return;
       } else await journal.command(input);
-      send(void 0, "task-action");
+      await send(void 0, "task-action");
     }))
   });
   return journal;
