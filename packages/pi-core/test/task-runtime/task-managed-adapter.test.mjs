@@ -30,6 +30,16 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 		denyGrant: false,
 		streaming: false,
 	};
+	// Invocations (hooks, tools) currently running; the host lends capabilities only to them.
+	let live = 0;
+	const during = async (invocation) => {
+		live++;
+		try {
+			return await invocation();
+		} finally {
+			live--;
+		}
+	};
 	const capabilities = {
 		"caller.scope": () => ({ kind: "session", sessionId: "s1", workspaceDirectory: cwd, workspaceId: "w" }),
 		"session.records.read": () => ({ mode: "persistent", state: "durable", error: null, records: [...host.records] }),
@@ -42,9 +52,12 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 			{ name: "read", readOnlyHint: true },
 			{ name: "write", readOnlyHint: false },
 		],
-		"session.notify": (input) => {
-			// Same rule as the real host: no session message while the SDK run is active.
+		"session.notify": async (input) => {
+			// Same rules as the real host: no session message while the SDK run is active, and the
+			// invoking hook/tool must still be running when the (asynchronous) write completes.
 			if (host.streaming) throw new Error("Session notification requires an idle session");
+			await new Promise((resolveTick) => setTimeout(resolveTick, 0));
+			if (!live) throw new Error("Plugin capability caller completed");
 			host.notices.push(input);
 			return { durability: "durable" };
 		},
@@ -97,7 +110,7 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 	const hooks = {}, tools = {}, commands = {};
 	native.extension({
 		on: (name, handler) => {
-			hooks[name] = handler;
+			hooks[name] = (...args) => during(() => handler(...args));
 		},
 		registerTool: (tool) => {
 			tools[tool.name] = tool;
@@ -109,7 +122,7 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 	const ctx = { cwd, signal: lifetime.signal, hasUI: false, sessionManager: { getSessionId: () => "s1" } };
 	await hooks.session_start({}, ctx);
 	const tool = async (name, input) => {
-		const result = await tools[name].execute(`${name}-1`, input, lifetime.signal, undefined, ctx);
+		const result = await during(() => tools[name].execute(`${name}-1`, input, lifetime.signal, undefined, ctx));
 		return JSON.parse(result.content[0].text);
 	};
 	return { cwd, host, app, native, hooks, tools, commands, ctx, tool, close: () => app.dispose() };
@@ -190,6 +203,18 @@ it("one host task grant authorizes the plan; delivered files complete it and the
 		t.ctx,
 	);
 	expect(t.host.grants).toHaveLength(1);
+	await t.close();
+});
+
+it("a status query outside a run posts its card while the input hook is still live", async () => {
+	const t = await harness();
+	await t.hooks.input({ text: plan.goal, images: [] }, t.ctx);
+	await t.tool("task_plan", plan);
+	const before = t.host.notices.length;
+	expect(await t.hooks.input({ text: "任务状态", images: [] }, t.ctx)).toEqual({ action: "handled" });
+	expect(t.host.notices).toHaveLength(before + 1);
+	const status = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
+	expect(status.storage.state).toBe("durable");
 	await t.close();
 });
 
