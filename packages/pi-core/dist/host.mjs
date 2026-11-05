@@ -2512,6 +2512,13 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
   let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || ports.readKnowledgeBinding;
   let pendingStatus = null;
   let providerTurnOpen = false;
+  const statusAfterRun = ports.statusAfterRun === true;
+  const flushStatus = () => {
+    providerTurnOpen = false;
+    const held = pendingStatus;
+    pendingStatus = null;
+    if (held) send(held.content, held.command);
+  };
   const currentContext = () => invocation.getStore() || context;
   const authorize = (cwd, path) => ports.authorizeRead(currentContext(), cwd, path);
   const inspect = (cwd, path, expected = {}) => ports.inspect(currentContext(), cwd, path, expected, {
@@ -2771,9 +2778,9 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     providerTurnOpen = true;
   });
   on("turn_end", () => {
-    providerTurnOpen = false;
-    if (pendingStatus !== null) send(pendingStatus.content, pendingStatus.command);
+    if (!statusAfterRun) flushStatus();
   });
+  if (statusAfterRun) on("agent_settled", flushStatus);
   on("tool_call", async (event, ctx) => {
     providerTurnOpen = true;
     await refreshStorage(ctx);
@@ -2806,10 +2813,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     if (!turnContext || !turnSessionId || turnSessionId !== (ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId))
       return;
     const last = [...event.messages || []].reverse().find((m) => m.role === "assistant");
-    providerTurnOpen = false;
-    const held = pendingStatus;
-    pendingStatus = null;
-    if (held) send(held.content, held.command);
+    if (!statusAfterRun) flushStatus();
     if (last?.stopReason === "aborted" || ctx?.signal?.aborted || /was aborted|request aborted/i.test(last?.errorMessage || "")) {
       cancelHandoff();
       await journal.pause("user-aborted");

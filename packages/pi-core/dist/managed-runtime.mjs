@@ -2303,6 +2303,13 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
   let context, activeSessionId, prepared = false, awaitingUser = false, halted = false, readKnowledgeBinding = options.readKnowledgeBinding || ports.readKnowledgeBinding;
   let pendingStatus = null;
   let providerTurnOpen = false;
+  const statusAfterRun = ports.statusAfterRun === true;
+  const flushStatus = () => {
+    providerTurnOpen = false;
+    const held = pendingStatus;
+    pendingStatus = null;
+    if (held) send(held.content, held.command);
+  };
   const currentContext = () => invocation.getStore() || context;
   const authorize = (cwd, path) => ports.authorizeRead(currentContext(), cwd, path);
   const inspect = (cwd, path, expected = {}) => ports.inspect(currentContext(), cwd, path, expected, {
@@ -2562,9 +2569,9 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     providerTurnOpen = true;
   });
   on("turn_end", () => {
-    providerTurnOpen = false;
-    if (pendingStatus !== null) send(pendingStatus.content, pendingStatus.command);
+    if (!statusAfterRun) flushStatus();
   });
+  if (statusAfterRun) on("agent_settled", flushStatus);
   on("tool_call", async (event, ctx) => {
     providerTurnOpen = true;
     await refreshStorage(ctx);
@@ -2597,10 +2604,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
     if (!turnContext || !turnSessionId || turnSessionId !== (ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId))
       return;
     const last = [...event.messages || []].reverse().find((m) => m.role === "assistant");
-    providerTurnOpen = false;
-    const held = pendingStatus;
-    pendingStatus = null;
-    if (held) send(held.content, held.command);
+    if (!statusAfterRun) flushStatus();
     if (last?.stopReason === "aborted" || ctx?.signal?.aborted || /was aborted|request aborted/i.test(last?.errorMessage || "")) {
       cancelHandoff();
       await journal.pause("user-aborted");
@@ -2895,7 +2899,8 @@ var EVENT_EFFECTS = Object.fromEntries([
   "turn_end",
   "tool_call",
   "tool_result",
-  "agent_end"
+  "agent_end",
+  "agent_settled"
 ].map((name) => [name, READ]));
 var PRIVATE_SEGMENT = /^(?:auth|credentials|secrets?|tokens?|password)(?:\.|$)/i;
 var fileError = (code, message) => Object.assign(new Error(message), { code });
@@ -2943,6 +2948,9 @@ function managedPorts(call, cache) {
         throw new Error("Task checkpoint is no longer on the actual SDK branch");
       return { mode: observed.mode, state: observed.state };
     },
+    // The host rejects session.notify while the SDK run is active (a queued custom message would
+    // extend the run), so status cards wait for agent_settled.
+    statusAfterRun: true,
     post: (ctx, { content, view }) => call("session.notify", { content, view }, ctx?.signal),
     notifyError: (ctx, text2) => call("session.notify", { content: text2 }, ctx?.signal),
     hasUI: () => true,
