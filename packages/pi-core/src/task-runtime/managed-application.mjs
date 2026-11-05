@@ -14,7 +14,7 @@ const TOOL_EFFECTS = {task_status:READ,task_plan:READ,task_wait:READ,task_reconc
 const COMMAND_EFFECTS = {"task-status":READ,"task-action":READ};
 const EVENT_EFFECTS = Object.fromEntries([
   "session_start","session_tree","context","input","before_agent_start","message_start",
-  "turn_start","turn_end","tool_call","tool_result","agent_end",
+  "turn_start","turn_end","tool_call","tool_result","agent_end","agent_settled",
 ].map(name=>[name,READ]));
 const PRIVATE_SEGMENT = /^(?:auth|credentials|secrets?|tokens?|password)(?:\.|$)/i;
 const fileError = (code, message) => Object.assign(new Error(message), { code });
@@ -64,6 +64,9 @@ function managedPorts(call, cache) {
         throw new Error("Task checkpoint is no longer on the actual SDK branch");
       return { mode: observed.mode, state: observed.state };
     },
+    // The host rejects session.notify while the SDK run is active (a queued custom message would
+    // extend the run), so status cards wait for agent_settled.
+    statusAfterRun: true,
     post: (ctx, { content, view }) => call("session.notify", { content, view }, ctx?.signal),
     notifyError: (ctx, text) => call("session.notify", { content: text }, ctx?.signal),
     hasUI: () => true,
