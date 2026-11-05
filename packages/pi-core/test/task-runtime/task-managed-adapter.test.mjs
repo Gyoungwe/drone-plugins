@@ -170,7 +170,7 @@ it("one host task grant authorizes the plan; delivered files complete it and the
 		writeDirectories: [join(t.cwd, "out")],
 		acceptance: ["Report A", "Report B"],
 		maxCalls: 192,
-		maxAutoResumes: 3,
+		maxAutoResumes: 19,
 	});
 	expect(t.host.grants[0].contractHash).toMatch(/^[a-f0-9]{64}$/);
 

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, parse, relative, resolve } from "node:path";
-const MAX_AUTO_RESUMES = 3;
+const MAX_AUTO_RESUMES = 19;
 function contractHash(task) {
   const contract = [
     task.id,

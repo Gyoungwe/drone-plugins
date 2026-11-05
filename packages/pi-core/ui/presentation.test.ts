@@ -113,7 +113,7 @@ describe("流内工作台卡的取舍", () => {
 				contractHash: "h",
 				approvedAt: "2026-01-01",
 				maxCalls: 192,
-				maxAutoResumes: 3,
+				maxAutoResumes: 19,
 			},
 		});
 		expect(taskNeedsUser(approved)).toBe(false);

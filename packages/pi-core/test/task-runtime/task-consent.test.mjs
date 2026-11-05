@@ -42,7 +42,7 @@ it("new tasks require one explicit consent before commands and writes, but allow
 	act(j, "approve-plan");
 	expect(j.authorization()).toBeNull();
 	act(j, "authorize-task");
-	expect(j.authorization()).toMatchObject({ version: 1, maxCalls: 192, maxAutoResumes: 3 });
+	expect(j.authorization()).toMatchObject({ version: 1, maxCalls: 192, maxAutoResumes: 19 });
 	// Read-only preparation happens before task_plan opens the task, so it is not billed to it.
 	expect(j.snapshot().budget.calls).toBe(0);
 	expect(
@@ -116,9 +116,13 @@ it("recovery is bounded and never triggered for aborts, model failures or repeat
 	expect(j.reserveContinuation("source-unread")).toBe(true);
 	await read(j, "three");
 	expect(j.reserveContinuation("tool-loop-stopped")).toBe(true);
-	await read(j, "four");
+	for (let i = 4; i <= 19; i++) {
+		await read(j, `r${i}`);
+		expect(j.reserveContinuation("source-unread")).toBe(true);
+	}
+	await read(j, "last");
 	expect(j.reserveContinuation("source-unread")).toBe(false);
-	expect(j.snapshot().budget.autoResumes).toBe(3);
+	expect(j.snapshot().budget.autoResumes).toBe(19);
 });
 it("consent does not transfer to another goal, binding or cancelled task", () => {
 	const { j, entries } = setup();
