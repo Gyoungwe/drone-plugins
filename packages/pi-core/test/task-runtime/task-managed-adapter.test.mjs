@@ -44,6 +44,10 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 		"caller.scope": () => ({ kind: "session", sessionId: "s1", workspaceDirectory: cwd, workspaceId: "w" }),
 		"session.records.read": () => ({ mode: "persistent", state: "durable", error: null, records: [...host.records] }),
 		"session.records.append": ({ type, data }) => {
+			if (host.failAppend) {
+				host.failAppend = false;
+				throw new Error("Actual managed checkpoint append failed");
+			}
 			const id = `r${host.records.length}`;
 			host.records.push({ id, type, data: structuredClone(data) });
 			return { id, durability: "durable" };
@@ -215,6 +219,28 @@ it("a status query outside a run posts its card while the input hook is still li
 	expect(t.host.notices).toHaveLength(before + 1);
 	const status = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
 	expect(status.storage.state).toBe("durable");
+	await t.close();
+});
+
+it("after a failed checkpoint append, status serves the last committed task and writes stay fenced", async () => {
+	const t = await harness();
+	await t.hooks.input({ text: plan.goal, images: [] }, t.ctx);
+	await t.tool("task_plan", plan);
+	const committed = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
+	t.host.failAppend = true;
+	await expect(t.app.operations.pause.execute({ reason: "must-not-commit" }, { signal: t.ctx.signal })).rejects.toThrow(
+		/Actual managed checkpoint append failed/,
+	);
+	const fenced = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
+	expect(fenced).toMatchObject({
+		snapshot: { id: committed.snapshot.id, reason: committed.snapshot.reason },
+		storage: { state: "needs-reopen" },
+	});
+	const records = t.host.records.length;
+	await expect(t.app.operations.pause.execute({ reason: "no-phantom-chain" }, { signal: t.ctx.signal })).rejects.toThrow(
+		/reopen the application from disk/,
+	);
+	expect(t.host.records).toHaveLength(records);
 	await t.close();
 });
 
