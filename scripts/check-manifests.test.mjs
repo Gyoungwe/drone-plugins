@@ -138,6 +138,13 @@ for (const token of ["binary-state-read", "binary-state-write"]) {
  });
 }
 test("read-only child session support is an explicit desktopRuntime declaration",()=>assert.equal(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,nativeChildSessions:"read-only"}}),""));
+test("POST read endpoints must sit on a declared network host and need a managed owner",()=>{
+	const owned={...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},permissions:{...valid.permissions,network:["127.0.0.1:23119"]}};
+	assert.equal(errors({...owned,drone:{...valid.drone,networkReads:["127.0.0.1:23119/connector/ping"]}}),"");
+	assert.match(errors({...owned,drone:{...valid.drone,networkReads:["api.example.org/search"]}}),/must be host\/path on a host in permissions.network/);
+	assert.match(errors({...owned,drone:{...valid.drone,networkReads:[]}}),/non-empty array/);
+	assert.match(errors({...valid,permissions:owned.permissions,drone:{...valid.drone,networkReads:["127.0.0.1:23119/connector/ping"]}}),/requires desktopRuntime ownership/);
+});
 test("rejects child session support that is writable or has no managed owner",()=>{
 	assert.match(errors({...valid,entrypoints:{...valid.entrypoints,desktopRuntime:"./dist/index.mjs"},drone:{...valid.drone,nativeChildSessions:"write"}}),/must be "read-only"/);
 	assert.match(errors({...valid,drone:{...valid.drone,nativeChildSessions:"read-only"}}),/requires desktopRuntime ownership/);
