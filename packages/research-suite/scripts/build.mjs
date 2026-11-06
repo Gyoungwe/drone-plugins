@@ -6,7 +6,7 @@
 // into this private staging tree before publishing.
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
 const packageRoot = resolve(import.meta.dirname, "..");
@@ -28,7 +28,8 @@ if (packageJson.name !== "@gyoungwe/research-suite") fail(`unexpected package na
 if (manifest.id !== "drone-research-suite") fail("plugin.manifest id is incorrect");
 if (manifest.version !== packageJson.version) fail("plugin.manifest version must match package.json");
 if (manifest.drone?.pluginApi !== 1) fail("plugin.manifest drone.pluginApi must be 1");
-if (manifest.drone?.resultContract !== "drone-result/v3") fail("plugin.manifest resultContract must be drone-result/v3");
+if (manifest.drone?.resultContract !== "drone-result/v3")
+	fail("plugin.manifest resultContract must be drone-result/v3");
 
 const stagedRoot = join(packageRoot, "node_modules");
 if (!checkOnly) {
@@ -80,14 +81,27 @@ for (const name of bundled) {
 // The native composition keeps its existing three extension entries. Knowledge's
 // optional Desktop resource is carried by that same dependency, never registered
 // as a second native extension or copied into a standalone suite UI bundle.
-const knowledgeManifest = JSON.parse(await readFile(join(packageAt("@gyoungwe/pi-knowledge"), "plugin.manifest.json"), "utf8"));
-if (knowledgeManifest.entrypoints.ui !== "./ui/plugin.json") fail("knowledge package is missing its co-packaged UI entrypoint");
-const knowledgeUi = JSON.parse(await readFile(join(packageAt("@gyoungwe/pi-knowledge"), knowledgeManifest.entrypoints.ui), "utf8"));
+const knowledgeManifest = JSON.parse(
+	await readFile(join(packageAt("@gyoungwe/pi-knowledge"), "plugin.manifest.json"), "utf8"),
+);
+if (knowledgeManifest.entrypoints.ui !== "./ui/plugin.json")
+	fail("knowledge package is missing its co-packaged UI entrypoint");
+const knowledgeUi = JSON.parse(
+	await readFile(join(packageAt("@gyoungwe/pi-knowledge"), knowledgeManifest.entrypoints.ui), "utf8"),
+);
 await readFile(join(packageAt("@gyoungwe/pi-knowledge"), "ui", knowledgeUi.main));
-if (JSON.stringify(knowledgeUi.contributions.map(entry => entry.region)) !== JSON.stringify(["knowledge.page", "knowledge.surface"])) fail("knowledge UI ownership is incorrect");
+if (
+	JSON.stringify(knowledgeUi.contributions.map((entry) => entry.region)) !==
+	JSON.stringify(["knowledge.page", "knowledge.surface"])
+)
+	fail("knowledge UI ownership is incorrect");
 
-const knowledgeSkills = await readdir(join(packageAt("@gyoungwe/pi-knowledge"), "skills"), { withFileTypes: true });
-const researchSkills = await readdir(join(packageAt("@gyoungwe/pi-research"), "skills"), { withFileTypes: true });
+const knowledgeSkills = await readdir(join(packageAt("@gyoungwe/pi-knowledge"), "skills"), {
+	withFileTypes: true,
+});
+const researchSkills = await readdir(join(packageAt("@gyoungwe/pi-research"), "skills"), {
+	withFileTypes: true,
+});
 const skillNames = (entries) => entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 const knowledgeNames = skillNames(knowledgeSkills);
 const researchNames = skillNames(researchSkills);
@@ -122,10 +136,10 @@ const marker = {
 const current = existsSync(markerPath) ? JSON.parse(await readFile(markerPath, "utf8")) : null;
 const serialized = `${JSON.stringify(marker, null, 2)}\n`;
 if (checkOnly) {
-	if (JSON.stringify(current) !== JSON.stringify(marker)) fail("build-manifest.json is stale; run npm run build");
+	if (JSON.stringify(current) !== JSON.stringify(marker))
+		fail("build-manifest.json is stale; run npm run build");
 	console.log("research-suite package staging is up to date");
 } else {
 	await writeFile(markerPath, serialized);
 	console.log("research-suite package staging is ready");
 }
-

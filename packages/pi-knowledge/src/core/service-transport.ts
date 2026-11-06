@@ -1,8 +1,5 @@
 import type { KnowledgeBinding } from "./config.js";
-import type {
-	KnowledgeWorkerLifecycleStage,
-	KnowledgeWorkerMetadata,
-} from "./runtime-host.js";
+import type { KnowledgeWorkerLifecycleStage, KnowledgeWorkerMetadata } from "./runtime-host.js";
 
 /** Domain requests never receive a Worker or filesystem/process control methods. */
 export interface KnowledgeServiceTransport {
@@ -23,8 +20,5 @@ export interface KnowledgeServiceTransportFactory {
 	metadata(): KnowledgeWorkerMetadata;
 	/** Stable identity of the real execution resource, not a guessed filesystem path. */
 	resourceKey(binding: KnowledgeBinding): string;
-	create(input: {
-		binding: KnowledgeBinding;
-		workerVersion?: string;
-	}): KnowledgeServiceTransport;
+	create(input: { binding: KnowledgeBinding; workerVersion?: string }): KnowledgeServiceTransport;
 }

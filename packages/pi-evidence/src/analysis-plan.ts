@@ -28,7 +28,8 @@ export interface AnalysisEvidencePlan {
 }
 
 function identity(value: unknown, label: string): AnalysisEvidencePlanIdentity {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+	if (!value || typeof value !== "object" || Array.isArray(value))
+		throw new Error(`${label} must be an object`);
 	const candidate = value as Record<string, unknown>;
 	if (typeof candidate.id !== "string" || !candidate.id.trim()) throw new Error(`${label}.id is required`);
 	if (typeof candidate.version !== "string" || !candidate.version.trim())
@@ -51,12 +52,15 @@ export function validateAnalysisEvidencePlan(value: unknown): AnalysisEvidencePl
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		throw new Error("Analysis evidence plan must be an object");
 	const plan = value as Record<string, unknown>;
-	if (plan.format !== "drone-analysis-evidence-plan") throw new Error("Invalid analysis evidence plan format");
-	if (plan.version !== ANALYSIS_EVIDENCE_PLAN_VERSION) throw new Error("Unsupported analysis evidence plan version");
+	if (plan.format !== "drone-analysis-evidence-plan")
+		throw new Error("Invalid analysis evidence plan format");
+	if (plan.version !== ANALYSIS_EVIDENCE_PLAN_VERSION)
+		throw new Error("Unsupported analysis evidence plan version");
 	const analysis = identity(plan.analysis, "analysis");
 	const adapter = identity(plan.adapter, "adapter");
 	const method = identity(plan.method, "method");
-	if (!isSha256(plan.adapterSnapshotSha256)) throw new Error("adapterSnapshotSha256 must be a SHA-256 digest");
+	if (!isSha256(plan.adapterSnapshotSha256))
+		throw new Error("adapterSnapshotSha256 must be a SHA-256 digest");
 	if (!Array.isArray(plan.requiredOutputs) || plan.requiredOutputs.length === 0)
 		throw new Error("requiredOutputs must be a nonempty array");
 	const requiredOutputs = plan.requiredOutputs.filter(outputPath);

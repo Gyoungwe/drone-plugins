@@ -1,20 +1,20 @@
 import { createHash } from "node:crypto";
 import type { PluginNativeRuntimeFactory, PluginNativeSession } from "@gyoungwe/plugin-api/native";
 import type {
-	PluginRuntimeRootDescription,
-	PluginRuntimeScope,
-	PluginStateReadResult,
 	PluginExecutionDescription,
 	PluginExecutionReceipt,
 	PluginExecutionReceiptResult,
 	PluginExecutionResult,
+	PluginRuntimeRootDescription,
+	PluginRuntimeScope,
+	PluginStateReadResult,
 } from "@gyoungwe/plugin-api/runtime";
-import { inquiryProvider } from "./inquiry-provider.js";
 import type { DiscoveryLedgerInput } from "./domain/index.js";
-import { DiscoveryService } from "./service.js";
-import type { DiscoveryHostServices, DiscoveryJournalName } from "./ports.js";
-import { JOURNALS, type JournalName } from "./native-records.js";
 import { UnavailableKernelRunner } from "./domain/index.js";
+import { inquiryProvider } from "./inquiry-provider.js";
+import { JOURNALS, type JournalName } from "./native-records.js";
+import type { DiscoveryHostServices, DiscoveryJournalName } from "./ports.js";
+import { DiscoveryService } from "./service.js";
 
 const readMetadata = {
 	drone: { readOnly: true, capabilities: ["research", "analysis"] },
@@ -110,10 +110,7 @@ function binding(value: unknown): DiscoveryWorkspaceBinding {
 	return item as DiscoveryWorkspaceBinding;
 }
 function records(value: unknown, journal: JournalName): Record<string, unknown>[] {
-	if (
-		!Array.isArray(value) ||
-		value.some((item) => !item || typeof item !== "object" || Array.isArray(item))
-	)
+	if (!Array.isArray(value) || value.some((item) => !item || typeof item !== "object" || Array.isArray(item)))
 		throw new Error(`Discovery journal ${journal} must contain an array of records`);
 	return value;
 }
@@ -156,12 +153,7 @@ interface WorkspaceOwner {
 }
 function ownerMetadata(value: unknown): OwnerMetadata {
 	const item = value as Partial<OwnerMetadata> | null;
-	if (
-		!item ||
-		item.schemaVersion !== 1 ||
-		!Array.isArray(item.kernels) ||
-		!Array.isArray(item.intents)
-	)
+	if (!item || item.schemaVersion !== 1 || !Array.isArray(item.kernels) || !Array.isArray(item.intents))
 		throw new Error("Discovery owner metadata is malformed");
 	for (const record of item.kernels) {
 		if (
@@ -402,14 +394,9 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 						request.signal?.throwIfAborted();
 						const actual = await caller();
 						const ownership = [...kernels.values()].find(
-							(item) =>
-								item.runDirectory === request.runDirectory && activeKernels.has(item.sessionId),
+							(item) => item.runDirectory === request.runDirectory && activeKernels.has(item.sessionId),
 						);
-						if (
-							actual.kind !== "session" ||
-							!ownership ||
-							ownership.creatorSessionId !== actual.sessionId
-						)
+						if (actual.kind !== "session" || !ownership || ownership.creatorSessionId !== actual.sessionId)
 							throw new Error("Execution has no live creator-owned logical kernel");
 						const intent: ExecutionIntent = {
 							requestId: request.requestId,
@@ -505,9 +492,7 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 		if (selected.binding && selected.binding.workspaceId !== scope.workspaceId)
 			throw new Error("Discovery state belongs to another workspace");
 		if (!selected.binding && selected.hasExistingData && !input.acknowledgeExistingData)
-			throw new Error(
-				"Existing discovery journals require explicit acknowledgement before binding",
-			);
+			throw new Error("Existing discovery journals require explicit acknowledgement before binding");
 		await capabilities.call("state.reserve", { root: input.root, path: "" });
 		const stored = await read(input.root, bindingPath);
 		if (stored.kind === "value") {
@@ -524,8 +509,7 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 			if (unique.length > 1)
 				throw new Error("Existing discovery plans contain conflicting project identities");
 			const projectId =
-				unique[0] ??
-				`discovery-${createHash("sha256").update(scope.workspaceId).digest("hex").slice(0, 32)}`;
+				unique[0] ?? `discovery-${createHash("sha256").update(scope.workspaceId).digest("hex").slice(0, 32)}`;
 			await capabilities.call("state.writeJson", {
 				root: input.root,
 				path: bindingPath,
@@ -591,17 +575,12 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 		const scope = await workspace();
 		if (scope.kind !== "session") throw new Error("Select a real creator SDK session for kernels");
 		const selected = await findRoot(scope);
-		if (!selected)
-			throw new Error("Bind a discovery state directory before creating a logical kernel");
+		if (!selected) throw new Error("Bind a discovery state directory before creating a logical kernel");
 		return { scope, owned: await owner(scope, selected) };
 	};
 	const ownedKernel = (owned: WorkspaceOwner, creatorSessionId: string, sessionId: string) => {
 		const kernel = owned.kernels.get(sessionId);
-		if (
-			!kernel ||
-			kernel.creatorSessionId !== creatorSessionId ||
-			!owned.activeKernels.has(sessionId)
-		)
+		if (!kernel || kernel.creatorSessionId !== creatorSessionId || !owned.activeKernels.has(sessionId))
 			throw new Error("Kernel belongs to another creator or is a historical record");
 		return kernel;
 	};
@@ -632,15 +611,11 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 		input: Parameters<DiscoveryService["createKernelSession"]>[0] & { image: string },
 	) => {
 		const { scope, owned } = await creatorOwner();
-		if (
-			owned.kernels.has(input.sessionId) ||
-			(await owned.service.getKernelSession(input.sessionId))
-		)
+		if (owned.kernels.has(input.sessionId) || (await owned.service.getKernelSession(input.sessionId)))
 			throw new Error("Kernel identity already exists; use a new identity");
 		if (
 			[...owned.kernels.values()].some(
-				(item) =>
-					owned.activeKernels.has(item.sessionId) && item.runDirectory === input.runDirectory,
+				(item) => owned.activeKernels.has(item.sessionId) && item.runDirectory === input.runDirectory,
 			)
 		)
 			throw new Error("An active logical kernel already owns this runs directory");
@@ -727,10 +702,7 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 		}
 		return listKernels();
 	};
-	const executeKernel = async (
-		input: { sessionId: string; code: string },
-		signal?: AbortSignal,
-	) => {
+	const executeKernel = async (input: { sessionId: string; code: string }, signal?: AbortSignal) => {
 		const { scope, owned } = await creatorOwner();
 		const kernel = ownedKernel(owned, scope.sessionId, input.sessionId);
 		if (kernel.status !== "active")
@@ -949,10 +921,7 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 						...definition,
 						async execute(id, input, signal, update, context) {
 							const scope = await caller();
-							if (
-								scope.kind !== "session" ||
-								(creatorSessionId && creatorSessionId !== scope.sessionId)
-							)
+							if (scope.kind !== "session" || (creatorSessionId && creatorSessionId !== scope.sessionId))
 								throw new Error("Native projection belongs to another SDK session");
 							creatorSessionId = scope.sessionId;
 							return definition.execute(id, input, signal, update, context);
@@ -989,12 +958,7 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 						"write",
 						(input, signal) => closeKernel(input as { sessionId: string }, signal),
 					],
-					[
-						"discovery_reconcile_executions",
-						emptyParameters,
-						"write",
-						(_input, signal) => reconcile(signal),
-					],
+					["discovery_reconcile_executions", emptyParameters, "write", (_input, signal) => reconcile(signal)],
 				];
 				for (const [name, parameters, effect, run] of kernelTools)
 					nativePi.registerTool({
@@ -1041,9 +1005,7 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 						...(effect === "read" ? readMetadata : writeMetadata),
 						async execute(_id, input) {
 							return response(
-								await operations[operation].execute(
-									operation === "executionDescription" ? null : input,
-								),
+								await operations[operation].execute(operation === "executionDescription" ? null : input),
 							);
 						},
 					});
@@ -1114,8 +1076,7 @@ export const createDiscoveryRuntime: PluginNativeRuntimeFactory = async ({
 					[...owned.kernels.values()]
 						.filter(
 							(kernel) =>
-								kernel.creatorSessionId === creatorSessionId &&
-								owned.activeKernels.has(kernel.sessionId),
+								kernel.creatorSessionId === creatorSessionId && owned.activeKernels.has(kernel.sessionId),
 						)
 						.map(async (kernel) => {
 							await owned.service.disposeKernelSession(kernel.sessionId);

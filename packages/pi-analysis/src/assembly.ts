@@ -18,7 +18,13 @@ export function validateBuscoEvidence(value: unknown): boolean {
 	const counts = qcRecord(row.counts);
 	if (!tool || !lineage || !counts) return false;
 	if (tool.id !== "BUSCO" || typeof tool.version !== "string" || !tool.version.trim()) return false;
-	if (typeof lineage.id !== "string" || !lineage.id.trim() || typeof lineage.version !== "string" || !lineage.version.trim()) return false;
+	if (
+		typeof lineage.id !== "string" ||
+		!lineage.id.trim() ||
+		typeof lineage.version !== "string" ||
+		!lineage.version.trim()
+	)
+		return false;
 	const keys = ["complete", "single", "duplicated", "fragmented", "missing"] as const;
 	const total = counts.total;
 	if (typeof total !== "number" || !Number.isSafeInteger(total) || total <= 0) return false;
@@ -26,17 +32,20 @@ export function validateBuscoEvidence(value: unknown): boolean {
 		const count = counts[key];
 		const percentage = row[key];
 		if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || count > total) return false;
-		if (typeof percentage !== "number" || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) return false;
-		if (Math.abs(percentage - 100 * count / total) > 0.0500000001) return false;
+		if (typeof percentage !== "number" || !Number.isFinite(percentage) || percentage < 0 || percentage > 100)
+			return false;
+		if (Math.abs(percentage - (100 * count) / total) > 0.0500000001) return false;
 	}
-	return counts.complete === Number(counts.single) + Number(counts.duplicated)
-		&& Number(counts.complete) + Number(counts.fragmented) + Number(counts.missing) === total
-		&& Number(counts.duplicated) <= Number(counts.complete);
+	return (
+		counts.complete === Number(counts.single) + Number(counts.duplicated) &&
+		Number(counts.complete) + Number(counts.fragmented) + Number(counts.missing) === total &&
+		Number(counts.duplicated) <= Number(counts.complete)
+	);
 }
 
 function qcRecord(value: unknown): Record<string, unknown> | undefined {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
-		? value as Record<string, unknown>
+		? (value as Record<string, unknown>)
 		: undefined;
 }
 

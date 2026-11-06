@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import type { DroneUiRuntime } from "@gyoungwe/plugin-api/ui";
 import type { PluginExecutionDescription } from "@gyoungwe/plugin-api/runtime";
+import type { DroneUiRuntime } from "@gyoungwe/plugin-api/ui";
+import { useEffect, useRef, useState } from "react";
 import type { KernelExecution } from "../src/domain/kernel.js";
 import type { DiscoveryKernelSession } from "../src/projections.js";
 
@@ -23,13 +23,11 @@ interface Snapshot {
 const words = {
 	en: {
 		title: "Controlled code execution",
-		logical:
-			"Creating a logical kernel saves its creator and budget. It does not start a container.",
+		logical: "Creating a logical kernel saves its creator and budget. It does not start a container.",
 		budget:
 			"Per kernel: 2 attempts; each code run up to 30 seconds and 64 KiB output. Network stays disabled; only its runs directory is writable.",
 		engineMissing: "No reachable container engine. No code can run.",
-		imageMissing:
-			"The configured language image is not cached. No image is pulled and no code can run.",
+		imageMissing: "The configured language image is not cached. No image is pulled and no code can run.",
 		language: "Language",
 		classification: "Data classification",
 		image: "Configured cached image",
@@ -64,8 +62,7 @@ const words = {
 	zh: {
 		title: "受控代码执行",
 		logical: "创建逻辑内核仅保存创建者与预算，不会启动容器。",
-		budget:
-			"每个内核最多 2 次尝试；每次代码执行最多 30 秒、64 KiB 输出。禁用网络，只可写本次 runs 目录。",
+		budget: "每个内核最多 2 次尝试；每次代码执行最多 30 秒、64 KiB 输出。禁用网络，只可写本次 runs 目录。",
 		engineMissing: "容器引擎不可用，不能运行代码。",
 		imageMissing: "当前语言配置的镜像未缓存。不会拉取镜像，也不能运行代码。",
 		language: "语言",
@@ -162,20 +159,12 @@ export function KernelPanel() {
 		setBusy(true);
 		setError(null);
 		try {
-			const result = await runtime.invoke(
-				"executeKernel",
-				{ sessionId: selected, code },
-				controller.signal,
-			);
+			const result = await runtime.invoke("executeKernel", { sessionId: selected, code }, controller.signal);
 			if (live.current) setLatest((result as { execution: KernelExecution }).execution);
 		} catch (cause) {
 			if (live.current)
 				setError(
-					controller.signal.aborted
-						? t.cancelled
-						: cause instanceof Error
-							? cause.message
-							: String(cause),
+					controller.signal.aborted ? t.cancelled : cause instanceof Error ? cause.message : String(cause),
 				);
 		} finally {
 			executing.current = null;
@@ -201,10 +190,7 @@ export function KernelPanel() {
 		"cleanup-failed": t.cleanup,
 	};
 	return (
-		<section
-			className="space-y-3 rounded-lg border border-border p-3"
-			data-testid="discovery-kernels"
-		>
+		<section className="space-y-3 rounded-lg border border-border p-3" data-testid="discovery-kernels">
 			<h3 className="font-medium">{t.title}</h3>
 			<p>{t.logical}</p>
 			<p className="text-xs text-muted">{t.budget}</p>
@@ -214,9 +200,7 @@ export function KernelPanel() {
 				</p>
 			)}
 			{environment?.kind === "unavailable" && <p role="status">{t.engineMissing}</p>}
-			{environment?.kind === "container" && !configuredImage && (
-				<p role="status">{t.imageMissing}</p>
-			)}
+			{environment?.kind === "container" && !configuredImage && <p role="status">{t.imageMissing}</p>}
 			<form
 				className="space-y-2"
 				onSubmit={(event) => {
@@ -293,11 +277,7 @@ export function KernelPanel() {
 			)}
 			<label className="block">
 				{t.select}
-				<select
-					aria-label={t.select}
-					value={selected}
-					onChange={(event) => setSelected(event.target.value)}
-				>
+				<select aria-label={t.select} value={selected} onChange={(event) => setSelected(event.target.value)}>
 					<option value="">{t.select}</option>
 					{own.map((kernel) => (
 						<option key={kernel.sessionId} value={kernel.sessionId}>
@@ -357,9 +337,7 @@ export function KernelPanel() {
 						<li key={intent.requestId}>
 							<code>{intent.requestId}</code> · {intent.status}
 							<p className="text-xs">
-								{intent.verification === "host-verified-this-activation"
-									? t.verified
-									: t.unverified}
+								{intent.verification === "host-verified-this-activation" ? t.verified : t.unverified}
 							</p>
 						</li>
 					))}
@@ -371,9 +349,7 @@ export function KernelPanel() {
 						{t.output} · {latest.status}
 					</summary>
 					{latest.blockedReason && <p>{latest.blockedReason}</p>}
-					<pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all">
-						{latest.output}
-					</pre>
+					<pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all">{latest.output}</pre>
 				</details>
 			)}
 		</section>

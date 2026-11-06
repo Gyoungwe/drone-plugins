@@ -7,7 +7,9 @@ export function createBrokerTopicMemoryStorage(io: WikiReviewPorts): TopicMemory
 		const key = `${binding.vaultId}/topic-memory/${project}.json`;
 		return {
 			key,
-			async read() { return (await io.state.read(key))?.value ?? null; },
+			async read() {
+				return (await io.state.read(key))?.value ?? null;
+			},
 			async write(value, expectedRevision) {
 				const current = await io.state.read(key);
 				if (current !== null && (current.value as { revision: number }).revision !== expectedRevision)

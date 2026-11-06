@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { sessions, services, setPluginRuntime } from "../test/setup";
 import type { KnowledgeOverview, KnowledgeSearchResult } from "../src/desktop/contract";
+import { services, sessions, setPluginRuntime } from "../test/setup";
 import { KnowledgePage, KnowledgeSurface } from "./entry";
 
 const overview: KnowledgeOverview = {

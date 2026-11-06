@@ -41,9 +41,7 @@ export function TaskDecisionCard({
 	};
 	const content = (
 		<>
-			<h4 className="text-[13px] font-medium leading-5 text-ink">
-				{formatCardText(decision.title)}
-			</h4>
+			<h4 className="text-[13px] font-medium leading-5 text-ink">{formatCardText(decision.title)}</h4>
 			<p className="mt-1 whitespace-pre-wrap text-[12px] leading-5 text-ink">
 				{formatCardText(decision.stop)}
 			</p>
@@ -67,9 +65,7 @@ export function TaskDecisionCard({
 						onClick={() => {
 							const actionId = decision.completeActionId;
 							if (!actionId) return;
-							void send(
-								taskActionArguments(view, task.id, "acknowledge", { actionId }),
-							);
+							void send(taskActionArguments(view, task.id, "acknowledge", { actionId }));
 						}}
 					>
 						{decision.completeLabel}
@@ -90,24 +86,17 @@ export function TaskDecisionCard({
 						type="button"
 						disabled={busy || readOnly || !sessionId || agentActive}
 						className="rounded-md border border-border px-2 py-1 text-xs text-ink-dim hover:bg-hover disabled:opacity-40"
-						onClick={() =>
-							void send(taskActionArguments(view, task.id, "cancel"))
-						}
+						onClick={() => void send(taskActionArguments(view, task.id, "cancel"))}
 					>
 						{decision.endLabel}
 					</button>
 				)}
 			</div>
 			<details className="mt-2">
-				<summary className="cursor-pointer text-xs text-ink-dim">
-					{decision.detailsLabel}
-				</summary>
+				<summary className="cursor-pointer text-xs text-ink-dim">{decision.detailsLabel}</summary>
 				<ul className="mt-1 list-disc space-y-0.5 pl-4">
 					{decision.details.map((line) => (
-						<li
-							key={line}
-							className="whitespace-pre-wrap text-xs leading-4 text-ink-dim"
-						>
+						<li key={line} className="whitespace-pre-wrap text-xs leading-4 text-ink-dim">
 							{formatCardText(line)}
 						</li>
 					))}
@@ -124,9 +113,7 @@ export function TaskDecisionCard({
 		return (
 			<p
 				className={
-					embedded
-						? "mt-2 whitespace-pre-wrap text-[12px] text-ink-dim"
-						: "mt-2 text-[12px] text-ink-dim"
+					embedded ? "mt-2 whitespace-pre-wrap text-[12px] text-ink-dim" : "mt-2 text-[12px] text-ink-dim"
 				}
 				data-testid="task-decision-line"
 			>
@@ -135,10 +122,7 @@ export function TaskDecisionCard({
 		);
 	}
 	return embedded ? (
-		<div
-			className="mt-3 border-t border-border/70 pt-3"
-			data-testid="task-decision"
-		>
+		<div className="mt-3 border-t border-border/70 pt-3" data-testid="task-decision">
 			{content}
 		</div>
 	) : (

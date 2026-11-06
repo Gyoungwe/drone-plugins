@@ -1,9 +1,6 @@
 import type { KnowledgePage, WikiReviewItem, WikiReviewPreview } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { useKnowledgeStore } from "../api";
-import { Button } from "../api";
-import { StatePanel } from "../api";
+import { Button, getKnowledgeApi, StatePanel, useKnowledgeStore } from "../api";
 import { useKnowledgeText } from "./copy";
 import { KnowledgeNoteViewer } from "./KnowledgeNoteViewer";
 import { knowledgeLineDiff } from "./line-diff";
@@ -111,7 +108,11 @@ export function WikiReviewPanel({
 		setError(null);
 		setResult(null);
 		try {
-			const value = await getKnowledgeApi().decideKnowledgeReview({ cwd, token: preview.reviewToken, decision });
+			const value = await getKnowledgeApi().decideKnowledgeReview({
+				cwd,
+				token: preview.reviewToken,
+				decision,
+			});
 			const text =
 				value.status === "rejected"
 					? t("rejected")

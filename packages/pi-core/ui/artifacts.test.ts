@@ -7,9 +7,7 @@ it("proposed paths do not invent delivered files", () => {
 	expect(
 		taskArtifactLinks({
 			...base,
-			milestones: [
-				{ state: "pending", acceptance: { kind: "file", path: "planned.md" } },
-			],
+			milestones: [{ state: "pending", acceptance: { kind: "file", path: "planned.md" } }],
 		} as WorkbenchTask),
 	).toEqual([]);
 });

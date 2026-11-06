@@ -3,33 +3,26 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { setImmediate as yieldTurn } from "node:timers/promises";
-import {
-	allowedSegment,
-	canRead,
-	noteScope,
-	snippet,
-	validateNote,
-} from "./files.js";
+import { allowedSegment, canRead, noteScope, snippet, validateNote } from "./files.js";
+import { createRevisionCache } from "./graph-cache.js";
 import { backlinkContext } from "./graph-retrieval.js";
+import type { KnowledgeIndexFiles, KnowledgeIndexTransport } from "./index-runtime-ports.js";
+import { parseFrontmatter } from "./ingest-frontmatter.js";
+import { noteCategory } from "./note-category.js";
+import { noteDisplayTitle } from "./note-title.js";
+import { recentByCategory as groupRecentByCategory } from "./recent-by-category.js";
 import {
 	buildKnowledgeSearchExpression,
 	splitKnowledgeChunks,
 	tokenizeKnowledgeText,
 } from "./search-policy.js";
-import { parseFrontmatter } from "./ingest-frontmatter.js";
-import { noteDisplayTitle } from "./note-title.js";
 import { createSemanticModel } from "./semantic-model.js";
-import { createRevisionCache } from "./graph-cache.js";
-import { noteCategory } from "./note-category.js";
-import { recentByCategory as groupRecentByCategory } from "./recent-by-category.js";
-
-import type { KnowledgeIndexFiles, KnowledgeIndexTransport } from "./index-runtime-ports.js";
 
 /** One algorithm shared by the native worker and the Desktop resource process. */
 export async function createKnowledgeIndexRuntime(
- options: { database: string; reconcileMs?: number; backgroundReconcile?: boolean },
- files: KnowledgeIndexFiles,
- transport: KnowledgeIndexTransport,
+	options: { database: string; reconcileMs?: number; backgroundReconcile?: boolean },
+	files: KnowledgeIndexFiles,
+	transport: KnowledgeIndexTransport,
 ) {
 	await mkdir(dirname(options.database), { recursive: true, mode: 0o700 });
 	const db = new DatabaseSync(options.database, { timeout: 1500 });
@@ -89,7 +82,8 @@ export async function createKnowledgeIndexRuntime(
 		.map((column) => column.name);
 	if (!semanticColumns.includes("start_char"))
 		db.exec("ALTER TABLE semantic_chunks ADD COLUMN start_char INTEGER");
-	if (!semanticColumns.includes("end_char")) db.exec("ALTER TABLE semantic_chunks ADD COLUMN end_char INTEGER");
+	if (!semanticColumns.includes("end_char"))
+		db.exec("ALTER TABLE semantic_chunks ADD COLUMN end_char INTEGER");
 	if (semanticColumns.includes("text")) {
 		db.exec(`BEGIN IMMEDIATE;
 	DROP INDEX IF EXISTS semantic_chunks_lookup;
@@ -383,31 +377,38 @@ export async function createKnowledgeIndexRuntime(
 		timer.unref();
 	}
 	let watcher;
-	if (files.watch) try {
-		watcher = await files.watch((name) => {
-			if (_closed) return;
-			const path = name?.toString().replaceAll("\\", "/");
-			if (path?.endsWith(".md")) {
-				try {
-					validateNote(path);
-					dirty.add(path);
-				} catch {
-					return;
-				}
-			} else if (!path || path.split("/").every(allowedSegment)) fullScanRequested = true;
-			schedule();
-		}, (error) => {
-			if (_closed) return;
-			watching = false;
+	if (files.watch)
+		try {
+			watcher = await files.watch(
+				(name) => {
+					if (_closed) return;
+					const path = name?.toString().replaceAll("\\", "/");
+					if (path?.endsWith(".md")) {
+						try {
+							validateNote(path);
+							dirty.add(path);
+						} catch {
+							return;
+						}
+					} else if (!path || path.split("/").every(allowedSegment)) fullScanRequested = true;
+					schedule();
+				},
+				(error) => {
+					if (_closed) return;
+					watching = false;
+					statements.problem.run("<watcher>", String(error.message));
+				},
+			);
+			watching = true;
+		} catch (error) {
 			statements.problem.run("<watcher>", String(error.message));
-		});
-		watching = true;
-	} catch (error) {
-		statements.problem.run("<watcher>", String(error.message));
-	}
-	const reconcileTimer = options.backgroundReconcile === false ? null : setInterval(() => {
-		if (!scan) void beginReconcile();
-	}, options.reconcileMs || 120000);
+		}
+	const reconcileTimer =
+		options.backgroundReconcile === false
+			? null
+			: setInterval(() => {
+					if (!scan) void beginReconcile();
+				}, options.reconcileMs || 120000);
 	reconcileTimer?.unref();
 	function closeWorker() {
 		if (closePromise) return closePromise;
@@ -501,7 +502,8 @@ export async function createKnowledgeIndexRuntime(
 			.slice(0, Math.max(1, Math.min(24, Math.floor(limit || 8))));
 	}
 	async function read(path, project, options = {}) {
-		if (!canRead(validateNote(path), project)) throw new Error("Note is outside shared/current-project scope");
+		if (!canRead(validateNote(path), project))
+			throw new Error("Note is outside shared/current-project scope");
 		const row = await updatePath(path);
 		if (!row) return { path, missing: true, revision };
 		const part = snippet(row.body, options);
@@ -512,7 +514,11 @@ export async function createKnowledgeIndexRuntime(
 				: null;
 		return {
 			path,
-			hash: row.hash, title: row.title, kind: row.kind, category: noteCategory(row), revision,
+			hash: row.hash,
+			title: row.title,
+			kind: row.kind,
+			category: noteCategory(row),
+			revision,
 			...part,
 			humanReview,
 			pending: db.prepare("SELECT kind,revision FROM jobs WHERE path=?").all(path),
@@ -827,13 +833,19 @@ export async function createKnowledgeIndexRuntime(
 	function resolveLinkTarget(target, project = undefined) {
 		if (statements.get.get(target) && (project === undefined || canRead(target, project))) return target;
 		if (target.includes("/")) return null;
-		const rows = project === undefined
-			? db.prepare("SELECT path FROM notes WHERE path LIKE ? LIMIT 2").all(`%/${target}`)
-			: db.prepare("SELECT path FROM notes WHERE path LIKE ? AND (scope='shared' OR scope=?) LIMIT 2").all(`%/${target}`, project || "");
+		const rows =
+			project === undefined
+				? db.prepare("SELECT path FROM notes WHERE path LIKE ? LIMIT 2").all(`%/${target}`)
+				: db
+						.prepare("SELECT path FROM notes WHERE path LIKE ? AND (scope='shared' OR scope=?) LIMIT 2")
+						.all(`%/${target}`, project || "");
 		return rows.length === 1 ? rows[0].path : null;
 	}
 	function noteTitle(path) {
-		return db.prepare("SELECT title FROM notes WHERE path=?").get(path)?.title || path.split("/").at(-1).slice(0, -3);
+		return (
+			db.prepare("SELECT title FROM notes WHERE path=?").get(path)?.title ||
+			path.split("/").at(-1).slice(0, -3)
+		);
 	}
 	/** 一篇笔记的出链与反链（双向链接）；反链同时匹配全路径和只写笔记名的链接 */
 	async function noteLinks(args) {
@@ -842,9 +854,12 @@ export async function createKnowledgeIndexRuntime(
 		// 0.2 callers omit project for their historical whole-Vault view. Remove
 		// this unscoped mode after all old host consumers leave the facade.
 		const project = args.project;
-		if (project !== undefined && !canRead(path, project)) throw new Error("Note is outside shared/current-project scope");
+		if (project !== undefined && !canRead(path, project))
+			throw new Error("Note is outside shared/current-project scope");
 		const outgoing = [];
-		for (const { target } of db.prepare("SELECT target FROM links WHERE source=? ORDER BY target").all(path)) {
+		for (const { target } of db
+			.prepare("SELECT target FROM links WHERE source=? ORDER BY target")
+			.all(path)) {
 			if (project !== undefined && !canRead(target, project)) continue;
 			const resolved = resolveLinkTarget(target, project);
 			outgoing.push(
@@ -871,11 +886,16 @@ export async function createKnowledgeIndexRuntime(
 		const seeds = (Array.isArray(args.paths) ? args.paths : []).slice(0, 6).map(String);
 		const per = Math.max(1, Math.min(12, Math.floor(args.perSeed || 8)));
 		const noteRow = db.prepare("SELECT path,title,kind,hash,body,scope FROM notes WHERE path=?");
-		const visible = (row) => row && (row.kind === "note" || row.kind === "wiki") && (row.scope === "shared" || row.scope === project);
+		const visible = (row) =>
+			row &&
+			(row.kind === "note" || row.kind === "wiki") &&
+			(row.scope === "shared" || row.scope === project);
 		const degreeOf = (path) => {
 			const name = path.split("/").at(-1);
 			const out = db.prepare("SELECT COUNT(*) c FROM links WHERE source=?").get(path).c;
-			const inc = db.prepare("SELECT COUNT(DISTINCT source) c FROM links WHERE target=? OR target=?").get(path, name).c;
+			const inc = db
+				.prepare("SELECT COUNT(DISTINCT source) c FROM links WHERE target=? OR target=?")
+				.get(path, name).c;
 			return out + inc;
 		};
 		const items = [];
@@ -889,9 +909,12 @@ export async function createKnowledgeIndexRuntime(
 			const seedRow = noteRow.get(seedPath);
 			if (!visible(seedRow)) continue;
 			const found = new Map();
-			for (const { target } of db.prepare("SELECT target FROM links WHERE source=? ORDER BY target LIMIT 64").all(seedPath)) {
+			for (const { target } of db
+				.prepare("SELECT target FROM links WHERE source=? ORDER BY target LIMIT 64")
+				.all(seedPath)) {
 				const resolved = resolveLinkTarget(target);
-				if (resolved && resolved !== seedPath && !found.has(resolved)) found.set(resolved, { direction: "outgoing" });
+				if (resolved && resolved !== seedPath && !found.has(resolved))
+					found.set(resolved, { direction: "outgoing" });
 			}
 			const name = seedPath.split("/").at(-1);
 			const targets = resolveLinkTarget(name) === seedPath ? [seedPath, name] : [seedPath, seedPath];
@@ -964,7 +987,10 @@ export async function createKnowledgeIndexRuntime(
 		}
 		const legacyEdges = new Map();
 		for (const edge of rawEdges) {
-			const key = edge.source < edge.target ? `${edge.source}\u0000${edge.target}` : `${edge.target}\u0000${edge.source}`;
+			const key =
+				edge.source < edge.target
+					? `${edge.source}\u0000${edge.target}`
+					: `${edge.target}\u0000${edge.source}`;
 			legacyEdges.set(key, [edge.source, edge.target]);
 		}
 		const legacyDegree = new Map();
@@ -1015,7 +1041,10 @@ export async function createKnowledgeIndexRuntime(
 				if (identity) duplicateCounts.set(identity, (duplicateCounts.get(identity) || 0) + 1);
 			}
 		}
-		const totalDuplicateCount = [...duplicateCounts.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+		const totalDuplicateCount = [...duplicateCounts.values()].reduce(
+			(sum, count) => sum + Math.max(0, count - 1),
+			0,
+		);
 		const model = createSemanticModel(
 			{
 				nodes: semanticCandidateNodes.map((row) => ({
@@ -1032,14 +1061,16 @@ export async function createKnowledgeIndexRuntime(
 				})),
 				edges: semanticCandidateEdges,
 			},
-				{ view, mergeMirrors },
+			{ view, mergeMirrors },
 		);
 		const chosen = [...model.nodes]
 			.sort((a, b) => b.degree - a.degree || a.path.localeCompare(b.path))
 			.slice(0, limit);
 		const keep = new Set(chosen.map((node) => node.path));
 		const links = model.edges.filter(({ source, target }) => keep.has(source) && keep.has(target));
-		const relations = (model.relations || []).filter(({ source, target }) => keep.has(source) && keep.has(target));
+		const relations = (model.relations || []).filter(
+			({ source, target }) => keep.has(source) && keep.has(target),
+		);
 		const result = {
 			nodes: legacyChosen.map((path) => {
 				const row = notes.get(path);
@@ -1061,11 +1092,15 @@ export async function createKnowledgeIndexRuntime(
 				nodes: chosen.map((node) => ({ ...node })),
 				edges: links,
 				totalNotes: notes.size,
-			view,
-			mergeMirrors,
+				view,
+				mergeMirrors,
 				relations,
-				duplicates: (model.duplicates || []).filter(({ canonical, duplicate }) => keep.has(canonical) || keep.has(duplicate)),
-				communities: Object.fromEntries(Object.entries(model.communities || {}).filter(([path]) => keep.has(path))),
+				duplicates: (model.duplicates || []).filter(
+					({ canonical, duplicate }) => keep.has(canonical) || keep.has(duplicate),
+				),
+				communities: Object.fromEntries(
+					Object.entries(model.communities || {}).filter(([path]) => keep.has(path)),
+				),
 				layout: Object.fromEntries(Object.entries(model.layout || {}).filter(([path]) => keep.has(path))),
 				health: {
 					isolated: chosen.filter((node) => node.degree === 0).length,
@@ -1141,10 +1176,21 @@ export async function createKnowledgeIndexRuntime(
 			const items = db
 				.prepare(`SELECT * FROM jobs WHERE ${where} ORDER BY updated DESC,key LIMIT ? OFFSET ?`)
 				.all(scope, limit, offset);
-			return { items, total, offset, nextOffset: offset + items.length < total ? offset + items.length : null, revision };
+			return {
+				items,
+				total,
+				offset,
+				nextOffset: offset + items.length < total ? offset + items.length : null,
+				revision,
+			};
 		}
 		if (op === "recentNotes") return { items: await recentNotes(args.project, args.limit), revision };
-		if (op === "recentByCategory") return { groups: await recentByCategory(args.project, args.limit), counts: categoryCounts(args.project), revision };
+		if (op === "recentByCategory")
+			return {
+				groups: await recentByCategory(args.project, args.limit),
+				counts: categoryCounts(args.project),
+				revision,
+			};
 		if (op === "jobs") return { ...status(), items: pending(args.project, 100, args.kind || null) };
 		if (op === "completeJob") {
 			db.prepare("DELETE FROM jobs WHERE key=? AND revision=?").run(args.key, args.revision);
@@ -1164,7 +1210,7 @@ export async function createKnowledgeIndexRuntime(
 		}
 		throw new Error("Unknown knowledge operation");
 	}
-	transport.onMessage( async ({ id, op, args = {} }) => {
+	transport.onMessage(async ({ id, op, args = {} }) => {
 		if (op === "close") {
 			try {
 				await closeWorker();

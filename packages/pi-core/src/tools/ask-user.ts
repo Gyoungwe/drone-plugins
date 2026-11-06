@@ -1,3 +1,5 @@
+import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import {
 	type AskDecision,
 	type AskQuestion,
@@ -6,8 +8,6 @@ import {
 	type AskResponse,
 	askDecisionHash,
 } from "../contracts";
-import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 
 const optionSchema = Type.Object({
 	value: Type.String(),

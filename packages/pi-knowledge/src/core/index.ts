@@ -1,3 +1,4 @@
+export { type CapabilityKnowledgeSourcePort, readCapabilitySources } from "./capability-discovery.js";
 export {
 	type ClaimComparison,
 	type ClaimSetComparison,
@@ -5,7 +6,6 @@ export {
 	compareClaims,
 	type KnowledgeClaim,
 } from "./claim-conflicts.js";
-export { readCapabilitySources, type CapabilityKnowledgeSourcePort } from "./capability-discovery.js";
 export {
 	createKnowledgeConfigApi,
 	createKnowledgeConfigState,
@@ -22,6 +22,59 @@ export {
 	saveKnowledgeBinding,
 	withKnowledgeBinding,
 } from "./config.js";
+export * from "./daily-discovery.js";
+export * from "./daily-discovery-prompt.js";
+export {
+	BackgroundReviewer,
+	type BackgroundReviewerBridge,
+	type BackgroundReviewerOptions,
+	type BackgroundReviewRequest,
+	type DeliverableReviewFinding,
+	type DeliverableReviewLocation,
+	type DeliverableReviewResult,
+	type DeliverableReviewSnapshot,
+	type ReviewAttemptRecord,
+	type ReviewDeliverableRecord,
+	type ReviewerModelProvider,
+	type ReviewerProviderSelection,
+	type ReviewerSeverity,
+	type ReviewerTrigger,
+	type ReviewReadReceipt,
+	reviewDeliverable,
+	selectReviewerProvider,
+} from "./deliverable-review.js";
+export { summaryDeliveryClaims } from "./delivery-claims.js";
+export { EvolutionIndex, type EvolutionIndexStore } from "./evolution.js";
+export {
+	createExperienceStore,
+	EXPERIENCE_LIMITS,
+	EXPERIENCE_VERSION,
+	type ExperienceArtifact,
+	type ExperienceBinding,
+	type ExperienceDocument,
+	type ExperienceInput,
+	type ExperienceObservation,
+	type ExperienceOutcome,
+	type ExperienceProvenance,
+	type ExperienceQcDistribution,
+	type ExperienceQcMetric,
+	type ExperienceRecord,
+	type ExperienceRepair,
+	type ExperienceResourceUse,
+	type ExperienceSearchHit,
+	type ExperienceSearchResult,
+	type ExperienceStatus,
+	type ExperienceStore,
+	type ExperienceStoreOptions,
+	type ExperienceStorePort,
+	experienceInputFromTerminalJob,
+	recordTerminalJobExperience,
+	searchExperiences,
+	type TerminalJobExperienceInput,
+	terminalJobExperienceInput,
+	type WorkflowSpecDiff,
+	type WorkflowSpecDiffValue,
+} from "./experience-store.js";
 export {
 	continuationHint,
 	continuesTopic,
@@ -61,43 +114,21 @@ export {
 	literatureCard,
 	statusTone,
 } from "./flow-cards.js";
+export { createKnowledgeRuntime, type KnowledgeRuntime } from "./knowledge-runtime.js";
 export {
 	containedVaultFile,
 	createVaultFileOnly,
 	initializeProjectContext,
 	initializeSharedNavigation,
-	replaceVaultFile,
 	type KnowledgeLayoutDependencies,
 	type NavigationUpdateResult,
 	type ReplaceVaultFileOptions,
-	VaultFileConflictError,
+	replaceVaultFile,
 	updateVaultNavigation,
+	VaultFileConflictError,
 } from "./layout.js";
-export {
-	createSpecialistBudget,
-	decideSpecialistRun,
-	SPECIALIST_DECISIONS,
-	type SpecialistBudget,
-	type SpecialistBudgetOptions,
-	type SpecialistBudgetSnapshot,
-	type SpecialistDecision,
-	type SpecialistRequestSignatureOptions,
-	type SpecialistRunDecision,
-	type SpecialistRunOptions,
-	type SpecialistUsage,
-	specialistRequestSignature,
-} from "./orchestration-policy.js";
-export {
-	advisoryLine,
-	advisoryNotice,
-	knowledgeFailure,
-	type PublicationFailure,
-	type PublicationFailureCode,
-	type PublicationVerification,
-	publicationFallbackNotice,
-	publicationNotice,
-	publicationNotices,
-} from "./publication-policy.js";
+export { runNavigationMaintenance, updateNavigation } from "./maintenance.js";
+export * from "./memory-note.js";
 export {
 	evaluateMetacognitivePublication,
 	type MetacognitiveArtifact,
@@ -115,37 +146,116 @@ export {
 	type MetacognitiveSnapshot,
 	type MetacognitiveUseRole,
 } from "./metacognitive-policy.js";
+export { looksLikeFileName, noteDisplayTitle } from "./note-title.js";
 export {
-	BackgroundReviewer,
-	type BackgroundReviewerBridge,
-	reviewDeliverable,
-	selectReviewerProvider,
-	type BackgroundReviewRequest,
-	type BackgroundReviewerOptions,
-	type DeliverableReviewFinding,
-	type DeliverableReviewLocation,
-	type DeliverableReviewResult,
-	type DeliverableReviewSnapshot,
-	type ReviewAttemptRecord,
-	type ReviewDeliverableRecord,
-	type ReviewReadReceipt,
-	type ReviewerModelProvider,
-	type ReviewerProviderSelection,
-	type ReviewerSeverity,
-	type ReviewerTrigger,
-} from "./deliverable-review.js";
+	createSpecialistBudget,
+	decideSpecialistRun,
+	SPECIALIST_DECISIONS,
+	type SpecialistBudget,
+	type SpecialistBudgetOptions,
+	type SpecialistBudgetSnapshot,
+	type SpecialistDecision,
+	type SpecialistRequestSignatureOptions,
+	type SpecialistRunDecision,
+	type SpecialistRunOptions,
+	type SpecialistUsage,
+	specialistRequestSignature,
+} from "./orchestration-policy.js";
+export * from "./project-identity.js";
 export {
-	createKnowledgeReviewPolicy,
+	createKnowledgePublication,
+	projectKnowledgeEvent,
+	projectKnowledgeSnapshot,
+	registerAnswerPublication,
+} from "./publication.js";
+export {
+	advisoryLine,
+	advisoryNotice,
+	knowledgeFailure,
+	type PublicationFailure,
+	type PublicationFailureCode,
+	type PublicationVerification,
+	publicationFallbackNotice,
+	publicationNotice,
+	publicationNotices,
+} from "./publication-policy.js";
+export { recentByCategory } from "./recent-by-category.js";
+export * from "./related-notes.js";
+export {
+	checkKnowledgeReceiptFreshness,
+	checkKnowledgeSnapshotReuse,
+	ingestKnowledgeSnapshot,
+	type KnowledgeContext,
+	type KnowledgeContextInput,
+	type KnowledgeFreshnessCheck,
+	type KnowledgeFreshnessOptions,
+	type KnowledgeFreshnessStatus,
+	type KnowledgeReceiptInput,
+	type KnowledgeReuseDecision,
+	KnowledgeReuseIndex,
+	type KnowledgeReuseIndexEntry,
+	type KnowledgeReuseIndexStore,
+	type KnowledgeReuseRequest,
+	type KnowledgeReuseStatus,
+	type KnowledgeSnapshotInput,
+	type KnowledgeSourceState,
+	knowledgeEvidenceGradeRank,
+	knowledgeReuseLevelRank,
+	resolveKnowledgeContext,
+	validateKnowledgeSourceReceipt,
+} from "./reuse.js";
+export {
 	advisoryCodes,
+	createKnowledgeReviewPolicy,
 	type ReviewMode,
 	readReviewMode,
 	saveReviewMode,
 } from "./review-policy.js";
+export type {
+	KnowledgeWorkerLifecycleEvent,
+	KnowledgeWorkerMetadata,
+} from "./runtime-host.js";
+export {
+	configureKnowledgeEvidence,
+	configureKnowledgeHost,
+	configureKnowledgeRuntime,
+	configureKnowledgeSetup,
+	configureKnowledgeWorker,
+	consumeKnowledgeReviewPreview,
+	createKnowledgeRuntimeHost,
+	createKnowledgeWorker,
+	deliveryContract,
+	emitKnowledgeWorkerLifecycle,
+	inspectObsidianSetup,
+	inspectSetupDirectory,
+	KNOWLEDGE_WORKER_LIFECYCLE_EVENT,
+	type KnowledgeRuntimeHost,
+	knowledgeWorkerMetadata,
+	LAYOUT,
+	loadWorkspaceConfig,
+	publishExplainer,
+	researchSetupOptions,
+	resolveSetupVault,
+} from "./runtime-host.js";
 export {
 	buildKnowledgeSearchExpression,
 	splitKnowledgeChunks,
 	tokenizeKnowledgeText,
 } from "./search-policy.js";
+export {
+	assignCommunities,
+	classifyRelation,
+	createSemanticModel,
+	isInfrastructureNode,
+	nodeType,
+	type RelationType,
+	type SemanticEdgeInput,
+	type SemanticGraph,
+	type SemanticNode,
+	type SemanticNodeInput,
+	type SemanticRelation,
+	type SemanticView,
+} from "./semantic-model.js";
 export { embedTexts, validateSemanticConfig as validateSemanticProviderConfig } from "./semantic-provider.js";
 export {
 	createSemanticSettingsApi,
@@ -160,11 +270,36 @@ export {
 	validateSemanticConfig,
 } from "./semantic-settings.js";
 export {
+	closeKnowledgeServices,
+	createKnowledgeServicePool,
+	getKnowledgeService,
+	KnowledgeService,
+	notifyKnowledgeChange,
+} from "./service.js";
+export {
 	normalizeSourceLinks,
 	onlineSourceLink,
 	type SourceLinkOptions,
 	type SourceLinksResult,
 } from "./source-links.js";
+export { createSpecialistDelivery, saveSpecialistExplainer } from "./specialist-delivery.js";
+export {
+	contextSessionId,
+	createKnowledgeSpecialistHost,
+	knowledgeSpecialistHost,
+	registerKnowledgeSpecialistHost,
+	SPECIALIST_LIMITS,
+	setSpecialistSettings,
+	specialistQueueSnapshot,
+	specialistSettings,
+	withSpecialistSlot,
+} from "./specialist-host.js";
+export {
+	createKnowledgeSpecialists,
+	createKnowledgeSpecialistTools,
+	knowledgeReadStart,
+	shouldOrientKnowledge,
+} from "./specialists.js";
 export {
 	createTaskFeedback,
 	guardResearchToolResult,
@@ -190,83 +325,23 @@ export {
 	type TopicCandidateResult,
 } from "./topic-candidate.js";
 export {
-	immutableWikiProposalHash,
-	MANAGED_END,
-	MANAGED_START,
-	type ManagedParts,
-	managedParts,
-	proposedWikiText,
-	targetWikiPath,
-	validateSpecialistHtml,
-	validateWikiSourcePaths,
-	type WikiProposalShape,
-} from "./wiki-policy.js";
-
-export {
-	TOPIC_MEMORY_LIMITS,
-	TOPIC_MEMORY_VERSION,
 	archiveTopic,
 	classifyTopic,
-	createTopicMemoryApi,
 	createTopicMemory,
+	createTopicMemoryApi,
 	listTopics,
 	readTopic,
+	TOPIC_MEMORY_LIMITS,
+	TOPIC_MEMORY_VERSION,
 	topicRunHash,
 	updateTopic,
 } from "./topic-memory.js";
-export { runNavigationMaintenance, updateNavigation } from "./maintenance.js";
-export { looksLikeFileName, noteDisplayTitle } from "./note-title.js";
-export { recentByCategory } from "./recent-by-category.js";
-export * from "./daily-discovery.js";
-export * from "./daily-discovery-prompt.js";
-export * from "./memory-note.js";
-export * from "./project-identity.js";
-export * from "./related-notes.js";
-export {
-	createKnowledgeRuntimeHost,
-	type KnowledgeRuntimeHost,
-	configureKnowledgeWorker,
-	configureKnowledgeEvidence,
-	configureKnowledgeHost,
-	configureKnowledgeSetup,
-	createKnowledgeWorker,
-	consumeKnowledgeReviewPreview,
-	deliveryContract,
-	emitKnowledgeWorkerLifecycle,
-	knowledgeWorkerMetadata,
-	KNOWLEDGE_WORKER_LIFECYCLE_EVENT,
-	loadWorkspaceConfig,
-	publishExplainer,
-	LAYOUT,
-	inspectObsidianSetup,
-	inspectSetupDirectory,
-	resolveSetupVault,
-	researchSetupOptions,
-} from "./runtime-host.js";
-export type {
-	KnowledgeWorkerLifecycleEvent,
-	KnowledgeWorkerMetadata,
-} from "./runtime-host.js";
-export { configureKnowledgeRuntime } from "./runtime-host.js";
-export {
-	assignCommunities,
-	classifyRelation,
-	createSemanticModel,
-	isInfrastructureNode,
-	nodeType,
-	type RelationType,
-	type SemanticEdgeInput,
-	type SemanticGraph,
-	type SemanticNode,
-	type SemanticNodeInput,
-	type SemanticRelation,
-	type SemanticView,
-} from "./semantic-model.js";
 
+export * from "./ui-service.js";
 export {
-	createKnowledgeUi,
 	beginKnowledgeFlow,
 	clearKnowledgeFlow,
+	createKnowledgeUi,
 	emitKnowledgeUi,
 	flowFor,
 	invalidateKnowledgeUi,
@@ -280,104 +355,28 @@ export {
 	subscribeKnowledgeUi,
 	updateKnowledgeFlow,
 } from "./ui-state.js";
+export { lastWikiModelReview, reviewWikiWithModel } from "./wiki-model-review.js";
 export {
-	createKnowledgePublication,
-	projectKnowledgeEvent,
-	projectKnowledgeSnapshot,
-	registerAnswerPublication,
-} from "./publication.js";
-
-export { createKnowledgeServicePool, KnowledgeService, closeKnowledgeServices, getKnowledgeService, notifyKnowledgeChange } from "./service.js";
-
+	immutableWikiProposalHash,
+	MANAGED_END,
+	MANAGED_START,
+	type ManagedParts,
+	managedParts,
+	proposedWikiText,
+	targetWikiPath,
+	validateSpecialistHtml,
+	validateWikiSourcePaths,
+	type WikiProposalShape,
+} from "./wiki-policy.js";
 export {
-	checkKnowledgeReceiptFreshness,
-	checkKnowledgeSnapshotReuse,
-	KnowledgeReuseIndex,
-	ingestKnowledgeSnapshot,
-	knowledgeEvidenceGradeRank,
-	knowledgeReuseLevelRank,
-	resolveKnowledgeContext,
-	validateKnowledgeSourceReceipt,
-	type KnowledgeContext,
-	type KnowledgeContextInput,
-	type KnowledgeFreshnessCheck,
-	type KnowledgeFreshnessOptions,
-	type KnowledgeFreshnessStatus,
-	type KnowledgeReceiptInput,
-	type KnowledgeReuseIndexEntry,
-	type KnowledgeReuseIndexStore,
-	type KnowledgeReuseRequest,
-	type KnowledgeReuseDecision,
-	type KnowledgeReuseStatus,
-	type KnowledgeSnapshotInput,
-	type KnowledgeSourceState,
-} from "./reuse.js";
-
-export {
-	createKnowledgeWikiReview,
 	autoApplyWikiProposal,
+	createKnowledgeWikiReview,
 	decideWikiProposal,
 	listWikiProposals,
 	mergeWikiProposal,
 	previewWikiProposal,
 	stageWikiProposal,
 	undoWikiUpdate,
-	wikiHistory,
 	validateWikiSourcePaths as validateRuntimeWikiSourcePaths,
+	wikiHistory,
 } from "./wiki-review.js";
-
-export {
-	createKnowledgeSpecialistHost,
-	SPECIALIST_LIMITS,
-	contextSessionId,
-	knowledgeSpecialistHost,
-	registerKnowledgeSpecialistHost,
-	setSpecialistSettings,
-	specialistQueueSnapshot,
-	specialistSettings,
-	withSpecialistSlot,
-} from "./specialist-host.js";
-
-export { createKnowledgeSpecialistTools, createKnowledgeSpecialists, knowledgeReadStart, shouldOrientKnowledge } from "./specialists.js";
-
-export { createSpecialistDelivery, saveSpecialistExplainer } from "./specialist-delivery.js";
-
-export { lastWikiModelReview, reviewWikiWithModel } from "./wiki-model-review.js";
-
-export * from "./ui-service.js";
-
-export {
-	EXPERIENCE_LIMITS,
-	EXPERIENCE_VERSION,
-	createExperienceStore,
-	experienceInputFromTerminalJob,
-	recordTerminalJobExperience,
-	terminalJobExperienceInput,
-	searchExperiences,
-	type ExperienceArtifact,
-	type ExperienceBinding,
-	type ExperienceDocument,
-	type ExperienceInput,
-	type ExperienceObservation,
-	type ExperienceOutcome,
-	type ExperienceQcDistribution,
-	type ExperienceQcMetric,
-	type ExperienceProvenance,
-	type ExperienceRecord,
-	type ExperienceRepair,
-	type ExperienceResourceUse,
-	type ExperienceSearchHit,
-	type ExperienceSearchResult,
-	type ExperienceStorePort,
-	type TerminalJobExperienceInput,
-	type ExperienceStatus,
-	type ExperienceStore,
-	type ExperienceStoreOptions,
-	type WorkflowSpecDiff,
-	type WorkflowSpecDiffValue,
-} from "./experience-store.js";
-export { EvolutionIndex, type EvolutionIndexStore } from "./evolution.js";
-
-export { createKnowledgeRuntime, type KnowledgeRuntime } from "./knowledge-runtime.js";
-
-export { summaryDeliveryClaims } from "./delivery-claims.js";

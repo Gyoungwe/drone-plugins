@@ -2,8 +2,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { containedVaultFile } from "./layout.js";
 import { readNoteFile } from "./files.js";
+import { containedVaultFile } from "./layout.js";
 
 const START = "<!-- pi-agent:managed:start -->",
 	END = "<!-- pi-agent:managed:end -->";

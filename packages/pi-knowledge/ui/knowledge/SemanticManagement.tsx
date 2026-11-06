@@ -4,8 +4,7 @@ import type {
 	KnowledgeSemanticStatus,
 } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useRef, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { Button } from "../api";
+import { Button, getKnowledgeApi } from "../api";
 import { useKnowledgeText } from "./copy";
 
 const EMPTY_CONFIG: KnowledgeSemanticConfig = {

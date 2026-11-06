@@ -4,9 +4,9 @@ import type {
 	KnowledgeModelReviewResult,
 	KnowledgePreviewReviewResult,
 } from "../src/desktop/contract.js";
-import type { createKnowledgeRuntimeStore } from "./runtime-store";
-import { Button, useSettingsStore } from "./runtime-api";
 import { useNativeKnowledgeText } from "./native-copy";
+import { Button, useSettingsStore } from "./runtime-api";
+import type { createKnowledgeRuntimeStore } from "./runtime-store";
 
 export function NativeKnowledgeModelReview({
 	store,
@@ -53,8 +53,7 @@ export function NativeKnowledgeModelReview({
 					}
 				},
 				(cause) => {
-					if (generation.current === epoch)
-						setError(cause instanceof Error ? cause.message : String(cause));
+					if (generation.current === epoch) setError(cause instanceof Error ? cause.message : String(cause));
 				},
 			);
 		return () => {
@@ -87,8 +86,7 @@ export function NativeKnowledgeModelReview({
 			setAck(false);
 			if (result.applied) onApplied(result);
 		} catch (cause) {
-			if (epoch === generation.current)
-				setError(cause instanceof Error ? cause.message : String(cause));
+			if (epoch === generation.current) setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			if (epoch === generation.current) {
 				active.current = null;
@@ -98,10 +96,7 @@ export function NativeKnowledgeModelReview({
 		}
 	};
 	return (
-		<section
-			className="space-y-2 rounded-lg border border-border p-3"
-			data-testid="native-model-review"
-		>
+		<section className="space-y-2 rounded-lg border border-border p-3" data-testid="native-model-review">
 			<h3 className="text-sm font-medium">{t.modelReview}</h3>
 			{info && (
 				<p className="text-xs text-ink-dim">
@@ -149,8 +144,8 @@ export function NativeKnowledgeModelReview({
 						{t.modelReviewInput}:{" "}
 						{report.usage.inputTokens === null ? t.modelReviewUnknown : report.usage.inputTokens} ·{" "}
 						{t.modelReviewOutput}:{" "}
-						{report.usage.outputTokens === null ? t.modelReviewUnknown : report.usage.outputTokens}{" "}
-						· {t.modelReviewCost}:{" "}
+						{report.usage.outputTokens === null ? t.modelReviewUnknown : report.usage.outputTokens} ·{" "}
+						{t.modelReviewCost}:{" "}
 						{report.usage.cost === null ? t.modelReviewUnknown : `$${report.usage.cost.toFixed(4)}`}
 					</p>
 					{(report.partial || report.applyError || report.auditSaveError) && (

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -33,7 +33,9 @@ test("registerPiConnectors exposes read-only declaration tools", async () => {
 		true,
 	);
 	const arxiv = listed.details.connectors.find((descriptor) => descriptor.id === "arxiv");
-	const semanticScholar = listed.details.connectors.find((descriptor) => descriptor.id === "semantic-scholar");
+	const semanticScholar = listed.details.connectors.find(
+		(descriptor) => descriptor.id === "semantic-scholar",
+	);
 	assert.deepEqual(arxiv.permissions.network.allowedHosts, ["export.arxiv.org", "arxiv.org"]);
 	assert.deepEqual(semanticScholar.permissions.network.allowedHosts, ["api.semanticscholar.org"]);
 	assert.equal(arxiv.enabledByDefault, true);

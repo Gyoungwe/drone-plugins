@@ -2,10 +2,10 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as compatibilityConfig from "./config.js";
 import type { KnowledgeConfigApi } from "./config.js";
-import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
+import * as compatibilityConfig from "./config.js";
 import { failureCard, flowCard } from "./flow-cards.js";
+import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
 
 export interface AnswerMetricsStorage {
 	read(): Promise<{ value: unknown; version: string } | null>;
@@ -13,7 +13,11 @@ export interface AnswerMetricsStorage {
 }
 
 /** Explicit owner; constructing this API never installs a process listener. */
-export function createKnowledgeUi(runtime: KnowledgeRuntimeHost, config: Pick<KnowledgeConfigApi, "knowledgeDirectory"> | undefined, metrics?: AnswerMetricsStorage) {
+export function createKnowledgeUi(
+	runtime: KnowledgeRuntimeHost,
+	config: Pick<KnowledgeConfigApi, "knowledgeDirectory"> | undefined,
+	metrics?: AnswerMetricsStorage,
+) {
 	const { runtimeSlot, emitProcessEvent, flowCardBuilder, toolMeta } = runtime;
 	const knowledgeDirectory = () => config?.knowledgeDirectory() ?? null;
 	const state = runtimeSlot("knowledge", "ui", () => ({
@@ -190,8 +194,14 @@ export function createKnowledgeUi(runtime: KnowledgeRuntimeHost, config: Pick<Kn
 				if (saved === null) state.localAnswerStats = { answered: 0, total: 0, rate: null, updatedAt: null };
 				else {
 					const value = saved.value;
-					if (!value || typeof value !== "object" || !Number.isSafeInteger(value.answered) ||
-						!Number.isSafeInteger(value.total) || value.answered < 0 || value.total < value.answered)
+					if (
+						!value ||
+						typeof value !== "object" ||
+						!Number.isSafeInteger(value.answered) ||
+						!Number.isSafeInteger(value.total) ||
+						value.answered < 0 ||
+						value.total < value.answered
+					)
 						throw new Error("Invalid knowledge answer metrics");
 					state.localAnswerStats = { ...value, rate: value.total ? value.answered / value.total : null };
 				}
@@ -431,11 +441,50 @@ export function createKnowledgeUi(runtime: KnowledgeRuntimeHost, config: Pick<Kn
 			: updatePublicationFlow(ctx, proof);
 	}
 
-	return { dispose: () => { state.listeners.clear(); state.flows.clear(); }, subscribeKnowledgeUi, emitKnowledgeUi, flowFor, knowledgeAnswerRate, beginKnowledgeFlow, updateKnowledgeFlow, noteKnowledgeRead, publicationKnowledgeFlow, requestWikiReviewUi, notifyKnowledgeUi, invalidateKnowledgeUi, clearKnowledgeFlow, knowledgeExcerpt, noteKnowledgeSearch, noteKnowledgeOperation, noteKnowledgeSpecialist, receiveCompatibilityEvent };
+	return {
+		dispose: () => {
+			state.listeners.clear();
+			state.flows.clear();
+		},
+		subscribeKnowledgeUi,
+		emitKnowledgeUi,
+		flowFor,
+		knowledgeAnswerRate,
+		beginKnowledgeFlow,
+		updateKnowledgeFlow,
+		noteKnowledgeRead,
+		publicationKnowledgeFlow,
+		requestWikiReviewUi,
+		notifyKnowledgeUi,
+		invalidateKnowledgeUi,
+		clearKnowledgeFlow,
+		knowledgeExcerpt,
+		noteKnowledgeSearch,
+		noteKnowledgeOperation,
+		noteKnowledgeSpecialist,
+		receiveCompatibilityEvent,
+	};
 }
 
 // pi-knowledge 0.2 compatibility only. Delete when native/Desktop composition
 // shares one explicit 0.3 owner and no host consumer imports these facades.
 const compatibilityKnowledgeUi = createKnowledgeUi(compatibilityKnowledgeRuntimeHost, compatibilityConfig);
 process.on("drone:knowledge-ui/v1", compatibilityKnowledgeUi.receiveCompatibilityEvent);
-export const { subscribeKnowledgeUi, emitKnowledgeUi, flowFor, knowledgeAnswerRate, beginKnowledgeFlow, updateKnowledgeFlow, noteKnowledgeRead, publicationKnowledgeFlow, requestWikiReviewUi, notifyKnowledgeUi, invalidateKnowledgeUi, clearKnowledgeFlow, knowledgeExcerpt, noteKnowledgeSearch, noteKnowledgeOperation, noteKnowledgeSpecialist } = compatibilityKnowledgeUi;
+export const {
+	subscribeKnowledgeUi,
+	emitKnowledgeUi,
+	flowFor,
+	knowledgeAnswerRate,
+	beginKnowledgeFlow,
+	updateKnowledgeFlow,
+	noteKnowledgeRead,
+	publicationKnowledgeFlow,
+	requestWikiReviewUi,
+	notifyKnowledgeUi,
+	invalidateKnowledgeUi,
+	clearKnowledgeFlow,
+	knowledgeExcerpt,
+	noteKnowledgeSearch,
+	noteKnowledgeOperation,
+	noteKnowledgeSpecialist,
+} = compatibilityKnowledgeUi;

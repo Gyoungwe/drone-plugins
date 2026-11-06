@@ -3,47 +3,6 @@ import { createHash, randomUUID } from "node:crypto";
 import { access, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 
-// src/evidence-gate.ts
-var EVIDENCE_STAGES = Object.freeze([
-  "created",
-  "local_query_recorded",
-  "external_search_recorded",
-  "sources_inspected",
-  "sources_archived",
-  "claims_bound",
-  "answerable"
-]);
-var TERMINAL_FAILURES = /* @__PURE__ */ new Set(["unavailable", "browser_required", "failed"]);
-function createEvidenceGate({ scope = "factual-answer" } = {}) {
-  const events = [];
-  let stage = "created";
-  const record = (type, details = {}) => {
-    events.push({ type, at: (/* @__PURE__ */ new Date()).toISOString(), ...details });
-  };
-  const snapshot = () => ({
-    scope,
-    stage,
-    status: "ok",
-    answerable: stage === "answerable",
-    events: [...events]
-  });
-  const advance = (next, details = {}) => {
-    if (!EVIDENCE_STAGES.includes(next)) throw new Error(`Unknown evidence stage: ${next}`);
-    const current = EVIDENCE_STAGES.indexOf(stage);
-    const target = EVIDENCE_STAGES.indexOf(next);
-    if (target < current) throw new Error(`Evidence stage cannot move backwards: ${stage} -> ${next}`);
-    stage = next;
-    record(next, details);
-    return snapshot();
-  };
-  const fail = (status, details = {}) => {
-    if (!TERMINAL_FAILURES.has(status)) throw new Error(`Unknown evidence failure: ${status}`);
-    record(status, details);
-    return { ...snapshot(), status, answerable: false };
-  };
-  return Object.freeze({ advance, fail, snapshot });
-}
-
 // ../../node_modules/pdfjs-dist/legacy/build/pdf.mjs
 var __webpack_modules__ = {
   /***/
@@ -99969,6 +99928,47 @@ globalThis.pdfjsWorker = {
   WorkerMessageHandler
 };
 
+// src/evidence-gate.ts
+var EVIDENCE_STAGES = Object.freeze([
+  "created",
+  "local_query_recorded",
+  "external_search_recorded",
+  "sources_inspected",
+  "sources_archived",
+  "claims_bound",
+  "answerable"
+]);
+var TERMINAL_FAILURES = /* @__PURE__ */ new Set(["unavailable", "browser_required", "failed"]);
+function createEvidenceGate({ scope = "factual-answer" } = {}) {
+  const events = [];
+  let stage = "created";
+  const record = (type, details = {}) => {
+    events.push({ type, at: (/* @__PURE__ */ new Date()).toISOString(), ...details });
+  };
+  const snapshot = () => ({
+    scope,
+    stage,
+    status: "ok",
+    answerable: stage === "answerable",
+    events: [...events]
+  });
+  const advance = (next, details = {}) => {
+    if (!EVIDENCE_STAGES.includes(next)) throw new Error(`Unknown evidence stage: ${next}`);
+    const current = EVIDENCE_STAGES.indexOf(stage);
+    const target = EVIDENCE_STAGES.indexOf(next);
+    if (target < current) throw new Error(`Evidence stage cannot move backwards: ${stage} -> ${next}`);
+    stage = next;
+    record(next, details);
+    return snapshot();
+  };
+  const fail = (status, details = {}) => {
+    if (!TERMINAL_FAILURES.has(status)) throw new Error(`Unknown evidence failure: ${status}`);
+    record(status, details);
+    return { ...snapshot(), status, answerable: false };
+  };
+  return Object.freeze({ advance, fail, snapshot });
+}
+
 // src/evidence-loop.ts
 globalThis.pdfjsWorker = {
   WorkerMessageHandler
@@ -100605,6 +100605,115 @@ async function sourceStatus(options = {}, ports) {
   };
 }
 
+// src/core/claim-bindings.ts
+var RELATIONSHIPS = ["direct", "indirect", "hypothesis", "unsupported"];
+function text(value, label, max = 4e3) {
+  if (typeof value !== "string" || !value.trim() || value.length > max) throw new Error(`Invalid ${label}`);
+  return value.trim();
+}
+function validateClaimBindings(bindings, sources, reads) {
+  if (!Array.isArray(bindings) || bindings.length < 1 || bindings.length > 64)
+    throw new Error("Provide 1-64 structured claim_bindings");
+  const seen = /* @__PURE__ */ new Set();
+  return bindings.map((raw, index) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid claim binding");
+    const binding = raw;
+    const claim = text(binding.claim, "claim");
+    const limitations = text(binding.limitations, "limitations");
+    if (seen.has(claim)) throw new Error("Duplicate claim binding");
+    seen.add(claim);
+    const relationship = binding.relationship;
+    if (!RELATIONSHIPS.includes(relationship))
+      throw new Error("Invalid support relationship");
+    if (!Array.isArray(binding.sources) || binding.sources.length > 12)
+      throw new Error("Invalid claim sources");
+    if (["direct", "indirect"].includes(String(relationship)) && binding.sources.length === 0)
+      throw new Error("Supported claims require observed source excerpts");
+    const refs = binding.sources.map((rawRef) => {
+      if (!rawRef || typeof rawRef !== "object" || Array.isArray(rawRef))
+        throw new Error("Invalid claim source");
+      const ref = rawRef;
+      const path = typeof ref.path === "string" ? ref.path : "";
+      const source = sources.find((candidate) => candidate.path === path);
+      const observed = reads.get(path);
+      const receipts = Array.isArray(observed) ? observed : observed ? [observed] : [];
+      if (!source || !receipts.some((read2) => read2.hash === source.hash))
+        throw new Error("Claim source was not read and identity-verified in this scope");
+      const first = ref.start_line;
+      const last = ref.end_line;
+      const read = receipts.find(
+        (candidate) => candidate.hash === source.hash && Number.isInteger(first) && Number.isInteger(last) && first >= candidate.startLine && last >= first && last <= candidate.endLine
+      );
+      if (!read)
+        throw new Error("Claim source range is outside the observed read; unread gaps cannot be cited");
+      const quote = text(ref.quote, "source quote", 6e3);
+      const excerpt = read.text.split(/\r?\n/).slice(first - read.startLine, last - read.startLine + 1).join("\n");
+      if (!excerpt.includes(quote)) throw new Error("Claim quote does not match the observed note range");
+      return {
+        path: source.path,
+        doi: source.doi,
+        zotero_key: source.zotero_key,
+        hash: source.hash,
+        start_line: first,
+        end_line: last,
+        quote,
+        ...ref.original_location ? { original_location: text(ref.original_location, "historical original location", 600) } : {},
+        reading_basis: "current-scope-observed-excerpt",
+        ...read.receiptId ? { read_receipt_id: read.receiptId } : {},
+        originalFulltextReadThisTurn: false
+      };
+    });
+    return {
+      id: `claim-${index + 1}`,
+      claim,
+      relationship,
+      limitations,
+      ...binding.organism ? { organism: text(binding.organism, "organism", 600) } : {},
+      ...binding.method ? { method: text(binding.method, "method", 1e3) } : {},
+      sources: refs,
+      supportAssessment: "model-asserted-unreviewed",
+      provenanceChecked: true,
+      scientificallyVerified: false
+    };
+  });
+}
+function claimBindingRefs(bindings) {
+  return bindings.map(
+    (binding) => `${binding.claim} [${binding.relationship}] -> ${binding.sources.map((source) => `${source.path}:${source.start_line}-${source.end_line}`).join(", ") || "no supporting source"}; limitation: ${binding.limitations}`
+  );
+}
+var CLAIM_BINDING_SCHEMA = {
+  type: "array",
+  minItems: 1,
+  maxItems: 64,
+  items: {
+    type: "object",
+    properties: {
+      claim: { type: "string" },
+      relationship: { type: "string", enum: [...RELATIONSHIPS] },
+      organism: { type: "string" },
+      method: { type: "string" },
+      limitations: { type: "string" },
+      sources: {
+        type: "array",
+        maxItems: 12,
+        items: {
+          type: "object",
+          properties: {
+            path: { type: "string" },
+            start_line: { type: "integer", minimum: 1 },
+            end_line: { type: "integer", minimum: 1 },
+            quote: { type: "string" },
+            original_location: { type: "string" }
+          },
+          required: ["path", "start_line", "end_line", "quote"]
+        }
+      }
+    },
+    required: ["claim", "relationship", "limitations", "sources"]
+  }
+};
+
 // src/core/receipt-journal.ts
 import { realpath as realpath3 } from "node:fs/promises";
 
@@ -100761,120 +100870,6 @@ function createResearchReceiptJournal(cwd, { sessionId = null, ports }) {
     }
   };
 }
-
-// src/core/claim-bindings.ts
-var RELATIONSHIPS = ["direct", "indirect", "hypothesis", "unsupported"];
-function text(value, label, max = 4e3) {
-  if (typeof value !== "string" || !value.trim() || value.length > max) throw new Error(`Invalid ${label}`);
-  return value.trim();
-}
-function validateClaimBindings(bindings, sources, reads) {
-  if (!Array.isArray(bindings) || bindings.length < 1 || bindings.length > 64)
-    throw new Error("Provide 1-64 structured claim_bindings");
-  const seen = /* @__PURE__ */ new Set();
-  return bindings.map((raw, index) => {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid claim binding");
-    const binding = raw;
-    const claim = text(binding.claim, "claim");
-    const limitations = text(binding.limitations, "limitations");
-    if (seen.has(claim)) throw new Error("Duplicate claim binding");
-    seen.add(claim);
-    const relationship = binding.relationship;
-    if (!RELATIONSHIPS.includes(relationship))
-      throw new Error("Invalid support relationship");
-    if (!Array.isArray(binding.sources) || binding.sources.length > 12)
-      throw new Error("Invalid claim sources");
-    if (["direct", "indirect"].includes(String(relationship)) && binding.sources.length === 0)
-      throw new Error("Supported claims require observed source excerpts");
-    const refs = binding.sources.map((rawRef) => {
-      if (!rawRef || typeof rawRef !== "object" || Array.isArray(rawRef))
-        throw new Error("Invalid claim source");
-      const ref = rawRef;
-      const path = typeof ref.path === "string" ? ref.path : "";
-      const source = sources.find((candidate) => candidate.path === path);
-      const observed = reads.get(path);
-      const receipts = Array.isArray(observed) ? observed : observed ? [observed] : [];
-      if (!source || !receipts.some((read2) => read2.hash === source.hash))
-        throw new Error("Claim source was not read and identity-verified in this scope");
-      const first = ref.start_line;
-      const last = ref.end_line;
-      const read = receipts.find(
-        (candidate) => candidate.hash === source.hash && Number.isInteger(first) && Number.isInteger(last) && first >= candidate.startLine && last >= first && last <= candidate.endLine
-      );
-      if (!read)
-        throw new Error("Claim source range is outside the observed read; unread gaps cannot be cited");
-      const quote = text(ref.quote, "source quote", 6e3);
-      const excerpt = read.text.split(/\r?\n/).slice(first - read.startLine, last - read.startLine + 1).join("\n");
-      if (!excerpt.includes(quote)) throw new Error("Claim quote does not match the observed note range");
-      return {
-        path: source.path,
-        doi: source.doi,
-        zotero_key: source.zotero_key,
-        hash: source.hash,
-        start_line: first,
-        end_line: last,
-        quote,
-        ...ref.original_location ? { original_location: text(ref.original_location, "historical original location", 600) } : {},
-        reading_basis: "current-scope-observed-excerpt",
-        ...read.receiptId ? { read_receipt_id: read.receiptId } : {},
-        originalFulltextReadThisTurn: false
-      };
-    });
-    return {
-      id: `claim-${index + 1}`,
-      claim,
-      relationship,
-      limitations,
-      ...binding.organism ? { organism: text(binding.organism, "organism", 600) } : {},
-      ...binding.method ? { method: text(binding.method, "method", 1e3) } : {},
-      sources: refs,
-      supportAssessment: "model-asserted-unreviewed",
-      provenanceChecked: true,
-      scientificallyVerified: false
-    };
-  });
-}
-function claimBindingRefs(bindings) {
-  return bindings.map(
-    (binding) => `${binding.claim} [${binding.relationship}] -> ${binding.sources.map((source) => `${source.path}:${source.start_line}-${source.end_line}`).join(", ") || "no supporting source"}; limitation: ${binding.limitations}`
-  );
-}
-var CLAIM_BINDING_SCHEMA = {
-  type: "array",
-  minItems: 1,
-  maxItems: 64,
-  items: {
-    type: "object",
-    properties: {
-      claim: { type: "string" },
-      relationship: { type: "string", enum: [...RELATIONSHIPS] },
-      organism: { type: "string" },
-      method: { type: "string" },
-      limitations: { type: "string" },
-      sources: {
-        type: "array",
-        maxItems: 12,
-        items: {
-          type: "object",
-          properties: {
-            path: { type: "string" },
-            start_line: { type: "integer", minimum: 1 },
-            end_line: { type: "integer", minimum: 1 },
-            quote: { type: "string" },
-            original_location: { type: "string" }
-          },
-          required: ["path", "start_line", "end_line", "quote"]
-        }
-      }
-    },
-    required: ["claim", "relationship", "limitations", "sources"]
-  }
-};
-
-// src/core/research-loop.ts
-import { createHash as createHash6, randomUUID as randomUUID3 } from "node:crypto";
-import { access as access3, mkdir as mkdir3, readFile as readFile4, realpath as realpath4, rename as rename3, writeFile as writeFile3 } from "node:fs/promises";
-import { dirname as dirname3, isAbsolute as isAbsolute4, join as join3, relative as relative5, resolve as resolve6, sep as sep5 } from "node:path";
 
 // src/core/research-delivery.ts
 import { createHash as createHash5 } from "node:crypto";
@@ -101046,6 +101041,9 @@ function validateSummaryAssessment(value, packet) {
 }
 
 // src/core/research-loop.ts
+import { createHash as createHash6, randomUUID as randomUUID3 } from "node:crypto";
+import { access as access3, mkdir as mkdir3, readFile as readFile4, realpath as realpath4, rename as rename3, writeFile as writeFile3 } from "node:fs/promises";
+import { dirname as dirname3, isAbsolute as isAbsolute4, join as join3, relative as relative5, resolve as resolve6, sep as sep5 } from "node:path";
 var RESEARCH_STAGES = Object.freeze([
   "created",
   "local_query_recorded",
@@ -102181,10 +102179,14 @@ async function workspace(cwd) {
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  if (!config || typeof config !== "object" || Array.isArray(config)) throw new Error("Invalid research workspace configuration");
-  if (config.resultsRoot !== void 0 && typeof config.resultsRoot !== "string") throw new Error("resultsRoot must be a path");
-  if (config.obsidianVault != null && typeof config.obsidianVault !== "string") throw new Error("obsidianVault must be a path");
-  if (config.knowledgeBindingRevision !== void 0 && !Number.isInteger(config.knowledgeBindingRevision)) throw new Error("knowledgeBindingRevision must be an integer");
+  if (!config || typeof config !== "object" || Array.isArray(config))
+    throw new Error("Invalid research workspace configuration");
+  if (config.resultsRoot !== void 0 && typeof config.resultsRoot !== "string")
+    throw new Error("resultsRoot must be a path");
+  if (config.obsidianVault != null && typeof config.obsidianVault !== "string")
+    throw new Error("obsidianVault must be a path");
+  if (config.knowledgeBindingRevision !== void 0 && !Number.isInteger(config.knowledgeBindingRevision))
+    throw new Error("knowledgeBindingRevision must be an integer");
   return {
     resultsRoot: resolve8(cwd, config.resultsRoot ?? "results"),
     obsidianVault: config.obsidianVault ? resolve8(cwd, config.obsidianVault) : null,

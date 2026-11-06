@@ -1,8 +1,5 @@
 import { useEffect, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { useLanguage } from "../api";
-import { relativeTime } from "../api";
-import { Button } from "../api";
+import { Button, getKnowledgeApi, relativeTime, useLanguage } from "../api";
 import { useKnowledgeText } from "./copy";
 import { launchKnowledgeSetup, reportKnowledgeError, useKnowledgeOverview } from "./hooks";
 import { KnowledgeGraph } from "./KnowledgeGraph";

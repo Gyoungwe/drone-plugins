@@ -12,37 +12,22 @@ function localHref(path: string): string | undefined {
 		return;
 	const encoded = normalized
 		.split("/")
-		.map((part) =>
-			encodeURIComponent(part).replace(
-				/[!'()*]/g,
-				(c) => `%${c.charCodeAt(0).toString(16)}`,
-			),
-		)
+		.map((part) => encodeURIComponent(part).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16)}`))
 		.join("/");
-	if (/^[a-z]:\//i.test(normalized))
-		return `file:///${normalized.slice(0, 2)}${encoded.slice(4)}`;
+	if (/^[a-z]:\//i.test(normalized)) return `file:///${normalized.slice(0, 2)}${encoded.slice(4)}`;
 	return normalized.startsWith("/") ? `file://${encoded}` : `./${encoded}`;
 }
 export function taskArtifactLinks(task: WorkbenchTask) {
-	const byPath = new Map<
-		string,
-		{ path: string; href: string; state: string }
-	>();
+	const byPath = new Map<string, { path: string; href: string; state: string }>();
 	const add = (path: string | undefined, state: string) => {
 		if (!path) return;
 		const href = localHref(path);
 		if (!href) return;
 		const normalized = path.replaceAll("\\", "/");
-		byPath.set(
-			/^[a-z]:/i.test(normalized) ? normalized.toLowerCase() : normalized,
-			{ path, href, state },
-		);
+		byPath.set(/^[a-z]:/i.test(normalized) ? normalized.toLowerCase() : normalized, { path, href, state });
 	};
 	for (const milestone of task.milestones)
-		if (
-			milestone.state === "completed" &&
-			milestone.evidence?.kind === "file-observed"
-		)
+		if (milestone.state === "completed" && milestone.evidence?.kind === "file-observed")
 			add(milestone.evidence.path, "observed");
 	for (const operation of task.operations)
 		if (

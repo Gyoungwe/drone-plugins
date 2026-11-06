@@ -5,10 +5,7 @@
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",
-		"testedHosts": [
-			"1.1.0",
-			"latest"
-		]
+		"testedHosts": ["1.1.0", "latest"]
 	},
 	"drone": {
 		"pluginApi": 1,
@@ -19,15 +16,7 @@
 		"host": "./dist/host.mjs",
 		"ui": "./ui/plugin.json"
 	},
-	"capabilities": [
-		"core",
-		"planning",
-		"tasks",
-		"files",
-		"read-only",
-		"evidence",
-		"ui"
-	],
+	"capabilities": ["core", "planning", "tasks", "files", "read-only", "evidence", "ui"],
 	"tools": [
 		"ask_user",
 		"set_status",
@@ -40,15 +29,9 @@
 		"task_reconcile",
 		"task_evidence_restore"
 	],
-	"hosts": [
-		"native-pi",
-		"drone-desktop"
-	],
+	"hosts": ["native-pi", "drone-desktop"],
 	"permissions": {
-		"filesystem": [
-			"workspace-read",
-			"workspace"
-		],
+		"filesystem": ["workspace-read", "workspace"],
 		"network": [],
 		"subprocess": [],
 		"externalWrites": false

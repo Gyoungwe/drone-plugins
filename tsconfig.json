@@ -1,12 +1,12 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true
-  },
-  "include": ["packages/*/src/**/*.ts"],
-  "exclude": ["packages/pi-core/src/**/*.ts"]
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"strict": true,
+		"noEmit": true,
+		"skipLibCheck": true
+	},
+	"include": ["packages/*/src/**/*.ts"],
+	"exclude": ["packages/pi-core/src/**/*.ts"]
 }

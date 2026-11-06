@@ -28,8 +28,9 @@ describe("maintenance against a real worker-indexed Vault", () => {
 		const appState = join(root, "app-state");
 		await mkdir(vault, { recursive: true });
 		process.env.DRONE_KNOWLEDGE_DIR = appState;
-		configureKnowledgeWorker((_url, options) =>
-			new Worker(new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url), options as never),
+		configureKnowledgeWorker(
+			(_url, options) =>
+				new Worker(new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url), options as never),
 		);
 		for (let index = 0; index < 20; index++) {
 			const path = join(vault, "Library", "Papers", `PMC${index + 1}.pdf.md`);
@@ -44,7 +45,12 @@ describe("maintenance against a real worker-indexed Vault", () => {
 		});
 		const service = await getKnowledgeService(binding);
 		await service.request("reconcile", { force: true });
-		const graph = await service.request("graph", { revision: binding.revision, limit: 5000, view: "all", mergeMirrors: false });
+		const graph = await service.request("graph", {
+			revision: binding.revision,
+			limit: 5000,
+			view: "all",
+			mergeMirrors: false,
+		});
 		const items = planMaintenance(null, graph, { enabled: true, maxItems: 20, dailyLimit: 20 });
 		expect(items).toHaveLength(20);
 		expect(items.every((item) => item.kind === "missing-topic")).toBe(true);
@@ -61,13 +67,18 @@ describe("maintenance against a real worker-indexed Vault", () => {
 			setTopic: async (path, topic) => {
 				const absolute = join(vault, path);
 				const body = await readFile(absolute, "utf8");
-				await writeFile(absolute, `---\ntype: paper\ntopic: ${topic}\n---${body.split("---").slice(2).join("---")}`);
+				await writeFile(
+					absolute,
+					`---\ntype: paper\ntopic: ${topic}\n---${body.split("---").slice(2).join("---")}`,
+				);
 			},
 			proposeWiki: async () => undefined,
 		});
 		expect(result.processed).toBe(20);
 		expect(result.modelCalls).toBe(20);
 		expect(prompts[0]).toContain("Evidence body 1");
-		expect(await readFile(join(vault, "Library", "Papers", "PMC1.pdf.md"), "utf8")).toContain("topic: Indexed paper");
+		expect(await readFile(join(vault, "Library", "Papers", "PMC1.pdf.md"), "utf8")).toContain(
+			"topic: Indexed paper",
+		);
 	});
 });

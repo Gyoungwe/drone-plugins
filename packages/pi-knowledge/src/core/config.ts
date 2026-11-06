@@ -219,7 +219,8 @@ export function createKnowledgeConfigApi(
 		readKnowledgeBinding: (options = {}) => readKnowledgeBindingWithState(state, fixedDirectory, options),
 		saveKnowledgeBinding: (input, expectedRevision = null) =>
 			saveKnowledgeBindingWithState(state, fixedDirectory, input, expectedRevision),
-		withKnowledgeBinding: (binding, operation) => withKnowledgeBindingWithState(state, fixedDirectory, binding, operation),
+		withKnowledgeBinding: (binding, operation) =>
+			withKnowledgeBindingWithState(state, fixedDirectory, binding, operation),
 	};
 }
 

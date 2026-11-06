@@ -1,99 +1,88 @@
-import {
-	reviewHistoryInputSchema,
-	reviewHistoryResultSchema,
-	undoReviewInputSchema,
-	undoReviewResultSchema,
-	type KnowledgeReviewHistoryInput,
-	type KnowledgeUndoReviewInput,
-} from "./contract.js";
-import { createKnowledgeSemanticPreferences } from "./semantic-preferences.js";
-import {
-	semanticPreferencesInputSchema,
-	semanticPreferencesResultSchema,
-	setSemanticSettingsInputSchema,
-	type KnowledgeSetSemanticSettingsInput,
-} from "./contract.js";
+import type { PluginNativeRuntimeFactory, PluginNativeSession } from "@gyoungwe/plugin-api/native";
+import type { PluginNativeSessionFacts, PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
+import { type KnowledgeBinding, parseKnowledgeBinding, projectIdentity } from "../core/config.js";
+import { createKnowledgeOwnerLifecycle } from "../core/owner-lifecycle.js";
+import { createStoredKnowledgeReviewPolicy } from "../core/review-policy.js";
 import { createKnowledgeRuntimeHost } from "../core/runtime-host.js";
 import { createKnowledgeServicePool } from "../core/service.js";
-import { createStoredKnowledgeReviewPolicy } from "../core/review-policy.js";
-import { createBrokerReviewPolicyStorage } from "./state-policy.js";
-import { createBrokerSemanticSettings } from "./semantic-settings.js";
-import { createResourceServiceTransportFactory } from "./service-transport.js";
-import { createKnowledgeModelReview } from "../core/wiki-model-review.js";
-import { createKnowledgeModelReviewModel, parseModelReviewCommandInput } from "./model-review.js";
-import {
-	modelReviewInputSchema,
-	modelReviewResultSchema,
-	modelReviewInfoInputSchema,
-	modelReviewInfoResultSchema,
-	type KnowledgeModelReviewInput,
-	type KnowledgeModelReviewInfoInput,
-} from "./contract.js";
-import { createKnowledgeReviewModel } from "./reviews.js";
-import { createKnowledgeWikiReview } from "../core/wiki-review.js";
-import { createBrokerWikiReviewPorts } from "./review-storage.js";
-
-import {
-	reviewsInputSchema,
-	reviewsResultSchema,
-	previewReviewInputSchema,
-	previewReviewResultSchema,
-	rejectReviewInputSchema,
-	rejectReviewResultSchema,
-	applyReviewInputSchema,
-	applyReviewResultSchema,
-	type KnowledgeReviewsInput,
-	type KnowledgePreviewReviewInput,
-	type KnowledgeRejectReviewInput,
-	type KnowledgeApplyReviewInput,
-} from "./contract.js";
-import type { PluginNativeSessionFacts, PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
-import type { PluginNativeRuntimeFactory, PluginNativeSession } from "@gyoungwe/plugin-api/native";
-import { parseKnowledgeBinding, projectIdentity, type KnowledgeBinding } from "../core/config.js";
-import { createKnowledgeOwnerLifecycle } from "../core/owner-lifecycle.js";
-import { createKnowledgeReadModel, type KnowledgeReadOwner } from "./read-model.js";
-import { createKnowledgePreferences } from "./preferences.js";
-import {
-	preferencesInputSchema,
-	preferencesResultSchema,
-	setReviewPolicyInputSchema,
-	type KnowledgeSetReviewPolicyInput,
-} from "./contract.js";
-import { registerDesktopKnowledgeNativeReadTools } from "./native.js";
-import { createManagedNativeSession } from "../extension/knowledge-extension.js";
-import { createKnowledgeUi } from "../core/ui-state.js";
+import { createSpecialistDelivery } from "../core/specialist-delivery.js";
 import { createKnowledgeSpecialistHost } from "../core/specialist-host.js";
 import { createKnowledgeSpecialistTools } from "../core/specialists.js";
 import { createTopicMemoryApi } from "../core/topic-memory.js";
-import { createSpecialistDelivery } from "../core/specialist-delivery.js";
-import { createBrokerKnowledgeState } from "./native-state.js";
-import { createBrokerTopicMemoryStorage } from "./topic-storage.js";
-import { createBrokerSpecialistSettingsStorage } from "./specialist-settings-storage.js";
-import { createManagedKnowledgeSessionPorts } from "./session-ports.js";
-import { createKnowledgeRecoveryMigration } from "./recovery-migration.js";
-import { createBrokerKnowledgeSpecialist } from "./specialist-model.js";
+import { createKnowledgeUi } from "../core/ui-state.js";
+import { createKnowledgeModelReview } from "../core/wiki-model-review.js";
+import { createKnowledgeWikiReview } from "../core/wiki-review.js";
+import { createManagedNativeSession } from "../extension/knowledge-extension.js";
 import {
-	overviewInputSchema,
-	overviewResultSchema,
-	searchInputSchema,
-	searchResultSchema,
-	type KnowledgeSearchInput,
-	readNoteInputSchema,
-	readNoteResultSchema,
-	linksInputSchema,
-	linksResultSchema,
+	applyReviewInputSchema,
+	applyReviewResultSchema,
 	graphInputSchema,
 	graphResultSchema,
 	jobsInputSchema,
 	jobsResultSchema,
-	recentByCategoryInputSchema,
-	recentByCategoryResultSchema,
-	type KnowledgeReadNoteInput,
-	type KnowledgeLinksInput,
+	type KnowledgeApplyReviewInput,
 	type KnowledgeGraphInput,
 	type KnowledgeJobsInput,
+	type KnowledgeLinksInput,
+	type KnowledgeModelReviewInfoInput,
+	type KnowledgeModelReviewInput,
+	type KnowledgePreviewReviewInput,
+	type KnowledgeReadNoteInput,
 	type KnowledgeRecentByCategoryInput,
+	type KnowledgeRejectReviewInput,
+	type KnowledgeReviewHistoryInput,
+	type KnowledgeReviewsInput,
+	type KnowledgeSearchInput,
+	type KnowledgeSetReviewPolicyInput,
+	type KnowledgeSetSemanticSettingsInput,
+	type KnowledgeUndoReviewInput,
+	linksInputSchema,
+	linksResultSchema,
+	modelReviewInfoInputSchema,
+	modelReviewInfoResultSchema,
+	modelReviewInputSchema,
+	modelReviewResultSchema,
+	overviewInputSchema,
+	overviewResultSchema,
+	preferencesInputSchema,
+	preferencesResultSchema,
+	previewReviewInputSchema,
+	previewReviewResultSchema,
+	readNoteInputSchema,
+	readNoteResultSchema,
+	recentByCategoryInputSchema,
+	recentByCategoryResultSchema,
+	rejectReviewInputSchema,
+	rejectReviewResultSchema,
+	reviewHistoryInputSchema,
+	reviewHistoryResultSchema,
+	reviewsInputSchema,
+	reviewsResultSchema,
+	searchInputSchema,
+	searchResultSchema,
+	semanticPreferencesInputSchema,
+	semanticPreferencesResultSchema,
+	setReviewPolicyInputSchema,
+	setSemanticSettingsInputSchema,
+	undoReviewInputSchema,
+	undoReviewResultSchema,
 } from "./contract.js";
+import { createKnowledgeModelReviewModel, parseModelReviewCommandInput } from "./model-review.js";
+import { registerDesktopKnowledgeNativeReadTools } from "./native.js";
+import { createBrokerKnowledgeState } from "./native-state.js";
+import { createKnowledgePreferences } from "./preferences.js";
+import { createKnowledgeReadModel, type KnowledgeReadOwner } from "./read-model.js";
+import { createKnowledgeRecoveryMigration } from "./recovery-migration.js";
+import { createBrokerWikiReviewPorts } from "./review-storage.js";
+import { createKnowledgeReviewModel } from "./reviews.js";
+import { createKnowledgeSemanticPreferences } from "./semantic-preferences.js";
+import { createBrokerSemanticSettings } from "./semantic-settings.js";
+import { createResourceServiceTransportFactory } from "./service-transport.js";
+import { createManagedKnowledgeSessionPorts } from "./session-ports.js";
+import { createBrokerKnowledgeSpecialist } from "./specialist-model.js";
+import { createBrokerSpecialistSettingsStorage } from "./specialist-settings-storage.js";
+import { createBrokerReviewPolicyStorage } from "./state-policy.js";
+import { createBrokerTopicMemoryStorage } from "./topic-storage.js";
 
 async function projectFor(
 	capabilities: PluginRuntimeCapabilities,
@@ -124,10 +113,32 @@ async function projectFor(
 
 /** One granted knowledge owner composes the same native interface, services and UI operations. */
 /** Every tool the read-only knowledge interface registers in a child session; none of them writes. */
-const CHILD_READ_TOOLS = ["knowledge_status", "knowledge_search", "research_check_answer", "research_knowledge_status", "research_prepare_knowledge", "research_read_knowledge", "research_restore_evidence", "research_resume_topic", "research_search_explainers", "research_search_knowledge", "research_task_status", "research_topics"] as const;
+const CHILD_READ_TOOLS = [
+	"knowledge_status",
+	"knowledge_search",
+	"research_check_answer",
+	"research_knowledge_status",
+	"research_prepare_knowledge",
+	"research_read_knowledge",
+	"research_restore_evidence",
+	"research_resume_topic",
+	"research_search_explainers",
+	"research_search_knowledge",
+	"research_task_status",
+	"research_topics",
+] as const;
 
 /** Every hook the read-only knowledge interface registers in a child session. */
-const CHILD_SESSION_EVENTS = ["session_start", "session_tree", "before_agent_start", "context", "message_start", "tool_execution_start", "tool_execution_end", "tool_result"] as const;
+const CHILD_SESSION_EVENTS = [
+	"session_start",
+	"session_tree",
+	"before_agent_start",
+	"context",
+	"message_start",
+	"tool_execution_start",
+	"tool_execution_end",
+	"tool_result",
+] as const;
 
 const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	const states = context.resources.filter((resource) => resource.kind === "state");
@@ -135,8 +146,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 		throw new Error("Knowledge runtime requires exactly one authorized application-state root");
 	const state = states[0].handle;
 	const fileRoots = context.resources.filter((resource) => resource.kind === "files");
-	if (fileRoots.length > 1)
-		throw new Error("Knowledge runtime requires at most one selected file root");
+	if (fileRoots.length > 1) throw new Error("Knowledge runtime requires at most one selected file root");
 	if (!context.resourcesLifecycle)
 		throw new Error("Knowledge services require the host resource shutdown barrier");
 	async function readKnowledgeBinding(): Promise<KnowledgeBinding | null> {
@@ -162,18 +172,19 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 		write: (value, version) => storage.write("answer-metrics.json", value, version),
 	});
 	const unsubscribeUi = ui.subscribeKnowledgeUi(() => context.events.changed());
-	const specialists = createKnowledgeSpecialistHost(host, config, ui, createBrokerSpecialistSettingsStorage(storage));
+	const specialists = createKnowledgeSpecialistHost(
+		host,
+		config,
+		ui,
+		createBrokerSpecialistSettingsStorage(storage),
+	);
 	const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
 	const semantic = createBrokerSemanticSettings(context.capabilities, state);
 	const policy = createStoredKnowledgeReviewPolicy(
 		createBrokerReviewPolicyStorage(context.capabilities, state),
 		() => false,
 	);
-	const transports = createResourceServiceTransportFactory(
-		context,
-		state,
-		context.resourcesLifecycle,
-	);
+	const transports = createResourceServiceTransportFactory(context, state, context.resourcesLifecycle);
 	const services = createKnowledgeServicePool(host, config, semantic, policy, transports);
 	const lifecycle = createKnowledgeOwnerLifecycle({
 		beforeDrain: () => specialists.dispose(),
@@ -195,17 +206,32 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 		reviewIo,
 	);
 	const modelReview = createKnowledgeModelReview(host, config, wiki, reviewIo, async () => {
-		const document = (await reviewIo.state.read("specialists.json"))?.value as
-			| { mode?: unknown }
-			| undefined;
+		const document = (await reviewIo.state.read("specialists.json"))?.value as { mode?: unknown } | undefined;
 		if (document === undefined) return { mode: "automatic" };
 		if (!["automatic", "manual", "off"].includes(document.mode as string))
 			throw new Error("Invalid knowledge specialist settings");
 		return document;
 	});
-	const topics = createTopicMemoryApi(host, undefined, createBrokerTopicMemoryStorage({ state: storage, files: reviewIo.files }));
+	const topics = createTopicMemoryApi(
+		host,
+		undefined,
+		createBrokerTopicMemoryStorage({ state: storage, files: reviewIo.files }),
+	);
 	const delivery = createSpecialistDelivery(host, config);
-	const owner = { config, services, wiki, modelReview, host, reviewPolicy: policy, ui, topics, delivery, specialistTools, extensionHost: {}, ...lifecycle };
+	const owner = {
+		config,
+		services,
+		wiki,
+		modelReview,
+		host,
+		reviewPolicy: policy,
+		ui,
+		topics,
+		delivery,
+		specialistTools,
+		extensionHost: {},
+		...lifecycle,
+	};
 	const modelReviews = createKnowledgeModelReviewModel(
 		owner,
 		states[0].access === "read-write",
@@ -472,7 +498,10 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 			const sessionPorts = createManagedKnowledgeSessionPorts(context.capabilities);
 			const composition = {
 				session: sessionPorts.ports,
-				registerReadTools: (pi: any) => registerDesktopKnowledgeNativeReadTools(pi, owner, (native: { cwd: string }) => projectFor(context.capabilities, native.cwd)),
+				registerReadTools: (pi: any) =>
+					registerDesktopKnowledgeNativeReadTools(pi, owner, (native: { cwd: string }) =>
+						projectFor(context.capabilities, native.cwd),
+					),
 				project: async (cwd: string) => {
 					const project = await projectFor(context.capabilities, cwd);
 					if (project === null) throw new Error("Knowledge native session has no workspace project");
@@ -495,9 +524,11 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 					// A child's answers only take the evidence-only path (label, no task report), so its
 					// finalizer runs with read capabilities; any write it attempted would fail at the broker.
 					projection: { ...child.projection, finalizeEffect: "read" },
-					toolEffects: readable ? Object.fromEntries(CHILD_READ_TOOLS.map(tool => [tool, "read" as const])) : {},
+					toolEffects: readable
+						? Object.fromEntries(CHILD_READ_TOOLS.map((tool) => [tool, "read" as const]))
+						: {},
 					// A child is read-only: its hooks get read capabilities only, so any write attempt fails at the broker.
-					eventEffects: Object.fromEntries(CHILD_SESSION_EVENTS.map(event => [event, "read" as const])),
+					eventEffects: Object.fromEntries(CHILD_SESSION_EVENTS.map((event) => [event, "read" as const])),
 					commandEffects: {},
 				};
 				return session;
@@ -508,15 +539,28 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 			return {
 				...native,
 				toolEffects: { knowledge_status: "read", knowledge_search: "read" },
-				eventEffects: { session_start: "read", session_tree: "read", tool_execution_start: "read", tool_result: "read" },
-				commandEffects: { "knowledge-review-model": "write", "obsidian-review": "write", "knowledge-migrate-recovery": "write" },
+				eventEffects: {
+					session_start: "read",
+					session_tree: "read",
+					tool_execution_start: "read",
+					tool_result: "read",
+				},
+				commandEffects: {
+					"knowledge-review-model": "write",
+					"obsidian-review": "write",
+					"knowledge-migrate-recovery": "write",
+				},
 				async extension(pi) {
 					await native.extension(pi);
 					pi.on("session_start", (_event, caller) => {
-						unregister = specialists.registerKnowledgeSpecialistHost(caller.sessionManager.getSessionId(), createBrokerKnowledgeSpecialist(context.capabilities));
+						unregister = specialists.registerKnowledgeSpecialistHost(
+							caller.sessionManager.getSessionId(),
+							createBrokerKnowledgeSpecialist(context.capabilities),
+						);
 					});
 					pi.registerCommand("knowledge-migrate-recovery", {
-						description: "Explicitly import an authorized 0.2.0/0.2.1 historical read-window checkpoint; no current proof is restored",
+						description:
+							"Explicitly import an authorized 0.2.0/0.2.1 historical read-window checkpoint; no current proof is restored",
 						async handler(args, caller) {
 							if (args.trim()) throw new Error("Checkpoint migration accepts no scope or target arguments");
 							const result = await migrateRecovery(caller);
@@ -524,20 +568,32 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 						},
 					});
 					pi.registerCommand("knowledge-review-model", {
-						description: "Review one exact Wiki proposal with explicit JSON cost/data acknowledgement; read the audit in the knowledge review UI",
+						description:
+							"Review one exact Wiki proposal with explicit JSON cost/data acknowledgement; read the audit in the knowledge review UI",
 						async handler(args, caller) {
 							const input = parseModelReviewCommandInput(args);
-							const scope = await context.capabilities.call("caller.scope", null) as import("@gyoungwe/plugin-api/runtime").PluginRuntimeScope;
-							if (scope.kind !== "session" || scope.sessionId !== caller.sessionManager.getSessionId()) throw new Error("Model review command requires its originating live session");
+							const scope = (await context.capabilities.call(
+								"caller.scope",
+								null,
+							)) as import("@gyoungwe/plugin-api/runtime").PluginRuntimeScope;
+							if (scope.kind !== "session" || scope.sessionId !== caller.sessionManager.getSessionId())
+								throw new Error("Model review command requires its originating live session");
 							const binding = await owner.config.readKnowledgeBinding({ fresh: true });
 							if (!binding) throw new Error("No application knowledge Vault is bound");
 							const signal = caller.signal ? AbortSignal.any([native.signal, caller.signal]) : native.signal;
-							await modelReviews.review({ ...input, revision: binding.revision }, await projectFor(context.capabilities, scope.workspaceDirectory), { scope, signal, capabilities: context.capabilities });
+							await modelReviews.review(
+								{ ...input, revision: binding.revision },
+								await projectFor(context.capabilities, scope.workspaceDirectory),
+								{ scope, signal, capabilities: context.capabilities },
+							);
 							context.events.changed();
 						},
 					});
 				},
-				async dispose() { unregister?.(); await native.dispose(); },
+				async dispose() {
+					unregister?.();
+					await native.dispose();
+				},
 			};
 		},
 		dispose: () => owner.dispose(),

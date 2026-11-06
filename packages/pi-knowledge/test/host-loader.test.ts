@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
 import { copyFile, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { describe, expect, it } from "vitest";
 import { knowledgeHostLoader } from "../src/core/host.js";
 import { createKnowledgeWorker, knowledgeWorkerMetadata } from "../src/core/runtime-host.js";
 
@@ -144,24 +144,36 @@ describe("knowledge host loader", () => {
 
 	it("plans and executes maintenance through the discovered host without a legacy import", async () => {
 		const port = knowledgeHostLoader.load();
-		if (!port.planMaintenance || !port.runMaintenance) throw new Error("Maintenance host operations are missing");
-		const items = port.planMaintenance(null, {
-			nodes: [
-				{ path: "Library/Papers/a.md", title: "PMC123.pdf", kind: "note", degree: 0 },
-				{ path: "Library/Papers/b.md", title: "Independent finding", kind: "note", degree: 0 },
-			],
-			edges: [],
-		}, { enabled: true, maxItems: 5, dailyLimit: 5 });
+		if (!port.planMaintenance || !port.runMaintenance)
+			throw new Error("Maintenance host operations are missing");
+		const items = port.planMaintenance(
+			null,
+			{
+				nodes: [
+					{ path: "Library/Papers/a.md", title: "PMC123.pdf", kind: "note", degree: 0 },
+					{ path: "Library/Papers/b.md", title: "Independent finding", kind: "note", degree: 0 },
+				],
+				edges: [],
+			},
+			{ enabled: true, maxItems: 5, dailyLimit: 5 },
+		);
 		expect(items.map(({ kind }) => kind)).toEqual(["missing-topic", "orphan"]);
 		const calls: string[] = [];
 		const result = await port.runMaintenance(items, {
 			readNote: async (path) => ({ markdown: `# ${path}` }),
-			complete: async (prompt) => prompt.includes("PMC123")
-				? JSON.stringify({ topic: "Verified topic" })
-				: JSON.stringify({ title: "Independent finding", targets: ["Wiki/Methods"], reason: "related" }),
-			setTopic: async (path, topic) => { calls.push(`topic:${path}:${topic}`); },
-			validateWikiLinks: async (proposal) => { calls.push(`validate:${proposal.markdown}`); },
-			proposeWiki: async (item, proposal) => { calls.push(`proposal:${item.path}:${proposal.markdown}`); },
+			complete: async (prompt) =>
+				prompt.includes("PMC123")
+					? JSON.stringify({ topic: "Verified topic" })
+					: JSON.stringify({ title: "Independent finding", targets: ["Wiki/Methods"], reason: "related" }),
+			setTopic: async (path, topic) => {
+				calls.push(`topic:${path}:${topic}`);
+			},
+			validateWikiLinks: async (proposal) => {
+				calls.push(`validate:${proposal.markdown}`);
+			},
+			proposeWiki: async (item, proposal) => {
+				calls.push(`proposal:${item.path}:${proposal.markdown}`);
+			},
 			budget: { modelCalls: 5 },
 		});
 		expect(result.modelCalls).toBe(2);
@@ -182,7 +194,10 @@ describe("knowledge host loader", () => {
 			await mkdir(join(canonicalVault, "notes"));
 			const path = await port.vault.containedFile(canonicalVault, "notes/test.md");
 			expect(await port.vault.createFileOnly(path, "before\n")).toBe(true);
-			const first = (await port.vault.readNote(canonicalVault, "notes/test.md")) as { hash: string; text: string };
+			const first = (await port.vault.readNote(canonicalVault, "notes/test.md")) as {
+				hash: string;
+				text: string;
+			};
 			expect(first.text).toBe("before\n");
 			await port.vault.replaceFile(path, "after\n", { expectedHash: first.hash });
 			const second = (await port.vault.readNote(canonicalVault, "notes/test.md")) as { text: string };

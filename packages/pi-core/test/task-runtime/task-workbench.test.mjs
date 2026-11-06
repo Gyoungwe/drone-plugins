@@ -1,10 +1,10 @@
-import { it } from "./scoped-test.mjs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createEvidenceRecovery } from "../../src/task-runtime/evidence.mjs";
 import { afterEach, expect, vi } from "vitest";
+import { createEvidenceRecovery } from "../../src/task-runtime/evidence.mjs";
 import { createTaskWorkbench, inspectTaskFile, LIMITS, WORKBENCH_ENTRY } from "./fixture.mjs";
+import { it } from "./scoped-test.mjs";
 
 vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 });
 const dirs = [];
@@ -399,7 +399,10 @@ it("evicted evidence is restored under current permission/version and remains bo
 	const dir = await fixture();
 	await writeFile(join(dir, "data.txt"), "one\ntwo\nthree");
 	const allow = vi.fn(async () => {}),
-		e = createEvidenceRecovery({ authorize: allow, files: { inspect: inspectTaskFile, readText: path => readFile(path, "utf8") } });
+		e = createEvidenceRecovery({
+			authorize: allow,
+			files: { inspect: inspectTaskFile, readText: (path) => readFile(path, "utf8") },
+		});
 	e.attach("s", "t");
 	await e.capture({ toolCallId: "r", input: { path: "data.txt", offset: 2, limit: 1 } }, dir, null);
 	await expect(e.restore({ receiptId: "r", path: "data.txt" }, dir, async () => null)).rejects.toThrow(
@@ -419,7 +422,10 @@ it("revoked permission or changed bytes invalidate recovery instead of reusing a
 	const dir = await fixture();
 	await writeFile(join(dir, "data.txt"), "one");
 	const allow = vi.fn(async () => {}),
-		e = createEvidenceRecovery({ authorize: allow, files: { inspect: inspectTaskFile, readText: path => readFile(path, "utf8") } });
+		e = createEvidenceRecovery({
+			authorize: allow,
+			files: { inspect: inspectTaskFile, readText: (path) => readFile(path, "utf8") },
+		});
 	e.attach("s", "t");
 	await e.capture({ toolCallId: "r", input: { path: "data.txt" } }, dir, "binding");
 	e.evict(["r"]);

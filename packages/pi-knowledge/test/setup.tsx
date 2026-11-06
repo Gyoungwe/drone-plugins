@@ -101,13 +101,7 @@ Object.assign(window, {
 		knowledge: services,
 		components: {
 			Button,
-			Markdown: ({
-				text,
-				onLink,
-			}: {
-				text: string;
-				onLink?: (href: string) => void;
-			}) => (
+			Markdown: ({ text, onLink }: { text: string; onLink?: (href: string) => void }) => (
 				<div>
 					<p>{text}</p>
 					{text === "external-link" && (
@@ -124,29 +118,18 @@ Object.assign(window, {
 				</div>
 			),
 			ActionSurface,
-			PluginEntryHost: ({ entry }: { entry: { title: string } }) => (
-				<div>Plugin {entry.title}</div>
-			),
-			PageHeader: ({
-				title,
-				tabs,
-			}: {
-				title: string;
-				tabs: React.ReactNode;
-			}) => (
+			PluginEntryHost: ({ entry }: { entry: { title: string } }) => <div>Plugin {entry.title}</div>,
+			PageHeader: ({ title, tabs }: { title: string; tabs: React.ReactNode }) => (
 				<header>
 					{title}
 					{tabs}
 				</header>
 			),
-			StatePanel: ({ children }: React.PropsWithChildren) => (
-				<div>{children}</div>
-			),
+			StatePanel: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 		},
 		hooks: {
 			usePluginRuntime: () => {
-				if (!pluginRuntime)
-					throw new Error("Plugin runtime is unavailable for this UI module");
+				if (!pluginRuntime) throw new Error("Plugin runtime is unavailable for this UI module");
 				return pluginRuntime;
 			},
 			useLanguage: () => "zh",
@@ -154,8 +137,7 @@ Object.assign(window, {
 			usePluginEntries: () => pluginEntries,
 		},
 		helpers: {
-			isDraftSessionId: (id: string | null) =>
-				id?.startsWith("draft:") ?? false,
+			isDraftSessionId: (id: string | null) => id?.startsWith("draft:") ?? false,
 			taskArtifactLinks: (task: {
 				milestones: Array<{
 					state: string;
@@ -163,10 +145,7 @@ Object.assign(window, {
 				}>;
 			}) =>
 				task.milestones
-					.filter(
-						(m) =>
-							m.state === "completed" && m.evidence?.kind === "file-observed",
-					)
+					.filter((m) => m.state === "completed" && m.evidence?.kind === "file-observed")
 					.map((m) => ({ path: m.evidence!.path, state: "observed" })),
 			pushToast: () => undefined,
 		},

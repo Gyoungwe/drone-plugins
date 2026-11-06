@@ -3,7 +3,8 @@ import { validateArtifactManifest } from "./artifacts.js";
 import { verifyReplay } from "./replay.js";
 
 function inputRecord(value: unknown): Record<string, unknown> {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Evidence host input must be an object");
+	if (!value || typeof value !== "object" || Array.isArray(value))
+		throw new Error("Evidence host input must be an object");
 	return value as Record<string, unknown>;
 }
 

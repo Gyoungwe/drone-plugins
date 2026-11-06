@@ -1,15 +1,24 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { createAgentSession, createAgentSessionRuntime, createAgentSessionServices, createAgentSessionFromServices, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
+import {
+	createAgentSession,
+	createAgentSessionFromServices,
+	createAgentSessionRuntime,
+	createAgentSessionServices,
+	DefaultResourceLoader,
+	ModelRuntime,
+	SessionManager,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 
 const execFileAsync = promisify(execFile);
 const packageRoot = resolve(import.meta.dirname, "..");
@@ -67,7 +76,12 @@ try {
 	const tools = new Map();
 	const commands = new Map();
 	const pi = {
-		events: { on() { return () => {}; }, emit() {} },
+		events: {
+			on() {
+				return () => {};
+			},
+			emit() {},
+		},
 		on() {},
 		appendEntry() {},
 		getCommands() {
@@ -126,24 +140,37 @@ try {
 	await mkdir(agentDir);
 	const settingsManager = SettingsManager.inMemory();
 	const loader = new DefaultResourceLoader({
-		cwd: root, agentDir, settingsManager, noExtensions: true, noSkills: true,
+		cwd: root,
+		agentDir,
+		settingsManager,
+		noExtensions: true,
+		noSkills: true,
 		additionalExtensionPaths: [join(artifactRoot, "dist/index.mjs")],
 	});
 	await loader.reload();
 	assert.deepEqual(loader.getExtensions().errors, []);
 	const modelRuntime = await ModelRuntime.create({
-		authPath: join(agentDir, "auth.json"), modelsPath: null,
-		modelsStorePath: join(agentDir, "models.json"), allowModelNetwork: false, refreshOnCreate: false,
+		authPath: join(agentDir, "auth.json"),
+		modelsPath: null,
+		modelsStorePath: join(agentDir, "models.json"),
+		allowModelNetwork: false,
+		refreshOnCreate: false,
 	});
 	const provider = fauxProvider({ provider: "knowledge-package-smoke", tokensPerSecond: 100000 });
 	modelRuntime.registerNativeProvider(provider.provider);
 	await modelRuntime.setRuntimeApiKey("knowledge-package-smoke", "offline-test-only");
 	const { session } = await createAgentSession({
-		cwd: root, agentDir, settingsManager, resourceLoader: loader, modelRuntime,
-		model: provider.getModel(), sessionManager: SessionManager.inMemory(root), tools: ["knowledge_status"],
+		cwd: root,
+		agentDir,
+		settingsManager,
+		resourceLoader: loader,
+		modelRuntime,
+		model: provider.getModel(),
+		sessionManager: SessionManager.inMemory(root),
+		tools: ["knowledge_status"],
 	});
 	const receipts = [];
-	const unsubscribe = session.subscribe(event => {
+	const unsubscribe = session.subscribe((event) => {
 		if (event.type === "tool_execution_end") receipts.push(event);
 	});
 	try {
@@ -168,40 +195,70 @@ try {
 	await mkdir(vault);
 	process.env.DRONE_KNOWLEDGE_DIR = configuredDirectory;
 	const packedHost = await import(pathToFileURL(join(artifactRoot, "dist/host.mjs")).href);
-	const binding = await packedHost.createKnowledgeConfigApi(undefined, configuredDirectory)
+	const binding = await packedHost
+		.createKnowledgeConfigApi(undefined, configuredDirectory)
 		.saveKnowledgeBinding({ vault, profile: "hybrid", depositMode: "verified", subagentPolicy: "none" });
 	const indexPath = join(configuredDirectory, binding.vaultId, "index.sqlite");
-	const leasePaths = [`vault:${vault}`, `index:${indexPath}`].map(resource =>
-		join(homedir(), ".drone/runtime-leases/knowledge-writers", `${createHash("sha256").update(resource).digest("hex")}.lock`));
+	const leasePaths = [`vault:${vault}`, `index:${indexPath}`].map((resource) =>
+		join(
+			homedir(),
+			".drone/runtime-leases/knowledge-writers",
+			`${createHash("sha256").update(resource).digest("hex")}.lock`,
+		),
+	);
 	const configuredReceipts = [];
 	for (let attempt = 0; attempt < 2; attempt++) {
-		const runtime = await createAgentSessionRuntime(async ({ cwd, agentDir, sessionManager }) => {
-			const services = await createAgentSessionServices({ cwd, agentDir, modelRuntime,
-				settingsManager: SettingsManager.inMemory(), resourceLoaderOptions: {
-					noExtensions: true, noSkills: true, noContextFiles: true,
-					additionalExtensionPaths: [join(artifactRoot, "dist/index.mjs")],
-				} });
-			const result = await createAgentSessionFromServices({ services, sessionManager,
-				model: provider.getModel(), tools: ["knowledge_status", "research_knowledge_status"] });
-			return { ...result, services, diagnostics: services.diagnostics };
-		}, { cwd: root, agentDir, sessionManager: SessionManager.inMemory(root) });
+		const runtime = await createAgentSessionRuntime(
+			async ({ cwd, agentDir, sessionManager }) => {
+				const services = await createAgentSessionServices({
+					cwd,
+					agentDir,
+					modelRuntime,
+					settingsManager: SettingsManager.inMemory(),
+					resourceLoaderOptions: {
+						noExtensions: true,
+						noSkills: true,
+						noContextFiles: true,
+						additionalExtensionPaths: [join(artifactRoot, "dist/index.mjs")],
+					},
+				});
+				const result = await createAgentSessionFromServices({
+					services,
+					sessionManager,
+					model: provider.getModel(),
+					tools: ["knowledge_status", "research_knowledge_status"],
+				});
+				return { ...result, services, diagnostics: services.diagnostics };
+			},
+			{ cwd: root, agentDir, sessionManager: SessionManager.inMemory(root) },
+		);
 		const errors = [];
 		const runReceipts = [];
-		runtime.session.subscribe(event => { if (event.type === "tool_execution_end") runReceipts.push(event); });
+		runtime.session.subscribe((event) => {
+			if (event.type === "tool_execution_end") runReceipts.push(event);
+		});
 		try {
-			await runtime.session.bindExtensions({ onError: error => errors.push(error) });
+			await runtime.session.bindExtensions({ onError: (error) => errors.push(error) });
 			provider.setResponses([
-				fauxAssistantMessage([fauxToolCall("knowledge_status", {}), fauxToolCall("research_knowledge_status", {})], { stopReason: "toolUse" }),
+				fauxAssistantMessage(
+					[fauxToolCall("knowledge_status", {}), fauxToolCall("research_knowledge_status", {})],
+					{ stopReason: "toolUse" },
+				),
 				fauxAssistantMessage("The configured local index responded."),
 			]);
 			await runtime.session.prompt("Report local index state.");
 			assert.deepEqual(errors, []);
 			assert.equal(runReceipts.length, 2);
-			assert(runReceipts.every(receipt => !receipt.isError));
-			assert.equal(runReceipts.find(receipt => receipt.toolName === "knowledge_status").result.details.status, "configured");
-			await Promise.all(leasePaths.map(path => access(path)));
-			configuredReceipts.push({ attempt, tools: runReceipts.map(receipt => receipt.toolName).sort() });
-		} finally { await runtime.dispose(); }
+			assert(runReceipts.every((receipt) => !receipt.isError));
+			assert.equal(
+				runReceipts.find((receipt) => receipt.toolName === "knowledge_status").result.details.status,
+				"configured",
+			);
+			await Promise.all(leasePaths.map((path) => access(path)));
+			configuredReceipts.push({ attempt, tools: runReceipts.map((receipt) => receipt.toolName).sort() });
+		} finally {
+			await runtime.dispose();
+		}
 		for (const path of leasePaths) await assert.rejects(access(path), { code: "ENOENT" });
 	}
 	console.log(

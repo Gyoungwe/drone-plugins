@@ -108,7 +108,10 @@ export interface ResearchConnectorHostAdapter {
 		connectorId: string,
 		context?: ResearchConnectorContext,
 		limit?: number,
-	) => Promise<{ readonly hits: readonly ResearchConnectorHit[]; readonly failures: readonly ResearchConnectorFailure[] }>;
+	) => Promise<{
+		readonly hits: readonly ResearchConnectorHit[];
+		readonly failures: readonly ResearchConnectorFailure[];
+	}>;
 	readonly search: (
 		input: ResearchSearchRequest,
 		context?: ResearchConnectorContext,
@@ -169,7 +172,9 @@ function receipt(input: {
 
 function retryable(error: unknown): boolean {
 	const status =
-		typeof error === "object" && error !== null && "status" in error ? Number((error as { status?: unknown }).status) : 0;
+		typeof error === "object" && error !== null && "status" in error
+			? Number((error as { status?: unknown }).status)
+			: 0;
 	return status === 408 || status === 429 || status >= 500 || status === 0;
 }
 
@@ -207,13 +212,20 @@ async function fetchJson(
 	}
 }
 
-async function fetchText(fetchImpl: typeof fetch, url: string, options: ResearchConnectorContext): Promise<string> {
+async function fetchText(
+	fetchImpl: typeof fetch,
+	url: string,
+	options: ResearchConnectorContext,
+): Promise<string> {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
 	const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
 	try {
 		const response = await fetchImpl(url, {
-			headers: { accept: "application/atom+xml,application/xml,text/xml", "user-agent": "Drone-Research-Workbench/0.33" },
+			headers: {
+				accept: "application/atom+xml,application/xml,text/xml",
+				"user-agent": "Drone-Research-Workbench/0.33",
+			},
 			signal,
 		});
 		if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
@@ -226,9 +238,9 @@ async function fetchText(fetchImpl: typeof fetch, url: string, options: Research
 function bibliographicAuthors(value: unknown): readonly string[] {
 	return Array.isArray(value)
 		? value.flatMap((author) => {
-					const name = text(record(author).name);
-					return name ? [name] : [];
-				})
+				const name = text(record(author).name);
+				return name ? [name] : [];
+			})
 		: [];
 }
 
@@ -239,7 +251,9 @@ function semanticScholarHit(item: unknown): ResearchConnectorHit[] {
 	if (!paperId || !title) return [];
 	const externalIds = record(value.externalIds);
 	const doi = text(externalIds.DOI) || undefined;
-	const locator = doi ? `https://doi.org/${doi}` : text(value.url) || `https://www.semanticscholar.org/paper/${paperId}`;
+	const locator = doi
+		? `https://doi.org/${doi}`
+		: text(value.url) || `https://www.semanticscholar.org/paper/${paperId}`;
 	return [
 		{
 			id: `semantic-scholar:${paperId}`,
@@ -333,9 +347,9 @@ function createArxivConnector(fetchImpl: typeof fetch): ResearchConnector {
 				const title = xmlTag(entry, "title");
 				if (!arxivId || !title) return [];
 				const locator = `https://arxiv.org/abs/${arxivId}`;
-				const authors = [...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/giu)].map(
-					(item) => text(item[1]).replaceAll("&amp;", "&"),
-				);
+				const authors = [
+					...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/giu),
+				].map((item) => text(item[1]).replaceAll("&amp;", "&"));
 				const publishedAt = xmlTag(entry, "published") || undefined;
 				return [
 					{
@@ -390,7 +404,8 @@ function createProjectStorageConnector(projectStorage: ResearchProjectStoragePor
 							version: item.modifiedAt,
 							accessedAt: isoNow(),
 							contentHash:
-								item.contentHash || hash({ cwd: options.cwd, relativePath, size: item.size, modifiedAt: item.modifiedAt }),
+								item.contentHash ||
+								hash({ cwd: options.cwd, relativePath, size: item.size, modifiedAt: item.modifiedAt }),
 							readOnly: true,
 						},
 					},
@@ -400,7 +415,9 @@ function createProjectStorageConnector(projectStorage: ResearchProjectStoragePor
 	};
 }
 
-export function createResearchConnectorHostLoader(options: ResearchConnectorHostOptions): ResearchConnectorHostLoader {
+export function createResearchConnectorHostLoader(
+	options: ResearchConnectorHostOptions,
+): ResearchConnectorHostLoader {
 	const connectors = [
 		...(options.fetchImpl
 			? [createSemanticScholarConnector(options.fetchImpl), createArxivConnector(options.fetchImpl)]
@@ -415,10 +432,14 @@ export function createResearchConnectorHostLoader(options: ResearchConnectorHost
 				status: "unavailable",
 				list: () => [],
 				recommend: async () => {
-					throw new Error("Research connector transport is unavailable; the host must inject an authorized connector registry");
+					throw new Error(
+						"Research connector transport is unavailable; the host must inject an authorized connector registry",
+					);
 				},
 				search: async () => {
-					throw new Error("Research connector transport is unavailable; the host must inject an authorized connector registry");
+					throw new Error(
+						"Research connector transport is unavailable; the host must inject an authorized connector registry",
+					);
 				},
 			}),
 		};
@@ -437,7 +458,14 @@ export function createResearchConnectorHostLoader(options: ResearchConnectorHost
 					if (!connector) {
 						return {
 							hits: [],
-							failures: [{ connectorId, message: `Unknown research connector: ${connectorId}`, retryable: false, at: isoNow() }],
+							failures: [
+								{
+									connectorId,
+									message: `Unknown research connector: ${connectorId}`,
+									retryable: false,
+									at: isoNow(),
+								},
+							],
 						};
 					}
 					if (!connector.recommend) return { hits: [], failures: [] };
@@ -450,12 +478,21 @@ export function createResearchConnectorHostLoader(options: ResearchConnectorHost
 				async search(input, context = {}) {
 					const query = input.query.normalize("NFKC").trim();
 					if (!query || query.length > 512) throw new Error("Research search query is required");
-					const requested = input.connectorIds ? [...input.connectorIds] : connectors.map((connector) => connector.descriptor.id);
-					const selected = requested.map((id) => byId.get(id)).filter((connector): connector is ResearchConnector => Boolean(connector));
+					const requested = input.connectorIds
+						? [...input.connectorIds]
+						: connectors.map((connector) => connector.descriptor.id);
+					const selected = requested
+						.map((id) => byId.get(id))
+						.filter((connector): connector is ResearchConnector => Boolean(connector));
 					const limit = clampLimit(input.limit);
 					const failures: ResearchConnectorFailure[] = requested
 						.filter((id) => !byId.has(id))
-						.map((connectorId) => ({ connectorId, message: `Unknown research connector: ${connectorId}`, retryable: false, at: isoNow() }));
+						.map((connectorId) => ({
+							connectorId,
+							message: `Unknown research connector: ${connectorId}`,
+							retryable: false,
+							at: isoNow(),
+						}));
 					const settled = await Promise.allSettled(
 						selected.map((connector) =>
 							connector.search(query, {
@@ -473,7 +510,10 @@ export function createResearchConnectorHostLoader(options: ResearchConnectorHost
 						if (result.status === "fulfilled") hits.push(...result.value);
 						else failures.push(failure(connector.descriptor.id, result.reason));
 					});
-					const deduped = [...new Map(hits.map((hit) => [hit.id, hit])).values()].slice(0, limit * Math.max(1, selected.length));
+					const deduped = [...new Map(hits.map((hit) => [hit.id, hit])).values()].slice(
+						0,
+						limit * Math.max(1, selected.length),
+					);
 					return { query, hits: deduped, failures, connectors: requested, complete: failures.length === 0 };
 				},
 			};

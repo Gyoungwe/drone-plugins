@@ -83,17 +83,9 @@ function acquireFile(path: string): KnowledgeWriterLease {
  */
 export function acquireKnowledgeWriterLease(
 	input: KnowledgeWriterLeaseInput,
-	leaseDirectory = join(
-		homedir(),
-		".drone",
-		"runtime-leases",
-		"knowledge-writers",
-	),
+	leaseDirectory = join(homedir(), ".drone", "runtime-leases", "knowledge-writers"),
 ): KnowledgeWriterLease {
-	const resources = [
-		`vault:${realpathSync(input.vault)}`,
-		`index:${canonicalIndex(input.indexPath)}`,
-	];
+	const resources = [`vault:${realpathSync(input.vault)}`, `index:${canonicalIndex(input.indexPath)}`];
 	mkdirSync(leaseDirectory, { recursive: true, mode: 0o700 });
 	const locks: KnowledgeWriterLease[] = [];
 	const release = () => {
@@ -106,11 +98,7 @@ export function acquireKnowledgeWriterLease(
 				failures.push(error);
 			}
 		}
-		if (failures.length)
-			throw new AggregateError(
-				failures,
-				"Knowledge writer lease release failed",
-			);
+		if (failures.length) throw new AggregateError(failures, "Knowledge writer lease release failed");
 	};
 	try {
 		for (const resource of resources) {

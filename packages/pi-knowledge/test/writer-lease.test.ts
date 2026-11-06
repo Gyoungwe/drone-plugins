@@ -36,22 +36,13 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe("knowledge writer lease", () => {
 	it("excludes both shared Vault and shared index writers and releases a partial acquisition", () => {
-		const first = acquireKnowledgeWriterLease(
-			{ vault, indexPath },
-			leaseDirectory,
+		const first = acquireKnowledgeWriterLease({ vault, indexPath }, leaseDirectory);
+		expect(() =>
+			acquireKnowledgeWriterLease({ vault, indexPath: join(root, "other.sqlite") }, leaseDirectory),
+		).toThrow("already reserved");
+		expect(() => acquireKnowledgeWriterLease({ vault: otherVault, indexPath }, leaseDirectory)).toThrow(
+			"already reserved",
 		);
-		expect(() =>
-			acquireKnowledgeWriterLease(
-				{ vault, indexPath: join(root, "other.sqlite") },
-				leaseDirectory,
-			),
-		).toThrow("already reserved");
-		expect(() =>
-			acquireKnowledgeWriterLease(
-				{ vault: otherVault, indexPath },
-				leaseDirectory,
-			),
-		).toThrow("already reserved");
 		const unrelated = acquireKnowledgeWriterLease(
 			{ vault: otherVault, indexPath: join(root, "other.sqlite") },
 			leaseDirectory,
@@ -60,10 +51,7 @@ describe("knowledge writer lease", () => {
 		first.release();
 		first.release();
 		expect(readdirSync(leaseDirectory)).toEqual([]);
-		const successor = acquireKnowledgeWriterLease(
-			{ vault, indexPath },
-			leaseDirectory,
-		);
+		const successor = acquireKnowledgeWriterLease({ vault, indexPath }, leaseDirectory);
 		successor.release();
 		expect(readdirSync(vault)).toEqual([]);
 	});
@@ -74,30 +62,18 @@ describe("knowledge writer lease", () => {
 		const indexAlias = join(root, "index-alias.sqlite");
 		symlinkSync(vault, alias, "dir");
 		symlinkSync(indexPath, indexAlias, "file");
-		const owner = acquireKnowledgeWriterLease(
-			{ vault, indexPath },
-			leaseDirectory,
-		);
+		const owner = acquireKnowledgeWriterLease({ vault, indexPath }, leaseDirectory);
 		expect(() =>
-			acquireKnowledgeWriterLease(
-				{ vault: alias, indexPath: join(root, "other.sqlite") },
-				leaseDirectory,
-			),
+			acquireKnowledgeWriterLease({ vault: alias, indexPath: join(root, "other.sqlite") }, leaseDirectory),
 		).toThrow("already reserved");
 		expect(() =>
-			acquireKnowledgeWriterLease(
-				{ vault: otherVault, indexPath: indexAlias },
-				leaseDirectory,
-			),
+			acquireKnowledgeWriterLease({ vault: otherVault, indexPath: indexAlias }, leaseDirectory),
 		).toThrow("already reserved");
 		owner.release();
 	});
 
 	it("does not delete a replaced lease while releasing its other resource", () => {
-		const owner = acquireKnowledgeWriterLease(
-			{ vault, indexPath },
-			leaseDirectory,
-		);
+		const owner = acquireKnowledgeWriterLease({ vault, indexPath }, leaseDirectory);
 		const replaced = join(leaseDirectory, readdirSync(leaseDirectory)[0]);
 		unlinkSync(replaced);
 		writeFileSync(replaced, "different-owner\n");
@@ -109,9 +85,7 @@ describe("knowledge writer lease", () => {
 	it("rejects an independent process, allows it after release, and retains crash residue", () => {
 		const bundle = join(root, "lease.mjs");
 		buildSync({
-			entryPoints: [
-				fileURLToPath(new URL("../src/core/writer-lease.ts", import.meta.url)),
-			],
+			entryPoints: [fileURLToPath(new URL("../src/core/writer-lease.ts", import.meta.url))],
 			outfile: bundle,
 			bundle: true,
 			platform: "node",
@@ -123,19 +97,8 @@ const { acquireKnowledgeWriterLease } = await import(pathToFileURL(process.argv[
 const lease = acquireKnowledgeWriterLease({vault:process.argv[2],indexPath:process.argv[3]},process.argv[4]);
 if (process.argv[5] === 'release') lease.release();
 process.stdout.write('acquired');`;
-		const args = [
-			"--input-type=module",
-			"-e",
-			script,
-			bundle,
-			vault,
-			indexPath,
-			leaseDirectory,
-		];
-		const owner = acquireKnowledgeWriterLease(
-			{ vault, indexPath },
-			leaseDirectory,
-		);
+		const args = ["--input-type=module", "-e", script, bundle, vault, indexPath, leaseDirectory];
+		const owner = acquireKnowledgeWriterLease({ vault, indexPath }, leaseDirectory);
 		const blocked = spawnSync(process.execPath, [...args, "release"], {
 			encoding: "utf8",
 		});
@@ -148,12 +111,10 @@ process.stdout.write('acquired');`;
 			}),
 		).toBe("acquired");
 		expect(readdirSync(leaseDirectory)).toEqual([]);
-		expect(
-			execFileSync(process.execPath, [...args, "crash"], { encoding: "utf8" }),
-		).toBe("acquired");
-		expect(() =>
-			acquireKnowledgeWriterLease({ vault, indexPath }, leaseDirectory),
-		).toThrow("already reserved");
+		expect(execFileSync(process.execPath, [...args, "crash"], { encoding: "utf8" })).toBe("acquired");
+		expect(() => acquireKnowledgeWriterLease({ vault, indexPath }, leaseDirectory)).toThrow(
+			"already reserved",
+		);
 		expect(readdirSync(leaseDirectory)).toHaveLength(2);
 	});
 });

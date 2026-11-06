@@ -1,14 +1,8 @@
-import {
-	act,
-	cleanup,
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { sessions, services, setPluginRuntime, knowledge } from "../test/setup";
+import { knowledge, services, sessions, setPluginRuntime } from "../test/setup";
 import { KnowledgePage } from "./entry";
+
 const path = "Library/Methods/a.md",
 	other = "Library/Methods/b.md",
 	hash = "a".repeat(64);
@@ -42,12 +36,7 @@ const note = (target = path, startLine = 1) => ({
 	kind: "method",
 	category: "method",
 	hash,
-	text:
-		target === other
-			? "B content"
-			: startLine === 1
-				? "A first page"
-				: "A second page",
+	text: target === other ? "B content" : startLine === 1 ? "A first page" : "A second page",
 	startLine,
 	endLine: startLine === 1 ? 2 : 4,
 	totalLines: 4,
@@ -62,8 +51,7 @@ const links = (target = path) => ({
 	path: target,
 	title: "A",
 	incoming: [],
-	outgoing:
-		target === path ? [{ path: other, title: "B method", exists: true }] : [],
+	outgoing: target === path ? [{ path: other, title: "B method", exists: true }] : [],
 });
 const nodes = [
 	{
@@ -120,54 +108,52 @@ const graph = {
 };
 function fixture() {
 	let changed!: (event: { type: "changed"; revision: number }) => void;
-	const invoke = vi.fn(
-		async (operation: string, input: any): Promise<unknown> => {
-			if (operation === "overview") return overview;
-			if (operation === "recentByCategory") return recent;
-			if (operation === "readNote") return note(input.path, input.startLine);
-			if (operation === "links") return links(input.path);
-			if (operation === "graph") return graph;
-			if (operation === "search")
-				return {
-					query: input.query,
-					revision: 8,
-					bindingRevision: 2,
-					coverage: "ready",
-					complete: true,
-					hits: [
-						{
-							path,
-							title: "Search method",
-							kind: "method",
-							hash,
-							text: "Matched source",
-							startLine: 3,
-							endLine: 4,
-						},
-					],
-				};
-			if (operation === "jobs")
-				return {
-					revision: 8,
-					bindingRevision: 2,
-					project: "/alpha",
-					items: [
-						{
-							key: String(input.offset),
-							kind: "refresh",
-							path: input.offset ? other : path,
-							scope: "/alpha",
-							revision: 8,
-							updated: "2026-10-26",
-						},
-					],
-					total: 21,
-					offset: input.offset,
-					nextOffset: input.offset ? null : 20,
-				};
-			throw new Error(`Unexpected operation ${operation}`);
-		},
-	);
+	const invoke = vi.fn(async (operation: string, input: any): Promise<unknown> => {
+		if (operation === "overview") return overview;
+		if (operation === "recentByCategory") return recent;
+		if (operation === "readNote") return note(input.path, input.startLine);
+		if (operation === "links") return links(input.path);
+		if (operation === "graph") return graph;
+		if (operation === "search")
+			return {
+				query: input.query,
+				revision: 8,
+				bindingRevision: 2,
+				coverage: "ready",
+				complete: true,
+				hits: [
+					{
+						path,
+						title: "Search method",
+						kind: "method",
+						hash,
+						text: "Matched source",
+						startLine: 3,
+						endLine: 4,
+					},
+				],
+			};
+		if (operation === "jobs")
+			return {
+				revision: 8,
+				bindingRevision: 2,
+				project: "/alpha",
+				items: [
+					{
+						key: String(input.offset),
+						kind: "refresh",
+						path: input.offset ? other : path,
+						scope: "/alpha",
+						revision: 8,
+						updated: "2026-10-26",
+					},
+				],
+				total: 21,
+				offset: input.offset,
+				nextOffset: input.offset ? null : 20,
+			};
+		throw new Error(`Unexpected operation ${operation}`);
+	});
 	sessions.setState({ activeSessionId: "session-a", cwd: "/alpha" });
 	knowledge.setState({ dialog: null });
 	for (const method of [
@@ -193,9 +179,7 @@ afterEach(cleanup);
 it("reads hashed pages, follows scoped links and keeps external opening disabled", async () => {
 	const runtime = fixture();
 	render(<KnowledgePage />);
-	fireEvent.click(
-		await screen.findByRole("button", { name: /A method Library/ }),
-	);
+	fireEvent.click(await screen.findByRole("button", { name: /A method Library/ }));
 	await screen.findByText("A first page");
 	expect(screen.getByText(/L1–2 · aaaaaaaaaaaa/)).toBeDefined();
 	const more = screen.getByRole("button", { name: "继续读取" });
@@ -217,8 +201,7 @@ it("reads hashed pages, follows scoped links and keeps external opening disabled
 	fireEvent.click(await screen.findByRole("button", { name: "B method" }));
 	await screen.findByText("B content");
 	expect(knowledge.getState().dialog).toBeNull();
-	for (const method of Object.values(services))
-		expect(method).not.toHaveBeenCalled();
+	for (const method of Object.values(services)) expect(method).not.toHaveBeenCalled();
 });
 it("opens a search hit at its exact source range and hash, with scoped category totals", async () => {
 	const runtime = fixture();
@@ -242,9 +225,7 @@ it("uses the existing graph selection and paginates scoped jobs through the runt
 	render(<KnowledgePage />);
 	await screen.findByText("A method");
 	fireEvent.click(screen.getByRole("button", { name: "图谱", exact: true }));
-	fireEvent.click(
-		await screen.findByRole("button", { name: /A method · 方法/ }),
-	);
+	fireEvent.click(await screen.findByRole("button", { name: /A method · 方法/ }));
 	// The selected node's detail panel renders after the selection update; wait for it.
 	fireEvent.click(await screen.findByRole("button", { name: "打开笔记" }));
 	await screen.findByText("A first page");
@@ -269,9 +250,7 @@ it("does not display a delayed previous-session note and preserves the query acr
 	await screen.findByText("Matched source");
 	act(() => runtime.emit());
 	await screen.findByText("Matched source");
-	expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe(
-		"method",
-	);
+	expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("method");
 	let resolve!: (value: unknown) => void;
 	const normal = runtime.invoke.getMockImplementation()!;
 	runtime.invoke.mockImplementation((op, input) =>
@@ -294,18 +273,12 @@ it("keeps Markdown links inside contribution navigation instead of opening a hos
 	const runtime = fixture();
 	const normal = runtime.invoke.getMockImplementation()!;
 	runtime.invoke.mockImplementation(async (op, input) =>
-		op === "readNote"
-			? { ...note(), text: "external-link" }
-			: normal(op, input),
+		op === "readNote" ? { ...note(), text: "external-link" } : normal(op, input),
 	);
 	render(<KnowledgePage />);
-	fireEvent.click(
-		await screen.findByRole("button", { name: /A method Library/ }),
-	);
+	fireEvent.click(await screen.findByRole("button", { name: /A method Library/ }));
 	fireEvent.click(await screen.findByRole("link", { name: "External target" }));
-	await screen.findByText(
-		"此链接暂不能打开。库内笔记请使用下方的双向链接；外部链接需等待受控打开能力。",
-	);
+	await screen.findByText("此链接暂不能打开。库内笔记请使用下方的双向链接；外部链接需等待受控打开能力。");
 	expect(services.openKnowledgeTarget).not.toHaveBeenCalled();
 	expect(knowledge.getState().dialog).toBeNull();
 });

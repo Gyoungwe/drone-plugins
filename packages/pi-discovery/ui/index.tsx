@@ -1,11 +1,8 @@
-import { memo, useEffect, useState } from "react";
+import type { PluginRuntimeRootDescription, PluginRuntimeScope } from "@gyoungwe/plugin-api/runtime";
 import type { DroneUiRuntime } from "@gyoungwe/plugin-api/ui";
-import type {
-	PluginRuntimeScope,
-	PluginRuntimeRootDescription,
-} from "@gyoungwe/plugin-api/runtime";
-import type { DiscoveryWorkspaceBinding } from "../src/runtime.js";
+import { memo, useEffect, useState } from "react";
 import type { DiscoveryExplorationPlan } from "../src/projections.js";
+import type { DiscoveryWorkspaceBinding } from "../src/runtime.js";
 import { KernelPanel } from "./KernelPanel.js";
 
 const host = (window as unknown as { DroneUI: DroneUiRuntime }).DroneUI;
@@ -158,9 +155,7 @@ function WorkspacePanel() {
 							{root.access === "read-write" &&
 								(!binding ||
 									binding.workspaceId ===
-										(overview.scope.kind === "application"
-											? null
-											: overview.scope.workspaceId)) && (
+										(overview.scope.kind === "application" ? null : overview.scope.workspaceId)) && (
 									<button
 										disabled={busy}
 										onClick={() =>

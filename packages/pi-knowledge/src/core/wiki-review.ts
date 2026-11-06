@@ -1,16 +1,16 @@
 // @ts-nocheck
 import { createHash, randomUUID } from "node:crypto";
-import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
-import * as compatibilityConfig from "./config.js";
 import type { KnowledgeConfigApi } from "./config.js";
+import * as compatibilityConfig from "./config.js";
 import { canRead, validateNote } from "./files.js";
 import * as compatibilityReviewPolicy from "./review-policy.js";
-import * as compatibilityUi from "./ui-state.js";
+import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
 import type { createKnowledgeUi } from "./ui-state.js";
-import { createWikiReviewReader, targetPath, managedParts } from "./wiki-review-reader.js";
+import * as compatibilityUi from "./ui-state.js";
 import { stripManagedHeader } from "./wiki-policy.js";
-import type { WikiReviewPorts } from "./wiki-review-ports.js";
 import { createLocalWikiReviewPorts, renameWithRetry as renameLocalWikiFile } from "./wiki-review-node.js";
+import type { WikiReviewPorts } from "./wiki-review-ports.js";
+import { createWikiReviewReader, managedParts, targetPath } from "./wiki-review-reader.js";
 
 export function createKnowledgeWikiReview(
 	runtime: Pick<KnowledgeRuntimeHost, "runRuntimeExclusive">,

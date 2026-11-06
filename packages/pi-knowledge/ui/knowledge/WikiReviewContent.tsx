@@ -3,10 +3,7 @@ import { useMemo, useState } from "react";
 import { useKnowledgeText } from "./copy";
 import { knowledgeLineDiff } from "./line-diff";
 
-type ReviewContent = Pick<
-	WikiReviewPreview,
-	"before" | "after" | "protectedText" | "sources"
->;
+type ReviewContent = Pick<WikiReviewPreview, "before" | "after" | "protectedText" | "sources">;
 export function WikiReviewContent({
 	preview,
 	onOpenSource,
@@ -16,18 +13,11 @@ export function WikiReviewContent({
 }) {
 	const t = useKnowledgeText();
 	const [view, setView] = useState<"diff" | "both" | "protected">("diff");
-	const lines = useMemo(
-		() => knowledgeLineDiff(preview.before, preview.after),
-		[preview],
-	);
+	const lines = useMemo(() => knowledgeLineDiff(preview.before, preview.after), [preview]);
 	const visible = lines.slice(0, 200);
 	return (
 		<>
-			<div
-				className="flex flex-wrap gap-1"
-				role="tablist"
-				aria-label={t("reviewTitle")}
-			>
+			<div className="flex flex-wrap gap-1" role="tablist" aria-label={t("reviewTitle")}>
 				{(["diff", "both", "protected"] as const).map((tab) => (
 					<button
 						key={tab}
@@ -57,16 +47,10 @@ export function WikiReviewContent({
 							<span title={row.kind} className="w-3 shrink-0">
 								{row.kind === "add" ? "+" : row.kind === "remove" ? "−" : " "}
 							</span>
-							<span className="min-w-0 whitespace-pre-wrap break-words">
-								{row.text || " "}
-							</span>
+							<span className="min-w-0 whitespace-pre-wrap break-words">{row.text || " "}</span>
 						</div>
 					))}
-					{lines.length > 200 && (
-						<p className="px-2 py-2 text-[11px] text-ink-faint">
-							{t("truncated")}
-						</p>
-					)}
+					{lines.length > 200 && <p className="px-2 py-2 text-[11px] text-ink-faint">{t("truncated")}</p>}
 				</section>
 			)}
 			{view === "both" && (
@@ -92,10 +76,7 @@ export function WikiReviewContent({
 				</h4>
 				<div className="max-h-28 space-y-1 overflow-auto">
 					{preview.sources.map((source) => (
-						<div
-							key={source.path}
-							className="rounded-lg border border-border px-2 py-2"
-						>
+						<div key={source.path} className="rounded-lg border border-border px-2 py-2">
 							{onOpenSource ? (
 								<button
 									type="button"
@@ -111,9 +92,7 @@ export function WikiReviewContent({
 								L{source.startLine}–{source.endLine}
 								{source.hash ? ` · ${source.hash.slice(0, 12)}` : ""}
 							</p>
-							{source.changed && (
-								<p className="text-xs text-warn">{t("sourceChanged")}</p>
-							)}
+							{source.changed && <p className="text-xs text-warn">{t("sourceChanged")}</p>}
 							{source.error && (
 								<p role="alert" className="text-xs text-err">
 									{source.error}

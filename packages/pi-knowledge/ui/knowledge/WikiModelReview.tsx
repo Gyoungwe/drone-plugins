@@ -1,11 +1,8 @@
-import { reportKnowledgeError } from "./hooks";
 import type { WikiModelReviewResult, WikiReviewPreview } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useRef, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { useSessionsStore } from "../api";
-import { useSettingsStore } from "../api";
-import { Button } from "../api";
+import { Button, getKnowledgeApi, useSessionsStore, useSettingsStore } from "../api";
 import { useKnowledgeText } from "./copy";
+import { reportKnowledgeError } from "./hooks";
 
 function compactTokens(value: number): string {
 	if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
@@ -55,9 +52,7 @@ export function WikiModelReview({
 		return () => {
 			generation.current++;
 			if (active.current) {
-				void getKnowledgeApi()
-					.cancelKnowledgeModelReview(active.current)
-					.catch(reportKnowledgeError);
+				void getKnowledgeApi().cancelKnowledgeModelReview(active.current).catch(reportKnowledgeError);
 				active.current = null;
 			}
 		};

@@ -19,6 +19,10 @@ for (const name of [
 	"drone-example",
 ])
 	if (!bundle.includes(JSON.stringify(name))) throw new Error(`pi-core smoke: missing ${name}`);
-if (/(?:from|import\s*\(|require\s*\()["'](?:electron|@drone\/(?:backend|desktop|shared|tasks))["']/u.test(bundle))
+if (
+	/(?:from|import\s*\(|require\s*\()["'](?:electron|@drone\/(?:backend|desktop|shared|tasks))["']/u.test(
+		bundle,
+	)
+)
 	throw new Error("pi-core bundle contains host-only import");
 console.log("pi-core bundle smoke passed");

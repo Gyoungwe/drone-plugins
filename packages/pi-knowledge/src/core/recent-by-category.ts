@@ -14,7 +14,10 @@ export function recentByCategory(
 	rows: readonly RecentCategoryRow[],
 	limit = 10,
 ): Record<KnowledgeCategory, Array<{ path: string; title: string; kind: string; updatedAt: number }>> {
-	const groups: Record<KnowledgeCategory, Array<{ path: string; title: string; kind: string; updatedAt: number }>> = {
+	const groups: Record<
+		KnowledgeCategory,
+		Array<{ path: string; title: string; kind: string; updatedAt: number }>
+	> = {
 		paper: [],
 		software: [],
 		method: [],
@@ -37,4 +40,3 @@ export function recentByCategory(
 			.slice(0, max);
 	return groups;
 }
-

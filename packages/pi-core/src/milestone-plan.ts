@@ -24,20 +24,12 @@ export interface TaskPlanMilestone {
 
 const clean = (value: unknown, max = 180): string =>
 	String(value ?? "")
-		.replace(
-			/(?:bearer\s+|(?:api[_-]?key|token|password|secret)\s*[=:]\s*)[^\s,;]+/gi,
-			"[redacted]",
-		)
+		.replace(/(?:bearer\s+|(?:api[_-]?key|token|password|secret)\s*[=:]\s*)[^\s,;]+/gi, "[redacted]")
 		.split("")
-		.map((c) =>
-			c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 || "<>".includes(c)
-				? " "
-				: c,
-		)
+		.map((c) => (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 || "<>".includes(c) ? " " : c))
 		.join("")
 		.slice(0, max);
-const error = (code: string, message: string): Error =>
-	Object.assign(new Error(message), { code });
+const error = (code: string, message: string): Error => Object.assign(new Error(message), { code });
 const MCP_CONFIG_FILE = /(?:^|[\\/])(?:\.?mcp|mcp-adapter)\.json$/i;
 
 /** Normalize a model-authored plan before the host opens or mutates a task. */
@@ -54,8 +46,7 @@ export function normalizeTaskMilestones(
 			`Milestone ID ${JSON.stringify(String(badId.id).slice(0, 60))} is invalid: use 1–40 letters, digits, "-" or "_".`,
 		);
 	const ids = new Set(input.map((m) => m.id));
-	if (ids.size !== input.length)
-		throw error("plan-id", "Milestone IDs must be unique.");
+	if (ids.size !== input.length) throw error("plan-id", "Milestone IDs must be unique.");
 	const seen = new Set<string>();
 	return input.map((m) => {
 		if ((m.dependsOn || []).some((id: string) => !seen.has(id)))
@@ -68,10 +59,7 @@ export function normalizeTaskMilestones(
 				"acceptance-required",
 				`Acceptance must be one of ${catalog.kinds.join(" | ")} (observed by the host or confirmed by the user); model labels cannot complete it.`,
 			);
-		if (
-			m.acceptance.kind === "file" &&
-			MCP_CONFIG_FILE.test(String(m.acceptance.path || ""))
-		)
+		if (m.acceptance.kind === "file" && MCP_CONFIG_FILE.test(String(m.acceptance.path || "")))
 			throw error(
 				"acceptance-config-write",
 				"Writing an MCP config file (mcp.json) does not load MCP tools, so it cannot complete a milestone. Use human_review, or finish only after the mcp tool actually ran in a reloaded session; if no MCP tools are available, tell the user instead.",
@@ -79,15 +67,9 @@ export function normalizeTaskMilestones(
 		const acceptance: Record<string, unknown> = {
 			kind: m.acceptance.kind,
 			path: clean(m.acceptance.path, 512),
-			sha256: /^[a-f0-9]{64}$/.test(String(m.acceptance.sha256 || ""))
-				? m.acceptance.sha256
-				: null,
+			sha256: /^[a-f0-9]{64}$/.test(String(m.acceptance.sha256 || "")) ? m.acceptance.sha256 : null,
 		};
-		if (
-			["workspace", "vault", "research-run"].includes(
-				String(m.acceptance.rootKind),
-			)
-		)
+		if (["workspace", "vault", "research-run"].includes(String(m.acceptance.rootKind)))
 			acceptance.rootKind = m.acceptance.rootKind;
 		for (const field of catalog.fields[m.acceptance.kind] || [])
 			acceptance[field] = clean(m.acceptance[field]);

@@ -1,34 +1,30 @@
 {
-  "schemaVersion": 1,
-  "id": "drone-desktop-ui-pack",
-  "version": "0.3.0",
-  "pi": {
-    "apiVersion": 1,
-    "minHostVersion": "1.1.0"
-  },
-  "drone": {
-    "pluginApi": 1,
-    "resultContract": "drone-result/v3"
-  },
-  "entrypoints": {
-    "ui": "./ui/plugin.json"
-  },
-  "capabilities": [
-    "ui"
-  ],
-  "tools": [],
-  "hosts": [
-    "drone-desktop"
-  ],
-  "permissions": {
-    "filesystem": [],
-    "network": [],
-    "subprocess": [],
-    "externalWrites": false,
-    "readWrite": {
-      "read": false,
-      "write": false,
-      "delete": false
-    }
-  }
+	"schemaVersion": 1,
+	"id": "drone-desktop-ui-pack",
+	"version": "0.3.0",
+	"pi": {
+		"apiVersion": 1,
+		"minHostVersion": "1.1.0"
+	},
+	"drone": {
+		"pluginApi": 1,
+		"resultContract": "drone-result/v3"
+	},
+	"entrypoints": {
+		"ui": "./ui/plugin.json"
+	},
+	"capabilities": ["ui"],
+	"tools": [],
+	"hosts": ["drone-desktop"],
+	"permissions": {
+		"filesystem": [],
+		"network": [],
+		"subprocess": [],
+		"externalWrites": false,
+		"readWrite": {
+			"read": false,
+			"write": false,
+			"delete": false
+		}
+	}
 }

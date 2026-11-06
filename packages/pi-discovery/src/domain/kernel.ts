@@ -115,9 +115,7 @@ const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
 const encoder = new TextEncoder();
 
 function validClassification(value: unknown): value is DataClassification {
-	return (
-		value === "public" || value === "internal" || value === "controlled" || value === "restricted"
-	);
+	return value === "public" || value === "internal" || value === "controlled" || value === "restricted";
 }
 
 function validKind(value: unknown): value is KernelContentKind {
@@ -126,19 +124,10 @@ function validKind(value: unknown): value is KernelContentKind {
 
 function ensureOptions(options: KernelSessionOptions): void {
 	assertValid(safeId(options.sessionId), "sessionId is invalid");
-	assertValid(
-		safeRunPath(options.runDirectory),
-		"runDirectory must be a project-relative runs path",
-	);
-	assertValid(
-		options.language === "python" || options.language === "r",
-		"unsupported kernel language",
-	);
+	assertValid(safeRunPath(options.runDirectory), "runDirectory must be a project-relative runs path");
+	assertValid(options.language === "python" || options.language === "r", "unsupported kernel language");
 	assertValid(validClassification(options.dataClassification), "invalid data classification");
-	assertValid(
-		options.runner && typeof options.runner.run === "function",
-		"controlled runner is required",
-	);
+	assertValid(options.runner && typeof options.runner.run === "function", "controlled runner is required");
 	const capabilities = options.runner.capabilities;
 	assertValid(
 		capabilities.kind === "container" ||
@@ -146,16 +135,10 @@ function ensureOptions(options: KernelSessionOptions): void {
 			capabilities.kind === "unavailable",
 		"invalid runner kind",
 	);
-	assertValid(
-		capabilities.languages.includes(options.language),
-		"runner does not support this language",
-	);
+	assertValid(capabilities.languages.includes(options.language), "runner does not support this language");
 	if (capabilities.kind !== "unavailable") {
 		assertValid(capabilities.networkDisabled, "kernel runner must disable network access");
-		assertValid(
-			capabilities.writesOnlyToRunDirectory,
-			"kernel runner must constrain writes to runs",
-		);
+		assertValid(capabilities.writesOnlyToRunDirectory, "kernel runner must constrain writes to runs");
 	}
 	for (const [label, value] of [
 		["idleTimeoutMs", options.idleTimeoutMs],
@@ -163,8 +146,7 @@ function ensureOptions(options: KernelSessionOptions): void {
 		["maxExecutions", options.maxExecutions],
 		["maxOutputBytes", options.maxOutputBytes],
 	] as const) {
-		if (value !== undefined)
-			assertValid(boundedInteger(value, 1, 24 * 60 * 60_000), `${label} is invalid`);
+		if (value !== undefined) assertValid(boundedInteger(value, 1, 24 * 60 * 60_000), `${label} is invalid`);
 	}
 }
 
@@ -203,8 +185,7 @@ export function filterKernelOutput(
 			blocked = true;
 			continue;
 		}
-		const withinClassification =
-			classificationRank[item.classification] <= classificationRank[policy];
+		const withinClassification = classificationRank[item.classification] <= classificationRank[policy];
 		const allowed =
 			withinClassification &&
 			(policy === "public" || policy === "internal"
@@ -268,10 +249,7 @@ function notebookFor(history: readonly KernelExecution[], language: KernelLangua
 
 export class KernelSession {
 	private readonly options: Required<
-		Pick<
-			KernelSessionOptions,
-			"idleTimeoutMs" | "executionTimeoutMs" | "maxExecutions" | "maxOutputBytes"
-		>
+		Pick<KernelSessionOptions, "idleTimeoutMs" | "executionTimeoutMs" | "maxExecutions" | "maxOutputBytes">
 	> &
 		KernelSessionOptions;
 	private state: KernelSessionStatus;
@@ -294,8 +272,7 @@ export class KernelSession {
 			maxOutputBytes: options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
 		};
 		this.state =
-			options.runner.capabilities.kind === "container" ||
-			options.runner.capabilities.kind === "fixture"
+			options.runner.capabilities.kind === "container" || options.runner.capabilities.kind === "fixture"
 				? "ready"
 				: "needs-container";
 		this.armIdleTimer();
@@ -308,9 +285,7 @@ export class KernelSession {
 			status: this.state,
 			executionCount: this.executionCount,
 			remainingExecutions: remaining,
-			...(this.expiresAt === undefined
-				? {}
-				: { expiresAt: new Date(this.expiresAt).toISOString() }),
+			...(this.expiresAt === undefined ? {} : { expiresAt: new Date(this.expiresAt).toISOString() }),
 		};
 	}
 
@@ -321,10 +296,7 @@ export class KernelSession {
 	async execute(code: string, signal?: AbortSignal): Promise<KernelExecution> {
 		assertValid(this.state === "ready", `kernel session is ${this.state}`);
 		assertValid(nonEmptyText(code, MAX_CODE_LENGTH), "kernel code is empty or too large");
-		assertValid(
-			this.executionCount < this.options.maxExecutions,
-			"kernel execution budget exceeded",
-		);
+		assertValid(this.executionCount < this.options.maxExecutions, "kernel execution budget exceeded");
 		const controller = new AbortController();
 		this.executionController = controller;
 		signal?.throwIfAborted();
@@ -355,9 +327,7 @@ export class KernelSession {
 		let execution: KernelExecution;
 		try {
 			const result = await this.options.runner.run({
-				signal: callerSignal
-					? AbortSignal.any([controller.signal, callerSignal])
-					: controller.signal,
+				signal: callerSignal ? AbortSignal.any([controller.signal, callerSignal]) : controller.signal,
 				requestId: id,
 				language: this.options.language,
 				code,
@@ -367,10 +337,7 @@ export class KernelSession {
 				dataClassification: this.options.dataClassification,
 			});
 			controller.signal.throwIfAborted();
-			assertValid(
-				result && Number.isInteger(result.exitCode),
-				"runner returned invalid exit status",
-			);
+			assertValid(result && Number.isInteger(result.exitCode), "runner returned invalid exit status");
 			assertValid(
 				Number.isFinite(result.producedBytes) && result.producedBytes >= 0,
 				"runner returned invalid byte count",
@@ -418,18 +385,13 @@ export class KernelSession {
 				producedBytes: 0,
 				redactedBytes: 0,
 				blockedReason:
-					controller.signal.reason instanceof Error &&
-					controller.signal.reason.message === "runner-timeout"
+					controller.signal.reason instanceof Error && controller.signal.reason.message === "runner-timeout"
 						? "timeout"
 						: controller.signal.aborted
 							? "cancelled"
-							: error instanceof Error &&
-									"code" in error &&
-									error.code === "EXECUTION_IMAGE_NOT_CACHED"
+							: error instanceof Error && "code" in error && error.code === "EXECUTION_IMAGE_NOT_CACHED"
 								? "image-not-cached"
-								: error instanceof Error &&
-										"code" in error &&
-										error.code === "EXECUTION_IMAGE_MISMATCH"
+								: error instanceof Error && "code" in error && error.code === "EXECUTION_IMAGE_MISMATCH"
 									? "image-mismatch"
 									: "runner-failure",
 			};
@@ -455,11 +417,7 @@ export class KernelSession {
 		const scriptPath = `${base}.${this.options.language === "python" ? "py" : "R"}`;
 		const notebookPath = `${base}.ipynb`;
 		return Promise.all([
-			fileWriter.write(
-				scriptPath,
-				script,
-				this.options.language === "python" ? "text/x-python" : "text/x-r",
-			),
+			fileWriter.write(scriptPath, script, this.options.language === "python" ? "text/x-python" : "text/x-r"),
 			fileWriter.write(notebookPath, notebook, "application/x-ipynb+json"),
 		]).then(() => ({ scriptPath, notebookPath, script, notebook }));
 	}
@@ -497,10 +455,7 @@ export type KernelPreparation =
 	| { readonly status: "needs-container"; readonly reason: string };
 
 /** Explicit capability gate used before creating an interactive session. */
-export function prepareKernel(
-	runner: ControlledKernelRunner,
-	language: KernelLanguage,
-): KernelPreparation {
+export function prepareKernel(runner: ControlledKernelRunner, language: KernelLanguage): KernelPreparation {
 	if (!runner?.capabilities?.languages.includes(language))
 		return { status: "needs-container", reason: "language is unavailable" };
 	if (runner.capabilities.kind !== "container")
@@ -544,9 +499,7 @@ export class SubprocessFixtureRunner implements ControlledKernelRunner {
 		)
 			return Promise.reject(new Error("fixture-command-not-allowlisted"));
 		const args =
-			request.language === "python"
-				? ["-I", "-c", request.code]
-				: ["--vanilla", "-e", request.code];
+			request.language === "python" ? ["-I", "-c", request.code] : ["--vanilla", "-e", request.code];
 		const started = Date.now();
 		return new Promise((resolve, reject) => {
 			const child = spawn(command, args, {

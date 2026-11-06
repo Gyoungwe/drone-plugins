@@ -1,7 +1,6 @@
 import type { InstitutionalStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { Button } from "../api";
+import { Button, getKnowledgeApi } from "../api";
 import { useZoteroText } from "./zotero-copy";
 
 function Row({ label, value, ok }: { label: string; value: string; ok?: boolean }) {

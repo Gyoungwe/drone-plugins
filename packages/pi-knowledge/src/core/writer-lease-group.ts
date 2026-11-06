@@ -1,7 +1,9 @@
 import type { KnowledgeWriterLease, KnowledgeWriterLeaseInput } from "./writer-lease.js";
 
 /** Keep the writer reservation for the domain owner, not merely one live worker. */
-export function createKnowledgeWriterLeaseGroup(acquire: (input: KnowledgeWriterLeaseInput) => KnowledgeWriterLease) {
+export function createKnowledgeWriterLeaseGroup(
+	acquire: (input: KnowledgeWriterLeaseInput) => KnowledgeWriterLease,
+) {
 	const reservations = new Map<string, { lease: KnowledgeWriterLease; workers: number }>();
 	let disposed = false;
 	function acquireWorker(input: KnowledgeWriterLeaseInput): KnowledgeWriterLease {
@@ -38,7 +40,8 @@ export function createKnowledgeWriterLeaseGroup(acquire: (input: KnowledgeWriter
 				failures.push(error);
 			}
 		}
-		if (failures.length) throw new AggregateError(failures, "Knowledge writer reservations could not be released");
+		if (failures.length)
+			throw new AggregateError(failures, "Knowledge writer reservations could not be released");
 	}
 	return { acquireWorker, dispose };
 }

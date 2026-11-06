@@ -155,7 +155,10 @@ export interface TerminalJobExperienceInput {
 }
 
 export interface ExperienceStorePort {
-	record(input: ExperienceInput, expectedRevision?: number): Promise<{ classification: string; record: ExperienceRecord; revision: number }>;
+	record(
+		input: ExperienceInput,
+		expectedRevision?: number,
+	): Promise<{ classification: string; record: ExperienceRecord; revision: number }>;
 }
 
 export interface ExperienceInput {
@@ -278,14 +281,23 @@ export interface ExperienceStore {
 	path: string;
 	scope: { vaultId: string; project: string; hostId: string };
 	read: () => Promise<ExperienceDocument>;
-	record: (input: ExperienceInput, expectedRevision?: number) => Promise<{
+	record: (
+		input: ExperienceInput,
+		expectedRevision?: number,
+	) => Promise<{
 		classification: "new" | "updated" | "duplicate";
 		revision: number;
 		record: ExperienceRecord;
 	}>;
 	search: (
 		query?: string,
-		options?: { limit?: number; includeObserved?: boolean; workflow?: string; hostId?: string; failureSignature?: string },
+		options?: {
+			limit?: number;
+			includeObserved?: boolean;
+			workflow?: string;
+			hostId?: string;
+			failureSignature?: string;
+		},
 	) => Promise<ExperienceSearchResult>;
 }
 
@@ -298,7 +310,10 @@ function text(value: unknown, limit: number): string {
 		.normalize("NFKC")
 		.replace(/[\u0000-\u001f\u007f<>]/g, " ")
 		.replace(/(?:bearer\s+)[^\s,;"']+/gi, "Bearer [redacted]")
-		.replace(/(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|authorization|cookie)["']?\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, "$1[redacted]")
+		.replace(
+			/(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|authorization|cookie)["']?\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
+			"$1[redacted]",
+		)
 		.replace(/https?:\/\/[^\s<>"]+/gi, (raw) => {
 			try {
 				const url = new URL(raw);
@@ -367,7 +382,9 @@ function finiteNumber(value: unknown, maximum = 1e12): number | null {
 }
 
 function normalizeExitCode(value: unknown): number | null {
-	return typeof value === "number" && Number.isSafeInteger(value) && value >= -1 && value <= 255 ? value : null;
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= -1 && value <= 255
+		? value
+		: null;
 }
 
 function normalizeRepair(value: unknown): ExperienceRepair | null {
@@ -411,7 +428,11 @@ function normalizeWorkflowSpecDiff(value: unknown): WorkflowSpecDiff[] {
 		const before = normalizeDiffValue(item.before);
 		const after = normalizeDiffValue(item.after ?? item.value);
 		if (before === undefined && after === undefined) continue;
-		result.push({ path, ...(before === undefined ? {} : { before }), ...(after === undefined ? {} : { after }) });
+		result.push({
+			path,
+			...(before === undefined ? {} : { before }),
+			...(after === undefined ? {} : { after }),
+		});
 	}
 	return result;
 }
@@ -421,7 +442,11 @@ function normalizeResourceUse(value: unknown): ExperienceResourceUse {
 	const result: ExperienceResourceUse = {};
 	for (const [key, raw] of Object.entries(value as Record<string, unknown>).slice(0, 32)) {
 		const name = text(key, 64);
-		if (!/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(name) || /(token|secret|password|credential|command|output|path|url)/i.test(name)) continue;
+		if (
+			!/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(name) ||
+			/(token|secret|password|credential|command|output|path|url)/i.test(name)
+		)
+			continue;
 		const number = finiteNonNegative(raw);
 		if (number !== null) result[name] = number;
 		if (Object.keys(result).length >= 16) break;
@@ -445,20 +470,36 @@ function normalizeQcMetrics(value: unknown): ExperienceQcMetric[] {
 		const unit = text(item.unit, 32) || null;
 		const valueNumber = finiteNonNegative(item.value, 1e12);
 		const count = finiteNonNegative(item.count, 1e9);
-		const distributionInput = item.distribution && typeof item.distribution === "object" ? (item.distribution as Record<string, unknown>) : item;
+		const distributionInput =
+			item.distribution && typeof item.distribution === "object"
+				? (item.distribution as Record<string, unknown>)
+				: item;
 		const distribution: ExperienceQcDistribution = {};
 		for (const [rawKey, rawValue] of Object.entries(distributionInput).slice(0, 16)) {
 			const key = text(rawKey, 32);
-			if (!/^[A-Za-z][A-Za-z0-9_.-]{0,31}$/.test(key) || ["count", "name", "unit", "value", "values"].includes(key)) continue;
+			if (
+				!/^[A-Za-z][A-Za-z0-9_.-]{0,31}$/.test(key) ||
+				["count", "name", "unit", "value", "values"].includes(key)
+			)
+				continue;
 			const number = finiteNumber(rawValue, 1e12);
 			if (number !== null) distribution[key] = number;
 		}
 		const distributionCount = finiteNonNegative(distributionInput.count, 1e9);
 		if (distributionCount !== null) distribution.count = distributionCount;
 		const values = Array.isArray(item.values)
-			? item.values.map((entry) => finiteNumber(entry, 1e12)).filter((entry): entry is number => entry !== null).slice(0, EXPERIENCE_LIMITS.maxQcValues)
+			? item.values
+					.map((entry) => finiteNumber(entry, 1e12))
+					.filter((entry): entry is number => entry !== null)
+					.slice(0, EXPERIENCE_LIMITS.maxQcValues)
 			: [];
-		if (valueNumber === null && count === null && Object.keys(distribution).length === 0 && values.length === 0) continue;
+		if (
+			valueNumber === null &&
+			count === null &&
+			Object.keys(distribution).length === 0 &&
+			values.length === 0
+		)
+			continue;
 		result.push({
 			name,
 			...(unit ? { unit } : {}),
@@ -476,9 +517,18 @@ function normalizeArtifact(value: unknown): ExperienceArtifact | null {
 	const item = value as Record<string, unknown>;
 	const sha256 = hash(item.sha256);
 	if (!sha256) return null;
-	const bytes = typeof item.bytes === "number" && Number.isSafeInteger(item.bytes) && item.bytes >= 0 ? item.bytes : undefined;
+	const bytes =
+		typeof item.bytes === "number" && Number.isSafeInteger(item.bytes) && item.bytes >= 0
+			? item.bytes
+			: undefined;
 	const pathValue = text(item.path, 240).replaceAll("\\", "/");
-	const safePath = pathValue && !isAbsolute(pathValue) && !pathValue.split("/").includes("..") && !/(?:^|\/)(?:\.env(?:\.[^/]*)?|auth\.json|credentials(?:\.json)?|\.ssh|\.git)(?:\/|$)/i.test(pathValue) ? pathValue : "";
+	const safePath =
+		pathValue &&
+		!isAbsolute(pathValue) &&
+		!pathValue.split("/").includes("..") &&
+		!/(?:^|\/)(?:\.env(?:\.[^/]*)?|auth\.json|credentials(?:\.json)?|\.ssh|\.git)(?:\/|$)/i.test(pathValue)
+			? pathValue
+			: "";
 	return {
 		...(safePath ? { path: safePath } : {}),
 		sha256,
@@ -518,7 +568,10 @@ function normalizeProvenance(input: ExperienceProvenance): ExperienceProvenance 
 	const item = input as Record<string, unknown>;
 	const manifestSha256 = hash(item.manifestSha256 ?? item.manifestHash);
 	const artifactHashes = Array.isArray(item.artifactHashes)
-		? item.artifactHashes.map(normalizeArtifact).filter((value): value is ExperienceArtifact => Boolean(value)).slice(0, EXPERIENCE_LIMITS.maxArtifacts)
+		? item.artifactHashes
+				.map(normalizeArtifact)
+				.filter((value): value is ExperienceArtifact => Boolean(value))
+				.slice(0, EXPERIENCE_LIMITS.maxArtifacts)
 		: [];
 	const runId = opaqueRef(item.runId);
 	const observationId = opaqueRef(item.observationId);
@@ -536,13 +589,32 @@ function normalizeProvenance(input: ExperienceProvenance): ExperienceProvenance 
 }
 
 function blank(vaultId: string, project: string, hostId: string): ExperienceDocument {
-	return { version: EXPERIENCE_VERSION, vaultId, project, hostId, revision: 0, updatedAt: now(), records: [] };
+	return {
+		version: EXPERIENCE_VERSION,
+		vaultId,
+		project,
+		hostId,
+		revision: 0,
+		updatedAt: now(),
+		records: [],
+	};
 }
 
-function validateDocument(value: unknown, vaultId: string, project: string, hostId: string): ExperienceDocument {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Corrupt experience document");
+function validateDocument(
+	value: unknown,
+	vaultId: string,
+	project: string,
+	hostId: string,
+): ExperienceDocument {
+	if (!value || typeof value !== "object" || Array.isArray(value))
+		throw new Error("Corrupt experience document");
 	const item = value as Record<string, unknown>;
-	if (item.version !== EXPERIENCE_VERSION || item.vaultId !== vaultId || item.project !== project || item.hostId !== hostId)
+	if (
+		item.version !== EXPERIENCE_VERSION ||
+		item.vaultId !== vaultId ||
+		item.project !== project ||
+		item.hostId !== hostId
+	)
 		throw new Error("Experience binding mismatch");
 	if (!Number.isSafeInteger(item.revision) || Number(item.revision) < 0 || !Array.isArray(item.records))
 		throw new Error("Corrupt experience document");
@@ -562,8 +634,16 @@ function normalizeRecord(value: unknown, vaultId: string, project: string, hostI
 	if (!value || typeof value !== "object") throw new Error("Invalid experience record");
 	const item = value as Record<string, unknown>;
 	const status = item.status === "verified" ? "verified" : item.status === "observed" ? "observed" : null;
-	const outcome = ["success", "failure", "blocked", "unknown"].includes(String(item.outcome)) ? (item.outcome as ExperienceOutcome) : null;
-	if (!status || !outcome || item.navigationOnly !== true || item.evidenceEligible !== false || item.instructionEligible !== false)
+	const outcome = ["success", "failure", "blocked", "unknown"].includes(String(item.outcome))
+		? (item.outcome as ExperienceOutcome)
+		: null;
+	if (
+		!status ||
+		!outcome ||
+		item.navigationOnly !== true ||
+		item.evidenceEligible !== false ||
+		item.instructionEligible !== false
+	)
 		throw new Error("Invalid experience record safety flags");
 	const result: ExperienceRecord = {
 		id: id(item.id, "experience id"),
@@ -580,12 +660,18 @@ function normalizeRecord(value: unknown, vaultId: string, project: string, hostI
 		status,
 		observedAt: text(item.observedAt, 40) || now(),
 		observationIds: boundedStringList(item.observationIds, EXPERIENCE_LIMITS.maxObservationIds),
-		observationCount: Number.isSafeInteger(item.observationCount) && Number(item.observationCount) > 0 ? Number(item.observationCount) : 1,
+		observationCount:
+			Number.isSafeInteger(item.observationCount) && Number(item.observationCount) > 0
+				? Number(item.observationCount)
+				: 1,
 		jobIds: (() => {
 			const values = boundedStringList(item.jobIds, EXPERIENCE_LIMITS.maxJobIds);
 			return values.length ? values : [id(item.jobId, "jobId")];
 		})(),
-		jobCount: Number.isSafeInteger(item.jobCount) && Number(item.jobCount) > 0 ? Math.min(Number(item.jobCount), EXPERIENCE_LIMITS.maxJobIds) : 1,
+		jobCount:
+			Number.isSafeInteger(item.jobCount) && Number(item.jobCount) > 0
+				? Math.min(Number(item.jobCount), EXPERIENCE_LIMITS.maxJobIds)
+				: 1,
 		failureSignature: text(item.failureSignature, 240) || null,
 		exitCode: normalizeExitCode(item.exitCode),
 		failedStep: text(item.failedStep, 240) || null,
@@ -594,7 +680,9 @@ function normalizeRecord(value: unknown, vaultId: string, project: string, hostI
 		resourceUse: normalizeResourceUse(item.resourceUse),
 		qcMetrics: normalizeQcMetrics(item.qcMetrics ?? item.qc ?? item.qcMetricDistribution),
 		modelSummary: text(item.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars) || null,
-		modelGenerated: item.modelGenerated === true && Boolean(text(item.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars)),
+		modelGenerated:
+			item.modelGenerated === true &&
+			Boolean(text(item.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars)),
 		contractHash: hash(item.contractHash),
 		workflow: normalizeWorkflow(item.workflow),
 		workflowRevision: normalizeWorkflowRevision(item.workflowRevision ?? item.workflowRevisionId),
@@ -622,7 +710,8 @@ function pathFor(directory: string, vaultId: string, project: string, hostId: st
 async function ensureSafePath(directory: string, path: string): Promise<void> {
 	const root = resolve(directory);
 	const relativePath = relative(root, resolve(path));
-	if (isAbsolute(relativePath) || relativePath === ".." || relativePath.startsWith(`..${sep}`)) throw new Error("Experience path escapes knowledge directory");
+	if (isAbsolute(relativePath) || relativePath === ".." || relativePath.startsWith(`..${sep}`))
+		throw new Error("Experience path escapes knowledge directory");
 	let current = root;
 	for (const segment of relativePath.split(sep).slice(0, -1)) {
 		current = join(current, segment);
@@ -637,7 +726,12 @@ async function ensureSafePath(directory: string, path: string): Promise<void> {
 	}
 }
 
-async function readDocument(path: string, vaultId: string, project: string, hostId: string): Promise<ExperienceDocument> {
+async function readDocument(
+	path: string,
+	vaultId: string,
+	project: string,
+	hostId: string,
+): Promise<ExperienceDocument> {
 	try {
 		const stat = await lstat(path);
 		if (stat.isSymbolicLink() || !stat.isFile()) throw new Error("Experience file must be a regular file");
@@ -663,7 +757,12 @@ async function atomicWrite(path: string, value: ExperienceDocument): Promise<voi
 }
 
 function tokenSet(value: string): Set<string> {
-	return new Set(value.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((token) => token.length > 1));
+	return new Set(
+		value
+			.toLowerCase()
+			.split(/[^\p{L}\p{N}]+/u)
+			.filter((token) => token.length > 1),
+	);
 }
 
 function scoreRecord(record: ExperienceRecord, query: string): number {
@@ -759,21 +858,35 @@ export function createExperienceStore(options: ExperienceStoreOptions): Experien
 	const vaultId = vaultKey(options.binding?.vaultId);
 	const project = projectKey(options.project);
 	const hostId = hostKey(options.hostId);
-	const directory = options.directory === undefined || options.directory === null ? knowledgeDirectory() : options.directory;
+	const directory =
+		options.directory === undefined || options.directory === null ? knowledgeDirectory() : options.directory;
 	if (!directory) throw new Error("Knowledge directory is not configured");
 	const path = pathFor(directory, vaultId, project, hostId);
 	const read = async () => {
 		await ensureSafePath(directory, path);
 		return readDocument(path, vaultId, project, hostId);
 	};
-	const mutate = async <T>(expectedRevision: number | undefined, updater: (current: ExperienceDocument) => { document: ExperienceDocument; result: T; noop?: boolean }): Promise<{ document: ExperienceDocument; result: T }> =>
+	const mutate = async <T>(
+		expectedRevision: number | undefined,
+		updater: (current: ExperienceDocument) => { document: ExperienceDocument; result: T; noop?: boolean },
+	): Promise<{ document: ExperienceDocument; result: T }> =>
 		runRuntimeExclusive("experience-store", path, async () => {
 			await ensureSafePath(directory, path);
 			const current = await readDocument(path, vaultId, project, hostId);
-			if (expectedRevision !== undefined && current.revision !== expectedRevision) throw new Error("Experience revision changed");
+			if (expectedRevision !== undefined && current.revision !== expectedRevision)
+				throw new Error("Experience revision changed");
 			const next = updater(structuredClone(current));
 			if (next.noop) return { document: current, result: next.result };
-			const candidate = { ...next.document, version: EXPERIENCE_VERSION, vaultId, project, hostId, revision: current.revision + 1, updatedAt: now(), records: next.document.records.slice(-EXPERIENCE_LIMITS.maxRecords) };
+			const candidate = {
+				...next.document,
+				version: EXPERIENCE_VERSION,
+				vaultId,
+				project,
+				hostId,
+				revision: current.revision + 1,
+				updatedAt: now(),
+				records: next.document.records.slice(-EXPERIENCE_LIMITS.maxRecords),
+			};
 			const document = validateDocument(candidate, vaultId, project, hostId);
 			await atomicWrite(path, document);
 			return { document, result: next.result };
@@ -784,36 +897,58 @@ export function createExperienceStore(options: ExperienceStoreOptions): Experien
 		read,
 		record: async (input: ExperienceInput, expectedRevision?: number) => {
 			if (!input || typeof input !== "object") throw new Error("Invalid experience input");
-				const rawInput = input as ExperienceInput & { job?: { id?: unknown }; terminalJob?: { id?: unknown } };
-				const jobId = id(input.jobId || rawInput.job?.id || rawInput.terminalJob?.id, "jobId");
-				const observation = input.observation || input.hostObservation;
-				const featureKey = id(
-					input.featureKey || observation?.featureKey || input.failureSignature || observation?.failureSignature || input.failedStep || input.step,
-					"featureKey",
-					240,
-				);
-			if (!observation || typeof observation !== "object") throw new Error("Terminal host observation is required");
+			const rawInput = input as ExperienceInput & { job?: { id?: unknown }; terminalJob?: { id?: unknown } };
+			const jobId = id(input.jobId || rawInput.job?.id || rawInput.terminalJob?.id, "jobId");
+			const observation = input.observation || input.hostObservation;
+			const featureKey = id(
+				input.featureKey ||
+					observation?.featureKey ||
+					input.failureSignature ||
+					observation?.failureSignature ||
+					input.failedStep ||
+					input.step,
+				"featureKey",
+				240,
+			);
+			if (!observation || typeof observation !== "object")
+				throw new Error("Terminal host observation is required");
 			const observationId = id(observation.id, "observation id");
 			const outcome = observation.outcome;
-			if (!["success", "failure", "blocked", "unknown"].includes(outcome)) throw new Error("Invalid experience outcome");
+			if (!["success", "failure", "blocked", "unknown"].includes(outcome))
+				throw new Error("Invalid experience outcome");
 			const provenance = normalizeProvenance(input.provenance || observation.provenance || {});
 			const summary = text(input.summary, EXPERIENCE_LIMITS.maxSummaryChars);
 			if (!summary) throw new Error("Experience summary is required");
-				const failureSignature = text(input.failureSignature ?? observation.failureSignature, 240) || null;
-				const exitCode = normalizeExitCode(input.exitCode ?? observation.exitCode);
-				const failedStep = text(input.failedStep ?? input.step ?? observation.failedStep ?? observation.step, 240) || null;
-				const repair = normalizeRepair(input.repair ?? observation.repair ?? (input.repairSucceeded === true || observation.repairSucceeded === true ? { succeeded: true } : null));
-				const repairSucceeded = input.repairSucceeded === true || observation.repairSucceeded === true || repair?.succeeded === true;
-				const workflowSpecDiff = normalizeWorkflowSpecDiff(input.workflowSpecDiff ?? observation.workflowSpecDiff);
-				const resourceUse = normalizeResourceUse(input.resourceUse ?? observation.resourceUse);
-				const qcMetrics = normalizeQcMetrics(input.qcMetrics ?? input.qc ?? observation.qcMetrics ?? observation.qc);
-				const modelSummary = text(input.modelSummary ?? observation.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars) || null;
-				const contractHash = hash(input.contractHash ?? observation.contractHash);
-				const workflow = normalizeWorkflow(input.workflow ?? observation.workflow);
-				const workflowRevision = normalizeWorkflowRevision(input.workflowRevision ?? observation.workflowRevision);
-				const scheduler = normalizeScheduler(input.scheduler ?? observation.scheduler);
-				const schedulerJobId = normalizeSchedulerJobId(input.schedulerJobId ?? observation.schedulerJobId);
-				const artifactRefs = normalizeArtifactRefs(input.artifactRefs ?? observation.artifactRefs);
+			const failureSignature = text(input.failureSignature ?? observation.failureSignature, 240) || null;
+			const exitCode = normalizeExitCode(input.exitCode ?? observation.exitCode);
+			const failedStep =
+				text(input.failedStep ?? input.step ?? observation.failedStep ?? observation.step, 240) || null;
+			const repair = normalizeRepair(
+				input.repair ??
+					observation.repair ??
+					(input.repairSucceeded === true || observation.repairSucceeded === true
+						? { succeeded: true }
+						: null),
+			);
+			const repairSucceeded =
+				input.repairSucceeded === true || observation.repairSucceeded === true || repair?.succeeded === true;
+			const workflowSpecDiff = normalizeWorkflowSpecDiff(
+				input.workflowSpecDiff ?? observation.workflowSpecDiff,
+			);
+			const resourceUse = normalizeResourceUse(input.resourceUse ?? observation.resourceUse);
+			const qcMetrics = normalizeQcMetrics(
+				input.qcMetrics ?? input.qc ?? observation.qcMetrics ?? observation.qc,
+			);
+			const modelSummary =
+				text(input.modelSummary ?? observation.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars) || null;
+			const contractHash = hash(input.contractHash ?? observation.contractHash);
+			const workflow = normalizeWorkflow(input.workflow ?? observation.workflow);
+			const workflowRevision = normalizeWorkflowRevision(
+				input.workflowRevision ?? observation.workflowRevision,
+			);
+			const scheduler = normalizeScheduler(input.scheduler ?? observation.scheduler);
+			const schedulerJobId = normalizeSchedulerJobId(input.schedulerJobId ?? observation.schedulerJobId);
+			const artifactRefs = normalizeArtifactRefs(input.artifactRefs ?? observation.artifactRefs);
 			const observedAt = text(observation.observedAt, 40) || now();
 			const sanitizedTags = boundedStringList(input.tags, EXPERIENCE_LIMITS.maxTags);
 			const sanitizedSources = boundedStringList(input.sourceRefs, EXPERIENCE_LIMITS.maxSources);
@@ -821,12 +956,15 @@ export function createExperienceStore(options: ExperienceStoreOptions): Experien
 			const out = await mutate<ExperienceMutationResult>(expectedRevision, (document) => {
 				const matching = document.records.filter((record) => record.featureKey === featureKey);
 				const existing = document.records.find((record) => record.id === HASH(key).slice(0, 32));
-				if (existing?.observationIds.includes(observationId)) return { document, result: { classification: "duplicate" as const, record: existing }, noop: true };
-					const observations = new Set(matching.flatMap((record) => record.observationIds));
-					observations.add(observationId);
-					const jobs = new Set(matching.flatMap((record) => (record.jobIds.length ? record.jobIds : [record.jobId])));
-					jobs.add(jobId);
-					const status: ExperienceStatus = repairSucceeded || jobs.size >= 2 ? "verified" : "observed";
+				if (existing?.observationIds.includes(observationId))
+					return { document, result: { classification: "duplicate" as const, record: existing }, noop: true };
+				const observations = new Set(matching.flatMap((record) => record.observationIds));
+				observations.add(observationId);
+				const jobs = new Set(
+					matching.flatMap((record) => (record.jobIds.length ? record.jobIds : [record.jobId])),
+				);
+				jobs.add(jobId);
+				const status: ExperienceStatus = repairSucceeded || jobs.size >= 2 ? "verified" : "observed";
 				const record: ExperienceRecord = existing || {
 					id: HASH(key).slice(0, 32),
 					version: EXPERIENCE_VERSION,
@@ -842,25 +980,25 @@ export function createExperienceStore(options: ExperienceStoreOptions): Experien
 					outcome,
 					status,
 					observedAt,
-						observationIds: [],
-						observationCount: 0,
-						jobIds: [],
-						jobCount: 0,
-						failureSignature,
-						exitCode,
-						failedStep,
-						repair,
-						workflowSpecDiff,
-						resourceUse,
-							qcMetrics,
-							modelSummary,
-							modelGenerated: Boolean(modelSummary),
-							contractHash,
-							workflow,
-							workflowRevision,
-							scheduler,
-							schedulerJobId,
-							artifactRefs,
+					observationIds: [],
+					observationCount: 0,
+					jobIds: [],
+					jobCount: 0,
+					failureSignature,
+					exitCode,
+					failedStep,
+					repair,
+					workflowSpecDiff,
+					resourceUse,
+					qcMetrics,
+					modelSummary,
+					modelGenerated: Boolean(modelSummary),
+					contractHash,
+					workflow,
+					workflowRevision,
+					scheduler,
+					schedulerJobId,
+					artifactRefs,
 					provenance,
 					tags: sanitizedTags,
 					sourceRefs: sanitizedSources,
@@ -870,10 +1008,10 @@ export function createExperienceStore(options: ExperienceStoreOptions): Experien
 					createdAt: now(),
 					updatedAt: now(),
 				};
-					record.observationIds = [...observations].slice(-EXPERIENCE_LIMITS.maxObservationIds);
-					record.observationCount = Math.min(observations.size, EXPERIENCE_LIMITS.maxObservationIds);
-					record.jobIds = [...jobs].slice(-EXPERIENCE_LIMITS.maxJobIds);
-					record.jobCount = Math.min(jobs.size, EXPERIENCE_LIMITS.maxJobIds);
+				record.observationIds = [...observations].slice(-EXPERIENCE_LIMITS.maxObservationIds);
+				record.observationCount = Math.min(observations.size, EXPERIENCE_LIMITS.maxObservationIds);
+				record.jobIds = [...jobs].slice(-EXPERIENCE_LIMITS.maxJobIds);
+				record.jobCount = Math.min(jobs.size, EXPERIENCE_LIMITS.maxJobIds);
 				record.status = status;
 				record.updatedAt = now();
 				record.observedAt = observedAt;
@@ -881,49 +1019,83 @@ export function createExperienceStore(options: ExperienceStoreOptions): Experien
 				record.summary = summary;
 				record.provenance = provenance;
 				record.tags = sanitizedTags;
-					record.sourceRefs = sanitizedSources;
-					if (failureSignature) record.failureSignature = failureSignature;
-					if (input.exitCode !== undefined || observation.exitCode !== undefined) record.exitCode = exitCode;
-					if (failedStep) record.failedStep = failedStep;
-					if (repair) record.repair = repair;
-					if (input.workflowSpecDiff !== undefined || observation.workflowSpecDiff !== undefined) record.workflowSpecDiff = workflowSpecDiff;
-					if (input.resourceUse !== undefined || observation.resourceUse !== undefined) record.resourceUse = resourceUse;
-					if (input.qcMetrics !== undefined || input.qc !== undefined || observation.qcMetrics !== undefined || observation.qc !== undefined) record.qcMetrics = qcMetrics;
-					if (modelSummary) {
-						record.modelSummary = modelSummary;
-						record.modelGenerated = true;
-					}
-					if (contractHash) record.contractHash = contractHash;
-					if (workflow) record.workflow = workflow;
-					if (workflowRevision) record.workflowRevision = workflowRevision;
-					if (scheduler) record.scheduler = scheduler;
-					if (schedulerJobId) record.schedulerJobId = schedulerJobId;
-					if (artifactRefs.length) record.artifactRefs = artifactRefs;
+				record.sourceRefs = sanitizedSources;
+				if (failureSignature) record.failureSignature = failureSignature;
+				if (input.exitCode !== undefined || observation.exitCode !== undefined) record.exitCode = exitCode;
+				if (failedStep) record.failedStep = failedStep;
+				if (repair) record.repair = repair;
+				if (input.workflowSpecDiff !== undefined || observation.workflowSpecDiff !== undefined)
+					record.workflowSpecDiff = workflowSpecDiff;
+				if (input.resourceUse !== undefined || observation.resourceUse !== undefined)
+					record.resourceUse = resourceUse;
+				if (
+					input.qcMetrics !== undefined ||
+					input.qc !== undefined ||
+					observation.qcMetrics !== undefined ||
+					observation.qc !== undefined
+				)
+					record.qcMetrics = qcMetrics;
+				if (modelSummary) {
+					record.modelSummary = modelSummary;
+					record.modelGenerated = true;
+				}
+				if (contractHash) record.contractHash = contractHash;
+				if (workflow) record.workflow = workflow;
+				if (workflowRevision) record.workflowRevision = workflowRevision;
+				if (scheduler) record.scheduler = scheduler;
+				if (schedulerJobId) record.schedulerJobId = schedulerJobId;
+				if (artifactRefs.length) record.artifactRefs = artifactRefs;
 				if (!existing) document.records.unshift(record);
-				return { document, result: { classification: existing ? ("updated" as const) : ("new" as const), record } };
+				return {
+					document,
+					result: { classification: existing ? ("updated" as const) : ("new" as const), record },
+				};
 			});
 			return { ...out.result, revision: out.document.revision, record: out.result.record };
 		},
 		search: async (
 			query = "",
-			options: { limit?: number; includeObserved?: boolean; workflow?: string; hostId?: string; failureSignature?: string } = {},
+			options: {
+				limit?: number;
+				includeObserved?: boolean;
+				workflow?: string;
+				hostId?: string;
+				failureSignature?: string;
+			} = {},
 		): Promise<ExperienceSearchResult> => {
 			const document = await read();
 			const q = text(query, EXPERIENCE_LIMITS.maxQueryChars);
-			const limit = Math.min(EXPERIENCE_LIMITS.maxSearchResults, Math.max(1, Math.floor(options.limit || EXPERIENCE_LIMITS.maxSearchResults)));
+			const limit = Math.min(
+				EXPERIENCE_LIMITS.maxSearchResults,
+				Math.max(1, Math.floor(options.limit || EXPERIENCE_LIMITS.maxSearchResults)),
+			);
 			const workflowFilter = normalizeWorkflow(options.workflow);
 			const hostFilter = options.hostId === undefined ? null : hostKey(options.hostId);
 			const failureFilter = text(options.failureSignature, 240).toLowerCase() || null;
 			const records = document.records
-				.filter((record) => !workflowFilter || record.workflow?.toLowerCase() === workflowFilter.toLowerCase())
+				.filter(
+					(record) => !workflowFilter || record.workflow?.toLowerCase() === workflowFilter.toLowerCase(),
+				)
 				.filter((record) => !hostFilter || record.hostId === hostFilter)
 				.filter((record) => !failureFilter || record.failureSignature?.toLowerCase() === failureFilter)
 				.filter((record) => options.includeObserved !== false || record.status === "verified")
 				.map((record) => ({ record, score: scoreRecord(record, q) }))
 				.filter((hit) => !q || hit.score > 0)
-				.sort((left, right) => right.score - left.score || right.record.updatedAt.localeCompare(left.record.updatedAt) || left.record.id.localeCompare(right.record.id))
+				.sort(
+					(left, right) =>
+						right.score - left.score ||
+						right.record.updatedAt.localeCompare(left.record.updatedAt) ||
+						left.record.id.localeCompare(right.record.id),
+				)
 				.slice(0, limit);
-			return { revision: document.revision, query: q, records, navigationOnly: true, evidenceEligible: false, instructionEligible: false };
+			return {
+				revision: document.revision,
+				query: q,
+				records,
+				navigationOnly: true,
+				evidenceEligible: false,
+				instructionEligible: false,
+			};
 		},
 	};
 }
@@ -938,7 +1110,15 @@ export async function searchExperiences(
 		hostFilter?: string;
 	},
 ): Promise<ExperienceSearchResult> {
-	const { query = "", limit, includeObserved, workflow, failureSignature, hostFilter, ...storeOptions } = options;
+	const {
+		query = "",
+		limit,
+		includeObserved,
+		workflow,
+		failureSignature,
+		hostFilter,
+		...storeOptions
+	} = options;
 	const store = createExperienceStore(storeOptions);
 	return store.search(query, { limit, includeObserved, workflow, hostId: hostFilter, failureSignature });
 }

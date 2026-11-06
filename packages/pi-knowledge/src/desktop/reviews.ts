@@ -1,20 +1,20 @@
 import type { KnowledgeBinding } from "../core/config.js";
 import type { createKnowledgeWikiReview } from "../core/wiki-review.js";
-import type { KnowledgeReadOwner } from "./read-model.js";
 import type {
-	KnowledgeReviewsInput,
-	KnowledgeReviewsResult,
-	KnowledgePreviewReviewInput,
-	KnowledgePreviewReviewResult,
 	KnowledgeApplyReviewInput,
 	KnowledgeApplyReviewResult,
+	KnowledgePreviewReviewInput,
+	KnowledgePreviewReviewResult,
 	KnowledgeRejectReviewInput,
 	KnowledgeRejectReviewResult,
 	KnowledgeReviewHistoryInput,
 	KnowledgeReviewHistoryResult,
+	KnowledgeReviewsInput,
+	KnowledgeReviewsResult,
 	KnowledgeUndoReviewInput,
 	KnowledgeUndoReviewResult,
 } from "./contract.js";
+import type { KnowledgeReadOwner } from "./read-model.js";
 
 type Wiki = ReturnType<typeof createKnowledgeWikiReview>;
 export type ReviewService = {
@@ -65,10 +65,7 @@ export function createKnowledgeReviewModel(
 ) {
 	const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
 	return {
-		async reviews(
-			input: KnowledgeReviewsInput,
-			project: string | null,
-		): Promise<KnowledgeReviewsResult> {
+		async reviews(input: KnowledgeReviewsInput, project: string | null): Promise<KnowledgeReviewsResult> {
 			if (project === null) {
 				return owner.run(async () => {
 					const binding = await owner.config.readKnowledgeBinding({ fresh: true });
@@ -178,10 +175,7 @@ export function createKnowledgeReviewModel(
 				items: await owner.wiki.wikiHistory(service, project),
 			}));
 		},
-		undoReview(
-			input: KnowledgeUndoReviewInput,
-			project: string | null,
-		): Promise<KnowledgeUndoReviewResult> {
+		undoReview(input: KnowledgeUndoReviewInput, project: string | null): Promise<KnowledgeUndoReviewResult> {
 			requireWrite(true);
 			return bound(input.revision, project, (service) =>
 				owner.wiki.undoWikiUpdate(service, project, input.id, input.expectedHash),

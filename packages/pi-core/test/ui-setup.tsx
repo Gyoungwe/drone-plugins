@@ -29,14 +29,10 @@ window.DroneUI = {
 		useAgentActive: () => uiFixture.active,
 	},
 	stores: {
-		useSessionsStore: (
-			selector: (state: typeof uiFixture.sessions) => unknown,
-		) => selector(uiFixture.sessions),
-		useUiStore: (
-			selector: (state: {
-				openResourcePreview: typeof uiFixture.preview;
-			}) => unknown,
-		) => selector({ openResourcePreview: uiFixture.preview }),
+		useSessionsStore: (selector: (state: typeof uiFixture.sessions) => unknown) =>
+			selector(uiFixture.sessions),
+		useUiStore: (selector: (state: { openResourcePreview: typeof uiFixture.preview }) => unknown) =>
+			selector({ openResourcePreview: uiFixture.preview }),
 	},
 	helpers: {
 		openExternal: vi.fn(async () => {}),

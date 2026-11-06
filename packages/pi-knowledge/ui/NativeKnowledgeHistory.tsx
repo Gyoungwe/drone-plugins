@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { KnowledgeReviewHistoryResult } from "../src/desktop/contract.js";
-import type { createKnowledgeRuntimeStore } from "./runtime-store";
-import { Button } from "./runtime-api";
 import { useNativeKnowledgeText } from "./native-copy";
+import { Button } from "./runtime-api";
+import type { createKnowledgeRuntimeStore } from "./runtime-store";
 
 export function NativeKnowledgeHistory({
 	store,

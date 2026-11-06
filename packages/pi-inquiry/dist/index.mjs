@@ -4637,27 +4637,12 @@ __export(typebox_exports, {
 });
 
 // src/event-projection.ts
-var TERMINAL_COMPUTE_STATUSES = /* @__PURE__ */ new Set([
-  "succeeded",
-  "failed",
-  "cancelled",
-  "blocked",
-  "partial"
-]);
-var TERMINAL_TASK_STATUSES = /* @__PURE__ */ new Set([
-  "succeeded",
-  "failed",
-  "cancelled",
-  "blocked",
-  "partial",
-  "unknown"
-]);
+var TERMINAL_COMPUTE_STATUSES = /* @__PURE__ */ new Set(["succeeded", "failed", "cancelled", "blocked", "partial"]);
+var TERMINAL_TASK_STATUSES = /* @__PURE__ */ new Set(["succeeded", "failed", "cancelled", "blocked", "partial", "unknown"]);
 var SHA256 = /^[a-f0-9]{64}$/i;
 function asIso(value) {
-  if (typeof value === "number" && Number.isFinite(value))
-    return new Date(value).toISOString();
-  if (typeof value === "string" && Number.isFinite(Date.parse(value)))
-    return new Date(value).toISOString();
+  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
+  if (typeof value === "string" && Number.isFinite(Date.parse(value))) return new Date(value).toISOString();
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function outcomeFor(status, eventType) {
@@ -4735,10 +4720,7 @@ var InquiryEventProjector = class {
       ...event.runProvenance ? { runProvenance: event.runProvenance } : {}
     };
     await this.domain.recordAttempt(attempt);
-    await this.associateReceipts(
-      [`job:${event.jobId}`, `run:${executionId}`],
-      artifactIds
-    );
+    await this.associateReceipts([`job:${event.jobId}`, `run:${executionId}`], artifactIds);
   }
   /** Record a terminal task/workflow event and its verified artifact metadata. */
   async recordTaskTerminal(event) {
@@ -4782,10 +4764,7 @@ var InquiryEventProjector = class {
       ...event.runProvenance ? { runProvenance: event.runProvenance } : {}
     };
     await this.domain.recordAttempt(attempt);
-    await this.associateReceipts(
-      [`task:${event.taskId}`, `run:${executionId}`],
-      artifactIds
-    );
+    await this.associateReceipts([`task:${event.taskId}`, `run:${executionId}`], artifactIds);
   }
   /** Record provenance for host-local bash/kernel work without retaining source or output contents. */
   async recordLocalExecution(event) {
@@ -4823,17 +4802,12 @@ var InquiryEventProjector = class {
       ...event.turn !== void 0 ? { turn: event.turn } : {},
       runProvenance: event.runProvenance
     });
-    await this.associateReceipts(
-      [`tool:${event.id}`, `run:${event.id}`],
-      artifactIds
-    );
+    await this.associateReceipts([`tool:${event.id}`, `run:${event.id}`], artifactIds);
   }
   async recordDecision(event) {
     const eventProjectId = event.projectId ? this.canonicalProjectId(event.projectId) : void 0;
     if (eventProjectId && eventProjectId !== this.storage.projectId)
-      throw new Error(
-        `Inquiry decision belongs to another project: ${event.projectId}`
-      );
+      throw new Error(`Inquiry decision belongs to another project: ${event.projectId}`);
     const record = "schemaVersion" in event ? { ...event, projectId: this.storage.projectId } : {
       id: event.id,
       schemaVersion: 2,
@@ -4853,12 +4827,7 @@ var InquiryEventProjector = class {
     );
     await this.domain.recordDecision({
       ...record,
-      affectedArtifactIds: [
-        .../* @__PURE__ */ new Set([
-          ...record.affectedArtifactIds,
-          ...related.map((item) => item.id)
-        ])
-      ]
+      affectedArtifactIds: [.../* @__PURE__ */ new Set([...record.affectedArtifactIds, ...related.map((item) => item.id)])]
     });
   }
   async associateReceipts(basis, artifactIds) {
@@ -4928,12 +4897,7 @@ var InquiryEventProjector = class {
 // src/event-schema.ts
 var text = typebox_exports.String({ minLength: 1, maxLength: 4096 });
 var timestamp = typebox_exports.Union([typebox_exports.Number(), text]);
-var scalar = typebox_exports.Union([
-  typebox_exports.String({ maxLength: 8192 }),
-  typebox_exports.Number(),
-  typebox_exports.Boolean(),
-  typebox_exports.Null()
-]);
+var scalar = typebox_exports.Union([typebox_exports.String({ maxLength: 8192 }), typebox_exports.Number(), typebox_exports.Boolean(), typebox_exports.Null()]);
 var parameters = typebox_exports.Record(typebox_exports.String(), scalar);
 var provenance = typebox_exports.Object(
   {
@@ -4941,9 +4905,7 @@ var provenance = typebox_exports.Object(
     workflow: typebox_exports.Optional(text),
     modules: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 128 })),
     commandSummary: typebox_exports.Optional(text),
-    environment: typebox_exports.Optional(
-      typebox_exports.Record(typebox_exports.String(), typebox_exports.String({ maxLength: 8192 }))
-    )
+    environment: typebox_exports.Optional(typebox_exports.Record(typebox_exports.String(), typebox_exports.String({ maxLength: 8192 })))
   },
   { additionalProperties: false }
 );
@@ -4954,35 +4916,23 @@ var artifact = typebox_exports.Object(
     bytes: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
     size: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
     sha256: typebox_exports.Optional(typebox_exports.String({ pattern: "^[a-fA-F0-9]{64}$" })),
-    location: typebox_exports.Optional(
-      typebox_exports.Union([typebox_exports.Literal("local"), typebox_exports.Literal("remote")])
-    ),
+    location: typebox_exports.Optional(typebox_exports.Union([typebox_exports.Literal("local"), typebox_exports.Literal("remote")])),
     purpose: typebox_exports.Optional(
       typebox_exports.Union(
-        ["input", "draft", "intermediate", "deliverable", "evidence"].map(
-          (value) => typebox_exports.Literal(value)
-        )
+        ["input", "draft", "intermediate", "deliverable", "evidence"].map((value) => typebox_exports.Literal(value))
       )
     ),
     status: typebox_exports.Optional(
       typebox_exports.Union(
-        [
-          "valid",
-          "superseded",
-          "cleanup-candidate",
-          "archived",
-          "pending-review"
-        ].map((value) => typebox_exports.Literal(value))
+        ["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].map(
+          (value) => typebox_exports.Literal(value)
+        )
       )
     ),
     parentIds: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 256 })),
     runId: typebox_exports.Optional(text),
     sourceKind: typebox_exports.Optional(
-      typebox_exports.Union(
-        ["task", "run", "input", "tool", "workflow", "manual"].map(
-          (value) => typebox_exports.Literal(value)
-        )
-      )
+      typebox_exports.Union(["task", "run", "input", "tool", "workflow", "manual"].map((value) => typebox_exports.Literal(value)))
     ),
     sourceId: typebox_exports.Optional(text)
   },
@@ -5004,15 +4954,9 @@ var compute = typebox_exports.Object(
     ...common,
     jobId: text,
     type: typebox_exports.Union(
-      [
-        "created",
-        "submitted",
-        "status",
-        "logs",
-        "collected",
-        "cancelled",
-        "error"
-      ].map((value) => typebox_exports.Literal(value))
+      ["created", "submitted", "status", "logs", "collected", "cancelled", "error"].map(
+        (value) => typebox_exports.Literal(value)
+      )
     ),
     at: timestamp,
     status: typebox_exports.Optional(text),
@@ -5022,10 +4966,7 @@ var compute = typebox_exports.Object(
     startedAt: typebox_exports.Optional(timestamp),
     hostId: typebox_exports.Optional(text),
     manifest: typebox_exports.Optional(
-      typebox_exports.Object(
-        { entries: typebox_exports.Optional(artifacts) },
-        { additionalProperties: false }
-      )
+      typebox_exports.Object({ entries: typebox_exports.Optional(artifacts) }, { additionalProperties: false })
     )
   },
   { additionalProperties: false }
@@ -5044,10 +4985,7 @@ var task = typebox_exports.Object(
     startedAt: typebox_exports.Optional(timestamp),
     detail: typebox_exports.Optional(text),
     manifest: typebox_exports.Optional(
-      typebox_exports.Object(
-        { entries: typebox_exports.Optional(artifacts) },
-        { additionalProperties: false }
-      )
+      typebox_exports.Object({ entries: typebox_exports.Optional(artifacts) }, { additionalProperties: false })
     )
   },
   { additionalProperties: false }
@@ -5062,9 +5000,7 @@ var local = typebox_exports.Object(
     parameters,
     runProvenance: provenance,
     outcome: typebox_exports.Union(
-      ["running", "succeeded", "failed", "blocked", "unknown"].map(
-        (value) => typebox_exports.Literal(value)
-      )
+      ["running", "succeeded", "failed", "blocked", "unknown"].map((value) => typebox_exports.Literal(value))
     )
   },
   { additionalProperties: false }
@@ -5074,10 +5010,7 @@ var assertedEventWriteSchema = typebox_exports.Union([
     { action: typebox_exports.Literal("recordComputeEvent"), event: compute },
     { additionalProperties: false }
   ),
-  typebox_exports.Object(
-    { action: typebox_exports.Literal("recordTaskTerminal"), event: task },
-    { additionalProperties: false }
-  ),
+  typebox_exports.Object({ action: typebox_exports.Literal("recordTaskTerminal"), event: task }, { additionalProperties: false }),
   typebox_exports.Object(
     { action: typebox_exports.Literal("recordLocalExecution"), event: local },
     { additionalProperties: false }
@@ -8321,8 +8254,7 @@ function nonEmpty2(value) {
 }
 function validateArtifactRecord(record) {
   const errors = [];
-  if (record.schemaVersion !== 1 && record.schemaVersion !== 2)
-    errors.push("unsupported schema version");
+  if (record.schemaVersion !== 1 && record.schemaVersion !== 2) errors.push("unsupported schema version");
   if (!nonEmpty2(record.id)) errors.push("id is required");
   if (!nonEmpty2(record.projectId)) errors.push("projectId is required");
   if (!isSafeArtifactPath(record.path)) errors.push("path must be a safe project-relative path");
@@ -8335,12 +8267,9 @@ function validateArtifactRecord(record) {
     errors.push("invalid source kind");
   if (!["input", "draft", "intermediate", "deliverable", "evidence"].includes(record.purpose))
     errors.push("invalid purpose");
-  if (!["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].includes(
-    record.status
-  ))
+  if (!["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].includes(record.status))
     errors.push("invalid status");
-  if (new Set(record.parentIds).size !== record.parentIds.length)
-    errors.push("parentIds must be unique");
+  if (new Set(record.parentIds).size !== record.parentIds.length) errors.push("parentIds must be unique");
   if (record.parentIds.some((id) => !nonEmpty2(id))) errors.push("parentIds must be non-empty");
   if (record.pendingReviewDecisionIds?.some((id) => !nonEmpty2(id)) || record.pendingReviewDecisionIds && new Set(record.pendingReviewDecisionIds).size !== record.pendingReviewDecisionIds.length)
     errors.push("pendingReviewDecisionIds must be unique and non-empty");
@@ -8365,11 +8294,9 @@ function validateArtifactLineage(record, artifacts2) {
       errors.push(`missing parent artifact: ${parentId}`);
       continue;
     }
-    if (parent.projectId !== record.projectId)
-      errors.push(`parent belongs to another project: ${parentId}`);
+    if (parent.projectId !== record.projectId) errors.push(`parent belongs to another project: ${parentId}`);
     if (parent.id === record.id) errors.push("artifact cannot parent itself");
-    if (hasAncestor(parent.id, record.id, byId))
-      errors.push(`lineage cycle through parent: ${parentId}`);
+    if (hasAncestor(parent.id, record.id, byId)) errors.push(`lineage cycle through parent: ${parentId}`);
   }
   return [...new Set(errors)];
 }
@@ -8442,8 +8369,7 @@ function reproducibilityStatus(codeFingerprint, runProvenance) {
 // src/provenance.ts
 var MAX_PARENT_CHAIN = 20;
 function runProvenanceFor(artifact2, attempts) {
-  if (artifact2.runProvenance && Object.keys(artifact2.runProvenance).length > 0)
-    return artifact2.runProvenance;
+  if (artifact2.runProvenance && Object.keys(artifact2.runProvenance).length > 0) return artifact2.runProvenance;
   const candidate = attempts.find(
     (attempt) => attempt.runProvenance && Object.keys(attempt.runProvenance).length > 0
   );
@@ -8600,9 +8526,7 @@ var InquiryService = class {
     const next = existing ? {
       ...record,
       ...existing,
-      affectedArtifactIds: [
-        .../* @__PURE__ */ new Set([...existing.affectedArtifactIds, ...record.affectedArtifactIds])
-      ]
+      affectedArtifactIds: [.../* @__PURE__ */ new Set([...existing.affectedArtifactIds, ...record.affectedArtifactIds])]
     } : record;
     await this.storage.decisions.put(next);
     if (next.status === "revoked") await this.markPendingReview(next);
@@ -8610,9 +8534,7 @@ var InquiryService = class {
   async listDecisions(projectId = this.storage.projectId) {
     if (projectId !== this.storage.projectId)
       throw new Error("Decision project does not match inquiry project");
-    return [...await this.storage.decisions.list()].sort(
-      (a, b) => b.createdAt.localeCompare(a.createdAt)
-    );
+    return [...await this.storage.decisions.list()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
   /**
    * Revocation is deliberately a ledger-only operation. It never calls a
@@ -8661,9 +8583,7 @@ var InquiryService = class {
       await this.storage.artifacts.put({
         ...artifact2,
         status: "pending-review",
-        pendingReviewDecisionIds: [
-          .../* @__PURE__ */ new Set([...artifact2.pendingReviewDecisionIds ?? [], decision.id])
-        ],
+        pendingReviewDecisionIds: [.../* @__PURE__ */ new Set([...artifact2.pendingReviewDecisionIds ?? [], decision.id])],
         updatedAt: decision.revokedAt ?? (/* @__PURE__ */ new Date()).toISOString()
       });
     }
@@ -8712,17 +8632,14 @@ var InquiryService = class {
     return this.storage.snapshot();
   }
   async artifactProvenance(artifactId) {
-    if (typeof artifactId !== "string" || !artifactId.trim() || artifactId.length > 512 || [...artifactId].some(
-      (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127
-    ))
+    if (typeof artifactId !== "string" || !artifactId.trim() || artifactId.length > 512 || [...artifactId].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))
       return void 0;
     return artifactProvenance(await this.storage.snapshot(), artifactId);
   }
   async rerunArtifact(artifactId) {
     const provenance2 = await this.artifactProvenance(artifactId);
     if (!provenance2) throw new Error(`Artifact not found: ${artifactId}`);
-    if (provenance2.reproducibility !== "reproducible")
-      throw new Error("Artifact is not reproducible");
+    if (provenance2.reproducibility !== "reproducible") throw new Error("Artifact is not reproducible");
     if (!this.rerunHandler) throw new Error("Artifact rerun is unavailable");
     const existing = [...await this.storage.reruns.list()].filter((item) => item.sourceArtifactId === provenance2.artifact.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     if (existing && (existing.status === "submitted" || existing.status === "running"))
@@ -8856,11 +8773,7 @@ var intentSchema = typebox_exports.Object(
     previousVersion: version,
     candidateVersion: sha,
     operation: typebox_exports.String({ minLength: 1 }),
-    status: typebox_exports.Union([
-      typebox_exports.Literal("pending"),
-      typebox_exports.Literal("committed"),
-      typebox_exports.Literal("not-committed")
-    ])
+    status: typebox_exports.Union([typebox_exports.Literal("pending"), typebox_exports.Literal("committed"), typebox_exports.Literal("not-committed")])
   },
   { additionalProperties: false }
 );
@@ -8886,11 +8799,7 @@ function parseInquiryBinding(result, workspaceId) {
 var inquiryBindingPath = () => "inquiry-binding.json";
 var bytes = (value) => new Uint8Array(Buffer.from(value, "base64"));
 var digest = (value) => createHash("sha256").update(value).digest("hex");
-var sidecars = [
-  "ledger.sqlite-wal",
-  "ledger.sqlite-shm",
-  "ledger.sqlite-journal"
-];
+var sidecars = ["ledger.sqlite-wal", "ledger.sqlite-shm", "ledger.sqlite-journal"];
 var InquiryRecoveryRequired = class extends Error {
   code = "INQUIRY_NEEDS_RECOVERY";
 };
@@ -8912,10 +8821,9 @@ var InquiryLedgerOwner = class {
     const result = this.pending.then(() => {
       if (this.stopped) throw new Error("Inquiry owner is disposed");
       if (this.cleanupFailure)
-        throw new Error(
-          "Inquiry cleanup failed; explicit recovery is required",
-          { cause: this.cleanupFailure }
-        );
+        throw new Error("Inquiry cleanup failed; explicit recovery is required", {
+          cause: this.cleanupFailure
+        });
       return operation();
     });
     this.pending = result.then(
@@ -8930,8 +8838,7 @@ var InquiryLedgerOwner = class {
         root: this.root.handle,
         path
       });
-      if (value.kind !== "missing")
-        throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
+      if (value.kind !== "missing") throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
     }
     const raw = await this.capabilities.call("state.readBinary", {
       root: this.root.handle,
@@ -8942,8 +8849,7 @@ var InquiryLedgerOwner = class {
         root: this.root.handle,
         path
       });
-      if (value.kind !== "missing")
-        throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
+      if (value.kind !== "missing") throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
     }
     return raw;
   }
@@ -8970,9 +8876,7 @@ var InquiryLedgerOwner = class {
   }
   async openCurrent() {
     if (this.binding.value.intent?.status === "pending")
-      throw new InquiryRecoveryRequired(
-        "A prior Inquiry write requires explicit SHA reconciliation"
-      );
+      throw new InquiryRecoveryRequired("A prior Inquiry write requires explicit SHA reconciliation");
     const raw = await this.readRaw();
     if (raw.version !== this.binding.value.headVersion)
       throw new InquiryRecoveryRequired(
@@ -8986,14 +8890,10 @@ var InquiryLedgerOwner = class {
     return this.current;
   }
   async snapshot() {
-    return this.serialize(
-      async () => new InquiryService(await this.openCurrent()).readOnlyState()
-    );
+    return this.serialize(async () => new InquiryService(await this.openCurrent()).readOnlyState());
   }
   async read(operation) {
-    return this.serialize(
-      async () => operation(new InquiryService(await this.openCurrent()))
-    );
+    return this.serialize(async () => operation(new InquiryService(await this.openCurrent())));
   }
   async backup(raw) {
     const original = this.binding.value.originalVersion;
@@ -9005,15 +8905,11 @@ var InquiryLedgerOwner = class {
     });
     if (stored.kind === "value") {
       if (stored.version !== original)
-        throw new InquiryRecoveryRequired(
-          "Original Inquiry backup bytes do not match their recorded SHA"
-        );
+        throw new InquiryRecoveryRequired("Original Inquiry backup bytes do not match their recorded SHA");
       return;
     }
     if (raw.kind !== "value" || raw.version !== original)
-      throw new InquiryRecoveryRequired(
-        "Original Inquiry backup is missing after the ledger changed"
-      );
+      throw new InquiryRecoveryRequired("Original Inquiry backup is missing after the ledger changed");
     const copied = await this.capabilities.call("state.writeBinary", {
       root: this.root.handle,
       path,
@@ -9044,10 +8940,7 @@ var InquiryLedgerOwner = class {
       const current = await this.openCurrent();
       const raw = await this.readRaw();
       signal.throwIfAborted();
-      const staged = this.engine.open(
-        this.binding.value.projectId,
-        await current.exportBytes()
-      );
+      const staged = this.engine.open(this.binding.value.projectId, await current.exportBytes());
       return this.withStaged(staged, async () => {
         const result = await mutate(new InquiryService(staged));
         signal.throwIfAborted();
@@ -9079,9 +8972,7 @@ var InquiryLedgerOwner = class {
           signal
         );
         if (committed.kind !== "value" || committed.version !== candidateVersion)
-          throw new InquiryRecoveryRequired(
-            "Inquiry write has no verified candidate SHA readback"
-          );
+          throw new InquiryRecoveryRequired("Inquiry write has no verified candidate SHA readback");
         signal.throwIfAborted();
         await this.writeBinding({
           ...this.binding.value,
@@ -9099,18 +8990,13 @@ var InquiryLedgerOwner = class {
       signal.throwIfAborted();
       await this.reserve();
       const intent = this.binding.value.intent;
-      if (intent?.status !== "pending")
-        return { state: "no-pending-write" };
+      if (intent?.status !== "pending") return { state: "no-pending-write" };
       const raw = await this.readRaw();
       const state = raw.version === intent.candidateVersion ? "committed" : raw.version === intent.previousVersion ? "not-committed" : null;
       if (!state)
-        throw new InquiryRecoveryRequired(
-          "Inquiry bytes match neither the previous nor the candidate SHA"
-        );
+        throw new InquiryRecoveryRequired("Inquiry bytes match neither the previous nor the candidate SHA");
       if (raw.kind === "value" && this.engine.inspect(bytes(raw.base64)).projectId !== this.binding.value.projectId)
-        throw new InquiryRecoveryRequired(
-          "Recovered Inquiry bytes belong to another project"
-        );
+        throw new InquiryRecoveryRequired("Recovered Inquiry bytes belong to another project");
       signal.throwIfAborted();
       await this.writeBinding({
         ...this.binding.value,
@@ -9127,12 +9013,9 @@ var InquiryLedgerOwner = class {
       signal.throwIfAborted();
       await this.reserve();
       if (this.binding.value.intent?.status === "pending")
-        throw new InquiryRecoveryRequired(
-          "Reconcile the pending write before restoring"
-        );
+        throw new InquiryRecoveryRequired("Reconcile the pending write before restoring");
       const version2 = this.binding.value.originalVersion;
-      if (version2 === null)
-        throw new Error("This Inquiry ledger had no original SQLite file");
+      if (version2 === null) throw new Error("This Inquiry ledger had no original SQLite file");
       const backup = await this.capabilities.call("state.readBinary", {
         root: this.root.handle,
         path: `ledger.sqlite.pre-plugin-${version2}.bak`
@@ -9141,9 +9024,7 @@ var InquiryLedgerOwner = class {
         throw new Error("Original Inquiry backup is missing or invalid");
       const raw = await this.readRaw();
       if (raw.version !== this.binding.value.headVersion)
-        throw new InquiryRecoveryRequired(
-          "Inquiry bytes changed before restore"
-        );
+        throw new InquiryRecoveryRequired("Inquiry bytes changed before restore");
       const intent = {
         previousVersion: raw.version,
         candidateVersion: version2,
@@ -9164,9 +9045,7 @@ var InquiryLedgerOwner = class {
         signal
       );
       if (restored.kind !== "value" || restored.version !== version2)
-        throw new InquiryRecoveryRequired(
-          "Original Inquiry restore has no SHA readback"
-        );
+        throw new InquiryRecoveryRequired("Original Inquiry restore has no SHA readback");
       signal.throwIfAborted();
       await this.writeBinding({
         ...this.binding.value,
@@ -9204,11 +9083,8 @@ function configureInquirySqlite(database) {
   database.exec("PRAGMA synchronous = FULL");
 }
 function readInquirySqliteMetadata(database) {
-  const rows = database.prepare(
-    "SELECT project_id, schema_version, revision, updated_at FROM inquiry_meta"
-  ).all();
-  if (rows.length !== 1)
-    throw new Error("Inquiry SQLite metadata must contain exactly one project");
+  const rows = database.prepare("SELECT project_id, schema_version, revision, updated_at FROM inquiry_meta").all();
+  if (rows.length !== 1) throw new Error("Inquiry SQLite metadata must contain exactly one project");
   const meta = rows[0];
   if (meta.schema_version !== INQUIRY_SCHEMA_VERSION && meta.schema_version !== LEGACY_INQUIRY_SCHEMA_VERSION || !Number.isSafeInteger(meta.revision) || meta.revision < 0 || typeof meta.updated_at !== "string")
     throw new Error("Invalid inquiry SQLite metadata");
@@ -9223,8 +9099,7 @@ var CanonicalSqliteInquiryStorage = class {
       if (tables.some((table) => table.name === "inquiry_meta")) {
         if (readInquirySqliteMetadata(database).project_id !== projectId)
           throw new Error("Inquiry SQLite ledger belongs to another project");
-      } else if (tables.length)
-        throw new Error("Unrecognized Inquiry SQLite schema");
+      } else if (tables.length) throw new Error("Unrecognized Inquiry SQLite schema");
       configureInquirySqlite(database);
       this.database.exec(`
 			CREATE TABLE IF NOT EXISTS inquiry_meta (
@@ -9277,9 +9152,7 @@ var CanonicalSqliteInquiryStorage = class {
       if (meta && meta.schema_version === LEGACY_INQUIRY_SCHEMA_VERSION) {
         this.database.exec("BEGIN IMMEDIATE");
         try {
-          this.database.exec(
-            "ALTER TABLE inquiry_meta RENAME TO inquiry_meta_v1"
-          );
+          this.database.exec("ALTER TABLE inquiry_meta RENAME TO inquiry_meta_v1");
           this.database.exec(`
 					CREATE TABLE inquiry_meta (
 						project_id TEXT PRIMARY KEY NOT NULL,
@@ -9298,10 +9171,7 @@ var CanonicalSqliteInquiryStorage = class {
           try {
             this.database.exec("ROLLBACK");
           } catch (rollbackError) {
-            throw new AggregateError(
-              [error, rollbackError],
-              "Inquiry migration and rollback failed"
-            );
+            throw new AggregateError([error, rollbackError], "Inquiry migration and rollback failed");
           }
           throw error;
         }
@@ -9311,38 +9181,17 @@ var CanonicalSqliteInquiryStorage = class {
           "INSERT INTO inquiry_meta (project_id, schema_version, revision, updated_at) VALUES (?, ?, 0, ?)"
         ).run(projectId, INQUIRY_SCHEMA_VERSION, (/* @__PURE__ */ new Date(0)).toISOString());
       }
-      this.artifacts = new SqliteLedgerCollection(
-        this,
-        "artifacts"
-      );
-      this.findings = new SqliteLedgerCollection(
-        this,
-        "findings"
-      );
-      this.questions = new SqliteLedgerCollection(
-        this,
-        "questions"
-      );
-      this.attempts = new SqliteLedgerCollection(
-        this,
-        "attempts"
-      );
-      this.decisions = new SqliteLedgerCollection(
-        this,
-        "decisions"
-      );
-      this.reruns = new SqliteLedgerCollection(
-        this,
-        "reruns"
-      );
+      this.artifacts = new SqliteLedgerCollection(this, "artifacts");
+      this.findings = new SqliteLedgerCollection(this, "findings");
+      this.questions = new SqliteLedgerCollection(this, "questions");
+      this.attempts = new SqliteLedgerCollection(this, "attempts");
+      this.decisions = new SqliteLedgerCollection(this, "decisions");
+      this.reruns = new SqliteLedgerCollection(this, "reruns");
     } catch (error) {
       try {
         database.close();
       } catch (closeError) {
-        throw new AggregateError(
-          [error, closeError],
-          "Inquiry initialization and close failed"
-        );
+        throw new AggregateError([error, closeError], "Inquiry initialization and close failed");
       }
       throw error;
     }
@@ -9363,9 +9212,7 @@ var CanonicalSqliteInquiryStorage = class {
     const meta = readInquirySqliteMetadata(this.database);
     if (!meta || meta.project_id !== this.projectId || meta.schema_version !== INQUIRY_SCHEMA_VERSION)
       throw new Error("Invalid inquiry SQLite metadata");
-    const read = (key) => this.database.prepare(
-      `SELECT payload FROM ${quotedTable(key)} WHERE project_id = ? ORDER BY id ASC`
-    ).all(this.projectId).map((row) => JSON.parse(row.payload));
+    const read = (key) => this.database.prepare(`SELECT payload FROM ${quotedTable(key)} WHERE project_id = ? ORDER BY id ASC`).all(this.projectId).map((row) => JSON.parse(row.payload));
     return {
       schemaVersion: INQUIRY_SCHEMA_VERSION,
       projectId: this.projectId,
@@ -9390,18 +9237,13 @@ var CanonicalSqliteInquiryStorage = class {
         this.database.prepare(
           `INSERT INTO ${quotedTable(key)} (id, project_id, payload, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, payload = excluded.payload, updated_at = excluded.updated_at`
         ).run(record.id, this.projectId, JSON.stringify(record), updatedAt);
-        this.database.prepare(
-          "UPDATE inquiry_meta SET revision = revision + 1, updated_at = ? WHERE project_id = ?"
-        ).run(updatedAt, this.projectId);
+        this.database.prepare("UPDATE inquiry_meta SET revision = revision + 1, updated_at = ? WHERE project_id = ?").run(updatedAt, this.projectId);
         this.database.exec("COMMIT");
       } catch (error) {
         try {
           this.database.exec("ROLLBACK");
         } catch (rollbackError) {
-          throw new AggregateError(
-            [error, rollbackError],
-            "Inquiry write and rollback failed"
-          );
+          throw new AggregateError([error, rollbackError], "Inquiry write and rollback failed");
         }
         throw error;
       }
@@ -9411,20 +9253,12 @@ var CanonicalSqliteInquiryStorage = class {
     if (!record.id || record.projectId !== this.projectId || record.schemaVersion !== INQUIRY_SCHEMA_VERSION && record.schemaVersion !== LEGACY_INQUIRY_SCHEMA_VERSION)
       throw new Error(`Invalid ${key.slice(0, -1)} record`);
     if (key === "artifacts") {
-      const errors = validateArtifactLineage(
-        record,
-        current.artifacts
-      );
-      if (errors.length)
-        throw new Error(`Invalid artifact record: ${errors.join("; ")}`);
+      const errors = validateArtifactLineage(record, current.artifacts);
+      if (errors.length) throw new Error(`Invalid artifact record: ${errors.join("; ")}`);
     }
     if (key === "findings") {
-      const errors = validateFindingReferences(
-        record,
-        current
-      );
-      if (errors.length)
-        throw new Error(`Invalid finding record: ${errors.join("; ")}`);
+      const errors = validateFindingReferences(record, current);
+      if (errors.length) throw new Error(`Invalid finding record: ${errors.join("; ")}`);
     }
     if (key === "decisions") {
       const decision = record;
@@ -9459,10 +9293,7 @@ var SqliteLedgerCollection = class {
     return snapshot[this.key] ?? [];
   }
   async put(record) {
-    await this.owner.update(
-      this.key,
-      record
-    );
+    await this.owner.update(this.key, record);
   }
 };
 
@@ -9550,12 +9381,8 @@ async function createInquiryWasmEngine(wasmBinary) {
       }
     },
     open(projectId, bytes2) {
-      if (!projectId.trim())
-        throw new Error("Inquiry projectId cannot be empty");
-      return new WasmInquiryStorage(
-        projectId,
-        new WasmConnection(new SQL.Database(bytes2))
-      );
+      if (!projectId.trim()) throw new Error("Inquiry projectId cannot be empty");
+      return new WasmInquiryStorage(projectId, new WasmConnection(new SQL.Database(bytes2)));
     }
   };
 }
@@ -9568,14 +9395,8 @@ var readMetadata = {
 var writeMetadata = { drone: { capabilities: ["research", "provenance"] } };
 var object = typebox_exports.Record(typebox_exports.String(), typebox_exports.Unknown());
 var readSchema = typebox_exports.Union([
-  typebox_exports.Object(
-    { action: typebox_exports.Literal("status") },
-    { additionalProperties: false }
-  ),
-  typebox_exports.Object(
-    { action: typebox_exports.Literal("inspect"), root: name },
-    { additionalProperties: false }
-  ),
+  typebox_exports.Object({ action: typebox_exports.Literal("status") }, { additionalProperties: false }),
+  typebox_exports.Object({ action: typebox_exports.Literal("inspect"), root: name }, { additionalProperties: false }),
   typebox_exports.Object(
     {
       action: typebox_exports.Union([
@@ -9659,10 +9480,7 @@ var writeSchema = typebox_exports.Union([
   ),
   typebox_exports.Object(
     {
-      action: typebox_exports.Union([
-        typebox_exports.Literal("reconcile"),
-        typebox_exports.Literal("restoreOriginal")
-      ])
+      action: typebox_exports.Union([typebox_exports.Literal("reconcile"), typebox_exports.Literal("restoreOriginal")])
     },
     { additionalProperties: false }
   )
@@ -9673,16 +9491,12 @@ async function createInquiryRuntimeWithEngine(context, engine) {
   const roots = () => capabilities.call("roots.describe", null);
   const caller = () => capabilities.call("caller.scope", null);
   const workspace = (scope) => {
-    if (scope.kind === "application")
-      throw new Error("Select an actual workspace/session for Inquiry");
+    if (scope.kind === "application") throw new Error("Select an actual workspace/session for Inquiry");
     return scope;
   };
   const selected = (available, handle, kind) => {
-    const root = available.find(
-      (root2) => root2.handle === handle && root2.kind === kind
-    );
-    if (!root)
-      throw new Error("Inquiry root was not granted for this activation");
+    const root = available.find((root2) => root2.handle === handle && root2.kind === kind);
+    if (!root) throw new Error("Inquiry root was not granted for this activation");
     return root;
   };
   const serialize = (workspaceId, execute) => {
@@ -9713,24 +9527,16 @@ async function createInquiryRuntimeWithEngine(context, engine) {
         found.push({ root: root.handle, path, value, version: result.version });
     }
     if (found.length > 1)
-      throw new Error(
-        "Multiple approved Inquiry bindings match this workspace; no first-root adoption"
-      );
+      throw new Error("Multiple approved Inquiry bindings match this workspace; no first-root adoption");
     return found[0] ?? null;
   };
   const inspect = async (root) => {
-    for (const path of [
-      "ledger.sqlite-wal",
-      "ledger.sqlite-shm",
-      "ledger.sqlite-journal"
-    ])
+    for (const path of ["ledger.sqlite-wal", "ledger.sqlite-shm", "ledger.sqlite-journal"])
       if ((await capabilities.call("state.readBinary", {
         root: root.handle,
         path
       })).kind !== "missing")
-        throw new Error(
-          `Inquiry SQLite sidecar must be closed before import: ${path}`
-        );
+        throw new Error(`Inquiry SQLite sidecar must be closed before import: ${path}`);
     const raw = await capabilities.call("state.readBinary", {
       root: root.handle,
       path: "ledger.sqlite"
@@ -9742,25 +9548,17 @@ async function createInquiryRuntimeWithEngine(context, engine) {
   };
   const owned = async (scope, available, reconcileMetadata = false) => {
     const binding = await lookup(scope, available);
-    if (!binding)
-      throw new Error("Inquiry workspace needs an explicit root binding");
+    if (!binding) throw new Error("Inquiry workspace needs an explicit root binding");
     const root = available.find(
       (root2) => root2.kind === "binary-state" && root2.path === binding.value.binaryPath
     );
-    if (!root)
-      throw new Error(
-        "Reselect the original bound Inquiry directory; saved paths grant no access"
-      );
+    if (!root) throw new Error("Reselect the original bound Inquiry directory; saved paths grant no access");
     let current = owners.get(scope.workspaceId);
     if (current && (current.root !== root.handle || current.metadataRoot !== binding.root))
-      throw new Error(
-        "Inquiry workspace already has another active root owner"
-      );
+      throw new Error("Inquiry workspace already has another active root owner");
     if (current && current.owner.bindingVersion !== binding.version) {
       if (!reconcileMetadata)
-        throw new Error(
-          "Inquiry metadata changed; explicit reconciliation is required"
-        );
+        throw new Error("Inquiry metadata changed; explicit reconciliation is required");
       await current.owner.dispose();
       owners.delete(scope.workspaceId);
       current = void 0;
@@ -9801,9 +9599,7 @@ async function createInquiryRuntimeWithEngine(context, engine) {
     const actual = workspace(scope);
     return serialize(actual.workspaceId, async () => {
       if (input.action === "inspect") {
-        const { raw, metadata } = await inspect(
-          selected(available, input.root, "binary-state")
-        );
+        const { raw, metadata } = await inspect(selected(available, input.root, "binary-state"));
         return {
           kind: raw.kind,
           version: raw.version,
@@ -9834,8 +9630,7 @@ async function createInquiryRuntimeWithEngine(context, engine) {
   };
   const write = async (input, signal) => {
     const scope = await caller();
-    if (scope.kind !== "session")
-      throw new Error("Inquiry writes require the actual creator SDK session");
+    if (scope.kind !== "session") throw new Error("Inquiry writes require the actual creator SDK session");
     const available = await roots();
     return serialize(scope.workspaceId, async () => {
       signal.throwIfAborted();
@@ -9851,32 +9646,19 @@ async function createInquiryRuntimeWithEngine(context, engine) {
             throw new Error("Inquiry is already bound to another directory");
           return { bound: true, projectId: existing.value.projectId };
         }
-        await capabilities.call(
-          "state.reserve",
-          { root: root.handle, path: "" },
-          signal
-        );
-        await capabilities.call(
-          "state.reserve",
-          { root: metadataRoot.handle, path: "" },
-          signal
-        );
+        await capabilities.call("state.reserve", { root: root.handle, path: "" }, signal);
+        await capabilities.call("state.reserve", { root: metadataRoot.handle, path: "" }, signal);
         if (owners.has(scope.workspaceId))
-          throw new Error(
-            "Active Inquiry binding disappeared; explicit recovery is required"
-          );
+          throw new Error("Active Inquiry binding disappeared; explicit recovery is required");
         const { raw, metadata } = await inspect(root);
         if (raw.kind === "value" && !input.acknowledgeExistingData)
-          throw new Error(
-            "Existing SQLite data requires explicit acknowledgment"
-          );
+          throw new Error("Existing SQLite data requires explicit acknowledgment");
         const path = inquiryBindingPath();
         const previous = await capabilities.call("state.readJson", {
           root: metadataRoot.handle,
           path
         });
-        if (previous.kind !== "missing")
-          throw new Error("Inquiry binding appeared during adoption");
+        if (previous.kind !== "missing") throw new Error("Inquiry binding appeared during adoption");
         const value2 = {
           schemaVersion: 1,
           workspaceId: scope.workspaceId,
@@ -9904,8 +9686,7 @@ async function createInquiryRuntimeWithEngine(context, engine) {
       const owner = await owned(scope, available, input.action === "reconcile");
       let value;
       if (input.action === "reconcile") value = await owner.reconcile(signal);
-      else if (input.action === "restoreOriginal")
-        value = await owner.restoreOriginal(signal);
+      else if (input.action === "restoreOriginal") value = await owner.restoreOriginal(signal);
       else
         value = await owner.write(
           input.action,
@@ -9930,34 +9711,22 @@ async function createInquiryRuntimeWithEngine(context, engine) {
                   service.storage,
                   service,
                   (value2) => value2 ?? ""
-                ).recordLocalExecution(
-                  input.event
-                );
+                ).recordLocalExecution(input.event);
                 return null;
               case "recordArtifact":
-                await service.recordArtifact(
-                  input.record
-                );
+                await service.recordArtifact(input.record);
                 return null;
               case "recordFinding":
-                await service.recordFinding(
-                  input.record
-                );
+                await service.recordFinding(input.record);
                 return null;
               case "recordQuestion":
-                await service.recordQuestion(
-                  input.record
-                );
+                await service.recordQuestion(input.record);
                 return null;
               case "recordAttempt":
-                await service.recordAttempt(
-                  input.record
-                );
+                await service.recordAttempt(input.record);
                 return null;
               case "recordDecision":
-                await service.recordDecision(
-                  input.record
-                );
+                await service.recordDecision(input.record);
                 return null;
               case "revokeDecision":
                 return service.revokeDecision(input.id, input.reason);
@@ -9966,10 +9735,7 @@ async function createInquiryRuntimeWithEngine(context, engine) {
               case "reviewDecisionArtifacts":
                 return service.reviewDecisionArtifacts(input.id, input.reason);
               case "associateDecisionArtifacts":
-                await service.associateDecisionArtifacts(
-                  input.id,
-                  input.artifactIds
-                );
+                await service.associateDecisionArtifacts(input.id, input.artifactIds);
                 return null;
               case "markRerunRunning":
                 return await service.markRerunRunning(input.id) ?? null;
@@ -9995,15 +9761,11 @@ async function createInquiryRuntimeWithEngine(context, engine) {
           name: "inquiry_read",
           label: "Inquiry \xB7 read",
           description: "Read only this actual workspace\u2019s explicitly bound Inquiry ledger. Imported/asserted records are not host provenance proofs.",
-          parameters: typebox_exports.Object(
-            { request: readSchema },
-            { additionalProperties: false }
-          ),
+          parameters: typebox_exports.Object({ request: readSchema }, { additionalProperties: false }),
           annotations: { readOnlyHint: true },
           ...readMetadata,
           async execute(_id, input) {
-            if (disposed)
-              throw new Error("Inquiry native projection is disposed");
+            if (disposed) throw new Error("Inquiry native projection is disposed");
             const value = await read(input.request);
             return {
               content: [{ type: "text", text: JSON.stringify(value) }],
@@ -10015,14 +9777,10 @@ async function createInquiryRuntimeWithEngine(context, engine) {
           name: "inquiry_write",
           label: "Inquiry \xB7 write",
           description: "Explicitly bind, update, reconcile or restore this workspace\u2019s original Inquiry SQLite ledger. Every host write still requires its own approved root, version and caller checks.",
-          parameters: typebox_exports.Object(
-            { request: writeSchema },
-            { additionalProperties: false }
-          ),
+          parameters: typebox_exports.Object({ request: writeSchema }, { additionalProperties: false }),
           ...writeMetadata,
           async execute(_id, input, signal) {
-            if (disposed)
-              throw new Error("Inquiry native projection is disposed");
+            if (disposed) throw new Error("Inquiry native projection is disposed");
             const value = await write(input.request, signal ?? context.signal);
             return {
               content: [{ type: "text", text: JSON.stringify(value) }],
@@ -10055,9 +9813,7 @@ async function createInquiryRuntimeWithEngine(context, engine) {
     async dispose() {
       stopped = true;
       await Promise.all(queues.values());
-      const results = await Promise.allSettled(
-        [...owners.values()].map((value) => value.owner.dispose())
-      );
+      const results = await Promise.allSettled([...owners.values()].map((value) => value.owner.dispose()));
       const failures = results.filter((result) => result.status === "rejected");
       if (failures.length)
         throw new AggregateError(
@@ -10070,9 +9826,7 @@ async function createInquiryRuntimeWithEngine(context, engine) {
 }
 var createInquiryRuntime = async (context) => createInquiryRuntimeWithEngine(
   context,
-  await createInquiryWasmEngine(
-    await readFile(new URL("./sql-wasm.wasm", import.meta.url))
-  )
+  await createInquiryWasmEngine(await readFile(new URL("./sql-wasm.wasm", import.meta.url)))
 );
 
 // src/native-runtime.ts
@@ -10089,8 +9843,7 @@ async function nativeInquiryExtension(pi, options = {}) {
       current = await lstat(root.path);
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
-      if (root.identity)
-        throw new Error("Native Inquiry root disappeared", { cause: error });
+      if (root.identity) throw new Error("Native Inquiry root disappeared", { cause: error });
       return;
     }
     if (!current.isDirectory() || current.isSymbolicLink())
@@ -10148,17 +9901,12 @@ ${detail}`,
       await verify(caller.root);
       return;
     }
-    for (const directory of [
-      join(caller.root.workspace, "runs"),
-      caller.root.path
-    ]) {
+    for (const directory of [join(caller.root.workspace, "runs"), caller.root.path]) {
       caller.signal.throwIfAborted();
       try {
         const existing = await lstat(directory);
         if (!existing.isDirectory() || existing.isSymbolicLink())
-          throw new Error(
-            "Native Inquiry state directory is not a real directory"
-          );
+          throw new Error("Native Inquiry state directory is not a real directory");
       } catch (error) {
         if (error.code !== "ENOENT") throw error;
         await mkdir(directory, { mode: 448 });
@@ -10198,8 +9946,7 @@ ${detail}`,
   const capabilities = {
     async call(name2, input, signal) {
       const parent = calls.getStore();
-      if (!parent)
-        throw new Error("Native Inquiry capability has no actual caller");
+      if (!parent) throw new Error("Native Inquiry capability has no actual caller");
       const caller = signal ? { ...parent, signal: AbortSignal.any([parent.signal, signal]) } : parent;
       await live(caller);
       if (name2 === "caller.scope") return { ...caller.scope };
@@ -10220,12 +9967,8 @@ ${detail}`,
         ];
       const request = input;
       if (name2 === "state.reserve") {
-        if (!["native-inquiry-json", "native-inquiry-binary"].includes(
-          request.root
-        ) || request.path !== "")
-          throw new Error(
-            "Native Inquiry reserves only the selected ledger directory"
-          );
+        if (!["native-inquiry-json", "native-inquiry-binary"].includes(request.root) || request.path !== "")
+          throw new Error("Native Inquiry reserves only the selected ledger directory");
         await approve(
           caller,
           "Reserve Inquiry writer",
@@ -10233,9 +9976,7 @@ ${detail}`,
         );
         await ensure(caller);
         await live(caller);
-        reservations.reserve("state-writers", [
-          await realpath(caller.root.path)
-        ]);
+        reservations.reserve("state-writers", [await realpath(caller.root.path)]);
         return { reserved: true };
       }
       if (name2 === "state.readBinary") {
@@ -10250,8 +9991,7 @@ ${detail}`,
         await live(caller);
         if (raw.kind === "missing") return raw;
         const bytes2 = Buffer.from(raw.base64, "base64");
-        if (bytes2.length > 1024 * 1024)
-          throw new Error("Native Inquiry JSON metadata exceeds 1 MiB");
+        if (bytes2.length > 1024 * 1024) throw new Error("Native Inquiry JSON metadata exceeds 1 MiB");
         try {
           return {
             kind: "value",
@@ -10267,8 +10007,7 @@ ${detail}`,
       if (name2 === "state.writeJson") {
         const value = input;
         handle(value.root, "state");
-        if (!value.path.endsWith(".json"))
-          throw new Error("Native Inquiry JSON writes require a .json file");
+        if (!value.path.endsWith(".json")) throw new Error("Native Inquiry JSON writes require a .json file");
         const text2 = `${JSON.stringify(value.value, null, 2)}
 `;
         if (Buffer.byteLength(text2) > 1024 * 1024)
@@ -10294,8 +10033,7 @@ ${text2}`
             prepare: () => access(caller)
           }
         );
-        if (raw.kind !== "value")
-          throw new Error("Native Inquiry JSON write has no readback");
+        if (raw.kind !== "value") throw new Error("Native Inquiry JSON write has no readback");
         return {
           kind: "value",
           value: JSON.parse(Buffer.from(raw.base64, "base64").toString("utf8")),
@@ -10336,8 +10074,7 @@ Logical content/diff is not displayed. A post-commit cancellation requires expli
       }
     }
   });
-  if (!runtime.createNativeSession)
-    throw new Error("Inquiry runtime has no native projection");
+  if (!runtime.createNativeSession) throw new Error("Inquiry runtime has no native projection");
   const native = await runtime.createNativeSession();
   const adapted = Object.create(pi);
   adapted.registerTool = ((definition) => {
@@ -10371,10 +10108,7 @@ Logical content/diff is not displayed. A post-commit cancellation requires expli
             }
           };
           await live(caller);
-          return calls.run(
-            caller,
-            () => execute(id, input, caller.signal, update, context)
-          );
+          return calls.run(caller, () => execute(id, input, caller.signal, update, context));
         })();
         pending.add(running);
         void running.then(

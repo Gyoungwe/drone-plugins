@@ -2,19 +2,9 @@
 // src/native-runtime.ts
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash as createHash2, randomBytes, randomUUID as randomUUID3 } from "node:crypto";
-import {
-  link,
-  lstat,
-  mkdir,
-  readFile,
-  readdir,
-  realpath,
-  rename,
-  rm,
-  writeFile
-} from "node:fs/promises";
-import { dirname, isAbsolute as isAbsolute2, join, relative as relative2, sep } from "node:path";
+import { link, lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { dirname, isAbsolute as isAbsolute2, join, relative as relative2, sep } from "node:path";
 import {
   ContainerSandboxRunner,
   describeContainerExecution,
@@ -26,41 +16,6 @@ import { PluginResourceReservations } from "@gyoungwe/plugin-api/node/reservatio
 
 // src/runtime.ts
 import { createHash } from "node:crypto";
-
-// src/inquiry-provider.ts
-function inquiryProvider(capabilities, discoveryProjectId) {
-  const write = async (action, record) => {
-    if (record.projectId !== discoveryProjectId)
-      throw new Error("Discovery record belongs to another project");
-    const inspection = await capabilities.call("provider.inspect", {
-      alias: "inquiry"
-    });
-    if (inspection.state !== "available")
-      throw new Error(`Inquiry provider is ${inspection.state}`);
-    const status = await capabilities.call("provider.read", {
-      alias: "inquiry",
-      operation: "inquiry.read",
-      input: { action: "status" }
-    });
-    if (status.state !== "bound" || typeof status.projectId !== "string" || !status.projectId)
-      throw new Error(
-        "Bind the original Inquiry ledger to this actual workspace first"
-      );
-    await capabilities.call("provider.write", {
-      alias: "inquiry",
-      operation: "inquiry.write",
-      input: { action, record: { ...record, projectId: status.projectId } }
-    });
-  };
-  return {
-    recordQuestion: (record) => write("recordQuestion", record),
-    recordAttempt: (record) => write("recordAttempt", record),
-    recordFinding: (record) => write("recordFinding", record)
-  };
-}
-
-// src/service.ts
-import { isAbsolute, relative, resolve } from "node:path";
 
 // src/domain/deadline.ts
 async function withDeadline(operation, timeoutMs, reason) {
@@ -100,20 +55,15 @@ function isoDate(value) {
   return typeof value === "string" && Number.isFinite(Date.parse(value));
 }
 function safeRunPath(value) {
-  if (typeof value !== "string" || value.length === 0 || value.includes("\0"))
-    return false;
-  if (value.startsWith("/") || value.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(value))
-    return false;
+  if (typeof value !== "string" || value.length === 0 || value.includes("\0")) return false;
+  if (value.startsWith("/") || value.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(value)) return false;
   const parts = value.replaceAll("\\", "/").split("/");
   return parts[0] === "runs" && parts.every((part) => part.length > 0 && part !== "." && part !== "..");
 }
 function stableJson(value) {
   return JSON.stringify(value, (_key, nested) => {
-    if (!nested || typeof nested !== "object" || Array.isArray(nested))
-      return nested;
-    return Object.fromEntries(
-      Object.entries(nested).sort(([a], [b]) => a.localeCompare(b))
-    );
+    if (!nested || typeof nested !== "object" || Array.isArray(nested)) return nested;
+    return Object.fromEntries(Object.entries(nested).sort(([a], [b]) => a.localeCompare(b)));
   });
 }
 function assertValid(condition, message) {
@@ -139,33 +89,17 @@ var CRITIC_ROLE = Object.freeze({
   checklist: CRITIC_CHECKLIST
 });
 function validateQuestion(question) {
-  assertValid(
-    CRITIC_CHECKLIST.includes(question.checklistItem),
-    "invalid critic checklist item"
-  );
-  assertValid(
-    nonEmptyText(question.question, 1e4),
-    "critic question is invalid"
-  );
-  assertValid(
-    ["high", "medium", "low"].includes(question.severity),
-    "critic severity is invalid"
-  );
+  assertValid(CRITIC_CHECKLIST.includes(question.checklistItem), "invalid critic checklist item");
+  assertValid(nonEmptyText(question.question, 1e4), "critic question is invalid");
+  assertValid(["high", "medium", "low"].includes(question.severity), "critic severity is invalid");
   for (const id of question.evidenceArtifactIds)
     assertValid(safeId(id), "critic evidence artifact id is invalid");
 }
 async function runCriticReview(request, provider, options = {}) {
   assertValid(safeId(request.findingId), "finding id is invalid");
-  assertValid(
-    nonEmptyText(request.findingStatement, 2e4),
-    "finding statement is invalid"
-  );
-  assertValid(
-    safeId(request.primaryProviderId),
-    "primary provider id is invalid"
-  );
-  for (const id of request.artifactIds)
-    assertValid(safeId(id), "artifact id is invalid");
+  assertValid(nonEmptyText(request.findingStatement, 2e4), "finding statement is invalid");
+  assertValid(safeId(request.primaryProviderId), "primary provider id is invalid");
+  for (const id of request.artifactIds) assertValid(safeId(id), "artifact id is invalid");
   const checklist = request.checklist ?? CRITIC_CHECKLIST;
   assertValid(
     checklist.length > 0 && checklist.every((item) => CRITIC_CHECKLIST.includes(item)),
@@ -173,14 +107,8 @@ async function runCriticReview(request, provider, options = {}) {
   );
   const timeoutMs = options.timeoutMs ?? 3e4;
   const maxQuestions = options.maxQuestions ?? 64;
-  assertValid(
-    boundedInteger(timeoutMs, 1, 6e5),
-    "critic timeout is invalid"
-  );
-  assertValid(
-    boundedInteger(maxQuestions, 1, 256),
-    "critic question limit is invalid"
-  );
+  assertValid(boundedInteger(timeoutMs, 1, 6e5), "critic timeout is invalid");
+  assertValid(boundedInteger(maxQuestions, 1, 256), "critic question limit is invalid");
   if (!provider || provider.providerId === request.primaryProviderId)
     return {
       status: "needs-independent-provider",
@@ -235,38 +163,26 @@ async function recordCriticQuestions(port, input) {
 function createMultiPathPlan(input) {
   assertValid(safeId(input.id), "multi-path plan id is invalid");
   assertValid(safeId(input.findingId), "finding id is invalid");
-  assertValid(
-    input.paths.length >= 5 && input.paths.length <= 10,
-    "multi-path plans require 5 to 10 paths"
-  );
+  assertValid(input.paths.length >= 5 && input.paths.length <= 10, "multi-path plans require 5 to 10 paths");
   assertValid(
     input.intent === "exploratory" || input.intent === "confirmatory",
     "analysis intent is invalid"
   );
   for (const path of input.paths) {
     assertValid(safeId(path.id), "analysis path id is invalid");
-    assertValid(
-      nonEmptyText(path.description, 1e4),
-      "analysis path description is invalid"
-    );
+    assertValid(nonEmptyText(path.description, 1e4), "analysis path description is invalid");
   }
   assertValid(
     new Set(input.paths.map((path) => path.id)).size === input.paths.length,
     "analysis path ids must be unique"
   );
   if (input.intent === "confirmatory")
-    assertValid(
-      input.priorRegistered,
-      "confirmatory analysis requires a registered prior"
-    );
+    assertValid(input.priorRegistered, "confirmatory analysis requires a registered prior");
   return { ...input, paths: [...input.paths] };
 }
 async function executeMultiPath(plan, executor, options = {}) {
   const timeoutMs = options.timeoutMs ?? 6e4;
-  assertValid(
-    boundedInteger(timeoutMs, 1, 864e5),
-    "multi-path timeout is invalid"
-  );
+  assertValid(boundedInteger(timeoutMs, 1, 864e5), "multi-path timeout is invalid");
   const records2 = [];
   for (const path of plan.paths) {
     const started = Date.now();
@@ -278,10 +194,7 @@ async function executeMultiPath(plan, executor, options = {}) {
         "invalid path outcome"
       );
       assertValid(safeId(result.signature), "path signature is invalid");
-      assertValid(
-        nonEmptyText(result.summary, 2e4),
-        "path summary is invalid"
-      );
+      assertValid(nonEmptyText(result.summary, 2e4), "path summary is invalid");
     } catch (error) {
       result = {
         outcome: "blocked",
@@ -315,10 +228,7 @@ async function executeMultiPath(plan, executor, options = {}) {
     };
     records2.push(record);
     if (options.inquiry) {
-      assertValid(
-        options.projectId,
-        "projectId is required when recording multipath attempts"
-      );
+      assertValid(options.projectId, "projectId is required when recording multipath attempts");
       await options.inquiry.recordAttempt(attempt);
     }
   }
@@ -326,9 +236,7 @@ async function executeMultiPath(plan, executor, options = {}) {
     (record) => record.outcome === "succeeded" && record.consistentWithReference
   ).length;
   const consistency = records2.length ? consistentCount / records2.length : 0;
-  const grade = records2.some(
-    (record) => record.outcome === "blocked" || record.outcome === "unknown"
-  ) && consistentCount === 0 ? "unknown" : consistency >= 0.8 ? "robust" : consistency >= 0.5 ? "sensitive" : "unstable";
+  const grade = records2.some((record) => record.outcome === "blocked" || record.outcome === "unknown") && consistentCount === 0 ? "unknown" : consistency >= 0.8 ? "robust" : consistency >= 0.5 ? "sensitive" : "unstable";
   return {
     grade,
     attemptCount: records2.length,
@@ -364,22 +272,13 @@ function validateBaseline(item) {
     "baseline metric is invalid"
   );
   assertValid(safeId(item.datasetId), "baseline dataset id is invalid");
-  assertValid(
-    nonEmptyText(item.datasetRevision, 256),
-    "baseline revision is invalid"
-  );
+  assertValid(nonEmptyText(item.datasetRevision, 256), "baseline revision is invalid");
   assertValid(finiteNonNegative(item.value), "baseline value is invalid");
   const expectedUnit = item.metric.endsWith("rate") ? "ratio" : item.metric === "verification-time-ms" ? "milliseconds" : item.metric === "repeated-failure-count" ? "count" : "score";
-  assertValid(
-    item.unit === expectedUnit,
-    "baseline unit does not match metric"
-  );
+  assertValid(item.unit === expectedUnit, "baseline unit does not match metric");
   assertValid(safeId(item.runId), "baseline run id is invalid");
   assertValid(isoDate(item.recordedAt), "baseline timestamp is invalid");
-  assertValid(
-    item.source === "fixture" || item.source === "external",
-    "baseline source is invalid"
-  );
+  assertValid(item.source === "fixture" || item.source === "external", "baseline source is invalid");
 }
 async function legacy(items, evaluator) {
   const metrics = [];
@@ -392,8 +291,7 @@ async function legacy(items, evaluator) {
     }
     try {
       const result = await evaluator(item);
-      if (!finiteNonNegative(result.value))
-        throw new Error("invalid evaluation value");
+      if (!finiteNonNegative(result.value)) throw new Error("invalid evaluation value");
       metrics.push({
         id: item.id,
         metric: item.metric,
@@ -413,12 +311,8 @@ async function legacy(items, evaluator) {
 }
 async function runEvaluation(items, evaluator, store, options = {}) {
   if (!items.length) throw new Error("evaluation requires at least one case");
-  if ("expectedFindingIds" in items[0])
-    return legacy(items, evaluator);
-  assertValid(
-    store && typeof store.get === "function",
-    "baseline store is required"
-  );
+  if ("expectedFindingIds" in items[0]) return legacy(items, evaluator);
+  assertValid(store && typeof store.get === "function", "baseline store is required");
   const cases = items;
   assertValid(
     new Set(cases.map((item) => item.id)).size === cases.length,
@@ -431,24 +325,15 @@ async function runEvaluation(items, evaluator, store, options = {}) {
       "evaluation metric is invalid"
     );
     assertValid(safeId(item.datasetId), "evaluation dataset id is invalid");
-    assertValid(
-      nonEmptyText(item.datasetRevision, 256),
-      "evaluation dataset revision is invalid"
-    );
+    assertValid(nonEmptyText(item.datasetRevision, 256), "evaluation dataset revision is invalid");
     assertValid(
       item.datasetStatus === "fixture" || item.datasetStatus === "external" || item.datasetStatus === "missing",
       "evaluation dataset status is invalid"
     );
-    assertValid(
-      nonEmptyText(item.description, 2e4),
-      "evaluation description is invalid"
-    );
+    assertValid(nonEmptyText(item.description, 2e4), "evaluation description is invalid");
   }
   const timeoutMs = options.timeoutMs ?? 6e4;
-  assertValid(
-    boundedInteger(timeoutMs, 1, 864e5),
-    "evaluation timeout is invalid"
-  );
+  assertValid(boundedInteger(timeoutMs, 1, 864e5), "evaluation timeout is invalid");
   const runId = options.runId ?? `evaluation-${randomUUID()}`;
   const startedAt = (/* @__PURE__ */ new Date()).toISOString();
   const observations = {};
@@ -457,25 +342,12 @@ async function runEvaluation(items, evaluator, store, options = {}) {
   for (const item of cases) {
     if (item.datasetStatus === "missing") continue;
     try {
-      const result = await withDeadline(
-        evaluator(item),
-        timeoutMs,
-        "evaluation-timeout"
-      );
-      assertValid(
-        finiteNonNegative(result.value),
-        "evaluation value is invalid"
-      );
+      const result = await withDeadline(evaluator(item), timeoutMs, "evaluation-timeout");
+      assertValid(finiteNonNegative(result.value), "evaluation value is invalid");
       if (item.metric.endsWith("rate") || item.metric === "bixbench-regression")
-        assertValid(
-          result.value <= 1,
-          "ratio/score must be between zero and one"
-        );
+        assertValid(result.value <= 1, "ratio/score must be between zero and one");
       if (item.metric === "repeated-failure-count")
-        assertValid(
-          Number.isSafeInteger(result.value),
-          "failure count must be an integer"
-        );
+        assertValid(Number.isSafeInteger(result.value), "failure count must be an integer");
       observations[item.id] = result;
     } catch {
       blockedCases.push(item.id);
@@ -483,20 +355,14 @@ async function runEvaluation(items, evaluator, store, options = {}) {
   }
   const metrics = [];
   for (const metric of DISCOVERY_EVALUATION_METRICS) {
-    const selected = cases.filter(
-      (item) => item.metric === metric && observations[item.id]
-    );
+    const selected = cases.filter((item) => item.metric === metric && observations[item.id]);
     if (!selected.length) continue;
     const values = selected.map(
       (item) => observations[item.id]?.verificationTimeMs ?? observations[item.id]?.value ?? 0
     );
     const value = metric === "verification-time-ms" ? median(values) : metric === "repeated-failure-count" ? values.reduce((sum, item) => sum + item, 0) : values.reduce((sum, item) => sum + item, 0) / values.length;
     const first = selected[0];
-    const baseline = await store.get(
-      metric,
-      first.datasetId,
-      first.datasetRevision
-    );
+    const baseline = await store.get(metric, first.datasetId, first.datasetRevision);
     const lower = metric === "verification-time-ms" || metric === "repeated-failure-count";
     metrics.push({
       metric,
@@ -529,18 +395,9 @@ var ExplorationBudgetError = class extends Error {
   code = "exploration-budget-exceeded";
 };
 function validateBudget(budget) {
-  assertValid(
-    boundedInteger(budget.maxExecutions, 1, 1e6),
-    "maxExecutions is invalid"
-  );
-  assertValid(
-    boundedInteger(budget.maxWallTimeMs, 1, 365 * 24 * 60 * 6e4),
-    "maxWallTimeMs is invalid"
-  );
-  assertValid(
-    boundedInteger(budget.maxOutputBytes, 1, Number.MAX_SAFE_INTEGER),
-    "maxOutputBytes is invalid"
-  );
+  assertValid(boundedInteger(budget.maxExecutions, 1, 1e6), "maxExecutions is invalid");
+  assertValid(boundedInteger(budget.maxWallTimeMs, 1, 365 * 24 * 60 * 6e4), "maxWallTimeMs is invalid");
+  assertValid(boundedInteger(budget.maxOutputBytes, 1, Number.MAX_SAFE_INTEGER), "maxOutputBytes is invalid");
   assertValid(positiveFinite(budget.maxCostUnits), "maxCostUnits is invalid");
 }
 function validatePrior(prior) {
@@ -550,15 +407,9 @@ function validatePrior(prior) {
     "prior direction is invalid"
   );
   if (prior.magnitude !== void 0)
-    assertValid(
-      finiteNonNegative(prior.magnitude),
-      "prior magnitude is invalid"
-    );
+    assertValid(finiteNonNegative(prior.magnitude), "prior magnitude is invalid");
   if (prior.confidence !== void 0)
-    assertValid(
-      prior.confidence >= 0 && prior.confidence <= 1,
-      "prior confidence is invalid"
-    );
+    assertValid(prior.confidence >= 0 && prior.confidence <= 1, "prior confidence is invalid");
 }
 var ExplorationBudgetLedger = class {
   constructor(budget) {
@@ -579,14 +430,8 @@ var ExplorationBudgetLedger = class {
       boundedInteger(input.executions, 0, this.budget.maxExecutions),
       "usage executions are invalid"
     );
-    assertValid(
-      finiteNonNegative(input.wallTimeMs),
-      "usage wall time is invalid"
-    );
-    assertValid(
-      finiteNonNegative(input.outputBytes),
-      "usage output bytes is invalid"
-    );
+    assertValid(finiteNonNegative(input.wallTimeMs), "usage wall time is invalid");
+    assertValid(finiteNonNegative(input.outputBytes), "usage output bytes is invalid");
     assertValid(finiteNonNegative(input.costUnits), "usage cost is invalid");
     const next = {
       executions: this.current.executions + input.executions,
@@ -602,57 +447,32 @@ var ExplorationBudgetLedger = class {
 };
 function computeSurprise(prior, posterior) {
   validatePrior(prior);
-  assertValid(
-    posterior && isoDate(posterior.recordedAt),
-    "posterior timestamp is invalid"
-  );
-  assertValid(
-    Date.parse(posterior.recordedAt) >= Date.parse(prior.recordedAt),
-    "posterior predates prior"
-  );
+  assertValid(posterior && isoDate(posterior.recordedAt), "posterior timestamp is invalid");
+  assertValid(Date.parse(posterior.recordedAt) >= Date.parse(prior.recordedAt), "posterior predates prior");
   if (posterior.magnitude !== void 0)
-    assertValid(
-      finiteNonNegative(posterior.magnitude),
-      "posterior magnitude is invalid"
-    );
+    assertValid(finiteNonNegative(posterior.magnitude), "posterior magnitude is invalid");
   if (posterior.confidence !== void 0)
-    assertValid(
-      posterior.confidence >= 0 && posterior.confidence <= 1,
-      "posterior confidence is invalid"
-    );
+    assertValid(posterior.confidence >= 0 && posterior.confidence <= 1, "posterior confidence is invalid");
   const directionChange = posterior.direction && posterior.direction !== "unknown" && posterior.direction !== prior.direction ? 0.5 : 0;
   const magnitudeChange = Math.min(
     1,
-    Math.abs(
-      (posterior.magnitude ?? prior.magnitude ?? 0) - (prior.magnitude ?? 0)
-    ) / Math.max(1, Math.abs(prior.magnitude ?? 0))
+    Math.abs((posterior.magnitude ?? prior.magnitude ?? 0) - (prior.magnitude ?? 0)) / Math.max(1, Math.abs(prior.magnitude ?? 0))
   );
   const confidenceChange = Math.min(
     1,
-    Math.abs(
-      (posterior.confidence ?? prior.confidence ?? 0.5) - (prior.confidence ?? 0.5)
-    )
+    Math.abs((posterior.confidence ?? prior.confidence ?? 0.5) - (prior.confidence ?? 0.5))
   );
-  return Math.min(
-    1,
-    directionChange + magnitudeChange * 0.35 + confidenceChange * 0.15
-  );
+  return Math.min(1, directionChange + magnitudeChange * 0.35 + confidenceChange * 0.15);
 }
 function rankExplorationCandidates(candidates) {
   for (const candidate of candidates) {
     assertValid(safeId(candidate.id), "candidate id is invalid");
-    assertValid(
-      nonEmptyText(candidate.statement, 1e4),
-      "candidate statement is invalid"
-    );
+    assertValid(nonEmptyText(candidate.statement, 1e4), "candidate statement is invalid");
     assertValid(
       finiteNonNegative(candidate.surprise) && candidate.surprise <= 1,
       "candidate surprise is invalid"
     );
-    assertValid(
-      positiveFinite(candidate.estimatedCost),
-      "candidate cost is invalid"
-    );
+    assertValid(positiveFinite(candidate.estimatedCost), "candidate cost is invalid");
     assertValid(
       finiteNonNegative(candidate.expectedExplanationsExcluded),
       "candidate discrimination is invalid"
@@ -668,16 +488,13 @@ function rankExplorationCandidates(candidates) {
 }
 function validateCompetitiveExplanations(explanations) {
   const errors = [];
-  if (explanations.length < 3)
-    errors.push("at least three competing explanations are required");
+  if (explanations.length < 3) errors.push("at least three competing explanations are required");
   if (!explanations.some((item) => item.kind === "technical"))
     errors.push("a technical explanation is required");
   const ids = /* @__PURE__ */ new Set();
   for (const explanation of explanations) {
-    if (!safeId(explanation.id))
-      errors.push(`invalid explanation id: ${explanation.id}`);
-    if (ids.has(explanation.id))
-      errors.push(`duplicate explanation id: ${explanation.id}`);
+    if (!safeId(explanation.id)) errors.push(`invalid explanation id: ${explanation.id}`);
+    if (ids.has(explanation.id)) errors.push(`duplicate explanation id: ${explanation.id}`);
     ids.add(explanation.id);
     if (!nonEmptyText(explanation.statement, 1e4))
       errors.push(`invalid explanation statement: ${explanation.id}`);
@@ -707,9 +524,7 @@ async function recordDiscoveryToInquiry(port, input) {
       posterior: input.posterior,
       surprise: computeSurprise(input.prior, input.posterior)
     } : {},
-    competingExplanations: input.explanations.map(
-      (item) => `${item.kind}: ${item.statement}`
-    ),
+    competingExplanations: input.explanations.map((item) => `${item.kind}: ${item.statement}`),
     testsDone: [],
     testsPlanned: input.testsPlanned,
     status: "open",
@@ -751,34 +566,19 @@ function validKind(value) {
 }
 function ensureOptions(options) {
   assertValid(safeId(options.sessionId), "sessionId is invalid");
-  assertValid(
-    safeRunPath(options.runDirectory),
-    "runDirectory must be a project-relative runs path"
-  );
-  assertValid(
-    options.language === "python" || options.language === "r",
-    "unsupported kernel language"
-  );
+  assertValid(safeRunPath(options.runDirectory), "runDirectory must be a project-relative runs path");
+  assertValid(options.language === "python" || options.language === "r", "unsupported kernel language");
   assertValid(validClassification(options.dataClassification), "invalid data classification");
-  assertValid(
-    options.runner && typeof options.runner.run === "function",
-    "controlled runner is required"
-  );
+  assertValid(options.runner && typeof options.runner.run === "function", "controlled runner is required");
   const capabilities = options.runner.capabilities;
   assertValid(
     capabilities.kind === "container" || capabilities.kind === "fixture" || capabilities.kind === "unavailable",
     "invalid runner kind"
   );
-  assertValid(
-    capabilities.languages.includes(options.language),
-    "runner does not support this language"
-  );
+  assertValid(capabilities.languages.includes(options.language), "runner does not support this language");
   if (capabilities.kind !== "unavailable") {
     assertValid(capabilities.networkDisabled, "kernel runner must disable network access");
-    assertValid(
-      capabilities.writesOnlyToRunDirectory,
-      "kernel runner must constrain writes to runs"
-    );
+    assertValid(capabilities.writesOnlyToRunDirectory, "kernel runner must constrain writes to runs");
   }
   for (const [label, value] of [
     ["idleTimeoutMs", options.idleTimeoutMs],
@@ -786,8 +586,7 @@ function ensureOptions(options) {
     ["maxExecutions", options.maxExecutions],
     ["maxOutputBytes", options.maxOutputBytes]
   ]) {
-    if (value !== void 0)
-      assertValid(boundedInteger(value, 1, 24 * 60 * 6e4), `${label} is invalid`);
+    if (value !== void 0) assertValid(boundedInteger(value, 1, 24 * 60 * 6e4), `${label} is invalid`);
   }
 }
 function filterKernelOutput(outputs, policy, maxBytes = DEFAULT_MAX_OUTPUT_BYTES) {
@@ -901,10 +700,7 @@ var KernelSession = class {
   async execute(code, signal) {
     assertValid(this.state === "ready", `kernel session is ${this.state}`);
     assertValid(nonEmptyText(code, MAX_CODE_LENGTH), "kernel code is empty or too large");
-    assertValid(
-      this.executionCount < this.options.maxExecutions,
-      "kernel execution budget exceeded"
-    );
+    assertValid(this.executionCount < this.options.maxExecutions, "kernel execution budget exceeded");
     const controller = new AbortController();
     this.executionController = controller;
     signal?.throwIfAborted();
@@ -940,10 +736,7 @@ var KernelSession = class {
         dataClassification: this.options.dataClassification
       });
       controller.signal.throwIfAborted();
-      assertValid(
-        result && Number.isInteger(result.exitCode),
-        "runner returned invalid exit status"
-      );
+      assertValid(result && Number.isInteger(result.exitCode), "runner returned invalid exit status");
       assertValid(
         Number.isFinite(result.producedBytes) && result.producedBytes >= 0,
         "runner returned invalid byte count"
@@ -1008,11 +801,7 @@ var KernelSession = class {
     const scriptPath = `${base}.${this.options.language === "python" ? "py" : "R"}`;
     const notebookPath = `${base}.ipynb`;
     return Promise.all([
-      fileWriter.write(
-        scriptPath,
-        script,
-        this.options.language === "python" ? "text/x-python" : "text/x-r"
-      ),
+      fileWriter.write(scriptPath, script, this.options.language === "python" ? "text/x-python" : "text/x-r"),
       fileWriter.write(notebookPath, notebook, "application/x-ipynb+json")
     ]).then(() => ({ scriptPath, notebookPath, script, notebook }));
   }
@@ -1050,15 +839,46 @@ var UnavailableKernelRunner = class {
   }
 };
 
+// src/inquiry-provider.ts
+function inquiryProvider(capabilities, discoveryProjectId) {
+  const write = async (action, record) => {
+    if (record.projectId !== discoveryProjectId)
+      throw new Error("Discovery record belongs to another project");
+    const inspection = await capabilities.call("provider.inspect", {
+      alias: "inquiry"
+    });
+    if (inspection.state !== "available") throw new Error(`Inquiry provider is ${inspection.state}`);
+    const status = await capabilities.call("provider.read", {
+      alias: "inquiry",
+      operation: "inquiry.read",
+      input: { action: "status" }
+    });
+    if (status.state !== "bound" || typeof status.projectId !== "string" || !status.projectId)
+      throw new Error("Bind the original Inquiry ledger to this actual workspace first");
+    await capabilities.call("provider.write", {
+      alias: "inquiry",
+      operation: "inquiry.write",
+      input: { action, record: { ...record, projectId: status.projectId } }
+    });
+  };
+  return {
+    recordQuestion: (record) => write("recordQuestion", record),
+    recordAttempt: (record) => write("recordAttempt", record),
+    recordFinding: (record) => write("recordFinding", record)
+  };
+}
+
+// src/native-records.ts
+var JOURNALS = ["sessions", "critics", "multipath", "plans", "evaluations", "baselines"];
+
 // src/service.ts
+import { isAbsolute, relative, resolve } from "node:path";
 function safeProjectId(value) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value))
-    throw new Error("Invalid discovery project id");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("Invalid discovery project id");
   return value;
 }
 function safeSessionId(value) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value))
-    throw new Error("Invalid discovery session id");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("Invalid discovery session id");
   return value;
 }
 function safeRunDirectory(projectRoot, value) {
@@ -1264,8 +1084,7 @@ var DiscoveryService = class {
   async createKernel(input) {
     await this.init();
     const sessionId = safeSessionId(input.sessionId);
-    if (this.sessionMeta.has(sessionId))
-      throw new Error(`Discovery session already exists: ${sessionId}`);
+    if (this.sessionMeta.has(sessionId)) throw new Error(`Discovery session already exists: ${sessionId}`);
     const runDirectory = safeRunDirectory(this.projectRoot, input.runDirectory);
     await this.authorize({
       kind: "create-kernel-session",
@@ -1533,10 +1352,7 @@ var DiscoveryService = class {
       pending,
       signal: this.executionSignals.get(id)
     }));
-    const settled = await Promise.allSettled([
-      ...sessionClosures,
-      ...executions.map((item) => item.pending)
-    ]);
+    const settled = await Promise.allSettled([...sessionClosures, ...executions.map((item) => item.pending)]);
     const failures = settled.filter(
       (result, index) => result.status === "rejected" && (index < sessionClosures.length || !executions[index - sessionClosures.length]?.signal?.aborted)
     );
@@ -1557,16 +1373,6 @@ var DiscoveryService = class {
     this.sessions.clear();
   }
 };
-
-// src/native-records.ts
-var JOURNALS = [
-  "sessions",
-  "critics",
-  "multipath",
-  "plans",
-  "evaluations",
-  "baselines"
-];
 
 // src/runtime.ts
 var readMetadata = {
@@ -1939,9 +1745,7 @@ var createDiscoveryRuntime = async ({
     if (selected.binding && selected.binding.workspaceId !== scope.workspaceId)
       throw new Error("Discovery state belongs to another workspace");
     if (!selected.binding && selected.hasExistingData && !input.acknowledgeExistingData)
-      throw new Error(
-        "Existing discovery journals require explicit acknowledgement before binding"
-      );
+      throw new Error("Existing discovery journals require explicit acknowledgement before binding");
     await capabilities.call("state.reserve", { root: input.root, path: "" });
     const stored = await read(input.root, bindingPath);
     if (stored.kind === "value") {
@@ -2019,8 +1823,7 @@ var createDiscoveryRuntime = async ({
     const scope = await workspace();
     if (scope.kind !== "session") throw new Error("Select a real creator SDK session for kernels");
     const selected = await findRoot(scope);
-    if (!selected)
-      throw new Error("Bind a discovery state directory before creating a logical kernel");
+    if (!selected) throw new Error("Bind a discovery state directory before creating a logical kernel");
     return { scope, owned: await owner(scope, selected) };
   };
   const ownedKernel = (owned, creatorSessionId, sessionId) => {
@@ -2376,12 +2179,7 @@ var createDiscoveryRuntime = async ({
             "write",
             (input, signal2) => closeKernel(input, signal2)
           ],
-          [
-            "discovery_reconcile_executions",
-            emptyParameters,
-            "write",
-            (_input, signal2) => reconcile(signal2)
-          ]
+          ["discovery_reconcile_executions", emptyParameters, "write", (_input, signal2) => reconcile(signal2)]
         ];
         for (const [name, parameters, effect, run] of kernelTools)
           nativePi.registerTool({
@@ -2422,9 +2220,7 @@ var createDiscoveryRuntime = async ({
             ...effect === "read" ? readMetadata : writeMetadata,
             async execute(_id, input) {
               return response(
-                await operations[operation].execute(
-                  operation === "executionDescription" ? null : input
-                )
+                await operations[operation].execute(operation === "executionDescription" ? null : input)
               );
             }
           });
@@ -2597,9 +2393,7 @@ Cancel accepted request ${requestId} and wait for its owned resources and termin
     if (!/^sha256:[a-f0-9]{64}$/.test(request.image))
       throw new Error("Native execution requires an exact cached image ID");
     if (!caller.context.hasUI)
-      throw new Error(
-        "Native execution requires interactive approval; headless calls cannot authorize code"
-      );
+      throw new Error("Native execution requires interactive approval; headless calls cannot authorize code");
     const approved = await caller.context.ui.confirm(
       "Bounded container execution",
       `Workspace: ${caller.scope.workspaceDirectory}
@@ -2618,15 +2412,13 @@ ${request.code}`,
     const workspace = await assertExecutionCaller(caller);
     const available = await describeContainerExecution(options.container);
     if (!available.runtime || !available.images[request.language])
-      throw Object.assign(
-        new Error("Configured language image is not cached; no image was pulled"),
-        { code: "EXECUTION_IMAGE_NOT_CACHED" }
-      );
+      throw Object.assign(new Error("Configured language image is not cached; no image was pulled"), {
+        code: "EXECUTION_IMAGE_NOT_CACHED"
+      });
     if (available.images[request.language] !== request.image)
-      throw Object.assign(
-        new Error("Requested image does not match the configured cached language image"),
-        { code: "EXECUTION_IMAGE_MISMATCH" }
-      );
+      throw Object.assign(new Error("Requested image does not match the configured cached language image"), {
+        code: "EXECUTION_IMAGE_MISMATCH"
+      });
     await prepareSandboxRunDirectory(workspace, request.runDirectory, caller.signal);
     const runner = await ContainerSandboxRunner.create({
       ...options.container,
@@ -2649,8 +2441,7 @@ ${request.code}`,
   const filePath = async (root, path) => {
     if (isAbsolute2(path) || path.includes("\\") || path.includes("\0") || path !== "" && path.split("/").some((part) => !part || part === "." || part === ".."))
       throw new Error("Expected a discovery state-relative path");
-    if ((await lstat(root)).isSymbolicLink())
-      throw new Error("Discovery state root contains a symlink");
+    if ((await lstat(root)).isSymbolicLink()) throw new Error("Discovery state root contains a symlink");
     let selected = root;
     for (const part of path === "" ? [] : path.split("/")) {
       selected = join(selected, part);
@@ -2672,8 +2463,7 @@ ${request.code}`,
         throw new Error("Discovery JSON state must be a file of at most 1 MiB");
       bytes = await readFile(selected);
     } catch (error) {
-      if (error.code === "ENOENT")
-        return { kind: "missing", version: null };
+      if (error.code === "ENOENT") return { kind: "missing", version: null };
       throw error;
     }
     if (bytes.length > 1048576) throw new Error("Discovery JSON state exceeds 1 MiB");
@@ -2716,8 +2506,7 @@ ${request.code}`,
       throw error;
     }
     const stored = await read(caller.root, input.path);
-    if (stored.version !== hash(bytes))
-      throw new Error("Discovery state did not read back after write");
+    if (stored.version !== hash(bytes)) throw new Error("Discovery state did not read back after write");
     return stored;
   };
   const capabilities = {
@@ -2727,7 +2516,8 @@ ${request.code}`,
       caller.signal.throwIfAborted();
       return calls.run(caller, async () => {
         if (name === "caller.scope") return { ...caller.scope };
-        if (name === "provider.inspect") return { state: "unavailable", service: "inquiry.runtime", requestedVersion: 1, provider: null };
+        if (name === "provider.inspect")
+          return { state: "unavailable", service: "inquiry.runtime", requestedVersion: 1, provider: null };
         if (name.startsWith("execution.")) return executeCapability(name, input, caller);
         if (name === "roots.describe") {
           try {
@@ -2867,10 +2657,7 @@ ${request.code}`,
                 root: caller.handle
               };
           }
-          const result = await calls.run(
-            caller,
-            () => execute(id, input, caller.signal, update, context)
-          );
+          const result = await calls.run(caller, () => execute(id, input, caller.signal, update, context));
           caller.signal.throwIfAborted();
           return result;
         })();

@@ -4,11 +4,11 @@ import { BulkRnaseqAdapter } from "./bulk-rnaseq.js";
 import { createAnalysisEvidencePlan } from "./evidence-plan.js";
 import { AnalysisAdapterRegistry, adapterSnapshotSha256 } from "./registry.js";
 
+export * from "./analysis-contract.js";
 export * from "./assembly.js";
 export * from "./bulk-rnaseq.js";
-export * from "./registry.js";
-export * from "./analysis-contract.js";
 export * from "./evidence-plan.js";
+export * from "./registry.js";
 
 export function createAnalysisAdapterRegistry(): AnalysisAdapterRegistry {
 	return new AnalysisAdapterRegistry([new BulkRnaseqAdapter(), new AssemblyAdapter()]);

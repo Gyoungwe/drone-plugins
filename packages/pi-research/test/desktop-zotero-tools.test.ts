@@ -1,11 +1,19 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import createDesktopRuntime from "../src/desktop/runtime.js";
-import { saveToZotero, updateInZotero, ZOTERO_NETWORK_READS, zoteroStatus } from "../src/desktop/zotero-tools.js";
+import {
+	saveToZotero,
+	updateInZotero,
+	ZOTERO_NETWORK_READS,
+	zoteroStatus,
+} from "../src/desktop/zotero-tools.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../plugin.manifest.json", import.meta.url), "utf8"));
 const DOI = "10.1000/gut.2021.001";
-const ITEM = { key: "ABCD2345", data: { DOI, title: "Gut signatures", itemType: "journalArticle", collections: [] } };
+const ITEM = {
+	key: "ABCD2345",
+	data: { DOI, title: "Gut signatures", itemType: "journalArticle", collections: [] },
+};
 
 /**
  * A Drone host as the managed runtime sees it (same rules as network-capabilities.ts: a POST is a
@@ -57,15 +65,27 @@ describe("managed Zotero tools", () => {
 
 	it("saves one paper with exactly one host dialog and reads it back", async () => {
 		const host = managedHost();
-		const receipt = await saveToZotero(host.call, { doi: DOI, title: "Gut signatures", channel: "connector" });
+		const receipt = await saveToZotero(host.call, {
+			doi: DOI,
+			title: "Gut signatures",
+			channel: "connector",
+		});
 		expect(host.dialogs).toEqual([`写入 Zotero 文献库：《Gut signatures》（DOI ${DOI}）`]);
 		expect(host.sent.filter((line) => line.startsWith("WRITE"))).toEqual(["WRITE POST /connector/saveItems"]);
-		expect(receipt).toMatchObject({ status: "saved", zoteroKey: "ABCD2345", consent: { via: "host-dialog" } });
+		expect(receipt).toMatchObject({
+			status: "saved",
+			zoteroKey: "ABCD2345",
+			consent: { via: "host-dialog" },
+		});
 	});
 
 	it("reports a declined dialog as the user's choice, with nothing written", async () => {
 		const host = managedHost({ approve: false });
-		const receipt = await saveToZotero(host.call, { doi: DOI, title: "Gut signatures", channel: "connector" });
+		const receipt = await saveToZotero(host.call, {
+			doi: DOI,
+			title: "Gut signatures",
+			channel: "connector",
+		});
 		expect(receipt).toMatchObject({ status: "cancelled", reason: "user-declined" });
 		expect(receipt.write?.performed).not.toBe(true);
 		expect(host.sent.some((line) => line.startsWith("WRITE"))).toBe(false);
@@ -73,7 +93,11 @@ describe("managed Zotero tools", () => {
 
 	it("blocks changing an existing item without credentials, before any write", async () => {
 		const host = managedHost();
-		const receipt = await updateInZotero(host.call, { zotero_key: "ABCD2345", collection_key: "COLL2345" }, "/project");
+		const receipt = await updateInZotero(
+			host.call,
+			{ zotero_key: "ABCD2345", collection_key: "COLL2345" },
+			"/project",
+		);
 		expect(receipt).toMatchObject({ status: "blocked" });
 		expect(host.dialogs).toEqual([]);
 	});
@@ -95,7 +119,11 @@ describe("managed Zotero tools", () => {
 		const session = await runtime.createNativeSession!();
 		const tools: string[] = [];
 		session.extension({ registerTool: (tool: { name: string }) => tools.push(tool.name) } as never);
-		expect(tools.sort()).toEqual(["research_zotero_save", "research_zotero_status", "research_zotero_update"]);
+		expect(tools.sort()).toEqual([
+			"research_zotero_save",
+			"research_zotero_status",
+			"research_zotero_update",
+		]);
 		expect(Object.keys(session.toolEffects ?? {}).sort()).toEqual(tools);
 		expect(Object.values(session.toolEffects ?? {})).toEqual(["read", "read", "read"]);
 	});
@@ -109,7 +137,13 @@ it("a save inside a task authorization names the allowance it was given, on the 
 			return {
 				taskId: "t",
 				allowances: [
-					{ id: "other", role: "acceptance", member: "zotero_item", consent: { doi: "10.1000/other" }, used: false },
+					{
+						id: "other",
+						role: "acceptance",
+						member: "zotero_item",
+						consent: { doi: "10.1000/other" },
+						used: false,
+					},
 					{ id: "slot", role: "acceptance", member: "zotero_item", consent: { slot: true }, used: false },
 				],
 			};
@@ -118,6 +152,12 @@ it("a save inside a task authorization names the allowance it was given, on the 
 	};
 	const receipt = await saveToZotero(call, { doi: DOI, title: "Gut signatures" });
 	expect(receipt).toMatchObject({ status: "saved", consent: { via: "task-grant", milestoneId: "slot" } });
-	expect(sentAllowances.filter((entry) => String(entry).startsWith("network.write"))).toEqual(["network.write:slot"]);
-	expect(sentAllowances.filter((entry) => String(entry).startsWith("network.read")).every((entry) => String(entry).endsWith(":-"))).toBe(true);
+	expect(sentAllowances.filter((entry) => String(entry).startsWith("network.write"))).toEqual([
+		"network.write:slot",
+	]);
+	expect(
+		sentAllowances
+			.filter((entry) => String(entry).startsWith("network.read"))
+			.every((entry) => String(entry).endsWith(":-")),
+	).toBe(true);
 });

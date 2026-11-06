@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { PluginEntryHost, usePluginEntries } from "../api";
-import { UI_REGIONS } from "../api";
-import { useKnowledgeStore } from "../api";
-import { useSessionsStore } from "../api";
-import { type KnowledgeTab, useUiStore } from "../api";
-import { Button } from "../api";
-import { PageHeader } from "../api";
+import {
+	Button,
+	getKnowledgeApi,
+	type KnowledgeTab,
+	PageHeader,
+	PluginEntryHost,
+	UI_REGIONS,
+	useKnowledgeStore,
+	usePluginEntries,
+	useSessionsStore,
+	useUiStore,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 import { reportKnowledgeError, useKnowledgeOverview } from "./hooks";
 import { KnowledgeHome } from "./KnowledgeHome";

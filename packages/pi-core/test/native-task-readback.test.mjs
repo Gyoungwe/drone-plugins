@@ -4,8 +4,8 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { createStandaloneRuntime } from "../src/task-runtime/runtime-bridge.mjs";
 import { registerPiCore } from "../dist/index.mjs";
+import { createStandaloneRuntime } from "../src/task-runtime/runtime-bridge.mjs";
 
 delete process.env.DRONE_TASK_WORKBENCH;
 
@@ -50,7 +50,11 @@ async function host(t, { choice = "同意本次请求", ui = true, options = {},
 	registerPiCore(pi, options);
 	const ctx = {
 		cwd,
-		sessionManager: { getSessionFile: () => undefined, getSessionId: () => "native-session", getBranch: () => entries },
+		sessionManager: {
+			getSessionFile: () => undefined,
+			getSessionId: () => "native-session",
+			getBranch: () => entries,
+		},
 		...(ui
 			? {
 					ui: {
@@ -191,7 +195,8 @@ test("native readback refuses revoked UI and an in-flight session switch", async
 	await current.emit("session_start", {
 		...current.ctx,
 		sessionManager: {
-			getSessionFile: () => undefined, getSessionId: () => "new-session",
+			getSessionFile: () => undefined,
+			getSessionId: () => "new-session",
 			getBranch: () => [],
 		},
 	});

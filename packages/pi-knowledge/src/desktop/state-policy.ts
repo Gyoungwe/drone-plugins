@@ -1,8 +1,5 @@
 import type { PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
-import type {
-	KnowledgeReviewPolicyStorage,
-	ReviewPolicyDocument,
-} from "../core/review-policy.js";
+import type { KnowledgeReviewPolicyStorage, ReviewPolicyDocument } from "../core/review-policy.js";
 
 export function createBrokerReviewPolicyStorage(
 	capabilities: PluginRuntimeCapabilities,
@@ -16,8 +13,7 @@ export function createBrokerReviewPolicyStorage(
 					path: "review-policy.json",
 				})) as ReviewPolicyDocument;
 			} catch (error) {
-				if ((error as { code?: string }).code !== "ESTATECORRUPTED")
-					throw error;
+				if ((error as { code?: string }).code !== "ESTATECORRUPTED") throw error;
 				// Damaged JSON is a visible strict policy; authorization failures still reject.
 				return { kind: "corrupt", version: null };
 			}

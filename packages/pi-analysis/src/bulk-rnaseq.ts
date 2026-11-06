@@ -1,14 +1,14 @@
 import type {
+	AnalysisArtifactValidationInput,
 	AnalysisComputePlanInput,
 	AnalysisContext,
 	AnalysisGate,
 	AnalysisReadiness,
 	AnalysisReviewCheck,
-	AnalysisArtifactValidationInput,
 } from "./analysis-contract.js";
+import { BulkRnaseqNumericalComparator } from "./bulk-comparator.js";
 import { validateBulkResults } from "./bulk-results.js";
 import { canonicalPlanJson, normalizeBulkScientificPlan } from "./bulk-scientific-plan.js";
-import { BulkRnaseqNumericalComparator } from "./bulk-comparator.js";
 import {
 	type AnalysisAdapter,
 	type AnalysisAdapterPlan,
@@ -99,7 +99,13 @@ export class BulkRnaseqAdapter implements AnalysisAdapter {
 		],
 		capabilities: ["analysis", "files", "coding"],
 		sideEffects: ["read-only", "code-execution", "project-write"],
-		evidenceTypes: ["sample-design", "count-matrix", "differential-results", "execution-receipt", "dispersion-diagnostic"],
+		evidenceTypes: [
+			"sample-design",
+			"count-matrix",
+			"differential-results",
+			"execution-receipt",
+			"dispersion-diagnostic",
+		],
 		workflow: { id: "drone/deseq2-counts", version: "1.0.0" },
 	} as const;
 	readonly reviewInstructions =
@@ -115,11 +121,23 @@ export class BulkRnaseqAdapter implements AnalysisAdapter {
 		const method = methodIdentity(evidence.method);
 		if (!["DESeq2", "DESeq2/fixed-dispersion-diagnostic"].includes(method.id))
 			throw new Error("Bulk RNA-seq adapter requires an explicit supported DESeq2 method");
-		const scientificPlan = evidence.scientificPlan === undefined ? undefined : normalizeBulkScientificPlan(
-			spec, evidence.scientificPlan, method, evidence.groupColumn, evidence.biologicalUnitColumn,
-		);
-		if (scientificPlan && canonicalPlanJson(spec.dataDesign?.analysisPlan?.methodPlan) !== canonicalPlanJson(scientificPlan))
-			throw new Error("The scientific method plan must be frozen in the authorized analysisPlan before readiness");
+		const scientificPlan =
+			evidence.scientificPlan === undefined
+				? undefined
+				: normalizeBulkScientificPlan(
+						spec,
+						evidence.scientificPlan,
+						method,
+						evidence.groupColumn,
+						evidence.biologicalUnitColumn,
+					);
+		if (
+			scientificPlan &&
+			canonicalPlanJson(spec.dataDesign?.analysisPlan?.methodPlan) !== canonicalPlanJson(scientificPlan)
+		)
+			throw new Error(
+				"The scientific method plan must be frozen in the authorized analysisPlan before readiness",
+			);
 		const units = new Map<string, Set<string>>();
 		const groupsByUnit = new Map<string, string>();
 		if (typeof evidence.groupColumn !== "string" || typeof evidence.biologicalUnitColumn !== "string")
@@ -143,11 +161,22 @@ export class BulkRnaseqAdapter implements AnalysisAdapter {
 			referenceResolved: scientificPlan !== undefined || evidence.referenceResolved === true,
 			biologicalReplicates,
 		});
-		if (method.id === "DESeq2" && !scientificPlan) assessment = {
-			...assessment, ok: false, inferentialClaimsAllowed: false,
-			gates: [...assessment.gates, { code: "missing-data", severity: "pause", evidenceKey: "scientificPlan",
-				message: "Standard DESeq2 requires a frozen scientific plan and observed execution receipt before delivery." }],
-		};
+		if (method.id === "DESeq2" && !scientificPlan)
+			assessment = {
+				...assessment,
+				ok: false,
+				inferentialClaimsAllowed: false,
+				gates: [
+					...assessment.gates,
+					{
+						code: "missing-data",
+						severity: "pause",
+						evidenceKey: "scientificPlan",
+						message:
+							"Standard DESeq2 requires a frozen scientific plan and observed execution receipt before delivery.",
+					},
+				],
+			};
 		// Exploratory mode never waives the selected method's replicate requirement.
 		if (
 			(method.id === "DESeq2" && biologicalReplicates.some((item) => item.count < 2)) ||

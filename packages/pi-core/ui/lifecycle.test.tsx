@@ -1,16 +1,5 @@
-import type {
-	ChatMessageProps,
-	TaskView,
-	UIMessage,
-	WorkbenchTask,
-} from "@gyoungwe/plugin-api/ui";
-import {
-	act,
-	cleanup,
-	fireEvent,
-	render,
-	screen,
-} from "@testing-library/react";
+import type { ChatMessageProps, TaskView, UIMessage, WorkbenchTask } from "@gyoungwe/plugin-api/ui";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { uiFixture } from "../test/ui-setup";
 import { TaskMessage, TaskPanel } from "./entry";
@@ -81,18 +70,12 @@ it("sends the rendered row's session and exact journal revision through the publ
 	fireEvent.click(screen.getByRole("button", { name: "我看过了，这项算完成" }));
 	await act(async () => {});
 	expect(uiFixture.prompt).toHaveBeenCalledOnce();
-	const [sessionId, name, args] = uiFixture.prompt.mock.calls[0] as unknown as [
-		string,
-		string,
-	];
+	const [sessionId, name, args] = uiFixture.prompt.mock.calls[0] as unknown as [string, string];
 	expect(sessionId).toBe("shown");
 	expect(name).toBe("task-action");
 	const decoded = JSON.parse(
 		new TextDecoder().decode(
-			Uint8Array.from(
-				atob(args.replaceAll("-", "+").replaceAll("_", "/")),
-				(c) => c.charCodeAt(0),
-			),
+			Uint8Array.from(atob(args.replaceAll("-", "+").replaceAll("_", "/")), (c) => c.charCodeAt(0)),
 		),
 	);
 	expect(decoded).toEqual({
@@ -105,19 +88,11 @@ it("sends the rendered row's session and exact journal revision through the publ
 it("does not grant a read-only or running row an action because another session is editable", () => {
 	uiFixture.messages = [latest];
 	const view = render(<TaskMessage {...props()} readOnly />);
-	expect(
-		screen
-			.getByRole("button", { name: "我看过了，这项算完成" })
-			.hasAttribute("disabled"),
-	).toBe(true);
+	expect(screen.getByRole("button", { name: "我看过了，这项算完成" }).hasAttribute("disabled")).toBe(true);
 	fireEvent.click(screen.getByRole("button", { name: "我看过了，这项算完成" }));
 	expect(uiFixture.prompt).not.toHaveBeenCalled();
 	view.rerender(<TaskMessage {...props()} agentActive />);
-	expect(
-		screen
-			.getByRole("button", { name: "我看过了，这项算完成" })
-			.hasAttribute("disabled"),
-	).toBe(true);
+	expect(screen.getByRole("button", { name: "我看过了，这项算完成" }).hasAttribute("disabled")).toBe(true);
 });
 it("owns snapshot selection while ordinary text keeps the host default renderer", () => {
 	const older = { ...latest, id: "older", timestamp: 1 };
@@ -128,9 +103,7 @@ it("owns snapshot selection while ordinary text keeps the host default renderer"
 			<TaskMessage {...props()} />
 		</>,
 	);
-	expect(
-		screen.getAllByRole("button", { name: "我看过了，这项算完成" }),
-	).toHaveLength(1);
+	expect(screen.getAllByRole("button", { name: "我看过了，这项算完成" })).toHaveLength(1);
 	view.rerender(
 		<TaskMessage
 			{...props({
@@ -150,9 +123,7 @@ it("owns snapshot selection while ordinary text keeps the host default renderer"
 		tools: [],
 		timestamp: 3,
 	};
-	expect(TaskMessage({ ...props(ordinary), renderDefault: fallback })).toEqual(
-		<p>Untouched default</p>,
-	);
+	expect(TaskMessage({ ...props(ordinary), renderDefault: fallback })).toEqual(<p>Untouched default</p>);
 	expect(fallback).toHaveBeenCalledOnce();
 });
 it("renders an incompatible diagnostic without invoking a missing host hook", () => {
@@ -160,43 +131,59 @@ it("renders an incompatible diagnostic without invoking a missing host hook", ()
 	Reflect.deleteProperty(window.DroneUI.hooks, "useSessionMessages");
 	try {
 		render(<TaskPanel />);
-		expect(
-			document.querySelector('[data-task-ui-status="incompatible"]'),
-		).toBeTruthy();
+		expect(document.querySelector('[data-task-ui-status="incompatible"]')).toBeTruthy();
 		expect(screen.queryByTestId("task-panel")).toBeNull();
 	} finally {
 		window.DroneUI.hooks.useSessionMessages = hook;
 	}
 });
 
-it.each(["zh","en"] as const)("shows live-only memory and pending disk receipts in both task surfaces (%s)",language=>{
- uiFixture.language=language;
- const memory={...latest,taskView:{...taskView,storage:{mode:"memory",state:"deferred"}}};
- uiFixture.messages=[memory];
- let rendered=render(<TaskMessage {...props(memory)} />);
- expect(screen.getByRole("status").textContent).toContain(language==="zh"?"未保存到磁盘":"not saved to disk");
- rendered.unmount();
- rendered=render(<TaskPanel />);
- expect(screen.getByRole("status").textContent).toContain(language==="zh"?"重新授权":"fresh authorization");
- rendered.unmount();
- const pending={...latest,taskView:{...taskView,storage:{mode:"persistent",state:"deferred"}}};
- uiFixture.messages=[pending];
- rendered=render(<TaskMessage {...props(pending)} />);
- expect(screen.getByRole("status").textContent).toContain(language==="zh"?"外部写入暂不可用":"external writes are unavailable");
- rendered.unmount();
- const durable={...latest,taskView:{...taskView,storage:{mode:"persistent",state:"durable"}}};
- uiFixture.messages=[durable];
- render(<TaskPanel />);
- expect(screen.queryByRole("status")).toBeNull();
-});
+it.each(["zh", "en"] as const)(
+	"shows live-only memory and pending disk receipts in both task surfaces (%s)",
+	(language) => {
+		uiFixture.language = language;
+		const memory = { ...latest, taskView: { ...taskView, storage: { mode: "memory", state: "deferred" } } };
+		uiFixture.messages = [memory];
+		let rendered = render(<TaskMessage {...props(memory)} />);
+		expect(screen.getByRole("status").textContent).toContain(
+			language === "zh" ? "未保存到磁盘" : "not saved to disk",
+		);
+		rendered.unmount();
+		rendered = render(<TaskPanel />);
+		expect(screen.getByRole("status").textContent).toContain(
+			language === "zh" ? "重新授权" : "fresh authorization",
+		);
+		rendered.unmount();
+		const pending = {
+			...latest,
+			taskView: { ...taskView, storage: { mode: "persistent", state: "deferred" } },
+		};
+		uiFixture.messages = [pending];
+		rendered = render(<TaskMessage {...props(pending)} />);
+		expect(screen.getByRole("status").textContent).toContain(
+			language === "zh" ? "外部写入暂不可用" : "external writes are unavailable",
+		);
+		rendered.unmount();
+		const durable = {
+			...latest,
+			taskView: { ...taskView, storage: { mode: "persistent", state: "durable" } },
+		};
+		uiFixture.messages = [durable];
+		render(<TaskPanel />);
+		expect(screen.queryByRole("status")).toBeNull();
+	},
+);
 
-it("shows historical unknown and needs-reopen without a saved receipt claim",()=>{
- uiFixture.messages=[latest];
- let rendered=render(<TaskMessage {...props()} />);
- expect(screen.getByRole("status").textContent).toContain("无法确认已保存");
- rendered.unmount();
- const failed={...latest,taskView:{...taskView,storage:{mode:"persistent",state:"needs-reopen"}}};
- uiFixture.messages=[failed];
- render(<TaskPanel />);
- expect(screen.getByRole("status").textContent).toContain("请从磁盘重新打开");
+it("shows historical unknown and needs-reopen without a saved receipt claim", () => {
+	uiFixture.messages = [latest];
+	let rendered = render(<TaskMessage {...props()} />);
+	expect(screen.getByRole("status").textContent).toContain("无法确认已保存");
+	rendered.unmount();
+	const failed = {
+		...latest,
+		taskView: { ...taskView, storage: { mode: "persistent", state: "needs-reopen" } },
+	};
+	uiFixture.messages = [failed];
+	render(<TaskPanel />);
+	expect(screen.getByRole("status").textContent).toContain("请从磁盘重新打开");
 });

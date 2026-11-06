@@ -665,20 +665,17 @@ export const semanticPreferencesInputSchema = { type: "null" };
 export const semanticPreferencesResultSchema = object({
 	binding: nullable(object({ vaultId: string, revision: bindingRevision, label: string })),
 	settings: nullable(
-		object(
-			{ ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string },
-			[
-				"enabled",
-				"provider",
-				"baseUrl",
-				"model",
-				"credentialEnv",
-				"remoteConsent",
-				"version",
-				"revision",
-				"updatedAt",
-			],
-		),
+		object({ ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string }, [
+			"enabled",
+			"provider",
+			"baseUrl",
+			"model",
+			"credentialEnv",
+			"remoteConsent",
+			"version",
+			"revision",
+			"updatedAt",
+		]),
 	),
 	canWriteState: boolean,
 	providerExecution: { const: "unavailable" },
@@ -747,8 +744,7 @@ export interface KnowledgeModelReviewInfoInput {
 	expectedProposalHash: string;
 	profile?: "knowledge-wiki-reviewer";
 }
-export type KnowledgeModelReviewResult =
-	import("../core/wiki-model-review-types.js").WikiModelReviewAudit;
+export type KnowledgeModelReviewResult = import("../core/wiki-model-review-types.js").WikiModelReviewAudit;
 export interface KnowledgeModelReviewInfo {
 	selection: import("@gyoungwe/plugin-api/runtime").PluginModelSelection;
 	lastReview: KnowledgeModelReviewResult | null;

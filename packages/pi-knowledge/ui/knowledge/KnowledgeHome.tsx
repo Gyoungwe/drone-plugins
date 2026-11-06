@@ -1,10 +1,6 @@
 import type { KnowledgeGraph as GraphData, KnowledgePage, WikiReviewItem } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useMemo, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { useLanguage } from "../api";
-import { useKnowledgeStore } from "../api";
-import { useSettingsStore } from "../api";
-import { Button } from "../api";
+import { Button, getKnowledgeApi, useKnowledgeStore, useLanguage, useSettingsStore } from "../api";
 import { useKnowledgeText } from "./copy";
 import { DailyIdeas } from "./DailyIdeas";
 import { useKnowledgeOverview } from "./hooks";

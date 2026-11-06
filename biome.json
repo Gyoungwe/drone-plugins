@@ -1,0 +1,86 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"includes": [
+			"**/*.{ts,tsx,js,jsx,mjs,cjs,mts,json,css}",
+			"!docs",
+			"!**/build-manifest.json",
+			"!packages/*/ui/bundle.js",
+			"!packages/*/ui/styles/generated.ts",
+			"!packages/*/ui/styles/utilities.css",
+			"!packages/pi-knowledge/lib"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 110
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double",
+			"semicolons": "always"
+		}
+	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"a11y": {
+				"useButtonType": "off"
+			},
+			"correctness": {
+				"noUnsafeFinally": "off"
+			},
+			"suspicious": {
+				"noExplicitAny": "off",
+				"noImplicitAnyLet": "off",
+				"noControlCharactersInRegex": "off"
+			},
+			"complexity": {
+				"noExcessiveLinesPerFunction": {
+					"level": "off",
+					"options": { "maxLines": 60, "skipBlankLines": true }
+				}
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.test.mjs", "**/test/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noNonNullAssertion": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["scripts/fixtures/**", "packages/*/test/fixtures/**"],
+			"formatter": {
+				"enabled": false
+			},
+			"linter": {
+				"enabled": false
+			}
+		}
+	],
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	}
+}

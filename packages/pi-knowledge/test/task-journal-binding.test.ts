@@ -3,10 +3,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { createKnowledgeInterface, type KnowledgeInterfaceDependencies } from "../src/extension/internal-knowledge-extension.js";
+import {
+	createKnowledgeInterface,
+	type KnowledgeInterfaceDependencies,
+} from "../src/extension/internal-knowledge-extension.js";
 
 const roots: string[] = [];
-afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+afterEach(async () => {
+	await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
 
 async function fixture(readOnly = false) {
 	const cwd = await mkdtemp(join(tmpdir(), "knowledge-task-binding-"));
@@ -18,41 +23,109 @@ async function fixture(readOnly = false) {
 	const binding = { vaultId: "a".repeat(24), revision: 1, vault: cwd };
 	const readKnowledgeBinding = async () => binding;
 	let journal: any = null;
-	const provider = () => { if (journal) emitter.emit("drone:task-runtime/v1", { version: 1, registry: { journal } }); };
+	const provider = () => {
+		if (journal) emitter.emit("drone:task-runtime/v1", { version: 1, registry: { journal } });
+	};
 	emitter.on("drone:task-runtime/request/v1", provider);
 	const pi = {
-		events: { on(name: string, callback: (...args: any[]) => void) { emitter.on(name, callback); return () => emitter.off(name, callback); }, emit: (name: string, value: unknown) => emitter.emit(name, value) },
-		on(name: string, callback: (...args: any[]) => unknown) { hooks.set(name, [...(hooks.get(name) ?? []), callback]); },
+		events: {
+			on(name: string, callback: (...args: any[]) => void) {
+				emitter.on(name, callback);
+				return () => emitter.off(name, callback);
+			},
+			emit: (name: string, value: unknown) => emitter.emit(name, value),
+		},
+		on(name: string, callback: (...args: any[]) => unknown) {
+			hooks.set(name, [...(hooks.get(name) ?? []), callback]);
+		},
 		registerTool: (tool: any) => tools.set(tool.name, tool),
 		registerCommand() {},
 		appendEntry: (customType: string, data: unknown) => entries.push({ customType, data }),
 	};
 	let publicationOptions: any;
 	const publication = {
-		registerAnswerPublication(_pi: unknown, options: unknown) { publicationOptions = options; return { begin() {}, invalidate() {} }; },
+		registerAnswerPublication(_pi: unknown, options: unknown) {
+			publicationOptions = options;
+			return { begin() {}, invalidate() {} };
+		},
 	};
 	const service = {
-		prepare: async () => ({ navigation: [], ticket: "read-ticket", status: { coverage: "complete", problems: [] } }),
-		read: vi.fn(async () => ({ path: "Library/note.md", hash: "b".repeat(64), text: "Synthetic evidence", startLine: 2, endLine: 2 })),
+		prepare: async () => ({
+			navigation: [],
+			ticket: "read-ticket",
+			status: { coverage: "complete", problems: [] },
+		}),
+		read: vi.fn(async () => ({
+			path: "Library/note.md",
+			hash: "b".repeat(64),
+			text: "Synthetic evidence",
+			startLine: 2,
+			endLine: 2,
+		})),
 		request: async () => ({ outgoing: [], incoming: [] }),
 	};
-	const ui = Object.fromEntries(["beginKnowledgeFlow", "invalidateKnowledgeUi", "noteKnowledgeOperation", "noteKnowledgeRead", "noteKnowledgeSearch", "notifyKnowledgeUi", "requestWikiReviewUi", "updateKnowledgeFlow"].map(name => [name, vi.fn()]));
-	const oldRegister = vi.fn(() => { throw new Error("Knowledge must not register task hooks"); });
-	const knowledge = createKnowledgeInterface({
-		host: { deliveryContract: () => null },
-		config: { knowledgeDirectory: () => cwd, readKnowledgeBinding, withKnowledgeBinding: async (_binding: unknown, run: () => unknown) => run() },
-		services: { getKnowledgeService: async () => service },
-		publication, delivery: {}, specialists: { createKnowledgeSpecialists: () => ({ close: async () => {} }) },
-		topics: { createTopicMemory: () => ({}) }, ui, wiki: {},
-	} as unknown as KnowledgeInterfaceDependencies, { registerTaskRuntime: oldRegister, registerAcceptanceVerifier: oldRegister, bindAcceptanceVerifierEvents: oldRegister });
+	const ui = Object.fromEntries(
+		[
+			"beginKnowledgeFlow",
+			"invalidateKnowledgeUi",
+			"noteKnowledgeOperation",
+			"noteKnowledgeRead",
+			"noteKnowledgeSearch",
+			"notifyKnowledgeUi",
+			"requestWikiReviewUi",
+			"updateKnowledgeFlow",
+		].map((name) => [name, vi.fn()]),
+	);
+	const oldRegister = vi.fn(() => {
+		throw new Error("Knowledge must not register task hooks");
+	});
+	const knowledge = createKnowledgeInterface(
+		{
+			host: { deliveryContract: () => null },
+			config: {
+				knowledgeDirectory: () => cwd,
+				readKnowledgeBinding,
+				withKnowledgeBinding: async (_binding: unknown, run: () => unknown) => run(),
+			},
+			services: { getKnowledgeService: async () => service },
+			publication,
+			delivery: {},
+			specialists: { createKnowledgeSpecialists: () => ({ close: async () => {} }) },
+			topics: { createTopicMemory: () => ({}) },
+			ui,
+			wiki: {},
+		} as unknown as KnowledgeInterfaceDependencies,
+		{
+			registerTaskRuntime: oldRegister,
+			registerAcceptanceVerifier: oldRegister,
+			bindAcceptanceVerifierEvents: oldRegister,
+		},
+	);
 	const registration = knowledge.registerKnowledgeInterface(pi, { readOnly });
 	const ctx = { cwd, sessionManager: { getSessionId: () => "session", getBranch: () => entries } };
-	const emitHook = async (name: string) => { for (const handler of hooks.get(name) ?? []) await handler({}, ctx); };
-	return { emitter, tools, entries, service, oldRegister, publication: () => publicationOptions, setJournal: (value: any) => { journal = value; }, emitHook, ctx, registration, readKnowledgeBinding };
+	const emitHook = async (name: string) => {
+		for (const handler of hooks.get(name) ?? []) await handler({}, ctx);
+	};
+	return {
+		emitter,
+		tools,
+		entries,
+		service,
+		oldRegister,
+		publication: () => publicationOptions,
+		setJournal: (value: any) => {
+			journal = value;
+		},
+		emitHook,
+		ctx,
+		registration,
+		readKnowledgeBinding,
+	};
 }
 
 it("consumes only the current session bus owner and clears stale journal references on tree changes", async () => {
-	const a = await fixture(), b = await fixture();
+	const a = await fixture(),
+		b = await fixture();
 	const journal = { snapshot: () => ({ id: "task-a" }), configure: vi.fn() };
 	try {
 		expect(a.publication().getTaskRuntime()).toBeNull();
@@ -72,7 +145,10 @@ it("consumes only the current session bus owner and clears stale journal referen
 		a.setJournal(null);
 		await a.emitHook("session_tree");
 		expect(a.publication().getTaskRuntime()).toBeNull();
-	} finally { await a.registration.dispose(); await b.registration.dispose(); }
+	} finally {
+		await a.registration.dispose();
+		await b.registration.dispose();
+	}
 });
 
 it("binds recovery receipts and publication to the same existing task and rejects recovery after that owner disappears", async () => {
@@ -83,15 +159,22 @@ it("binds recovery receipts and publication to the same existing task and reject
 		await state.emitHook("session_start");
 		const read = state.tools.get("research_read_knowledge");
 		await read.execute("read-1", { path: "Library/note.md", start_line: 2 }, undefined, undefined, state.ctx);
-		const receipt = state.entries.filter(entry => entry.customType === "drone-knowledge-recovery-v1").at(-1).data.records[0];
+		const receipt = state.entries.filter((entry) => entry.customType === "drone-knowledge-recovery-v1").at(-1)
+			.data.records[0];
 		expect(receipt.taskId).toBe("task-with-evidence");
 		expect(state.publication().getTaskRuntime()).toBe(journal);
 		state.emitter.emit("drone:context-evicted", { sessionId: "session", toolCallIds: ["read-1"] });
 		state.setJournal(null);
 		await state.emitHook("session_tree");
-		await expect(state.tools.get("research_restore_evidence").execute("restore-1", { receipt_id: "read-1" }, undefined, undefined, state.ctx)).rejects.toThrow("evidence-recovery-unavailable");
+		await expect(
+			state.tools
+				.get("research_restore_evidence")
+				.execute("restore-1", { receipt_id: "read-1" }, undefined, undefined, state.ctx),
+		).rejects.toThrow("evidence-recovery-unavailable");
 		expect(state.service.read).toHaveBeenCalledOnce();
-	} finally { await state.registration.dispose(); }
+	} finally {
+		await state.registration.dispose();
+	}
 });
 
 it("keeps read-only knowledge projections from configuring task write-side state", async () => {
@@ -103,19 +186,24 @@ it("keeps read-only knowledge projections from configuring task write-side state
 		expect(configure).not.toHaveBeenCalled();
 		expect(state.publication().getTaskRuntime()).toBeNull();
 		expect(state.emitter.listenerCount("drone:task-runtime/v1")).toBe(0);
-	} finally { await state.registration.dispose(); }
+	} finally {
+		await state.registration.dispose();
+	}
 });
 
 it("full native interfaces publish function declarations only on their own official event bus", async () => {
- const first = await fixture(), other = await fixture();
- const received: any[] = [], unrelated: any[] = [];
- first.emitter.on("drone:acceptance-verifier/v1", payload => received.push(payload));
- other.emitter.on("drone:acceptance-verifier/v1", payload => unrelated.push(payload));
- first.emitter.emit("drone:acceptance-verifier/request/v1", { version: 1 });
- expect(received).toHaveLength(1);
- expect(typeof received[0].definition.resolve).toBe("function");
- expect(unrelated).toEqual([]);
- expect(first.oldRegister).not.toHaveBeenCalled();
- await first.registration.dispose();await other.registration.dispose();
- expect(first.emitter.listenerCount("drone:acceptance-verifier/request/v1")).toBe(0);
+	const first = await fixture(),
+		other = await fixture();
+	const received: any[] = [],
+		unrelated: any[] = [];
+	first.emitter.on("drone:acceptance-verifier/v1", (payload) => received.push(payload));
+	other.emitter.on("drone:acceptance-verifier/v1", (payload) => unrelated.push(payload));
+	first.emitter.emit("drone:acceptance-verifier/request/v1", { version: 1 });
+	expect(received).toHaveLength(1);
+	expect(typeof received[0].definition.resolve).toBe("function");
+	expect(unrelated).toEqual([]);
+	expect(first.oldRegister).not.toHaveBeenCalled();
+	await first.registration.dispose();
+	await other.registration.dispose();
+	expect(first.emitter.listenerCount("drone:acceptance-verifier/request/v1")).toBe(0);
 });

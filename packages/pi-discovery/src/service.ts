@@ -27,7 +27,12 @@ import {
 	runEvaluation,
 	UnavailableKernelRunner,
 } from "./domain/index.js";
-import type { DiscoveryQuestionPrior as QuestionPrior } from "./ports.js";
+import type {
+	DiscoveryAuthorizationOperation,
+	DiscoveryHostServices,
+	DiscoveryJournal,
+	DiscoveryQuestionPrior as QuestionPrior,
+} from "./ports.js";
 import type {
 	DiscoveryCapabilities,
 	DiscoveryCriticReview,
@@ -38,11 +43,6 @@ import type {
 	DiscoveryKernelSession,
 	DiscoveryMultipathAssessment,
 } from "./projections.js";
-import type {
-	DiscoveryHostServices,
-	DiscoveryJournal,
-	DiscoveryAuthorizationOperation,
-} from "./ports.js";
 
 export type DiscoveryAuthorization = (operation: DiscoveryAuthorizationOperation) => Promise<void>;
 
@@ -122,13 +122,11 @@ export interface DiscoveryServicePort {
 }
 
 function safeProjectId(value: string): string {
-	if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value))
-		throw new Error("Invalid discovery project id");
+	if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("Invalid discovery project id");
 	return value;
 }
 function safeSessionId(value: string): string {
-	if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value))
-		throw new Error("Invalid discovery session id");
+	if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("Invalid discovery session id");
 	return value;
 }
 function safeRunDirectory(projectRoot: string, value: string): string {
@@ -153,8 +151,7 @@ class FileBaselineStore {
 	constructor(private readonly store: DiscoveryJournal<DiscoveryBaselineRecord>) {}
 	async put(record: import("./domain/index.js").DiscoveryBaselineRecord): Promise<void> {
 		const normalized = createBaseline(record);
-		const records =
-			(await this.store.read()) as import("./domain/index.js").DiscoveryBaselineRecord[];
+		const records = (await this.store.read()) as import("./domain/index.js").DiscoveryBaselineRecord[];
 		const index = records.findIndex(
 			(item) =>
 				item.metric === normalized.metric &&
@@ -203,10 +200,7 @@ export class DiscoveryService implements DiscoveryServicePort {
 	private sessionsRevision = 0;
 	private savedSessionsRevision = 0;
 	private disposed = false;
-	private readonly executions = new Map<
-		string,
-		Promise<Awaited<ReturnType<KernelSession["execute"]>>>
-	>();
+	private readonly executions = new Map<string, Promise<Awaited<ReturnType<KernelSession["execute"]>>>>();
 	private readonly executionSignals = new Map<string, AbortSignal>();
 	private disposal?: Promise<void>;
 
@@ -287,10 +281,7 @@ export class DiscoveryService implements DiscoveryServicePort {
 		for (const [id, session] of this.sessions) {
 			const meta = this.sessionMeta.get(id);
 			if (!meta) throw new Error("Active discovery session has no journal metadata");
-			if (
-				meta.status !== session.status.status ||
-				meta.executionCount !== session.status.executionCount
-			) {
+			if (meta.status !== session.status.status || meta.executionCount !== session.status.executionCount) {
 				this.sessionMeta.set(id, {
 					...meta,
 					status: session.status.status,
@@ -359,8 +350,7 @@ export class DiscoveryService implements DiscoveryServicePort {
 	private async createKernel(input: DiscoveryKernelSessionInput): Promise<DiscoveryKernelSession> {
 		await this.init();
 		const sessionId = safeSessionId(input.sessionId);
-		if (this.sessionMeta.has(sessionId))
-			throw new Error(`Discovery session already exists: ${sessionId}`);
+		if (this.sessionMeta.has(sessionId)) throw new Error(`Discovery session already exists: ${sessionId}`);
 		const runDirectory = safeRunDirectory(this.projectRoot, input.runDirectory);
 		await this.authorize({
 			kind: "create-kernel-session",
@@ -376,9 +366,7 @@ export class DiscoveryService implements DiscoveryServicePort {
 			runner,
 			writer: this.options.services.files,
 			...(input.idleTimeoutMs === undefined ? {} : { idleTimeoutMs: input.idleTimeoutMs }),
-			...(input.executionTimeoutMs === undefined
-				? {}
-				: { executionTimeoutMs: input.executionTimeoutMs }),
+			...(input.executionTimeoutMs === undefined ? {} : { executionTimeoutMs: input.executionTimeoutMs }),
 			...(input.maxExecutions === undefined ? {} : { maxExecutions: input.maxExecutions }),
 			...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
 		};
@@ -656,15 +644,11 @@ export class DiscoveryService implements DiscoveryServicePort {
 			pending,
 			signal: this.executionSignals.get(id),
 		}));
-		const settled = await Promise.allSettled([
-			...sessionClosures,
-			...executions.map((item) => item.pending),
-		]);
+		const settled = await Promise.allSettled([...sessionClosures, ...executions.map((item) => item.pending)]);
 		const failures = settled.filter(
 			(result, index): result is PromiseRejectedResult =>
 				result.status === "rejected" &&
-				(index < sessionClosures.length ||
-					!executions[index - sessionClosures.length]?.signal?.aborted),
+				(index < sessionClosures.length || !executions[index - sessionClosures.length]?.signal?.aborted),
 		);
 		if (failures.length)
 			throw new AggregateError(

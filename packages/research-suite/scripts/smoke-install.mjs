@@ -15,7 +15,16 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 const packageRoot = new URL("..", import.meta.url).pathname;
-const sdkFamily = ["chord", "pi-agent-core", "pi-ai", "pi-codemode", "pi-coding-agent", "pi-mcp", "pi-telemetry", "pi-tui"];
+const sdkFamily = [
+	"chord",
+	"pi-agent-core",
+	"pi-ai",
+	"pi-codemode",
+	"pi-coding-agent",
+	"pi-mcp",
+	"pi-telemetry",
+	"pi-tui",
+];
 const root = await mkdtemp(join(tmpdir(), "drone-research-suite-install-"));
 const tarballRoot = join(root, "tarballs");
 const installRoot = join(root, "install");
@@ -31,31 +40,36 @@ await mkdir(env.HOME, { recursive: true });
 await writeFile(env.npm_config_userconfig, "registry=https://registry.npmjs.org\n", "utf8");
 try {
 	const packed = JSON.parse(
-		(await run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", tarballRoot], {
-			cwd: packageRoot,
-			env,
-		})).stdout,
+		(
+			await run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", tarballRoot], {
+				cwd: packageRoot,
+				env,
+			})
+		).stdout,
 	)[0];
 	assert(packed?.filename?.endsWith(".tgz"), "research-suite did not produce an npm tarball");
 	const tarball = join(tarballRoot, packed.filename);
 	const packageJson = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 	await writeFile(
 		join(installRoot, "package.json"),
-		`${JSON.stringify({
-			private: true,
-			type: "module",
-			dependencies: {
-				[packageJson.name]: `file:${tarball}`,
-				...Object.fromEntries(sdkFamily.map((name) => [`@earendil-works/${name}`, "1.1.0"])),
+		`${JSON.stringify(
+			{
+				private: true,
+				type: "module",
+				dependencies: {
+					[packageJson.name]: `file:${tarball}`,
+					...Object.fromEntries(sdkFamily.map((name) => [`@earendil-works/${name}`, "1.1.0"])),
+				},
 			},
-		}, null, 2)}\n`,
+			null,
+			2,
+		)}\n`,
 		"utf8",
 	);
-	await run(
-		"npm",
-		["install", "--ignore-scripts", "--legacy-peer-deps", "--no-audit", "--no-fund"],
-		{ cwd: installRoot, env },
-	);
+	await run("npm", ["install", "--ignore-scripts", "--legacy-peer-deps", "--no-audit", "--no-fund"], {
+		cwd: installRoot,
+		env,
+	});
 	const suiteRoot = join(installRoot, "node_modules", "@gyoungwe", "research-suite");
 	const installed = JSON.parse(await readFile(join(suiteRoot, "package.json"), "utf8"));
 	assert.equal(installed.version, packageJson.version);
@@ -82,7 +96,9 @@ try {
 		status: "PASS",
 		package: packageJson.name,
 		version: installed.version,
-		tarballSha256: createHash("sha256").update(await readFile(tarball)).digest("hex"),
+		tarballSha256: createHash("sha256")
+			.update(await readFile(tarball))
+			.digest("hex"),
 		installRootIsClean: true,
 		loadedExtensions: loaded.extensions.length,
 		toolCount: names.length,

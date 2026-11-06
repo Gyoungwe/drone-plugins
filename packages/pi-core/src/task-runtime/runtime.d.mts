@@ -6,5 +6,7 @@ export interface TaskJournal {
 
 export function registerTaskRuntime(
 	pi: unknown,
-	options?: { readKnowledgeBinding?: () => Promise<{ vaultId: string; revision: number; vault?: string } | null> },
+	options?: {
+		readKnowledgeBinding?: () => Promise<{ vaultId: string; revision: number; vault?: string } | null>;
+	},
 ): TaskJournal;

@@ -17,11 +17,9 @@ test("packed public entries provide their own declarations to a clean TypeScript
 	t.diagnostic(`Explicit Plugin API ${api.version} SHA-256 ${api.sha256}`);
 	const root = await mkdtemp(join(tmpdir(), "pi-core-types-"));
 	try {
-		const packed = await run(
-			"npm",
-			["pack", "--json", "--ignore-scripts", "--pack-destination", root],
-			{ cwd: packageRoot },
-		);
+		const packed = await run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", root], {
+			cwd: packageRoot,
+		});
 		const [{ filename }] = JSON.parse(packed.stdout);
 		const prefix = join(root, "consumer");
 		await run(
@@ -42,9 +40,7 @@ test("packed public entries provide their own declarations to a clean TypeScript
 			{ maxBuffer: 8 * 1024 * 1024 },
 		);
 		const installed = join(prefix, "node_modules/@gyoungwe/pi-core");
-		const pkg = JSON.parse(
-			await readFile(join(installed, "package.json"), "utf8"),
-		);
+		const pkg = JSON.parse(await readFile(join(installed, "package.json"), "utf8"));
 		assert.equal(pkg.version, "0.2.0");
 		assert.equal(pkg.exports["./host"].types, "./dist/host.d.ts");
 		await writeFile(
@@ -85,11 +81,10 @@ void [registerPiCore, coreHostLoader, writeMemory, makeAskUserTool, makeDeliverF
 				files: ["consumer.ts"],
 			}),
 		);
-		execFileSync(
-			join(workspaceRoot, "node_modules/.bin/tsc"),
-			["-p", join(prefix, "tsconfig.json")],
-			{ cwd: prefix, stdio: "inherit" },
-		);
+		execFileSync(join(workspaceRoot, "node_modules/.bin/tsc"), ["-p", join(prefix, "tsconfig.json")], {
+			cwd: prefix,
+			stdio: "inherit",
+		});
 		for (const path of [
 			"memory",
 			"tools/ask-user",

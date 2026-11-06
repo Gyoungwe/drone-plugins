@@ -4,14 +4,14 @@ import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import { expect, it } from "vitest";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
-import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
-import { createKnowledgeUi } from "../src/core/ui-state.js";
 import { createKnowledgePublication } from "../src/core/publication.js";
-import { createKnowledgeServicePool } from "../src/core/service.js";
-import { createKnowledgeWorkerTransportFactory } from "../src/core/worker-transport.js";
-import { createSemanticSettingsApi } from "../src/core/semantic-settings.js";
-import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
 import type { ReviewMode } from "../src/core/review-policy.js";
+import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
+import { createSemanticSettingsApi } from "../src/core/semantic-settings.js";
+import { createKnowledgeServicePool } from "../src/core/service.js";
+import { createKnowledgeUi } from "../src/core/ui-state.js";
+import { createKnowledgeWorkerTransportFactory } from "../src/core/worker-transport.js";
+import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
 
 it("publication guidance waits for the actual asynchronous review policy", async () => {
 	let finish!: (mode: ReviewMode) => void;
@@ -27,10 +27,7 @@ it("publication guidance waits for the actual asynchronous review policy", async
 		config,
 		new AbortController().signal,
 	);
-	const adapter = publication.registerAnswerPublication(
-		{ on() {} },
-		{ getCurrent: () => null },
-	);
+	const adapter = publication.registerAnswerPublication({ on() {} }, { getCurrent: () => null });
 	let settled = false;
 	const guidance = adapter.guidance().then((value) => {
 		settled = true;
@@ -39,30 +36,20 @@ it("publication guidance waits for the actual asynchronous review policy", async
 	await Promise.resolve();
 	expect(settled).toBe(false);
 	finish("automatic");
-	expect(await guidance).toContain(
-		"Evidence quality reminders are nonblocking",
-	);
+	expect(await guidance).toContain("Evidence quality reminders are nonblocking");
 	ui.dispose();
 });
 
 it("real answer validation waits for strict policy and rejects an unread related Wiki", async () => {
-	const root = await realpath(
-		await mkdtemp(join(tmpdir(), "knowledge-async-policy-")),
-	);
+	const root = await realpath(await mkdtemp(join(tmpdir(), "knowledge-async-policy-")));
 	const vault = join(root, "Vault"),
 		directory = join(root, "state");
 	await mkdir(join(vault, "Library/Methods"), { recursive: true });
 	await mkdir(join(vault, "Wiki"));
 	await writeFile(join(vault, "Home.md"), "# Home\n[[Wiki/Orchid]]\n");
 	await writeFile(join(vault, "Wiki/Index.md"), "# Wiki\n[[Wiki/Orchid]]\n");
-	await writeFile(
-		join(vault, "Wiki/Orchid.md"),
-		"# Orchid\nOrchid method overview.\n",
-	);
-	await writeFile(
-		join(vault, "Library/Methods/method.md"),
-		"# Orchid method\nOrchid evidence.\n",
-	);
+	await writeFile(join(vault, "Wiki/Orchid.md"), "# Orchid\nOrchid method overview.\n");
+	await writeFile(join(vault, "Library/Methods/method.md"), "# Orchid method\nOrchid evidence.\n");
 	const config = createKnowledgeConfigApi(undefined, directory);
 	await config.saveKnowledgeBinding({
 		vault,
@@ -72,11 +59,7 @@ it("real answer validation waits for strict policy and rejects an unread related
 	});
 	const host = createKnowledgeRuntimeHost();
 	host.configureKnowledgeWorker(
-		(_url, options) =>
-			new Worker(
-				new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url),
-				options,
-			),
+		(_url, options) => new Worker(new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url), options),
 		() => ({ version: "async-policy-test" }),
 	);
 	const ui = createKnowledgeUi(host, config);
@@ -86,11 +69,8 @@ it("real answer validation waits for strict policy and rejects an unread related
 		config,
 		createSemanticSettingsApi(undefined, directory),
 		{ readReviewMode: () => policy },
-		createKnowledgeWorkerTransportFactory(
-			host,
-			config,
-			ui.invalidateKnowledgeUi,
-			(input) => acquireKnowledgeWriterLease(input, join(root, "leases")),
+		createKnowledgeWorkerTransportFactory(host, config, ui.invalidateKnowledgeUi, (input) =>
+			acquireKnowledgeWriterLease(input, join(root, "leases")),
 		),
 	);
 	try {
@@ -112,11 +92,7 @@ it("real answer validation waits for strict policy and rejects an unread related
 		});
 		let settled = false;
 		const result = service
-			.validateAnswer(
-				prepared.ticket,
-				root,
-				"Orchid evidence [[Library/Methods/method.md]].",
-			)
+			.validateAnswer(prepared.ticket, root, "Orchid evidence [[Library/Methods/method.md]].")
 			.then(
 				(value: unknown) => {
 					settled = true;

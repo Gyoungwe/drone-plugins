@@ -49,10 +49,7 @@ export function KnowledgeSearchView({
 	busy: boolean;
 	error: string | null;
 	onSearch: (query: string) => Promise<void>;
-	onOpenNote: (
-		path: string,
-		hit?: { hash?: string; startLine?: number },
-	) => void;
+	onOpenNote: (path: string, hit?: { hash?: string; startLine?: number }) => void;
 }) {
 	const t = useKnowledgeText();
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -74,9 +71,7 @@ export function KnowledgeSearchView({
 	const hits = useMemo(
 		() =>
 			result?.hits.filter(
-				(hit) =>
-					activeCategory === "all" ||
-					classifyKnowledgeHit(hit.kind, hit.path) === activeCategory,
+				(hit) => activeCategory === "all" || classifyKnowledgeHit(hit.kind, hit.path) === activeCategory,
 			) ?? [],
 		[result, activeCategory],
 	);
@@ -107,19 +102,11 @@ export function KnowledgeSearchView({
 				<kbd className="rounded-md bg-hover px-2 py-0.5 text-[11px] text-ink-dim">
 					{t("homeSearchShortcut")}
 				</kbd>
-				<Button
-					size="sm"
-					type="submit"
-					disabled={busy || !query.trim() || !bindingRevision}
-				>
+				<Button size="sm" type="submit" disabled={busy || !query.trim() || !bindingRevision}>
 					{busy ? t("loading") : t("homeSearch")}
 				</Button>
 			</form>
-			<div
-				className="mt-3 flex flex-wrap items-center gap-1"
-				role="tablist"
-				aria-label={t("homeCategories")}
-			>
+			<div className="mt-3 flex flex-wrap items-center gap-1" role="tablist" aria-label={t("homeCategories")}>
 				{(Object.keys(CATEGORY_KEYS) as KnowledgeCategory[]).map((category) => {
 					const count = categoryCounts[category];
 					return (
@@ -131,17 +118,12 @@ export function KnowledgeSearchView({
 							onClick={() => onCategoryChange(category)}
 							className={`rounded-full px-3 py-2 text-xs ${activeCategory === category ? "bg-hover font-medium text-ink" : count === 0 ? "text-ink-faint opacity-60 hover:bg-hover" : "text-ink-dim hover:bg-hover"}`}
 						>
-							{t(CATEGORY_KEYS[category] as any)}{" "}
-							{count == null ? t("homeCountUnknown") : count}
+							{t(CATEGORY_KEYS[category] as any)} {count == null ? t("homeCountUnknown") : count}
 						</button>
 					);
 				})}
 			</div>
-			{!bindingRevision && (
-				<p className="mt-3 text-xs text-ink-faint">
-					{t("homeSearchUnavailable")}
-				</p>
-			)}
+			{!bindingRevision && <p className="mt-3 text-xs text-ink-faint">{t("homeSearchUnavailable")}</p>}
 			{error && (
 				<p role="alert" className="mt-3 break-words text-xs text-err">
 					{error}
@@ -156,9 +138,7 @@ export function KnowledgeSearchView({
 				<div className="mt-3">
 					{hits.length === 0 ? (
 						<p className="text-xs text-ink-faint">
-							{result.complete
-								? t("homeSearchEmpty")
-								: t("homeSearchIncomplete")}
+							{result.complete ? t("homeSearchEmpty") : t("homeSearchIncomplete")}
 						</p>
 					) : (
 						<ul className="divide-y divide-border rounded-xl border border-border bg-surface">
@@ -169,10 +149,7 @@ export function KnowledgeSearchView({
 										className="w-full px-3 py-3 text-left hover:bg-hover"
 										onClick={() => openHit(hit.path, hit)}
 									>
-										<span
-											className="block truncate text-xs font-medium"
-											title={hit.title}
-										>
+										<span className="block truncate text-xs font-medium" title={hit.title}>
 											{hit.title || hit.path}
 										</span>
 										<span className="mt-1 block truncate font-mono text-[11px] text-ink-faint">

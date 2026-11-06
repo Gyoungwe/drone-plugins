@@ -2,14 +2,7 @@ import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import { join } from "node:path";
 
-export const JOURNALS = [
-	"sessions",
-	"critics",
-	"multipath",
-	"plans",
-	"evaluations",
-	"baselines",
-] as const;
+export const JOURNALS = ["sessions", "critics", "multipath", "plans", "evaluations", "baselines"] as const;
 export type JournalName = (typeof JOURNALS)[number];
 const MAX_JOURNAL_BYTES = 1_048_576;
 const MAX_RESULTS = 32;
@@ -24,8 +17,7 @@ async function readJournal(
 	try {
 		for (const part of ["runs", ".drone-discovery", `${journal}.json`]) {
 			path = join(path, part);
-			if ((await lstat(path)).isSymbolicLink())
-				throw new Error("Discovery journal path contains a symlink");
+			if ((await lstat(path)).isSymbolicLink()) throw new Error("Discovery journal path contains a symlink");
 		}
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
@@ -35,25 +27,16 @@ async function readJournal(
 	try {
 		const metadata = await file.stat();
 		if (!metadata.isFile() || metadata.size > MAX_JOURNAL_BYTES)
-			throw new Error(
-				`Discovery journal must be a file of at most ${MAX_JOURNAL_BYTES} bytes`,
-			);
+			throw new Error(`Discovery journal must be a file of at most ${MAX_JOURNAL_BYTES} bytes`);
 		const bytes = Buffer.alloc(MAX_JOURNAL_BYTES + 1);
 		const { bytesRead } = await file.read(bytes, 0, bytes.length, 0);
-		if (bytesRead > MAX_JOURNAL_BYTES)
-			throw new Error("Discovery journal exceeds the byte limit");
-		const value: unknown = JSON.parse(
-			bytes.subarray(0, bytesRead).toString("utf8"),
-		);
+		if (bytesRead > MAX_JOURNAL_BYTES) throw new Error("Discovery journal exceeds the byte limit");
+		const value: unknown = JSON.parse(bytes.subarray(0, bytesRead).toString("utf8"));
 		if (
 			!Array.isArray(value) ||
-			value.some(
-				(item) => !item || typeof item !== "object" || Array.isArray(item),
-			)
+			value.some((item) => !item || typeof item !== "object" || Array.isArray(item))
 		)
-			throw new Error(
-				`Discovery journal ${journal} must contain an array of records`,
-			);
+			throw new Error(`Discovery journal ${journal} must contain an array of records`);
 		return value as Record<string, unknown>[];
 	} finally {
 		await file.close();
@@ -72,9 +55,7 @@ export async function nativeDiscoveryStatus(cwd: string) {
 		}),
 	);
 	return {
-		status: journals.some((item) => item.configured)
-			? "configured"
-			: "unconfigured",
+		status: journals.some((item) => item.configured) ? "configured" : "unconfigured",
 		readOnly: true,
 		journalRoot: "runs/.drone-discovery",
 		journals,
@@ -83,16 +64,11 @@ export async function nativeDiscoveryStatus(cwd: string) {
 	};
 }
 
-export async function nativeDiscoveryRecords(
-	cwd: string,
-	journal: JournalName,
-	query?: string,
-) {
+export async function nativeDiscoveryRecords(cwd: string, journal: JournalName, query?: string) {
 	const records = await readJournal(cwd, journal);
 	const needle = query?.trim().toLocaleLowerCase();
 	const matches = records?.filter(
-		(record) =>
-			!needle || JSON.stringify(record).toLocaleLowerCase().includes(needle),
+		(record) => !needle || JSON.stringify(record).toLocaleLowerCase().includes(needle),
 	);
 	return {
 		status: records === null ? "unconfigured" : "configured",

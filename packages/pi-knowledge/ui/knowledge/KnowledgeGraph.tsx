@@ -31,9 +31,7 @@ export function KnowledgeGraph({
 				useSessionsStore.getState().createDraftSession(cwd ?? undefined);
 				const id = useSessionsStore.getState().activeSessionId;
 				if (!id) return;
-				useDraftStore
-					.getState()
-					.updateDraft(id, (entry) => ({ ...entry, text: prompt }));
+				useDraftStore.getState().updateDraft(id, (entry) => ({ ...entry, text: prompt }));
 				useKnowledgeStore.getState().close();
 				useUiStore.getState().setView("chat");
 				window.dispatchEvent(new Event(COMPOSER_FOCUS_EVENT));

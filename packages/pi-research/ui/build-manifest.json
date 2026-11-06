@@ -1,11 +1,11 @@
 {
   "artifactSource": "ui/src/index.tsx",
   "inputs": {
-    "ui/src/index.tsx": "fa8b8831aa8c475b4ae483d83c27e8c1b451a312a3d89b5614295010132ee7cb",
-    "scripts/build-ui.mjs": "3e89c13cd4878cefa605390b7e6d199eb99b77933d88e4ac79afafecf3fb36ab",
-    "package.json": "4836268372a2643cf55faaad8879048ef665a748be1b78f82e5d225b9811633f",
-    "plugin.manifest.json": "70e67378c2e459febe284d1cbea54bd370396f56abaa80916176c092feba7e64",
-    "ui/plugin.json": "a22b36b08efb04f2d66ec8ac383f82d456cec3bcbbe9c7c8e65a3f33544cb29b"
+    "ui/src/index.tsx": "341ad7cc7af4843e93443d2b95d5e004380f3fe95fb0c187099449f6d26d69a0",
+    "scripts/build-ui.mjs": "7f1c75eee7f708f2d3eefdb949d97140374f090ae5ca21df5acd7054f6ad98fd",
+    "package.json": "82b9f06a99d287f48616ad5990866fa1d4cfdfb14c0c625b000c7d25369bcb85",
+    "plugin.manifest.json": "3ccea91078859f56bb91e4b6ea3893b53e17ca00b7380a671a088de2b3ef7545",
+    "ui/plugin.json": "f69c5484dfcc253ab39c60f87c42e9ef3b1e9faffa19661b3a9a45e0e19678a5"
   },
   "outputs": {
     "ui/bundle.js": "dc6c9b4f7097d0451550da56a2e5108fa0821afd46d0845d6c1351a109bdf699"

@@ -1,4 +1,3 @@
-import { it } from "./scoped-test.mjs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +8,7 @@ import {
 } from "@gyoungwe/pi-research/host";
 import { expect, vi } from "vitest";
 import { createTaskWorkbench, inspectTaskFile, WORKBENCH_ENTRY } from "./fixture.mjs";
+import { it } from "./scoped-test.mjs";
 
 vi.setConfig({ testTimeout: 30000 });
 function pdf(text) {

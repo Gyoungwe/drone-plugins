@@ -1,18 +1,19 @@
-import { Worker } from "node:worker_threads";
-import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, readFile, readdir, writeFile, rm, realpath } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Worker } from "node:worker_threads";
 import { expect, it } from "vitest";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
-import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
+import { inspectNote, readNoteFile } from "../src/core/files.js";
 import { createKnowledgeRuntime } from "../src/core/knowledge-runtime.js";
+import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
 import { immutableWikiProposalHash } from "../src/core/wiki-policy.js";
 import { createKnowledgeWikiReview } from "../src/core/wiki-review.js";
+import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
 import { createBrokerWikiReviewPorts } from "../src/desktop/review-storage.js";
-import { readNoteFile, inspectNote } from "../src/core/files.js";
 import { createKnowledgeReviewModel } from "../src/desktop/reviews.js";
+
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 
 it("shares CLI review projection through broker state and real SQLite with scope, version and revocation checks", async () => {

@@ -7,9 +7,7 @@ export function reproducibilityStatus(
 ): ReproducibilityStatus {
 	const hasCode = typeof codeFingerprint === "string" && codeFingerprint.trim().length > 0;
 	const hasRun =
-		runProvenance !== null &&
-		typeof runProvenance === "object" &&
-		Object.keys(runProvenance).length > 0;
+		runProvenance !== null && typeof runProvenance === "object" && Object.keys(runProvenance).length > 0;
 	if (hasCode && hasRun) return "reproducible";
 	if (hasCode || hasRun) return "partial";
 	return "not-reproducible";

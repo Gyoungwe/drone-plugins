@@ -1,8 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, it } from "vitest";
 import {
 	fauxAssistantMessage,
 	fauxProvider,
@@ -11,19 +10,20 @@ import {
 } from "@earendil-works/pi-ai";
 import {
 	createAgentSessionFromServices,
-	createAgentSessionServices,
 	createAgentSessionRuntime,
+	createAgentSessionServices,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { PluginResourceInstance } from "@gyoungwe/plugin-api/resource";
+import { expect, it } from "vitest";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
-import { createLocalWikiReviewPorts } from "../src/core/wiki-review-node.js";
-import { immutableWikiProposalHash } from "../src/core/wiki-policy.js";
 import { inspectNote, readNoteFile } from "../src/core/files.js";
-import createDesktopRuntime from "../src/desktop/runtime.js";
+import { immutableWikiProposalHash } from "../src/core/wiki-policy.js";
+import { createLocalWikiReviewPorts } from "../src/core/wiki-review-node.js";
 import createIndexResource from "../src/desktop/index-resource.js";
+import createDesktopRuntime from "../src/desktop/runtime.js";
 
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 it.each([false, true])(
@@ -101,9 +101,15 @@ it.each([false, true])(
 				names.push(name);
 				const input = raw as any;
 				if (name === "caller.scope") return call.scope;
-				if (name === "session.inspect") return { agentActive, projectTrusted: sdk.session.settingsManager.isProjectTrusted(), readOnly: false };
+				if (name === "session.inspect")
+					return {
+						agentActive,
+						projectTrusted: sdk.session.settingsManager.isProjectTrusted(),
+						readOnly: false,
+					};
 				// This fixture declares no task service. Production installed-source routing is covered by host gates.
-				if (name === "provider.inspect") return { state: "absent", service: "task.runtime", requestedVersion: 1, provider: null };
+				if (name === "provider.inspect")
+					return { state: "absent", service: "task.runtime", requestedVersion: 1, provider: null };
 				if (name === "model.selection")
 					return {
 						provider: provider.provider.id,
@@ -455,10 +461,7 @@ it.each([false, true])(
 			await expect(
 				invoke("undoReview", { revision: binding.revision, id, expectedHash: proposal.afterHash }),
 			).resolves.toMatchObject({ status: "reverted" });
-			await expect(readFile(join(vault, proposal.path), "utf8")).rejects.toHaveProperty(
-				"code",
-				"ENOENT",
-			);
+			await expect(readFile(join(vault, proposal.path), "utf8")).rejects.toHaveProperty("code", "ENOENT");
 			expect(await invoke("reviewHistory", { revision: binding.revision })).toMatchObject({
 				items: [],
 			});
@@ -471,9 +474,7 @@ it.each([false, true])(
 			expect(exited).toBe(0);
 			expect(await invoke("overview", null)).toMatchObject({ state: "bound" });
 			revoked = true;
-			await expect(invoke("reviewHistory", { revision: binding.revision })).rejects.toThrow(
-				"revoked",
-			);
+			await expect(invoke("reviewHistory", { revision: binding.revision })).rejects.toThrow("revoked");
 			revoked = false;
 		} finally {
 			await sdk.dispose();

@@ -1,13 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import {
-	copyFileSync,
-	mkdirSync,
-	mkdtempSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -33,15 +26,9 @@ const run = (command, args, cwd = root) =>
 	});
 try {
 	const packed = JSON.parse(
-		run(
-			"npm",
-			["pack", "--json", "--ignore-scripts", "--pack-destination", root],
-			packageRoot,
-		),
+		run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", root], packageRoot),
 	)[0];
-	const { overrides } = JSON.parse(
-		readFileSync(join(workspace, "package.json"), "utf8"),
-	);
+	const { overrides } = JSON.parse(readFileSync(join(workspace, "package.json"), "utf8"));
 	writeFileSync(
 		join(root, "package.json"),
 		JSON.stringify({
@@ -55,10 +42,7 @@ try {
 		}),
 	);
 	run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"]);
-	copyFileSync(
-		join(import.meta.dirname, "pdf-probe.mjs"),
-		join(root, "probe.mjs"),
-	);
+	copyFileSync(join(import.meta.dirname, "pdf-probe.mjs"), join(root, "probe.mjs"));
 	const probe = spawnSync(process.execPath, ["probe.mjs"], {
 		cwd: root,
 		env,

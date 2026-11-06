@@ -19,7 +19,12 @@ export interface DeliverableReviewLocation {
 
 export interface DeliverableReviewFinding {
 	id: string;
-	code: "untraceable-number" | "figure-code-mismatch" | "citation-without-receipt" | "review-timeout" | "review-budget-exhausted";
+	code:
+		| "untraceable-number"
+		| "figure-code-mismatch"
+		| "citation-without-receipt"
+		| "review-timeout"
+		| "review-budget-exhausted";
 	severity: ReviewerSeverity;
 	location: DeliverableReviewLocation;
 	detail: string;
@@ -88,7 +93,9 @@ export interface ReviewerProviderSelection {
 export interface BackgroundReviewerOptions {
 	timeoutMs?: number;
 	maxPerSession?: number;
-	review?: (snapshot: DeliverableReviewSnapshot) => DeliverableReviewFinding[] | Promise<DeliverableReviewFinding[]>;
+	review?: (
+		snapshot: DeliverableReviewSnapshot,
+	) => DeliverableReviewFinding[] | Promise<DeliverableReviewFinding[]>;
 	/** Optional model-backed pass; the host selects the provider by provider id. */
 	modelReview?: (
 		snapshot: DeliverableReviewSnapshot,
@@ -98,7 +105,11 @@ export interface BackgroundReviewerOptions {
 	providers?: readonly ReviewerModelProvider[];
 	getProviders?: () => readonly ReviewerModelProvider[] | Promise<readonly ReviewerModelProvider[]>;
 	useModel?: () => boolean | Promise<boolean>;
-	onResult?: (sessionId: string, result: DeliverableReviewResult, trigger: ReviewerTrigger) => void | Promise<void>;
+	onResult?: (
+		sessionId: string,
+		result: DeliverableReviewResult,
+		trigger: ReviewerTrigger,
+	) => void | Promise<void>;
 	now?: () => number;
 }
 
@@ -123,7 +134,9 @@ const NUMBER = /(?<![\w])[-+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[-+]?\d+)?%?/gi;
 const CITATION = /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g;
 
 function bounded(value: unknown, max = 300): string {
-	return String(value ?? "").replace(/[\r\n]+/g, " ").slice(0, max);
+	return String(value ?? "")
+		.replace(/[\r\n]+/g, " ")
+		.slice(0, max);
 }
 
 function normalizePath(path: string): string {
@@ -145,15 +158,27 @@ function numberMatches(token: string, value: unknown): boolean {
 	return Math.abs(parsed - candidate) <= tolerance;
 }
 
-function numberIsTraceable(token: string, artifacts: readonly MetacognitiveArtifact[], receipts: readonly ReviewReadReceipt[]): boolean {
+function numberIsTraceable(
+	token: string,
+	artifacts: readonly MetacognitiveArtifact[],
+	receipts: readonly ReviewReadReceipt[],
+): boolean {
 	for (const artifact of artifacts) {
 		if (artifact.numbers?.some((item) => numberMatches(token, item.value))) return true;
-		if (typeof artifact.text === "string" && artifact.text.match(NUMBER)?.some((value) => numberMatches(token, value))) return true;
+		if (
+			typeof artifact.text === "string" &&
+			artifact.text.match(NUMBER)?.some((value) => numberMatches(token, value))
+		)
+			return true;
 	}
 	for (const receipt of receipts) {
 		if (!receipt.receiptRef && !receipt.hash) continue;
 		if (receipt.numbers?.some((item) => numberMatches(token, item.value))) return true;
-		if (typeof receipt.text === "string" && receipt.text.match(NUMBER)?.some((value) => numberMatches(token, value))) return true;
+		if (
+			typeof receipt.text === "string" &&
+			receipt.text.match(NUMBER)?.some((value) => numberMatches(token, value))
+		)
+			return true;
 	}
 	return false;
 }
@@ -170,7 +195,9 @@ function locationFor(body: string, offset: number, path?: string): DeliverableRe
 
 function findingId(code: string, location: DeliverableReviewLocation, subject: string): string {
 	return createHash("sha256")
-		.update(`${code}\0${location.line ?? ""}\0${location.paragraph ?? ""}\0${location.artifactId ?? ""}\0${subject}`)
+		.update(
+			`${code}\0${location.line ?? ""}\0${location.paragraph ?? ""}\0${location.artifactId ?? ""}\0${subject}`,
+		)
 		.digest("hex")
 		.slice(0, 24);
 }
@@ -187,7 +214,10 @@ function citationPaths(
 	return [...paths].filter(Boolean);
 }
 
-function latestAttemptFor(deliverable: ReviewDeliverableRecord, attempts: readonly ReviewAttemptRecord[]): ReviewAttemptRecord | undefined {
+function latestAttemptFor(
+	deliverable: ReviewDeliverableRecord,
+	attempts: readonly ReviewAttemptRecord[],
+): ReviewAttemptRecord | undefined {
 	const related = attempts.filter(
 		(attempt) =>
 			(deliverable.attemptId && attempt.id === deliverable.attemptId) ||
@@ -206,7 +236,10 @@ function attemptHash(attempt: ReviewAttemptRecord | undefined, artifactId: strin
 }
 
 function isFigure(deliverable: ReviewDeliverableRecord): boolean {
-	return /^(figure|image|plot)$/i.test(deliverable.kind ?? "") || /\.(?:png|jpe?g|gif|svg|tiff?|webp)$/i.test(deliverable.path ?? "");
+	return (
+		/^(figure|image|plot)$/i.test(deliverable.kind ?? "") ||
+		/\.(?:png|jpe?g|gif|svg|tiff?|webp)$/i.test(deliverable.path ?? "")
+	);
 }
 
 function reviewRules(snapshot: DeliverableReviewSnapshot): DeliverableReviewFinding[] {
@@ -256,7 +289,11 @@ function reviewRules(snapshot: DeliverableReviewSnapshot): DeliverableReviewFind
 			continue;
 		}
 		const outputHash = attemptHash(attempt, deliverable.id);
-		if (!SHA256.test(String(deliverable.sha256 ?? "")) || !SHA256.test(String(outputHash ?? "")) || deliverable.sha256?.toLowerCase() !== outputHash?.toLowerCase())
+		if (
+			!SHA256.test(String(deliverable.sha256 ?? "")) ||
+			!SHA256.test(String(outputHash ?? "")) ||
+			deliverable.sha256?.toLowerCase() !== outputHash?.toLowerCase()
+		)
 			add(
 				{
 					code: "figure-code-mismatch",
@@ -273,7 +310,11 @@ function reviewRules(snapshot: DeliverableReviewSnapshot): DeliverableReviewFind
 	for (const path of citationPaths(body, snapshot.citations, snapshot.findings)) {
 		const receipt = receiptByPath.get(path);
 		if (receipt?.receiptRef || receipt?.hash) continue;
-		const artifact = artifacts.find((item) => normalizePath(item.path) === path && (item as MetacognitiveArtifact & { receiptId?: string }).receiptId);
+		const artifact = artifacts.find(
+			(item) =>
+				normalizePath(item.path) === path &&
+				(item as MetacognitiveArtifact & { receiptId?: string }).receiptId,
+		);
 		if (artifact) continue;
 		const offset = body.indexOf(path.replace(/\.md$/i, ""));
 		add(
@@ -300,10 +341,16 @@ function reviewContentHash(snapshot: DeliverableReviewSnapshot): string {
 	const stable = (value: unknown): unknown => {
 		if (Array.isArray(value)) return value.map(stable);
 		if (value && typeof value === "object")
-			return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, stable(item)]));
+			return Object.fromEntries(
+				Object.entries(value)
+					.sort(([a], [b]) => a.localeCompare(b))
+					.map(([key, item]) => [key, stable(item)]),
+			);
 		return value;
 	};
-	return createHash("sha256").update(JSON.stringify(stable(snapshot ?? null))).digest("hex");
+	return createHash("sha256")
+		.update(JSON.stringify(stable(snapshot ?? null)))
+		.digest("hex");
 }
 
 export function selectReviewerProvider(
@@ -368,7 +415,8 @@ export class BackgroundReviewer {
 
 	async reviewOnce(request: BackgroundReviewRequest): Promise<DeliverableReviewResult> {
 		const contentHash = reviewContentHash(request.snapshot);
-		const sessionCache = this.cache.get(request.sessionId) ?? new Map<string, Promise<DeliverableReviewResult>>();
+		const sessionCache =
+			this.cache.get(request.sessionId) ?? new Map<string, Promise<DeliverableReviewResult>>();
 		this.cache.set(request.sessionId, sessionCache);
 		const cached = sessionCache.get(contentHash);
 		if (cached) return cached;
@@ -421,7 +469,8 @@ export class BackgroundReviewer {
 			const resultCache = this.results.get(request.sessionId) ?? new Map<string, DeliverableReviewResult>();
 			resultCache.set(contentHash, result);
 			this.results.set(request.sessionId, resultCache);
-			const latest = this.latest.get(request.sessionId) ?? new Map<string, readonly DeliverableReviewFinding[]>();
+			const latest =
+				this.latest.get(request.sessionId) ?? new Map<string, readonly DeliverableReviewFinding[]>();
 			const targets = request.snapshot.deliverables?.map((item) => item.id) ?? [];
 			for (const target of targets.length ? targets : ["body"]) latest.set(target, result.findings);
 			this.latest.set(request.sessionId, latest);
@@ -438,20 +487,26 @@ export class BackgroundReviewer {
 		// Defer even the pure rules so the tool/event caller always returns first.
 		setTimeout(() => {
 			if (this.disposed) return;
-			void this.reviewOnce(request).then((result) => {
-				if (this.disposed) return;
-				const emitted = this.emitted.get(request.sessionId) ?? new Set<string>();
-				const key = result.findings[0]?.code === "review-budget-exhausted" ? "budget" : result.contentHash;
-				if (emitted.has(key)) return;
-				emitted.add(key);
-				this.emitted.set(request.sessionId, emitted);
-				return this.onResult?.(request.sessionId, result, request.trigger);
-			}).catch(() => {});
+			void this.reviewOnce(request)
+				.then((result) => {
+					if (this.disposed) return;
+					const emitted = this.emitted.get(request.sessionId) ?? new Set<string>();
+					const key = result.findings[0]?.code === "review-budget-exhausted" ? "budget" : result.contentHash;
+					if (emitted.has(key)) return;
+					emitted.add(key);
+					this.emitted.set(request.sessionId, emitted);
+					return this.onResult?.(request.sessionId, result, request.trigger);
+				})
+				.catch(() => {});
 		}, 0);
 	}
 
 	getFindings(sessionId: string): readonly DeliverableReviewFinding[] {
-		return [...new Map([...this.latest.get(sessionId)?.values() ?? []].flat().map((finding) => [finding.id, finding])).values()];
+		return [
+			...new Map(
+				[...(this.latest.get(sessionId)?.values() ?? [])].flat().map((finding) => [finding.id, finding]),
+			).values(),
+		];
 	}
 
 	clearSession(sessionId: string): void {

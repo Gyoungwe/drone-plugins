@@ -13,8 +13,7 @@ function runProvenanceFor(
 	artifact: ArtifactRecord,
 	attempts: readonly AttemptRecord[],
 ): RunProvenanceSummary | undefined {
-	if (artifact.runProvenance && Object.keys(artifact.runProvenance).length > 0)
-		return artifact.runProvenance;
+	if (artifact.runProvenance && Object.keys(artifact.runProvenance).length > 0) return artifact.runProvenance;
 	const candidate = attempts.find(
 		(attempt) => attempt.runProvenance && Object.keys(attempt.runProvenance).length > 0,
 	);

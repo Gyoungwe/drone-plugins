@@ -1,7 +1,10 @@
 import type { createKnowledgeServicePool, KnowledgeService } from "./service.js";
 
 /** Share the application worker while keeping read-ticket authority in this session. */
-export function createKnowledgeSessionServices(pool: Pick<ReturnType<typeof createKnowledgeServicePool>, "getKnowledgeService">, signal: AbortSignal) {
+export function createKnowledgeSessionServices(
+	pool: Pick<ReturnType<typeof createKnowledgeServicePool>, "getKnowledgeService">,
+	signal: AbortSignal,
+) {
 	const views = new WeakMap<KnowledgeService, KnowledgeService>();
 	const ticketStores = new Set<Map<string, unknown>>();
 	const operations = new Set<Promise<unknown>>();
@@ -21,7 +24,9 @@ export function createKnowledgeSessionServices(pool: Pick<ReturnType<typeof crea
 		// Internal calls share the session ticket map but must finish their cleanup
 		// after revocation. Only external method entries and receipts are revoked.
 		const receiver = new Proxy(service, {
-			get(target, property) { return property === "tickets" ? tickets : Reflect.get(target, property, target); },
+			get(target, property) {
+				return property === "tickets" ? tickets : Reflect.get(target, property, target);
+			},
 		});
 		const view = new Proxy(service, {
 			get(target, property) {

@@ -3,10 +3,14 @@ import { configureKnowledgeHost } from "../src/core/runtime-host.js";
 import { consumeKnowledgeReviewPreviewEntry } from "../src/core/ui-service.js";
 import { reviewWikiWithModel } from "../src/core/wiki-model-review.js";
 
-afterEach(() => configureKnowledgeHost({ consumeKnowledgeReviewPreview: consumeKnowledgeReviewPreviewEntry }));
+afterEach(() =>
+	configureKnowledgeHost({ consumeKnowledgeReviewPreview: consumeKnowledgeReviewPreviewEntry }),
+);
 
 it("validates foreground consent before the public compatibility adapter consumes a single-use preview", async () => {
-	const consume = vi.fn(() => { throw new Error("actual preview lookup"); });
+	const consume = vi.fn(() => {
+		throw new Error("actual preview lookup");
+	});
 	configureKnowledgeHost({ consumeKnowledgeReviewPreview: consume });
 	const input = { cwd: "/test-project", token: "single-use-preview", acknowledged: false, autoApply: false };
 	const evaluate = vi.fn();

@@ -127,7 +127,9 @@ export function managedParts(text: string): ManagedParts {
  * leading H1 that repeats the page title (or any leading H1 when no title is known).
  */
 export function stripManagedHeader(body: string, pageTitle?: string): string {
-	let text = String(body).replace(/^\uFEFF/u, "").trim();
+	let text = String(body)
+		.replace(/^\uFEFF/u, "")
+		.trim();
 	const fenced = text.match(/^```(?:markdown|md)?[ \t]*\n([\s\S]*?)\n```\s*$/iu);
 	if (fenced?.[1] !== undefined) text = fenced[1].trim();
 	text = text.replace(/^---[ \t]*\n[\s\S]*?\n---[ \t]*(?:\n|$)/u, "").trim();

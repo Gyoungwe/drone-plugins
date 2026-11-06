@@ -1,6 +1,6 @@
-import { it } from "./scoped-test.mjs";
 import { expect } from "vitest";
 import { createTaskWorkbench } from "./fixture.mjs";
+import { it } from "./scoped-test.mjs";
 
 // 会话 01a11779：浏览器 MCP 没加载，模型改写 packages/desktop/.pi/mcp.json 后把「写配置」当作验收完成。
 function plan(path) {

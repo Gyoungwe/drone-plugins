@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useKnowledgeStore } from "../api";
-import { Button } from "../api";
+import { Button, useKnowledgeStore } from "../api";
 import { useKnowledgeText } from "./copy";
 import { WikiReviewDialog } from "./WikiReviewDialog";
 /**
@@ -27,25 +26,27 @@ export function KnowledgeUiRoot() {
 			)}
 			{notice &&
 				createPortal(
-					<div className="drone-knowledge-ui"><div
-						role={notice.severity === "error" ? "alert" : "status"}
-						className="fixed bottom-5 right-4 z-(--z-toast) w-[min(420px,calc(100vw-32px))] rounded-xl border border-border bg-surface p-4 text-ink shadow-dialog"
-						data-testid="knowledge-notice"
-					>
-						<div className="flex items-start justify-between gap-2">
-							<p
-								className={`text-xs font-semibold ${notice.severity === "error" ? "text-err" : notice.severity === "warning" ? "text-warn" : ""}`}
-							>
-								{t("notification")}
+					<div className="drone-knowledge-ui">
+						<div
+							role={notice.severity === "error" ? "alert" : "status"}
+							className="fixed bottom-5 right-4 z-(--z-toast) w-[min(420px,calc(100vw-32px))] rounded-xl border border-border bg-surface p-4 text-ink shadow-dialog"
+							data-testid="knowledge-notice"
+						>
+							<div className="flex items-start justify-between gap-2">
+								<p
+									className={`text-xs font-semibold ${notice.severity === "error" ? "text-err" : notice.severity === "warning" ? "text-warn" : ""}`}
+								>
+									{t("notification")}
+								</p>
+								<Button size="sm" onClick={dismiss} aria-label={t("close")}>
+									×
+								</Button>
+							</div>
+							<p className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs leading-relaxed">
+								{notice.text}
 							</p>
-							<Button size="sm" onClick={dismiss} aria-label={t("close")}>
-								×
-							</Button>
 						</div>
-						<p className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs leading-relaxed">
-							{notice.text}
-						</p>
-					</div></div>,
+					</div>,
 					document.body,
 				)}
 		</>

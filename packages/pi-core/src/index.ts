@@ -1,8 +1,8 @@
-import type { AskQuestion, AskRequest, AskResponse } from "./contracts";
-import { createTaskApplication } from "./task-runtime/owner.mjs";
 import type { DroneHostPort, HostCapabilities } from "@gyoungwe/plugin-api";
+import type { AskQuestion, AskRequest, AskResponse } from "./contracts";
 import { registerDroneCommands } from "./drone-commands";
 import { registerNativeTaskReadback } from "./native-task-readback";
+import { createTaskApplication } from "./task-runtime/owner.mjs";
 import { type AskUserToolDeps, makeAskUserTool } from "./tools/ask-user";
 import { makeDeliverFilesTool } from "./tools/deliver-files";
 import { makeMemorySaveTool } from "./tools/memory-save";
@@ -148,26 +148,6 @@ export function registerPiCore(pi: any, options: PiCoreRegistrationOptions = {})
 	};
 }
 
-export {
-	buildDoctorReport,
-	buildExampleReport,
-	DRONE_COMMAND_SCHEMA_VERSION,
-	PI_CORE_PACKAGE_VERSION,
-	PI_HOST_RANGE,
-	parseExampleArgs,
-	registerDroneCommands,
-} from "./drone-commands";
-export { forgetMemory, memoryIndexPrompt, writeMemory } from "./memory";
-export { makeAskUserTool } from "./tools/ask-user";
-export { deliverFilesParams, makeDeliverFilesTool } from "./tools/deliver-files";
-export { MEMORY_SAVE_TOOL, makeMemorySaveTool } from "./tools/memory-save";
-export { makeStatusTool } from "./tools/status";
-export { formatTodoList, makeTodoTool, normalizeTodos } from "./tools/todo";
-export {
-	MAX_DELIVERED_FILES,
-	TODO_TOOL_NAME,
-	askDecisionHash,
-} from "./contracts";
 export type {
 	AskAnswer,
 	AskDecision,
@@ -183,5 +163,25 @@ export type {
 	TodoItem,
 	TodoStatus,
 } from "./contracts";
+export {
+	askDecisionHash,
+	MAX_DELIVERED_FILES,
+	TODO_TOOL_NAME,
+} from "./contracts";
+export {
+	buildDoctorReport,
+	buildExampleReport,
+	DRONE_COMMAND_SCHEMA_VERSION,
+	PI_CORE_PACKAGE_VERSION,
+	PI_HOST_RANGE,
+	parseExampleArgs,
+	registerDroneCommands,
+} from "./drone-commands";
+export { forgetMemory, memoryIndexPrompt, writeMemory } from "./memory";
+export { makeAskUserTool } from "./tools/ask-user";
+export { deliverFilesParams, makeDeliverFilesTool } from "./tools/deliver-files";
+export { MEMORY_SAVE_TOOL, makeMemorySaveTool } from "./tools/memory-save";
+export { makeStatusTool } from "./tools/status";
+export { formatTodoList, makeTodoTool, normalizeTodos } from "./tools/todo";
 
 export default registerPiCore;

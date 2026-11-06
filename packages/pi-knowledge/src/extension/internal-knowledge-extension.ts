@@ -1,13 +1,12 @@
 // @ts-nocheck
 import { join, resolve } from "node:path";
-import { parseKnowledgeRecoveryCheckpoint } from "../core/recovery-checkpoint.js";
-import { createKnowledgePrepareTool, createKnowledgeReadTool, createKnowledgeSearchTool, createKnowledgeAnswerCheckTool } from "./read-tools.js";
-import * as compatibilityHost from "../core/runtime-host.js";
 import type { KnowledgeExtensionHost } from "@gyoungwe/plugin-api/knowledge";
 import * as compatibilityConfig from "../core/config.js";
+import { summaryDeliveryClaims } from "../core/delivery-claims.js";
+import { searchExperiences } from "../core/experience-store.js";
 import {
-	continuesTopic,
 	currentProject as compatibilityProject,
+	continuesTopic,
 	explainerTopicId,
 	result,
 	sessionIdentity,
@@ -15,8 +14,9 @@ import {
 import { cardLink, flowCard } from "../core/flow-cards.js";
 import { runNavigationMaintenance } from "../core/maintenance.js";
 import * as compatibilityPublication from "../core/publication.js";
+import { parseKnowledgeRecoveryCheckpoint } from "../core/recovery-checkpoint.js";
+import * as compatibilityHost from "../core/runtime-host.js";
 import * as compatibilityServices from "../core/service.js";
-
 import * as compatibilityDelivery from "../core/specialist-delivery.js";
 import * as compatibilitySpecialists from "../core/specialists.js";
 import { createTaskFeedback, guardResearchToolResult } from "../core/task-feedback.js";
@@ -24,51 +24,82 @@ import { createToolBudget } from "../core/tool-budget.js";
 import { autoTopicCandidate } from "../core/topic-candidate.js";
 import * as compatibilityTopics from "../core/topic-memory.js";
 import { topicRunHash } from "../core/topic-memory.js";
-import { summaryDeliveryClaims } from "../core/delivery-claims.js";
-import { searchExperiences } from "../core/experience-store.js";
 import * as compatibilityUi from "../core/ui-state.js";
 import * as compatibilityWiki from "../core/wiki-review.js";
+import {
+	createKnowledgeAnswerCheckTool,
+	createKnowledgePrepareTool,
+	createKnowledgeReadTool,
+	createKnowledgeSearchTool,
+} from "./read-tools.js";
 
 export interface KnowledgeInterfaceSessionPorts {
 	initialize(context: any): Promise<void>;
 	inspect(context: any): Promise<{ agentActive: boolean; projectTrusted: boolean; readOnly: boolean }>;
 	taskRuntime(): any;
 	registerAcceptance(definition: any): () => void;
-	readRecords(context: any): Promise<{ state: "durable" | "deferred" | "needs-reopen"; error: string | null; records: { type: string; data: any }[] }>;
+	readRecords(context: any): Promise<{
+		state: "durable" | "deferred" | "needs-reopen";
+		error: string | null;
+		records: { type: string; data: any }[];
+	}>;
 	appendRecord(type: string, data: unknown, context: any): Promise<{ durability: "durable" | "deferred" }>;
 	select(title: string, options: string[], context: any): Promise<string | undefined>;
 	notify(content: string, context: any): Promise<void>;
 }
 
 export interface KnowledgeInterfaceDependencies {
- host: Pick<compatibilityHost.KnowledgeRuntimeHost, "publishExplainer" | "deliveryContract">;
- config: Pick<compatibilityConfig.KnowledgeConfigApi, "readKnowledgeBinding" | "withKnowledgeBinding">;
- available?: () => boolean;
- project?: typeof compatibilityProject;
- session?: KnowledgeInterfaceSessionPorts;
- services: Pick<ReturnType<typeof compatibilityServices.createKnowledgeServicePool>, "getKnowledgeService">;
- publication: ReturnType<typeof compatibilityPublication.createKnowledgePublication>;
- delivery: Pick<typeof compatibilityDelivery, "saveSpecialistExplainer">;
- specialists: Pick<ReturnType<typeof compatibilitySpecialists.createKnowledgeSpecialistTools>, "createKnowledgeSpecialists">;
- topics: Pick<typeof compatibilityTopics, "createTopicMemory">;
- ui: ReturnType<typeof compatibilityUi.createKnowledgeUi>;
- wiki: ReturnType<typeof compatibilityWiki.createKnowledgeWikiReview>;
+	host: Pick<compatibilityHost.KnowledgeRuntimeHost, "publishExplainer" | "deliveryContract">;
+	config: Pick<compatibilityConfig.KnowledgeConfigApi, "readKnowledgeBinding" | "withKnowledgeBinding">;
+	available?: () => boolean;
+	project?: typeof compatibilityProject;
+	session?: KnowledgeInterfaceSessionPorts;
+	services: Pick<ReturnType<typeof compatibilityServices.createKnowledgeServicePool>, "getKnowledgeService">;
+	publication: ReturnType<typeof compatibilityPublication.createKnowledgePublication>;
+	delivery: Pick<typeof compatibilityDelivery, "saveSpecialistExplainer">;
+	specialists: Pick<
+		ReturnType<typeof compatibilitySpecialists.createKnowledgeSpecialistTools>,
+		"createKnowledgeSpecialists"
+	>;
+	topics: Pick<typeof compatibilityTopics, "createTopicMemory">;
+	ui: ReturnType<typeof compatibilityUi.createKnowledgeUi>;
+	wiki: ReturnType<typeof compatibilityWiki.createKnowledgeWikiReview>;
 }
 
-function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencies, initialHost: KnowledgeExtensionHost, legacyRuntimeHandshake: boolean) {
+function createKnowledgeInterfaceApi(
+	dependencies: KnowledgeInterfaceDependencies,
+	initialHost: KnowledgeExtensionHost,
+	legacyRuntimeHandshake: boolean,
+) {
 	const { publishExplainer, deliveryContract } = dependencies.host;
 	const { readKnowledgeBinding, withKnowledgeBinding } = dependencies.config;
-	const knowledgeAvailable = dependencies.available ?? (() => Boolean((dependencies.config as compatibilityConfig.KnowledgeConfigApi).knowledgeDirectory()));
+	const knowledgeAvailable =
+		dependencies.available ??
+		(() => Boolean((dependencies.config as compatibilityConfig.KnowledgeConfigApi).knowledgeDirectory()));
 	const currentProject = dependencies.project ?? compatibilityProject;
 	const { getKnowledgeService } = dependencies.services;
 	const { registerAnswerPublication } = dependencies.publication;
 	const { saveSpecialistExplainer } = dependencies.delivery;
 	const { createKnowledgeSpecialists } = dependencies.specialists;
 	const { createTopicMemory } = dependencies.topics;
-	const { beginKnowledgeFlow, invalidateKnowledgeUi, noteKnowledgeOperation, noteKnowledgeRead,
-	 noteKnowledgeSearch, notifyKnowledgeUi, requestWikiReviewUi, updateKnowledgeFlow } = dependencies.ui;
-	const { autoApplyWikiProposal, decideWikiProposal, listWikiProposals, mergeWikiProposal,
-	 previewWikiProposal, stageWikiProposal } = dependencies.wiki;
+	const {
+		beginKnowledgeFlow,
+		invalidateKnowledgeUi,
+		noteKnowledgeOperation,
+		noteKnowledgeRead,
+		noteKnowledgeSearch,
+		notifyKnowledgeUi,
+		requestWikiReviewUi,
+		updateKnowledgeFlow,
+	} = dependencies.ui;
+	const {
+		autoApplyWikiProposal,
+		decideWikiProposal,
+		listWikiProposals,
+		mergeWikiProposal,
+		previewWikiProposal,
+		stageWikiProposal,
+	} = dependencies.wiki;
 	const defaultHost: KnowledgeExtensionHost = {};
 	let extensionHost: KnowledgeExtensionHost = initialHost;
 	function configureKnowledgeExtensionHost(host: KnowledgeExtensionHost = {}): void {
@@ -76,7 +107,9 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 	}
 	// Legacy acceptance callbacks stay in the 1.x type until its next breaking release.
 	// Registration is now a same-event-bus declaration owned by this extension.
-	function registerTool(pi: any, definition: any): void { (extensionHost.registerTool || ((target: any, value: any) => target.registerTool(value)))(pi, definition); }
+	function registerTool(pi: any, definition: any): void {
+		(extensionHost.registerTool || ((target: any, value: any) => target.registerTool(value)))(pi, definition);
+	}
 
 	/**
 	 * 知识闭环（每轮引导）：先查本地 → 本地不够才联网 → 把联网所得按类型沉淀为新笔记（直接入库）→ 回答并标注来源。
@@ -121,7 +154,11 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			resolve: async (review, { cwd }) => {
 				try {
 					const service = await getKnowledgeService();
-					const p = await previewWikiProposal(service, review.id, review.project || (await currentProject(cwd)));
+					const p = await previewWikiProposal(
+						service,
+						review.id,
+						review.project || (await currentProject(cwd)),
+					);
 					const stale = p.sources.some((s) => s.changed);
 					return {
 						status: p.status,
@@ -178,7 +215,8 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 		// Managed read-only sessions use a separate two-tool adapter.
 		if (!readOnly) {
 			const declaration = { version: 1, kind: "wiki_review", definition: registerWikiReviewAcceptance() };
-			if (dependencies.session) removeAcceptance = dependencies.session.registerAcceptance(declaration.definition);
+			if (dependencies.session)
+				removeAcceptance = dependencies.session.registerAcceptance(declaration.definition);
 			else {
 				const publishAcceptance = () => pi.events.emit("drone:acceptance-verifier/v1", declaration);
 				removeAcceptance = pi.events.on("drone:acceptance-verifier/request/v1", (payload) => {
@@ -217,15 +255,19 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			const data = { scope: recoveryScope, records: [...recovery.values()].slice(-8) };
 			if (dependencies.session) {
 				const receipt = await dependencies.session.appendRecord("drone-knowledge-recovery-v1", data, ctx);
-				if (receipt.durability !== "durable") throw new Error("Knowledge recovery checkpoint is deferred; no durable recovery was recorded");
+				if (receipt.durability !== "durable")
+					throw new Error("Knowledge recovery checkpoint is deferred; no durable recovery was recorded");
 			} else pi.appendEntry("drone-knowledge-recovery-v1", data);
 		};
 		const attachRecovery = async (ctx) => {
 			const scope = `${sessionIdentity(ctx)}:${resolve(ctx.cwd)}`;
 			if (scope === recoveryScope) return;
 			const result = dependencies.session ? await dependencies.session.readRecords(ctx) : null;
-			if (result?.state === "needs-reopen") throw new Error("Session records need reopening before knowledge recovery");
-			const entries = result ? result.records.map(record => ({ customType: record.type, data: record.data })) : ctx.sessionManager.getBranch();
+			if (result?.state === "needs-reopen")
+				throw new Error("Session records need reopening before knowledge recovery");
+			const entries = result
+				? result.records.map((record) => ({ customType: record.type, data: record.data }))
+				: ctx.sessionManager.getBranch();
 			const next = new Map();
 			for (const entry of entries) {
 				if (entry.customType !== "drone-knowledge-recovery-v1") continue;
@@ -233,7 +275,8 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				if (checkpoint.scope !== scope) continue;
 				next.clear();
 				for (const record of checkpoint.records) {
-					if (record.sessionId !== sessionIdentity(ctx)) throw new Error("Knowledge recovery record has a foreign session identity");
+					if (record.sessionId !== sessionIdentity(ctx))
+						throw new Error("Knowledge recovery record has a foreign session identity");
 					next.set(record.id, record);
 				}
 			}
@@ -241,15 +284,16 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			for (const [id, record] of next) recovery.set(id, record);
 			recoveryScope = scope;
 		};
-		if (!dependencies.session) pi.events.on("drone:context-evicted", async (e) => {
-			let changed = false;
-			for (const r of recovery.values())
-				if (r.sessionId === e.sessionId && e.toolCallIds?.includes(r.id)) {
-					r.evicted = true;
-					changed = true;
-				}
-			if (changed) await saveRecovery();
-		});
+		if (!dependencies.session)
+			pi.events.on("drone:context-evicted", async (e) => {
+				let changed = false;
+				for (const r of recovery.values())
+					if (r.sessionId === e.sessionId && e.toolCallIds?.includes(r.id)) {
+						r.evicted = true;
+						changed = true;
+					}
+				if (changed) await saveRecovery();
+			});
 		pi.on("session_tree", async (_e, ctx) => {
 			recoveryScope = null;
 			await attachRecovery(ctx);
@@ -259,10 +303,14 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				setupCompleted: () => {},
 				beforeStart: async () => ({}),
 				withTurnBinding: async (_ctx, operation) => operation(),
-				dispose: async () => { removeAcceptance?.(); },
+				dispose: async () => {
+					removeAcceptance?.();
+				},
 			};
 		let disposed = false;
-		const assertSessionActive = () => { if (disposed) throw new Error("Knowledge session has been disposed"); };
+		const assertSessionActive = () => {
+			if (disposed) throw new Error("Knowledge session has been disposed");
+		};
 		let current = null;
 		/** @type {any} */
 		let bootstrap = null;
@@ -284,9 +332,9 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 		const isKnowledgeRequest = (prompt, researchContinuation = false) =>
 			Boolean(
 				deliveryContract(prompt, { researchContinuation }) ||
-				/知识(?:库|内容|有哪些|记录)?|研究|文献|论文|证据|检索|软件|工具包|方法|算法|协议|怎么用|如何使用|用法|\bknowledge\b|obsidian|vault|wiki|evidence\s+note|\bresearch\b|\bpapers?\b|\bsoftware\b|\bmethods?\b|\bprotocols?\b|\bhow\s+(?:do|to)\s+(?:i\s+)?use\b/i.test(
-					String(prompt || ""),
-				),
+					/知识(?:库|内容|有哪些|记录)?|研究|文献|论文|证据|检索|软件|工具包|方法|算法|协议|怎么用|如何使用|用法|\bknowledge\b|obsidian|vault|wiki|evidence\s+note|\bresearch\b|\bpapers?\b|\bsoftware\b|\bmethods?\b|\bprotocols?\b|\bhow\s+(?:do|to)\s+(?:i\s+)?use\b/i.test(
+						String(prompt || ""),
+					),
 			);
 		// Zotero item edits and status return host receipts and never read Vault evidence, so they
 		// must not promote an ordinary turn into one that requires research_prepare_knowledge.
@@ -304,12 +352,16 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			try {
 				return await Promise.race([
 					service.probeTopic({ query: prompt, project }),
-					new Promise((resolveProbe) => { timer = setTimeout(() => {
-						// This optional slow search keeps ordinary chat; configuration and
-						// internal failures still propagate through the SDK hook diagnostics.
-						console.warn("[knowledge] Optional topic probe exceeded its deadline; continuing ordinary chat.");
-						resolveProbe(null);
-					}, 600); }),
+					new Promise((resolveProbe) => {
+						timer = setTimeout(() => {
+							// This optional slow search keeps ordinary chat; configuration and
+							// internal failures still propagate through the SDK hook diagnostics.
+							console.warn(
+								"[knowledge] Optional topic probe exceeded its deadline; continuing ordinary chat.",
+							);
+							resolveProbe(null);
+						}, 600);
+					}),
 				]);
 			} finally {
 				clearTimeout(timer);
@@ -426,7 +478,9 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 					event.result.details,
 					String(args.summary_markdown || ""),
 				);
-				const readEvidence = await current.service.currentReadEvidence(current.ticket, ctx.cwd, { limit: 12 });
+				const readEvidence = await current.service.currentReadEvidence(current.ticket, ctx.cwd, {
+					limit: 12,
+				});
 				const deliveredSources = event.result.details.delivery_receipt.sources.map((source) => ({
 					path: source.path,
 					hash: source.sha256,
@@ -502,7 +556,9 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 							};
 					}
 				} catch (error) {
-					appendFooter(`主题记忆未更新：${String(error.message).slice(0, 300)}；正式知识与证据门禁不受影响。`);
+					appendFooter(
+						`主题记忆未更新：${String(error.message).slice(0, 300)}；正式知识与证据门禁不受影响。`,
+					);
 				}
 				const paths = evidence.sources.map((source) => source.path);
 				if (
@@ -835,33 +891,37 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				});
 			},
 		});
-		registerTool(pi, createKnowledgeReadTool({
-			ensureTurn, toolBudget,
-			observer: {
-				updateFlow: updateKnowledgeFlow,
-				noteRead: noteKnowledgeRead,
-				recordRead: async (_id, ctx, c, page, p) => {
-					await attachRecovery(ctx);
-					if (page.hash && page.text) {
-						recovery.set(_id, {
-							id: _id,
-							sessionId: sessionIdentity(ctx),
-							taskId: getTaskRuntime()?.snapshot()?.id || null,
-							path: p.path,
-							hash: page.hash,
-							startLine: p.start_line || 1,
-							maxChars: p.max_chars || 5000,
-							vaultId: c.binding.vaultId,
-							bindingRevision: c.binding.revision,
-							evicted: false,
-							used: false,
-						});
-						while (recovery.size > 8) recovery.delete(recovery.keys().next().value);
-						await saveRecovery(ctx);
-					}
+		registerTool(
+			pi,
+			createKnowledgeReadTool({
+				ensureTurn,
+				toolBudget,
+				observer: {
+					updateFlow: updateKnowledgeFlow,
+					noteRead: noteKnowledgeRead,
+					recordRead: async (_id, ctx, c, page, p) => {
+						await attachRecovery(ctx);
+						if (page.hash && page.text) {
+							recovery.set(_id, {
+								id: _id,
+								sessionId: sessionIdentity(ctx),
+								taskId: getTaskRuntime()?.snapshot()?.id || null,
+								path: p.path,
+								hash: page.hash,
+								startLine: p.start_line || 1,
+								maxChars: p.max_chars || 5000,
+								vaultId: c.binding.vaultId,
+								bindingRevision: c.binding.revision,
+								evicted: false,
+								used: false,
+							});
+							while (recovery.size > 8) recovery.delete(recovery.keys().next().value);
+							await saveRecovery(ctx);
+						}
+					},
 				},
-			},
-		}));
+			}),
+		);
 		registerTool(pi, {
 			name: "research_restore_evidence",
 			drone: { readOnly: true, capabilities: ["research"] },
@@ -905,24 +965,42 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				return result(page);
 			},
 		});
-		registerTool(pi, createKnowledgeSearchTool({
-			ensureTurn, toolBudget,
-			searchExperiences: async (ctx, input) => {
-				const scope = await requireTopicTurn(ctx);
-				return searchExperiences({
-					binding: scope.binding, project: scope.project,
-					hostId: input.host_id, query: input.query, workflow: input.workflow,
-					hostFilter: input.host_id, limit: input.limit, includeObserved: true,
-				});
-			},
-			observer: { updateFlow: updateKnowledgeFlow, noteSearch: noteKnowledgeSearch },
-			searchContext: async (_ctx, c) => activeTopic
-				? JSON.parse(await (topicMemory || createTopicMemory({ binding: c.binding, project: c.project })).context(activeTopic.id))
-				: undefined,
-		}));
-		registerTool(pi, createKnowledgeAnswerCheckTool({
-			ensureTurn, preflight: (ctx, draft) => publication.preflight(ctx, draft),
-		}));
+		registerTool(
+			pi,
+			createKnowledgeSearchTool({
+				ensureTurn,
+				toolBudget,
+				searchExperiences: async (ctx, input) => {
+					const scope = await requireTopicTurn(ctx);
+					return searchExperiences({
+						binding: scope.binding,
+						project: scope.project,
+						hostId: input.host_id,
+						query: input.query,
+						workflow: input.workflow,
+						hostFilter: input.host_id,
+						limit: input.limit,
+						includeObserved: true,
+					});
+				},
+				observer: { updateFlow: updateKnowledgeFlow, noteSearch: noteKnowledgeSearch },
+				searchContext: async (_ctx, c) =>
+					activeTopic
+						? JSON.parse(
+								await (topicMemory || createTopicMemory({ binding: c.binding, project: c.project })).context(
+									activeTopic.id,
+								),
+							)
+						: undefined,
+			}),
+		);
+		registerTool(
+			pi,
+			createKnowledgeAnswerCheckTool({
+				ensureTurn,
+				preflight: (ctx, draft) => publication.preflight(ctx, draft),
+			}),
+		);
 		registerTool(pi, {
 			name: "research_task_status",
 			drone: { readOnly: true, recoverySafe: true, capabilities: ["research", "knowledge"] },
@@ -1010,7 +1088,10 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 									tissue: { type: "string", maxLength: 180 },
 									stage: { type: "string", maxLength: 180 },
 									method: { type: "string", maxLength: 180 },
-									direction: { type: "string", enum: ["increase", "decrease", "affirmed", "negated", "unknown"] },
+									direction: {
+										type: "string",
+										enum: ["increase", "decrease", "affirmed", "negated", "unknown"],
+									},
 									endpoint: { type: "string", maxLength: 180 },
 									unit: { type: "string", maxLength: 180 },
 									effect: { type: "number" },
@@ -1234,8 +1315,8 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 					flowCards: wikiProposalCard,
 				},
 				label: "Obsidian · 更新 Wiki",
-					description:
-						"Write a Wiki update from actual read source_paths (Vault-relative .md notes). In automatic review mode a new page, or a page previously written by the agent, is written immediately (status=applied); a page with human edits, or strict review mode, stays pending until the user accepts it in Wiki review (pending text is not live knowledge). Do not retry a write just because a reminder remains.",
+				description:
+					"Write a Wiki update from actual read source_paths (Vault-relative .md notes). In automatic review mode a new page, or a page previously written by the agent, is written immediately (status=applied); a page with human edits, or strict review mode, stays pending until the user accepts it in Wiki review (pending text is not live knowledge). Do not retry a write just because a reminder remains.",
 				parameters: {
 					type: "object",
 					properties: {
@@ -1302,11 +1383,12 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 						const pending = await listWikiProposals(service, project);
 						if (!pending.items.length) {
 							if (dependencies.session) await dependencies.session.notify(JSON.stringify(pending), ctx);
-							else pi.sendMessage({
-								customType: "obsidian-review",
-								display: true,
-								content: JSON.stringify(pending),
-							});
+							else
+								pi.sendMessage({
+									customType: "obsidian-review",
+									display: true,
+									content: JSON.stringify(pending),
+								});
 							return;
 						}
 						const options = pending.items.map((item) => `${item.id} · ${item.title}`);
@@ -1341,11 +1423,12 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 						choice === "确认应用此候选" ? "apply" : "reject",
 					);
 					if (dependencies.session) await dependencies.session.notify(JSON.stringify(output, null, 2), ctx);
-					else pi.sendMessage({
-						customType: "obsidian-review",
-						display: true,
-						content: JSON.stringify(output, null, 2),
-					});
+					else
+						pi.sendMessage({
+							customType: "obsidian-review",
+							display: true,
+							content: JSON.stringify(output, null, 2),
+						});
 				},
 			});
 		}
@@ -1498,7 +1581,8 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 				sessionScopeId = nextSessionId;
 				current = null;
 				bootstrap = null;
-				if (newSession || (activeTopic && !continuesTopic(event.prompt || "", activeTopic))) activeTopic = null;
+				if (newSession || (activeTopic && !continuesTopic(event.prompt || "", activeTopic)))
+					activeTopic = null;
 				topicMemory = null;
 				explicitTopicProposal = false;
 				deliveryFooter = null;
@@ -1533,7 +1617,7 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 											(c) =>
 												["skill:show-me", "skill:research-show-me"].includes(c.name) && c.source === "skill",
 										),
-							})?.guidance || "",
+								})?.guidance || "",
 						};
 					beginKnowledgeFlow(ctx, binding);
 					const _visible = await prepare(ctx, event.prompt || "");
@@ -1593,19 +1677,42 @@ function createKnowledgeInterfaceApi(dependencies: KnowledgeInterfaceDependencie
 			},
 		};
 	}
-	return { configureKnowledgeExtensionHost, LOCAL_FIRST_GUIDANCE, registerWikiReviewAcceptance, registerKnowledgeInterface };
+	return {
+		configureKnowledgeExtensionHost,
+		LOCAL_FIRST_GUIDANCE,
+		registerWikiReviewAcceptance,
+		registerKnowledgeInterface,
+	};
 }
 
 /** New adapters receive their session projection explicitly, without a shared runtime event. */
-export function createKnowledgeInterface(dependencies: KnowledgeInterfaceDependencies, initialHost: KnowledgeExtensionHost = {}) {
+export function createKnowledgeInterface(
+	dependencies: KnowledgeInterfaceDependencies,
+	initialHost: KnowledgeExtensionHost = {},
+) {
 	return createKnowledgeInterfaceApi(dependencies, initialHost, false);
 }
 
 // pi-knowledge 0.2 compatibility; remove after host/native adapters share the
 // explicit 0.3 owner and per-session publication APIs.
-const compatibility = createKnowledgeInterfaceApi({
- host: compatibilityHost, config: compatibilityConfig, services: compatibilityServices,
- publication: compatibilityPublication, delivery: compatibilityDelivery, specialists: compatibilitySpecialists,
- topics: compatibilityTopics, ui: compatibilityUi, wiki: compatibilityWiki,
-}, {}, true);
-export const { configureKnowledgeExtensionHost, LOCAL_FIRST_GUIDANCE, registerWikiReviewAcceptance, registerKnowledgeInterface } = compatibility;
+const compatibility = createKnowledgeInterfaceApi(
+	{
+		host: compatibilityHost,
+		config: compatibilityConfig,
+		services: compatibilityServices,
+		publication: compatibilityPublication,
+		delivery: compatibilityDelivery,
+		specialists: compatibilitySpecialists,
+		topics: compatibilityTopics,
+		ui: compatibilityUi,
+		wiki: compatibilityWiki,
+	},
+	{},
+	true,
+);
+export const {
+	configureKnowledgeExtensionHost,
+	LOCAL_FIRST_GUIDANCE,
+	registerWikiReviewAcceptance,
+	registerKnowledgeInterface,
+} = compatibility;

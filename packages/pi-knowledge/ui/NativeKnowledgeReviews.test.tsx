@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, expect, it, vi } from "vitest";
 import { knowledge, services, sessions, setPluginRuntime } from "../test/setup";
 import { KnowledgePage } from "./entry";
+
 const hash = "a".repeat(64),
 	proposalHash = "b".repeat(64),
 	sourcePath = "Library/Methods/source.md";

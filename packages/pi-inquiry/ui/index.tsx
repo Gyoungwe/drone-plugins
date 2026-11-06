@@ -1,11 +1,7 @@
 import type { PluginRuntimeRootDescription } from "@gyoungwe/plugin-api/runtime";
 import type { DroneUiRuntime } from "@gyoungwe/plugin-api/ui";
 import { memo, useEffect, useRef, useState } from "react";
-import type {
-	ArtifactRecord,
-	AttemptRecord,
-	DecisionRecord,
-} from "../src/models.js";
+import type { ArtifactRecord, AttemptRecord, DecisionRecord } from "../src/models.js";
 
 import type { InquiryService } from "../src/service.js";
 
@@ -35,8 +31,7 @@ const copy = {
 		bind: "Bind original directory",
 		reconcile: "Reconcile pending write",
 		restore: "Restore original backup",
-		pending:
-			"A prior write needs explicit SHA reconciliation. No automatic retry will run.",
+		pending: "A prior write needs explicit SHA reconciliation. No automatic retry will run.",
 		busy: "Waiting for approval or owned cleanup…",
 		cancel: "Cancel current invocation",
 		questionId: "Question ID",
@@ -55,8 +50,7 @@ const copy = {
 		confirm: "Confirm reviewed artifacts",
 		asserted:
 			"These records are plugin-asserted or imported data; they are not independent host provenance proofs.",
-		unavailable:
-			"Re-run execution and workspace promotion are not connected yet.",
+		unavailable: "Re-run execution and workspace promotion are not connected yet.",
 		bound: "Original project",
 		original:
 			"Restore replaces the current SQLite file with the exact original backup. Each write still requires approval.",
@@ -66,8 +60,7 @@ const copy = {
 		refresh: "刷新",
 		loading: "正在读取原始账本…",
 		select: "请先选择真实工作区会话。",
-		grant:
-			"启用插件时，请分别为 JSON 元数据和二进制状态授权同一个原始账本目录。",
+		grant: "启用插件时，请分别为 JSON 元数据和二进制状态授权同一个原始账本目录。",
 		binary: "二进制状态目录",
 		metadata: "JSON 元数据目录",
 		choose: "选择已授权目录",
@@ -95,8 +88,7 @@ const copy = {
 		asserted: "这些记录属于插件声明或导入数据，不能作为独立宿主溯源证明。",
 		unavailable: "重跑执行器和工作区晋升仍未接入。",
 		bound: "原始项目",
-		original:
-			"恢复将用原始备份的精确字节替换当前 SQLite 文件，每次写入仍需授权。",
+		original: "恢复将用原始备份的精确字节替换当前 SQLite 文件，每次写入仍需授权。",
 	},
 };
 function Workspace() {
@@ -116,16 +108,12 @@ function Workspace() {
 		[provenance, setProvenance] = useState<unknown>(null);
 	const live = useRef(true),
 		active = useRef<AbortController | undefined>(undefined);
-	const read = async (input: unknown) =>
-		(await runtime.invoke("inquiry.read", input)) as { value: Snapshot };
+	const read = async (input: unknown) => (await runtime.invoke("inquiry.read", input)) as { value: Snapshot };
 	const refresh = async () => {
 		const value = (await runtime.invoke("inquiry.read", {
 			action: "status",
 		})) as Status;
-		const data =
-			value.state === "bound"
-				? (await read({ action: "snapshot" })).value
-				: null;
+		const data = value.state === "bound" ? (await read({ action: "snapshot" })).value : null;
 		if (live.current) {
 			setStatus(value);
 			setSnapshot(data);
@@ -136,8 +124,7 @@ function Workspace() {
 		live.current = true;
 		const load = () => {
 			void refresh().catch((cause) => {
-				if (live.current)
-					setError(cause instanceof Error ? cause.message : String(cause));
+				if (live.current) setError(cause instanceof Error ? cause.message : String(cause));
 			});
 		};
 		load();
@@ -157,8 +144,7 @@ function Workspace() {
 			await runtime.invoke("inquiry.write", input, controller.signal);
 			await refresh();
 		} catch (cause) {
-			if (live.current)
-				setError(cause instanceof Error ? cause.message : String(cause));
+			if (live.current) setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			active.current = undefined;
 			if (live.current) setBusy(false);
@@ -195,14 +181,11 @@ function Workspace() {
 			})) as { value: unknown };
 			if (live.current) setProvenance(value.value);
 		} catch (cause) {
-			if (live.current)
-				setError(cause instanceof Error ? cause.message : String(cause));
+			if (live.current) setError(cause instanceof Error ? cause.message : String(cause));
 		}
 	};
-	const decision = (
-		record: DecisionRecord,
-		action: "revokeDecision" | "confirmDecision",
-	) => act({ action, id: record.id, reason });
+	const decision = (record: DecisionRecord, action: "revokeDecision" | "confirmDecision") =>
+		act({ action, id: record.id, reason });
 	return (
 		<section
 			className="flex h-full flex-col gap-4 overflow-y-auto p-4 text-sm"
@@ -214,9 +197,7 @@ function Workspace() {
 					type="button"
 					disabled={busy}
 					onClick={() =>
-						void refresh().catch((cause) =>
-							setError(cause instanceof Error ? cause.message : String(cause)),
-						)
+						void refresh().catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
 					}
 				>
 					{t.refresh}
@@ -238,11 +219,7 @@ function Workspace() {
 							<p>{t.grant}</p>
 							<label>
 								{t.binary}
-								<select
-									aria-label={t.binary}
-									value={root}
-									onChange={(event) => setRoot(event.target.value)}
-								>
+								<select aria-label={t.binary} value={root} onChange={(event) => setRoot(event.target.value)}>
 									<option value="">{t.choose}</option>
 									{status.roots
 										.filter((value) => value.kind === "binary-state")
@@ -271,11 +248,7 @@ function Workspace() {
 								</select>
 							</label>
 							<label>
-								<input
-									type="checkbox"
-									checked={ack}
-									onChange={(event) => setAck(event.target.checked)}
-								/>
+								<input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />
 								{t.ack}
 							</label>
 							<button
@@ -297,11 +270,7 @@ function Workspace() {
 					{status.state === "needs-recovery" && (
 						<div>
 							<p>{t.pending}</p>
-							<button
-								type="button"
-								disabled={busy}
-								onClick={() => void act({ action: "reconcile" })}
-							>
+							<button type="button" disabled={busy} onClick={() => void act({ action: "reconcile" })}>
 								{t.reconcile}
 							</button>
 						</div>
@@ -347,10 +316,7 @@ function Workspace() {
 										) : (
 											<ul>
 												{snapshot.questions.map((record) => (
-													<li
-														key={record.id}
-														className="rounded border border-border p-2"
-													>
+													<li key={record.id} className="rounded border border-border p-2">
 														<strong>{record.statement}</strong>
 														<p>
 															{record.id} · {record.status}
@@ -369,19 +335,12 @@ function Workspace() {
 										) : (
 											<ul>
 												{snapshot.artifacts.map((record) => (
-													<li
-														key={record.id}
-														className="rounded border border-border p-2"
-													>
+													<li key={record.id} className="rounded border border-border p-2">
 														<p className="break-all">{record.path}</p>
 														<p>
 															{record.status} · {record.sha256}
 														</p>
-														<button
-															type="button"
-															disabled={busy}
-															onClick={() => void inspect(record)}
-														>
+														<button type="button" disabled={busy} onClick={() => void inspect(record)}>
 															{t.provenance}
 														</button>
 													</li>
@@ -411,10 +370,7 @@ function Workspace() {
 										) : (
 											<ul>
 												{snapshot.decisions.map((record) => (
-													<li
-														key={record.id}
-														className="rounded border border-border p-2"
-													>
+													<li key={record.id} className="rounded border border-border p-2">
 														<strong>{record.summary}</strong>
 														<p>
 															{record.id} · {record.status}
@@ -425,15 +381,11 @@ function Workspace() {
 															onClick={() =>
 																void decision(
 																	record,
-																	record.status === "revoked"
-																		? "confirmDecision"
-																		: "revokeDecision",
+																	record.status === "revoked" ? "confirmDecision" : "revokeDecision",
 																)
 															}
 														>
-															{record.status === "revoked"
-																? t.confirm
-																: t.revoke}
+															{record.status === "revoked" ? t.confirm : t.revoke}
 														</button>
 													</li>
 												))}
@@ -441,9 +393,8 @@ function Workspace() {
 										)}
 									</section>
 									<p>
-										{t.attempts}: {snapshot.attempts.length} · {t.findings}:{" "}
-										{snapshot.findings.length} · {t.reruns}:{" "}
-										{snapshot.reruns.length}
+										{t.attempts}: {snapshot.attempts.length} · {t.findings}: {snapshot.findings.length} ·{" "}
+										{t.reruns}: {snapshot.reruns.length}
 									</p>
 								</>
 							)}
@@ -466,9 +417,7 @@ function Workspace() {
 					<p>{t.busy}</p>
 					<button
 						type="button"
-						onClick={() =>
-							active.current?.abort(new Error("Inquiry invocation cancelled"))
-						}
+						onClick={() => active.current?.abort(new Error("Inquiry invocation cancelled"))}
 					>
 						{t.cancel}
 					</button>
@@ -480,8 +429,6 @@ function Workspace() {
 	);
 }
 export const InquiryPanel = memo(function InquiryPanel() {
-	const sessionId = host.stores.useSessionsStore(
-		(state) => state.activeSessionId,
-	);
+	const sessionId = host.stores.useSessionsStore((state) => state.activeSessionId);
 	return <Workspace key={sessionId} />;
 });

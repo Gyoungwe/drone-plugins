@@ -1,14 +1,10 @@
-import type {
-	KnowledgeNote,
-	KnowledgeNoteLinks,
-} from "@gyoungwe/plugin-api/ui";
-import { useEffect, useState, type ReactNode } from "react";
+import type { KnowledgeNote, KnowledgeNoteLinks } from "@gyoungwe/plugin-api/ui";
+import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "../runtime-api";
 import { useKnowledgeText } from "./copy";
 import { KnowledgeLinksView } from "./KnowledgeLinksView";
 import { noteDisplayText } from "./note-display";
-export type ReadableNote = Pick<KnowledgeNote, "path"> &
-	Partial<Omit<KnowledgeNote, "path">>;
+export type ReadableNote = Pick<KnowledgeNote, "path"> & Partial<Omit<KnowledgeNote, "path">>;
 export interface NoteReadingApi {
 	readNote: (input: {
 		path: string;
@@ -16,10 +12,7 @@ export interface NoteReadingApi {
 		startLine: number;
 		expectedHash?: string;
 	}) => Promise<ReadableNote>;
-	links: (input: {
-		path: string;
-		revision: number;
-	}) => Promise<KnowledgeNoteLinks>;
+	links: (input: { path: string; revision: number }) => Promise<KnowledgeNoteLinks>;
 }
 export function KnowledgeNoteView({
 	api,
@@ -47,12 +40,10 @@ export function KnowledgeNoteView({
 	onClose: () => void;
 }) {
 	const t = useKnowledgeText();
-	const [cursor, setCursor] = useState<{ line: number; expectedHash?: string }>(
-			{
-				line: initialPage?.startLine ?? 1,
-				expectedHash: initialPage?.expectedHash,
-			},
-		),
+	const [cursor, setCursor] = useState<{ line: number; expectedHash?: string }>({
+			line: initialPage?.startLine ?? 1,
+			expectedHash: initialPage?.expectedHash,
+		}),
 		[note, setNote] = useState<ReadableNote | null>(null),
 		[error, setError] = useState<string | null>(null),
 		[loading, setLoading] = useState(false);
@@ -93,9 +84,7 @@ export function KnowledgeNoteView({
 			<div className="flex items-start justify-between gap-2">
 				<div className="min-w-0">
 					<h4 className="text-xs font-semibold">{t("viewNote")}</h4>
-					<p className="mt-1 break-all font-mono text-[11px] text-ink-dim">
-						{path}
-					</p>
+					<p className="mt-1 break-all font-mono text-[11px] text-ink-dim">{path}</p>
 				</div>
 				<Button size="sm" onClick={onClose} aria-label={t("close")}>
 					×
@@ -108,10 +97,7 @@ export function KnowledgeNoteView({
 				</p>
 			)}
 			{error && (
-				<p
-					role="alert"
-					className="whitespace-pre-wrap break-words text-xs text-err"
-				>
+				<p role="alert" className="whitespace-pre-wrap break-words text-xs text-err">
 					{error}
 				</p>
 			)}
@@ -142,9 +128,7 @@ export function KnowledgeNoteView({
 			)}
 			{note?.humanReview?.text && (
 				<details className="mt-2 text-xs">
-					<summary className="cursor-pointer font-medium">
-						{t("humanReview")}
-					</summary>
+					<summary className="cursor-pointer font-medium">{t("humanReview")}</summary>
 					<pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-ink-2">
 						{note.humanReview.text}
 					</pre>
@@ -159,9 +143,7 @@ export function KnowledgeNoteView({
 					onOpenNote={onOpenNote}
 				/>
 			)}
-			{unavailableReason && (
-				<p className="mt-2 text-xs text-ink-faint">{unavailableReason}</p>
-			)}
+			{unavailableReason && <p className="mt-2 text-xs text-ink-faint">{unavailableReason}</p>}
 			<div className="mt-2 flex flex-wrap gap-1">
 				{line > 1 && (
 					<Button size="sm" onClick={() => setCursor({ line: 1 })}>
@@ -188,11 +170,7 @@ export function KnowledgeNoteView({
 					size="sm"
 					disabled={!onOpenExternal || loading || note?.missing}
 					title={unavailableReason}
-					onClick={() =>
-						void onOpenExternal!().catch((e) =>
-							setError(String(e.message || e)),
-						)
-					}
+					onClick={() => void onOpenExternal!().catch((e) => setError(String(e.message || e)))}
 				>
 					{t("openObsidian")}
 				</Button>

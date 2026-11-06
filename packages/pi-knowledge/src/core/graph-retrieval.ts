@@ -44,7 +44,9 @@ export function centralityBoost(degree: number, weight: number, cap: number): nu
 }
 
 function baseScore(hit: GraphHitLike, index: number): number {
-	return typeof hit.fusionScore === "number" && Number.isFinite(hit.fusionScore) ? hit.fusionScore : 1 / (60 + index + 1);
+	return typeof hit.fusionScore === "number" && Number.isFinite(hit.fusionScore)
+		? hit.fusionScore
+		: 1 / (60 + index + 1);
 }
 
 export function expandWithGraph(

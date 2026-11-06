@@ -78,8 +78,7 @@ export const publicationNotices: Readonly<Record<PublicationFailureCode, string>
 		"【任务阶段已暂停】本阶段达到工具或上下文安全预算。已保存的结果不会因此删除；查看任务执行记录后可继续，无需新建对话。继续前先核对结果未知的操作，不要重复安装、导入或上传。",
 	"metacognitive-inconsistency":
 		"报告、方法、证据标签或诊断与实际运行结果不一致；回答暂未展示。请按下面的差异修正报告或重新运行当前流程。",
-	"artifact-pending-review":
-		"引用的结果正在等待确认；回答暂未展示。请重新生成受影响结果或完成现有审核。",
+	"artifact-pending-review": "引用的结果正在等待确认；回答暂未展示。请重新生成受影响结果或完成现有审核。",
 };
 
 const advisoryNotices: Partial<Record<PublicationFailureCode, string>> = {

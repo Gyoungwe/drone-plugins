@@ -1,32 +1,21 @@
-import {
-	mkdir,
-	mkdtemp,
-	readFile,
-	realpath,
-	rm,
-	writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
-import { createLocalReviewPolicyStorage } from "../src/core/review-policy-storage.js";
-import type { ReviewMode } from "../src/core/review-policy.js";
 import { createKnowledgeOwnerLifecycle } from "../src/core/owner-lifecycle.js";
+import type { ReviewMode } from "../src/core/review-policy.js";
+import { createLocalReviewPolicyStorage } from "../src/core/review-policy-storage.js";
 import { createKnowledgePreferences } from "../src/desktop/preferences.js";
 import type { KnowledgeReadOwner } from "../src/desktop/read-model.js";
 
 const roots: string[] = [];
 afterEach(async () => {
 	vi.unstubAllEnvs();
-	await Promise.all(
-		roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
-	);
+	await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 async function fixture(canWriteState = true) {
-	const root = await realpath(
-		await mkdtemp(join(tmpdir(), "knowledge-preferences-")),
-	);
+	const root = await realpath(await mkdtemp(join(tmpdir(), "knowledge-preferences-")));
 	roots.push(root);
 	const vault = join(root, "Vault"),
 		state = join(root, "state");
@@ -66,8 +55,7 @@ async function fixture(canWriteState = true) {
 					});
 				return value;
 			}
-			if (name === "state.writeJson")
-				return storage.write(raw.value, raw.expectedVersion);
+			if (name === "state.writeJson") return storage.write(raw.value, raw.expectedVersion);
 			throw new Error(`Unexpected capability ${name}`);
 		},
 	};
@@ -87,12 +75,7 @@ async function fixture(canWriteState = true) {
 		binding,
 		calls,
 		owner,
-		preferences: createKnowledgePreferences(
-			owner,
-			capabilities,
-			"approved-state",
-			canWriteState,
-		),
+		preferences: createKnowledgePreferences(owner, capabilities, "approved-state", canWriteState),
 		revoke: () => {
 			revoked = true;
 		},
@@ -126,9 +109,10 @@ it("reads and changes the approved state policy with versioned write/readback an
 		diagnostic: null,
 	});
 	expect(changed.reviewPolicy.version).toMatch(/^[a-f0-9]{64}$/);
-	expect(
-		JSON.parse(await readFile(join(f.state, "review-policy.json"), "utf8")),
-	).toEqual({ version: 1, mode: "strict" });
+	expect(JSON.parse(await readFile(join(f.state, "review-policy.json"), "utf8"))).toEqual({
+		version: 1,
+		mode: "strict",
+	});
 	await expect(
 		f.preferences.write({
 			bindingRevision: 1,
@@ -166,9 +150,7 @@ it("preserves damaged JSON and rejects revoked or missing write authority", asyn
 			mode: "automatic",
 		}),
 	).rejects.toThrow("damaged");
-	expect(
-		await readFile(join(writable.state, "review-policy.json"), "utf8"),
-	).toBe("{broken");
+	expect(await readFile(join(writable.state, "review-policy.json"), "utf8")).toBe("{broken");
 	writable.revoke();
 	await expect(writable.preferences.read()).rejects.toMatchObject({
 		code: "EPERM",

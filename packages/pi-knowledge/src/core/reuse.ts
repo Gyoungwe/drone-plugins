@@ -1,8 +1,8 @@
 import { isAbsolute, resolve } from "node:path";
 import {
+	type ContractParentRef,
 	contractContentHash,
 	createKnowledgeSnapshot,
-	type ContractParentRef,
 	type KnowledgeEvidenceGrade,
 	type KnowledgeFreshness,
 	type KnowledgeReuseLevel,
@@ -92,10 +92,17 @@ export function validateKnowledgeSourceReceipt(receipt: KnowledgeSourceReceipt):
 	if (!receipt.sourceRef || receipt.sourceRef.length > 4096) throw new Error("Invalid sourceRef");
 	if (receipt.relativePath !== undefined && (!receipt.relativePath || receipt.relativePath.length > 4096))
 		throw new Error("Invalid source relativePath");
-	if (receipt.sourceType !== undefined && !["project-file", "literature", "dataset", "protocol", "institutional", "connector"].includes(receipt.sourceType))
+	if (
+		receipt.sourceType !== undefined &&
+		!["project-file", "literature", "dataset", "protocol", "institutional", "connector"].includes(
+			receipt.sourceType,
+		)
+	)
 		throw new Error("Invalid source type");
-	if (receipt.locator !== undefined && receipt.locator.length > 4096) throw new Error("Invalid source locator");
-	if (receipt.license !== undefined && receipt.license.length > 512) throw new Error("Invalid source license");
+	if (receipt.locator !== undefined && receipt.locator.length > 4096)
+		throw new Error("Invalid source locator");
+	if (receipt.license !== undefined && receipt.license.length > 512)
+		throw new Error("Invalid source license");
 	if (receipt.accessedAt !== undefined) asTime(receipt.accessedAt, "accessedAt");
 	if (receipt.failureReason !== undefined && receipt.failureReason.length > 2000)
 		throw new Error("Source failure reason is too long");
@@ -104,10 +111,17 @@ export function validateKnowledgeSourceReceipt(receipt: KnowledgeSourceReceipt):
 	asTime(receipt.readAt, "readAt");
 	if (receipt.version !== undefined && (!receipt.version || receipt.version.length > 512))
 		throw new Error("Invalid source receipt version");
-	if (receipt.summary !== undefined && receipt.summary.length > 4000) throw new Error("Source summary is too long");
-	if (receipt.evidenceGrade && !["navigation", "contextual", "primary", "validated", "reproduced"].includes(receipt.evidenceGrade))
+	if (receipt.summary !== undefined && receipt.summary.length > 4000)
+		throw new Error("Source summary is too long");
+	if (
+		receipt.evidenceGrade &&
+		!["navigation", "contextual", "primary", "validated", "reproduced"].includes(receipt.evidenceGrade)
+	)
 		throw new Error("Invalid source receipt evidence grade");
-	if (receipt.evidenceLevel && !["navigation", "contextual", "primary", "validated", "reproduced"].includes(receipt.evidenceLevel))
+	if (
+		receipt.evidenceLevel &&
+		!["navigation", "contextual", "primary", "validated", "reproduced"].includes(receipt.evidenceLevel)
+	)
 		throw new Error("Invalid source receipt evidence level");
 	for (const ref of [...(receipt.analysisRefs ?? []), ...(receipt.checkpointRefs ?? [])])
 		if (!validParentRef(ref)) throw new Error("Invalid source receipt parent reference");
@@ -134,7 +148,8 @@ export function checkKnowledgeReceiptFreshness(
 		if (receipt.freshness?.expiresAt && Date.parse(receipt.freshness.expiresAt) <= checked)
 			return { status: "stale", checkedAt, reason: "receipt expiry has passed" };
 		if (options.maxAgeMs !== undefined) {
-			if (!Number.isFinite(options.maxAgeMs) || options.maxAgeMs < 0) throw new Error("maxAgeMs must be non-negative");
+			if (!Number.isFinite(options.maxAgeMs) || options.maxAgeMs < 0)
+				throw new Error("maxAgeMs must be non-negative");
 			if (checked - readAt > options.maxAgeMs)
 				return { status: "stale", checkedAt, reason: "receipt exceeds the freshness window" };
 		}
@@ -213,7 +228,8 @@ function levelForGrade(grade: KnowledgeEvidenceGrade): KnowledgeReuseLevel {
 function maxGrade(sources: readonly KnowledgeSourceReceipt[]): KnowledgeEvidenceGrade {
 	return sources.reduce<KnowledgeEvidenceGrade>(
 		(best, source) =>
-			knowledgeEvidenceGradeRank(source.evidenceGrade ?? source.evidenceLevel ?? "navigation") > knowledgeEvidenceGradeRank(best)
+			knowledgeEvidenceGradeRank(source.evidenceGrade ?? source.evidenceLevel ?? "navigation") >
+			knowledgeEvidenceGradeRank(best)
 				? (source.evidenceGrade ?? source.evidenceLevel ?? "navigation")
 				: best,
 		"navigation",
@@ -223,7 +239,8 @@ function maxGrade(sources: readonly KnowledgeSourceReceipt[]): KnowledgeEvidence
 function uniqueRefs(refs: readonly ContractParentRef[]): ContractParentRef[] {
 	const seen = new Set<string>();
 	return refs.filter((ref) => {
-		const key = typeof ref === "string" ? ref : `${ref.kind}:${ref.id}:${ref.revision ?? ""}:${ref.contentHash ?? ""}`;
+		const key =
+			typeof ref === "string" ? ref : `${ref.kind}:${ref.id}:${ref.revision ?? ""}:${ref.contentHash ?? ""}`;
 		if (seen.has(key)) return false;
 		seen.add(key);
 		return true;
@@ -232,7 +249,8 @@ function uniqueRefs(refs: readonly ContractParentRef[]): ContractParentRef[] {
 
 /** Build a versioned, immutable snapshot from actual source read receipts. */
 export function ingestKnowledgeSnapshot(input: KnowledgeSnapshotInput): KnowledgeSnapshot {
-	if (!input.context?.projectId || !input.context.workspaceId) throw new Error("Knowledge context is required");
+	if (!input.context?.projectId || !input.context.workspaceId)
+		throw new Error("Knowledge context is required");
 	if (!Array.isArray(input.sources) || input.sources.length === 0 || input.sources.length > 128)
 		throw new Error("Knowledge snapshot requires 1-128 source receipts");
 	const createdAt = nowIso(input.createdAt);
@@ -248,7 +266,13 @@ export function ingestKnowledgeSnapshot(input: KnowledgeSnapshotInput): Knowledg
 		return validateKnowledgeSourceReceipt(normalized);
 	});
 	const grade = input.evidenceGrade ?? input.evidenceLevel ?? maxGrade(sources);
-	if (sources.some((source) => knowledgeEvidenceGradeRank(source.evidenceGrade ?? source.evidenceLevel ?? "navigation") > knowledgeEvidenceGradeRank(grade)))
+	if (
+		sources.some(
+			(source) =>
+				knowledgeEvidenceGradeRank(source.evidenceGrade ?? source.evidenceLevel ?? "navigation") >
+				knowledgeEvidenceGradeRank(grade),
+		)
+	)
 		throw new Error("Snapshot evidence grade cannot understate a source grade");
 	const inferredLevel = levelForGrade(grade);
 	const reuseLevel = input.reuseLevel ?? inferredLevel;
@@ -338,7 +362,9 @@ export interface KnowledgeReuseDecision {
 }
 
 function sameRef(a: ContractParentRef, b: ContractParentRef): boolean {
-	return typeof a === "string" && typeof b === "string" ? a === b : typeof a !== "string" && typeof b !== "string" && a.kind === b.kind && a.id === b.id;
+	return typeof a === "string" && typeof b === "string"
+		? a === b
+		: typeof a !== "string" && typeof b !== "string" && a.kind === b.kind && a.id === b.id;
 }
 
 /** Fail-closed checks used before a new analysis consumes a snapshot. */
@@ -355,34 +381,62 @@ export function checkKnowledgeSnapshotReuse(
 			current: request.sourceStates?.[source.sourceRef],
 		}),
 	);
-	if (snapshot.projectId !== request.context.projectId || snapshot.workspaceId !== request.context.workspaceId)
+	if (
+		snapshot.projectId !== request.context.projectId ||
+		snapshot.workspaceId !== request.context.workspaceId
+	)
 		reasons.push("snapshot belongs to another project or workspace");
 	if (snapshot.approval === "pending") reasons.push("snapshot is awaiting user approval");
-	if (snapshot.approval === "rejected" || snapshot.approval === "revoked") reasons.push("snapshot approval was revoked");
-	if (request.requiredLevel && knowledgeReuseLevelRank(snapshot.reuseLevel) < knowledgeReuseLevelRank(request.requiredLevel))
+	if (snapshot.approval === "rejected" || snapshot.approval === "revoked")
+		reasons.push("snapshot approval was revoked");
+	if (
+		request.requiredLevel &&
+		knowledgeReuseLevelRank(snapshot.reuseLevel) < knowledgeReuseLevelRank(request.requiredLevel)
+	)
 		reasons.push("snapshot evidence level is insufficient");
 	if (request.assay && snapshot.assay !== request.assay) reasons.push("assay does not match");
-	if (request.methodVersion && snapshot.methodVersion !== request.methodVersion) reasons.push("method version does not match");
+	if (request.methodVersion && snapshot.methodVersion !== request.methodVersion)
+		reasons.push("method version does not match");
 	if (request.referenceVersion && snapshot.referenceVersion !== request.referenceVersion)
 		reasons.push("reference version does not match");
 	if (request.inputManifestHash && snapshot.inputManifestHash !== request.inputManifestHash)
 		reasons.push("input manifest does not match");
-	if (request.analysisRef && !(snapshot.analysisRefs ?? []).some((ref) => sameRef(ref, request.analysisRef as ContractParentRef)))
+	if (
+		request.analysisRef &&
+		!(snapshot.analysisRefs ?? []).some((ref) => sameRef(ref, request.analysisRef as ContractParentRef))
+	)
 		reasons.push("analysis reference is not linked");
-	if (request.evidenceCheckpointRef && !(snapshot.evidenceCheckpointRefs ?? []).some((ref) => sameRef(ref, request.evidenceCheckpointRef as ContractParentRef)))
+	if (
+		request.evidenceCheckpointRef &&
+		!(snapshot.evidenceCheckpointRefs ?? []).some((ref) =>
+			sameRef(ref, request.evidenceCheckpointRef as ContractParentRef),
+		)
+	)
 		reasons.push("evidence checkpoint reference is not linked");
-	if (freshness.some((item) => item.status === "stale" || item.status === "invalid")) reasons.push("one or more source receipts are stale");
+	if (freshness.some((item) => item.status === "stale" || item.status === "invalid"))
+		reasons.push("one or more source receipts are stale");
 	if (freshness.some((item) => item.status === "unknown")) reasons.push("source freshness is unknown");
 	let status: KnowledgeReuseStatus = "reusable";
 	if (reasons.length) {
 		if (snapshot.approval === "pending") status = "pending-approval";
 		else if (snapshot.approval === "rejected" || snapshot.approval === "revoked") status = "revoked";
 		else if (freshness.some((item) => item.status === "stale" || item.status === "invalid")) status = "stale";
-		else if (snapshot.projectId !== request.context.projectId || snapshot.workspaceId !== request.context.workspaceId) status = "context-mismatch";
-		else if (request.requiredLevel && knowledgeReuseLevelRank(snapshot.reuseLevel) < knowledgeReuseLevelRank(request.requiredLevel)) status = "insufficient-evidence";
-		else if (request.methodVersion && snapshot.methodVersion !== request.methodVersion) status = "method-mismatch";
-		else if (request.referenceVersion && snapshot.referenceVersion !== request.referenceVersion) status = "reference-mismatch";
-		else if (request.inputManifestHash && snapshot.inputManifestHash !== request.inputManifestHash) status = "input-mismatch";
+		else if (
+			snapshot.projectId !== request.context.projectId ||
+			snapshot.workspaceId !== request.context.workspaceId
+		)
+			status = "context-mismatch";
+		else if (
+			request.requiredLevel &&
+			knowledgeReuseLevelRank(snapshot.reuseLevel) < knowledgeReuseLevelRank(request.requiredLevel)
+		)
+			status = "insufficient-evidence";
+		else if (request.methodVersion && snapshot.methodVersion !== request.methodVersion)
+			status = "method-mismatch";
+		else if (request.referenceVersion && snapshot.referenceVersion !== request.referenceVersion)
+			status = "reference-mismatch";
+		else if (request.inputManifestHash && snapshot.inputManifestHash !== request.inputManifestHash)
+			status = "input-mismatch";
 		else if (request.analysisRef || request.evidenceCheckpointRef) status = "unlinked";
 		else status = "stale";
 	}
@@ -409,7 +463,10 @@ export class KnowledgeReuseIndex {
 	private readonly entries = new Map<string, KnowledgeReuseIndexEntry>();
 	private writeQueue: Promise<void> = Promise.resolve();
 
-	constructor(private readonly store?: KnowledgeReuseIndexStore, snapshots: readonly KnowledgeSnapshot[] = []) {
+	constructor(
+		private readonly store?: KnowledgeReuseIndexStore,
+		snapshots: readonly KnowledgeSnapshot[] = [],
+	) {
 		for (const snapshot of snapshots) this.entries.set(snapshot.id, { snapshot, reuseCount: 0 });
 	}
 
@@ -437,7 +494,10 @@ export class KnowledgeReuseIndex {
 	}
 
 	list(): readonly KnowledgeReuseIndexEntry[] {
-		return [...this.entries.values()].map((entry) => ({ ...entry, snapshot: structuredClone(entry.snapshot) }));
+		return [...this.entries.values()].map((entry) => ({
+			...entry,
+			snapshot: structuredClone(entry.snapshot),
+		}));
 	}
 
 	find(request: KnowledgeReuseRequest): readonly KnowledgeReuseDecision[] {
@@ -459,7 +519,9 @@ export class KnowledgeReuseIndex {
 
 	private async persist(): Promise<void> {
 		if (!this.store) return;
-		this.writeQueue = this.writeQueue.then(() => this.store?.write([...this.entries.values()].map((entry) => entry.snapshot)) ?? Promise.resolve());
+		this.writeQueue = this.writeQueue.then(
+			() => this.store?.write([...this.entries.values()].map((entry) => entry.snapshot)) ?? Promise.resolve(),
+		);
 		await this.writeQueue;
 	}
 }

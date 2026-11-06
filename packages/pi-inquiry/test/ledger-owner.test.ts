@@ -1,26 +1,11 @@
 import { createHash } from "node:crypto";
-import {
-	lstat,
-	mkdir,
-	mkdtemp,
-	readFile,
-	realpath,
-	rename,
-	rm,
-	writeFile,
-} from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
-import {
-	readBinaryStateFile,
-	writeBinaryStateFile,
-} from "@gyoungwe/plugin-api/node/binary-state";
+import { readBinaryStateFile, writeBinaryStateFile } from "@gyoungwe/plugin-api/node/binary-state";
 import { PluginResourceReservations } from "@gyoungwe/plugin-api/node/reservations";
-import type {
-	PluginRuntimeCapabilities,
-	PluginStateReadResult,
-} from "@gyoungwe/plugin-api/runtime";
+import type { PluginRuntimeCapabilities, PluginStateReadResult } from "@gyoungwe/plugin-api/runtime";
 import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import {
 	type InquiryBindingState,
@@ -35,8 +20,7 @@ import { SqliteInquiryStorage } from "../src/storage.js";
 import { createInquiryWasmEngine } from "../src/wasm-storage.js";
 
 const require = createRequire(import.meta.url),
-	hash = (bytes: Buffer | string) =>
-		createHash("sha256").update(bytes).digest("hex");
+	hash = (bytes: Buffer | string) => createHash("sha256").update(bytes).digest("hex");
 const projectId = "original-project",
 	workspaceId = "actual-workspace",
 	date = "2026-10-28T00:00:00.000Z";
@@ -64,14 +48,9 @@ let engine: InquiryWasmEngine,
 	owner: InquiryLedgerOwner,
 	ports: PluginRuntimeCapabilities;
 let activeWorkspace: string, activeDirectory: string;
-let controller: AbortController,
-	denyLedgerWrite: boolean,
-	cancelAfterCommit: boolean,
-	binaryWrites: number;
+let controller: AbortController, denyLedgerWrite: boolean, cancelAfterCommit: boolean, binaryWrites: number;
 beforeAll(async () => {
-	engine = await createInquiryWasmEngine(
-		await readFile(require.resolve("sql.js/dist/sql-wasm.wasm")),
-	);
+	engine = await createInquiryWasmEngine(await readFile(require.resolve("sql.js/dist/sql-wasm.wasm")));
 });
 async function readJson(path: string): Promise<PluginStateReadResult> {
 	try {
@@ -86,8 +65,7 @@ async function state(): Promise<InquiryBindingState> {
 	const path = inquiryBindingPath(),
 		result = await readJson(path);
 	const value = parseInquiryBinding(result, workspaceId);
-	if (result.kind !== "value" || !value)
-		throw new Error("Fixture binding missing");
+	if (result.kind !== "value" || !value) throw new Error("Fixture binding missing");
 	return { root: "json", path, value, version: result.version };
 }
 function reopened() {
@@ -113,10 +91,7 @@ beforeEach(async () => {
 	denyLedgerWrite = false;
 	cancelAfterCommit = false;
 	binaryWrites = 0;
-	const seed = new SqliteInquiryStorage(
-		projectId,
-		join(binary, "ledger.sqlite"),
-	);
+	const seed = new SqliteInquiryStorage(projectId, join(binary, "ledger.sqlite"));
 	await new InquiryService(seed).recordQuestion(question("original"));
 	await seed.close();
 	initial = await readFile(join(binary, "ledger.sqlite"));
@@ -131,15 +106,13 @@ beforeEach(async () => {
 		for (const part of path ? path.split("/") : []) {
 			current = join(current, part);
 			try {
-				if ((await lstat(current)).isSymbolicLink())
-					throw new Error("Fixture symlink refusal");
+				if ((await lstat(current)).isSymbolicLink()) throw new Error("Fixture symlink refusal");
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 			}
 		}
 		const suffix = relative(binary, current);
-		if (suffix === ".." || suffix.startsWith(`..${sep}`))
-			throw new Error("Fixture path confinement");
+		if (suffix === ".." || suffix.startsWith(`..${sep}`)) throw new Error("Fixture path confinement");
 		return current;
 	};
 	const access = {
@@ -150,8 +123,7 @@ beforeEach(async () => {
 		checkWrite: async () => {
 			controller.signal.throwIfAborted();
 		},
-		assertReserved: (parent: string) =>
-			reservations.assertReserved("state-writers", parent),
+		assertReserved: (parent: string) => reservations.assertReserved("state-writers", parent),
 		conflictError: () => new Error("CAS conflict"),
 		cleanupFailed: (error: unknown) => {
 			throw error;
@@ -186,13 +158,10 @@ beforeEach(async () => {
 				value: unknown;
 			};
 			if (name === "state.reserve") {
-				reservations.reserve("state-writers", [
-					request.root === "binary" ? binary : json,
-				]);
+				reservations.reserve("state-writers", [request.root === "binary" ? binary : json]);
 				return { reserved: true };
 			}
-			if (name === "state.readBinary")
-				return readBinaryStateFile(request.path, access);
+			if (name === "state.readBinary") return readBinaryStateFile(request.path, access);
 			if (name === "state.writeBinary") {
 				if (request.path === "ledger.sqlite" && denyLedgerWrite)
 					throw new Error("Actual fixture write denied");
@@ -213,8 +182,7 @@ beforeEach(async () => {
 			if (name === "state.readJson") return readJson(request.path);
 			if (name === "state.writeJson") {
 				const current = await readJson(request.path);
-				if (current.version !== request.expectedVersion)
-					throw new Error("Metadata CAS conflict");
+				if (current.version !== request.expectedVersion) throw new Error("Metadata CAS conflict");
 				const text = JSON.stringify(request.value);
 				const temporary = join(json, `${request.path}.tmp`);
 				await writeFile(temporary, text, { flag: "wx" });
@@ -251,9 +219,7 @@ it("preserves original SQLite bytes, commits canonical SQL, reopens and explicit
 	);
 	const backup = join(binary, `ledger.sqlite.pre-plugin-${hash(initial)}.bak`);
 	expect(await readFile(backup)).toEqual(initial);
-	expect((await owner.snapshot()).questions.map((record) => record.id)).toEqual(
-		["new", "original"],
-	);
+	expect((await owner.snapshot()).questions.map((record) => record.id)).toEqual(["new", "original"]);
 	await owner.dispose();
 	owner = await reopened();
 	expect((await owner.snapshot()).questions).toHaveLength(2);
@@ -262,9 +228,7 @@ it("preserves original SQLite bytes, commits canonical SQL, reopens and explicit
 		version: hash(initial),
 	});
 	expect(await readFile(join(binary, "ledger.sqlite"))).toEqual(initial);
-	expect((await owner.snapshot()).questions.map((record) => record.id)).toEqual(
-		["original"],
-	);
+	expect((await owner.snapshot()).questions.map((record) => record.id)).toEqual(["original"]);
 	expect(engine.inspect(initial)).toMatchObject({
 		projectId,
 		schemaVersion: 2,
@@ -290,9 +254,7 @@ it("retains a durable pending intent on denied write and reconciles the unchange
 		version: hash(initial),
 	});
 	expect(binaryWrites).toBe(writes);
-	expect((await owner.snapshot()).questions.map((record) => record.id)).toEqual(
-		["original"],
-	);
+	expect((await owner.snapshot()).questions.map((record) => record.id)).toEqual(["original"]);
 });
 it("does no new metadata write after revocation and lets a fresh caller reconcile an actually committed candidate", async () => {
 	cancelAfterCommit = true;
@@ -318,15 +280,10 @@ it("does no new metadata write after revocation and lets a fresh caller reconcil
 		version: hash(candidate),
 	});
 	expect(binaryWrites).toBe(writes);
-	expect((await owner.snapshot()).questions.map((record) => record.id)).toEqual(
-		["accepted", "original"],
-	);
+	expect((await owner.snapshot()).questions.map((record) => record.id)).toEqual(["accepted", "original"]);
 });
 it("refuses active WAL sidecars before backup, metadata intent or original mutation", async () => {
-	await writeFile(
-		join(binary, "ledger.sqlite-wal"),
-		"synthetic active sidecar",
-	);
+	await writeFile(join(binary, "ledger.sqlite-wal"), "synthetic active sidecar");
 	const before = await readJson(inquiryBindingPath());
 	await expect(
 		owner.write(
@@ -340,10 +297,7 @@ it("refuses active WAL sidecars before backup, metadata intent or original mutat
 	expect(binaryWrites).toBe(0);
 });
 it("rejects external SHA changes rather than silently adopting or overwriting them", async () => {
-	await writeFile(
-		join(binary, "ledger.sqlite"),
-		Buffer.from("different untrusted bytes"),
-	);
+	await writeFile(join(binary, "ledger.sqlite"), Buffer.from("different untrusted bytes"));
 	await expect(owner.snapshot()).rejects.toThrow("no automatic adoption");
 	expect(binaryWrites).toBe(0);
 });
@@ -393,20 +347,16 @@ it("serves the generic provider through the same canonical owner and labels JSON
 			value: null,
 			authority: "plugin-asserted-or-imported",
 		});
-		const snapshot = (await runtime.operations["inquiry.read"].execute(
-			{ action: "snapshot" },
-			context,
-		)) as { value: { questions: { id: string }[] } };
-		expect(snapshot.value.questions.map((record) => record.id)).toEqual([
-			"original",
-			"provider",
-		]);
+		const snapshot = (await runtime.operations["inquiry.read"].execute({ action: "snapshot" }, context)) as {
+			value: { questions: { id: string }[] };
+		};
+		expect(snapshot.value.questions.map((record) => record.id)).toEqual(["original", "provider"]);
 	} finally {
 		await runtime.dispose();
 	}
-	await expect(
-		runtime.operations["inquiry.read"].execute({ action: "snapshot" }, context),
-	).rejects.toThrow("stopping");
+	await expect(runtime.operations["inquiry.read"].execute({ action: "snapshot" }, context)).rejects.toThrow(
+		"stopping",
+	);
 });
 it("requires explicit existing-data binding through actual root handles without changing original bytes", async () => {
 	await rm(join(json, inquiryBindingPath()));
@@ -431,12 +381,9 @@ it("requires explicit existing-data binding through actual root handles without 
 		capabilities: ports,
 	};
 	try {
-		expect(
-			await runtime.operations["inquiry.read"].execute(
-				{ action: "status" },
-				context,
-			),
-		).toMatchObject({ state: "needs-binding" });
+		expect(await runtime.operations["inquiry.read"].execute({ action: "status" }, context)).toMatchObject({
+			state: "needs-binding",
+		});
 		await expect(
 			runtime.operations["inquiry.write"].execute(
 				{
@@ -491,10 +438,7 @@ it("refuses a second actual workspace binding to the same original directory wit
 		capabilities: ports,
 	};
 	try {
-		await runtime.operations["inquiry.read"].execute(
-			{ action: "snapshot" },
-			context,
-		);
+		await runtime.operations["inquiry.read"].execute({ action: "snapshot" }, context);
 		activeWorkspace = "other-workspace";
 		activeDirectory = join(directory, "other-workspace");
 		await mkdir(activeDirectory);
@@ -526,13 +470,10 @@ it("requires explicit reconciliation when pending metadata committed but its can
 			if (
 				name === "state.writeJson" &&
 				losePendingReply &&
-				(input as { value: { intent?: { status: string } } }).value.intent
-					?.status === "pending"
+				(input as { value: { intent?: { status: string } } }).value.intent?.status === "pending"
 			) {
 				losePendingReply = false;
-				invocation.abort(
-					new Error("Caller cancelled after actual metadata commit"),
-				);
+				invocation.abort(new Error("Caller cancelled after actual metadata commit"));
 				throw invocation.signal.reason;
 			}
 			return result;
@@ -568,27 +509,18 @@ it("requires explicit reconciliation when pending metadata committed but its can
 		).rejects.toThrow("after actual metadata commit");
 		expect((await state()).value.intent?.status).toBe("pending");
 		expect(await readFile(join(binary, "ledger.sqlite"))).toEqual(initial);
-		await expect(
-			runtime.operations["inquiry.read"].execute(
-				{ action: "snapshot" },
-				context,
-			),
-		).rejects.toThrow("explicit reconciliation");
+		await expect(runtime.operations["inquiry.read"].execute({ action: "snapshot" }, context)).rejects.toThrow(
+			"explicit reconciliation",
+		);
 		const writes = binaryWrites;
-		expect(
-			await runtime.operations["inquiry.write"].execute(
-				{ action: "reconcile" },
-				context,
-			),
-		).toMatchObject({ value: { state: "not-committed" } });
+		expect(await runtime.operations["inquiry.write"].execute({ action: "reconcile" }, context)).toMatchObject(
+			{ value: { state: "not-committed" } },
+		);
 		expect((await state()).value.intent?.status).toBe("not-committed");
 		expect(binaryWrites).toBe(writes);
-		expect(
-			await runtime.operations["inquiry.read"].execute(
-				{ action: "snapshot" },
-				context,
-			),
-		).toMatchObject({ value: { questions: [{ id: "original" }] } });
+		expect(await runtime.operations["inquiry.read"].execute({ action: "snapshot" }, context)).toMatchObject({
+			value: { questions: [{ id: "original" }] },
+		});
 	} finally {
 		await runtime.dispose();
 	}

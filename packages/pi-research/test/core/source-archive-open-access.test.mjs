@@ -1,15 +1,34 @@
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { verifyLiteratureReceipt } from "../../src/core/literature-receipt.js";
+import {
+	contactEmail,
+	normalizePmcid,
+	pmcCloudHttps,
+	resolveOpenAccess,
+} from "../../src/core/open-access.js";
 import { createResearchLoop } from "../../src/core/research-loop.js";
 import { archiveSource as archiveWithPorts, sourceStatus } from "../../src/core/source-archive.js";
-import { verifyLiteratureReceipt } from "../../src/core/literature-receipt.js";
-import { contactEmail, normalizePmcid, pmcCloudHttps, resolveOpenAccess } from "../../src/core/open-access.js";
+
 let workspaceConfig;
-const saveWorkspaceConfig = async (cwd, patch) => { workspaceConfig = {resultsRoot: join(cwd, "results"), ...patch}; };
-const archivePorts = {workspace: async () => workspaceConfig, publishSourceNote: async () => ({}), exclusive: (_key, work) => work()};
-const archiveSource = input => archiveWithPorts(input, archivePorts);
-const startResearchRun = input => createResearchLoop({workspace: archivePorts.workspace, resolveProject: async () => "archive-test", verifyLiteratureReceipt, sourceStatus: input => sourceStatus(input, archivePorts)}).startResearchRun(input);
+const saveWorkspaceConfig = async (cwd, patch) => {
+	workspaceConfig = { resultsRoot: join(cwd, "results"), ...patch };
+};
+const archivePorts = {
+	workspace: async () => workspaceConfig,
+	publishSourceNote: async () => ({}),
+	exclusive: (_key, work) => work(),
+};
+const archiveSource = (input) => archiveWithPorts(input, archivePorts);
+const startResearchRun = (input) =>
+	createResearchLoop({
+		workspace: archivePorts.workspace,
+		resolveProject: async () => "archive-test",
+		verifyLiteratureReceipt,
+		sourceStatus: (input) => sourceStatus(input, archivePorts),
+	}).startResearchRun(input);
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 });
@@ -642,5 +661,4 @@ describe("research_archive_source open-access acquisition", () => {
 		expect(institutionalFetch).toHaveBeenCalledTimes(2);
 		expect(result.status).toBe("downloaded");
 	});
-
 });

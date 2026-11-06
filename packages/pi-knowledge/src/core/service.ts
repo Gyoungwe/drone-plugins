@@ -1,20 +1,28 @@
 // @ts-nocheck
-import { mentionedWikiTitle } from "./topic-probe.js";
-import { expandWithGraph, GRAPH_RETRIEVAL_DEFAULTS } from "./graph-retrieval.js";
+
 import { createHash, randomUUID } from "node:crypto";
 import { relative, resolve, sep } from "node:path";
-import { createKnowledgeWorkerTransportFactory } from "./worker-transport.js";
-import type { KnowledgeServiceTransportFactory } from "./service-transport.js";
-import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost, type ProcessEventEmitter } from "./runtime-host.js";
-import * as compatibilityConfig from "./config.js";
 import type { KnowledgeBinding, KnowledgeConfigApi } from "./config.js";
+import * as compatibilityConfig from "./config.js";
 import { canRead, validateNote } from "./files.js";
+import { expandWithGraph, GRAPH_RETRIEVAL_DEFAULTS } from "./graph-retrieval.js";
 import * as compatibilityReviewPolicy from "./review-policy.js";
+import {
+	compatibilityKnowledgeRuntimeHost,
+	type KnowledgeRuntimeHost,
+	type ProcessEventEmitter,
+} from "./runtime-host.js";
 import { embedTexts, validateSemanticConfig } from "./semantic-provider.js";
-import * as compatibilitySemanticSettings from "./semantic-settings.js";
 import type { SemanticSettingsApi } from "./semantic-settings.js";
+import * as compatibilitySemanticSettings from "./semantic-settings.js";
+import type { KnowledgeServiceTransportFactory } from "./service-transport.js";
+import { mentionedWikiTitle } from "./topic-probe.js";
 import * as compatibilityUi from "./ui-state.js";
-export type KnowledgeServiceConfig = Pick<KnowledgeConfigApi, "readKnowledgeBinding" | "withKnowledgeBinding">;
+import { createKnowledgeWorkerTransportFactory } from "./worker-transport.js";
+export type KnowledgeServiceConfig = Pick<
+	KnowledgeConfigApi,
+	"readKnowledgeBinding" | "withKnowledgeBinding"
+>;
 
 /** A pool and all worker callbacks belong to one explicitly supplied owner. */
 function createKnowledgeServicePoolApi(
@@ -26,7 +34,11 @@ function createKnowledgeServicePoolApi(
 	emitLegacyPeerEvent: ProcessEventEmitter | null,
 ) {
 	const {
-		emitKnowledgeWorkerLifecycle, runRuntimeExclusive, runtimeSlot, hasPaperCitation, requiresPaperEvidence,
+		emitKnowledgeWorkerLifecycle,
+		runRuntimeExclusive,
+		runtimeSlot,
+		hasPaperCitation,
+		requiresPaperEvidence,
 	} = runtime;
 	const { readKnowledgeBinding, withKnowledgeBinding } = config;
 	const { readSemanticSettings, saveSemanticSettings } = semantic;
@@ -115,19 +127,37 @@ function createKnowledgeServicePoolApi(
 			this.transport = transportFactory.create({ binding, workerVersion: options.workerVersion });
 			this.closePromise = null;
 		}
-		get closed() { return this.transport.closed; }
-		get closing() { return this.transport.closing; }
-		get lifecycle() { return this.transport.lifecycle; }
-		set lifecycle(value) { this.transport.lifecycle = value; }
-		get workerVersion() { return this.transport.version; }
-		get workerMetadata() { return this.transport.metadata; }
-		get pendingRequestCount() { return this.transport.pendingRequestCount; }
-		waitUntilReady() { return this.transport.waitUntilReady(); }
+		get closed() {
+			return this.transport.closed;
+		}
+		get closing() {
+			return this.transport.closing;
+		}
+		get lifecycle() {
+			return this.transport.lifecycle;
+		}
+		set lifecycle(value) {
+			this.transport.lifecycle = value;
+		}
+		get workerVersion() {
+			return this.transport.version;
+		}
+		get workerMetadata() {
+			return this.transport.metadata;
+		}
+		get pendingRequestCount() {
+			return this.transport.pendingRequestCount;
+		}
+		waitUntilReady() {
+			return this.transport.waitUntilReady();
+		}
 		async healthCheck() {
 			await this.waitUntilReady();
 			return this.request("status");
 		}
-		request(op, args = {}) { return this.transport.request(op, args); }
+		request(op, args = {}) {
+			return this.transport.request(op, args);
+		}
 		async prepare({ cwd, project, query = "" }) {
 			return withKnowledgeBinding(this.binding, async () => {
 				const paths = ["Home.md", "Wiki/Index.md"];
@@ -382,7 +412,13 @@ function createKnowledgeServicePoolApi(
 			return withKnowledgeBinding(this.binding, async () => {
 				const result = await this.request("search", { query: text, wikiOnly: true, project, limit: 6 });
 				const hits = (result?.hits || []).filter((hit) => hit.kind === "wiki");
-				const titles = hits.map((hit) => hit.title || String(hit.path || "").split("/").pop());
+				const titles = hits.map(
+					(hit) =>
+						hit.title ||
+						String(hit.path || "")
+							.split("/")
+							.pop(),
+				);
 				const title = mentionedWikiTitle(text, titles);
 				return title ? hits[titles.indexOf(title)]?.path || null : null;
 			});
@@ -513,7 +549,9 @@ function createKnowledgeServicePoolApi(
 									.map((item, index) => ({
 										path: typeof item === "string" ? item : item?.path,
 										score:
-											typeof item === "object" && typeof item?.score === "number" && Number.isFinite(item.score)
+											typeof item === "object" &&
+											typeof item?.score === "number" &&
+											Number.isFinite(item.score)
 												? item.score
 												: 0,
 										hash: typeof item === "object" ? item?.hash : undefined,
@@ -561,7 +599,8 @@ function createKnowledgeServicePoolApi(
 									: {}),
 							};
 							if (semanticResult.partial) metrics.index.semanticPartial = true;
-							if (Number.isInteger(semanticResult.scanned)) metrics.index.semanticScanned = semanticResult.scanned;
+							if (Number.isInteger(semanticResult.scanned))
+								metrics.index.semanticScanned = semanticResult.scanned;
 							if (Number.isInteger(semanticResult.totalEligible))
 								metrics.index.semanticTotalEligible = semanticResult.totalEligible;
 						}
@@ -619,7 +658,11 @@ function createKnowledgeServicePoolApi(
 				// Graph-augmented retrieval: 1-hop expansion over [[links]] and backlinks of the top hits.
 				try {
 					const seeds = result.hits.slice(0, GRAPH_RETRIEVAL_DEFAULTS.seeds).map((hit) => hit.path);
-					const graph = await this.request("graphNeighbors", { paths: seeds, project: state.project, perSeed: 8 });
+					const graph = await this.request("graphNeighbors", {
+						paths: seeds,
+						project: state.project,
+						perSeed: 8,
+					});
 					const expanded = expandWithGraph(result.hits, graph?.items || [], { limit: Number(limit) || 5 });
 					metrics.graphCandidates = (graph?.items || []).length;
 					metrics.graphAccepted = expanded.filter((hit) => hit.retrieval === "graph").length;
@@ -731,7 +774,12 @@ function createKnowledgeServicePoolApi(
 		}
 		async evidenceReceipts(ticket, cwd, paths) {
 			const state = await this.check(ticket, cwd);
-			if (!Array.isArray(paths) || !paths.length || paths.length > 12 || new Set(paths).size !== paths.length) {
+			if (
+				!Array.isArray(paths) ||
+				!paths.length ||
+				paths.length > 12 ||
+				new Set(paths).size !== paths.length
+			) {
 				throw new Error("Supply 1–12 distinct source paths that were actually read this turn");
 			}
 			const sources = [];
@@ -916,17 +964,27 @@ function createKnowledgeServicePoolApi(
 			};
 		}
 		close() {
-			if (!this.closePromise) this.closePromise = this.transport.close().catch(error => {
-                // Resource close can finish after a caller is revoked. The adapter
-                // retains the actual receipt; a subsequent caller must be able to await it.
-                this.closePromise = null;
-                throw error;
-            }).finally(() => this.tickets.clear());
+			if (!this.closePromise)
+				this.closePromise = this.transport
+					.close()
+					.catch((error) => {
+						// Resource close can finish after a caller is revoked. The adapter
+						// retains the actual receipt; a subsequent caller must be able to await it.
+						this.closePromise = null;
+						throw error;
+					})
+					.finally(() => this.tickets.clear());
 			return this.closePromise;
 		}
-		prepareUnload() { return this.transport.prepareUnload(); }
-		drain() { return this.close(); }
-		dispose() { return this.close(); }
+		prepareUnload() {
+			return this.transport.prepareUnload();
+		}
+		drain() {
+			return this.close();
+		}
+		dispose() {
+			return this.close();
+		}
 	}
 	function getKnowledgeService(binding: KnowledgeBinding | null = null) {
 		if (pool.disposed) return Promise.reject(new Error("Knowledge service pool has been disposed"));
@@ -944,70 +1002,83 @@ function createKnowledgeServicePoolApi(
 		const key = transportFactory.resourceKey(binding);
 		const transitions = pool.transitions || new Map();
 		pool.transitions = transitions;
-		const transition = transitions.get(key) || (async () => {
-			let service = pool.get(key);
-			if (!service || service.closed) {
-				emitLegacyPeerEvent?.(SERVICE_EVENT, { action: "request", key, origin: serviceModule });
-				service = pool.get(key);
-			}
-			// A rebound Vault reuses the same database. Worker startup performs SQLite
-			// writes, so the old worker must exit before a replacement can be created.
-			let candidate;
-			let selectedMetadata;
-			try {
-				selectedMetadata = transportFactory.metadata();
-				const hostVersion = selectedMetadata.version;
-				const needsReplacement =
-					!service || service.closed || service.closing ||
-					service.binding?.revision !== binding.revision ||
-					(hostVersion !== "unknown" && service.workerVersion !== "unknown" && service.workerVersion !== hostVersion);
-				if (!needsReplacement) return service;
-				if (service) {
-					await service.drain();
-					pool.delete(key);
+		const transition =
+			transitions.get(key) ||
+			(async () => {
+				let service = pool.get(key);
+				if (!service || service.closed) {
+					emitLegacyPeerEvent?.(SERVICE_EVENT, { action: "request", key, origin: serviceModule });
+					service = pool.get(key);
 				}
-				candidate = new KnowledgeService(binding);
-				await candidate.healthCheck();
-				candidate.lifecycle = "enabled";
-				emitKnowledgeWorkerLifecycle("enabled", {
-					version: candidate.workerVersion,
-					previousVersion: service?.workerVersion,
-					source: candidate.workerMetadata.source,
-					integrity: candidate.workerMetadata.integrity,
-				});
-				pool.set(key, candidate);
-				emitLegacyPeerEvent?.(SERVICE_EVENT, { action: "register", key, service: candidate, origin: serviceModule });
-				if (service) {
-					emitKnowledgeWorkerLifecycle("reloaded", {
+				// A rebound Vault reuses the same database. Worker startup performs SQLite
+				// writes, so the old worker must exit before a replacement can be created.
+				let candidate;
+				let selectedMetadata;
+				try {
+					selectedMetadata = transportFactory.metadata();
+					const hostVersion = selectedMetadata.version;
+					const needsReplacement =
+						!service ||
+						service.closed ||
+						service.closing ||
+						service.binding?.revision !== binding.revision ||
+						(hostVersion !== "unknown" &&
+							service.workerVersion !== "unknown" &&
+							service.workerVersion !== hostVersion);
+					if (!needsReplacement) return service;
+					if (service) {
+						await service.drain();
+						pool.delete(key);
+					}
+					candidate = new KnowledgeService(binding);
+					await candidate.healthCheck();
+					candidate.lifecycle = "enabled";
+					emitKnowledgeWorkerLifecycle("enabled", {
 						version: candidate.workerVersion,
-						previousVersion: service.workerVersion,
+						previousVersion: service?.workerVersion,
 						source: candidate.workerMetadata.source,
 						integrity: candidate.workerMetadata.integrity,
 					});
+					pool.set(key, candidate);
+					emitLegacyPeerEvent?.(SERVICE_EVENT, {
+						action: "register",
+						key,
+						service: candidate,
+						origin: serviceModule,
+					});
+					if (service) {
+						emitKnowledgeWorkerLifecycle("reloaded", {
+							version: candidate.workerVersion,
+							previousVersion: service.workerVersion,
+							source: candidate.workerMetadata.source,
+							integrity: candidate.workerMetadata.integrity,
+						});
+					}
+					// Old in-flight writers keep their pinned Vault; never redirect them into a newly bound Vault.
+					const idle = [...pool].filter(([other, value]) => other !== key && value.pendingRequestCount === 0);
+					while (pool.size > 3 && idle.length) {
+						const [other, value] = idle.shift();
+						pool.delete(other);
+						await value.close();
+					}
+					return candidate;
+				} catch (error) {
+					if (candidate) await candidate.close();
+					const preserved = service && !service.closed && !service.closing;
+					emitKnowledgeWorkerLifecycle(preserved ? "rolled_back" : "disabled", {
+						version: preserved
+							? service.workerVersion
+							: candidate?.workerVersion || selectedMetadata?.version || "unknown",
+						previousVersion: service?.workerVersion,
+						source: candidate?.workerMetadata?.source,
+						integrity: candidate?.workerMetadata?.integrity,
+						reason: String(error?.message || error).slice(0, 400),
+					});
+					// Verification can preserve the old worker. Once it has drained, report
+					// disabled rather than pretending a failed startup restored that writer.
+					throw error;
 				}
-				// Old in-flight writers keep their pinned Vault; never redirect them into a newly bound Vault.
-				const idle = [...pool].filter(([other, value]) => other !== key && value.pendingRequestCount === 0);
-				while (pool.size > 3 && idle.length) {
-					const [other, value] = idle.shift();
-					pool.delete(other);
-					await value.close();
-				}
-				return candidate;
-			} catch (error) {
-				if (candidate) await candidate.close();
-				const preserved = service && !service.closed && !service.closing;
-				emitKnowledgeWorkerLifecycle(preserved ? "rolled_back" : "disabled", {
-					version: preserved ? service.workerVersion : candidate?.workerVersion || selectedMetadata?.version || "unknown",
-					previousVersion: service?.workerVersion,
-					source: candidate?.workerMetadata?.source,
-					integrity: candidate?.workerMetadata?.integrity,
-					reason: String(error?.message || error).slice(0, 400),
-				});
-				// Verification can preserve the old worker. Once it has drained, report
-				// disabled rather than pretending a failed startup restored that writer.
-				throw error;
-			}
-		})();
+			})();
 		transitions.set(key, transition);
 		try {
 			return await transition;
@@ -1039,7 +1110,11 @@ function createKnowledgeServicePoolApi(
 				if (closed[index].status === "fulfilled" && pool.get(key) === service) pool.delete(key);
 			}
 			const failures = [...pending, ...closed].filter((result) => result.status === "rejected");
-			if (failures.length) throw new AggregateError(failures.map((result) => result.reason), "Knowledge service pool disposal failed");
+			if (failures.length)
+				throw new AggregateError(
+					failures.map((result) => result.reason),
+					"Knowledge service pool disposal failed",
+				);
 		})();
 		const closing = operation.finally(() => {
 			if (pool.closing === closing) pool.closing = null;
@@ -1047,7 +1122,14 @@ function createKnowledgeServicePoolApi(
 		pool.closing = closing;
 		return closing;
 	}
-	return { dispose: () => pool.dispose(), KnowledgeService, getKnowledgeService, notifyKnowledgeChange, closeKnowledgeServices, receiveCompatibilityEvent };
+	return {
+		dispose: () => pool.dispose(),
+		KnowledgeService,
+		getKnowledgeService,
+		notifyKnowledgeChange,
+		closeKnowledgeServices,
+		receiveCompatibilityEvent,
+	};
 }
 
 /** New owners never exchange service objects through process-wide events. */
@@ -1064,12 +1146,20 @@ export function createKnowledgeServicePool(
 // pi-knowledge 0.2 compatibility only. Delete when native/Desktop composition
 // shares one explicit 0.3 owner and no host consumer imports these facades.
 const compatibilityKnowledgeServices = createKnowledgeServicePoolApi(
-	compatibilityKnowledgeRuntimeHost, compatibilityConfig,
-	compatibilitySemanticSettings, compatibilityReviewPolicy,
+	compatibilityKnowledgeRuntimeHost,
+	compatibilityConfig,
+	compatibilitySemanticSettings,
+	compatibilityReviewPolicy,
 	// Remove with the 0.2 compatibility facade after complete owner disposal is wired.
-	createKnowledgeWorkerTransportFactory(compatibilityKnowledgeRuntimeHost, compatibilityConfig, compatibilityUi.invalidateKnowledgeUi, null),
+	createKnowledgeWorkerTransportFactory(
+		compatibilityKnowledgeRuntimeHost,
+		compatibilityConfig,
+		compatibilityUi.invalidateKnowledgeUi,
+		null,
+	),
 	compatibilityKnowledgeRuntimeHost.emitProcessEvent,
 );
 process.on("drone:knowledge-service/v1", compatibilityKnowledgeServices.receiveCompatibilityEvent);
-export const { KnowledgeService, getKnowledgeService, notifyKnowledgeChange, closeKnowledgeServices } = compatibilityKnowledgeServices;
+export const { KnowledgeService, getKnowledgeService, notifyKnowledgeChange, closeKnowledgeServices } =
+	compatibilityKnowledgeServices;
 export type KnowledgeService = InstanceType<typeof KnowledgeService>;

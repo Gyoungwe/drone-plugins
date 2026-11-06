@@ -99,7 +99,10 @@ export function verifyZoteroAcceptance(
 	const send = capabilityFetch(call);
 	// The reconciler sets its own timeout; the caller's cancellation also applies.
 	const fetchImpl: typeof fetch = (input, init) =>
-		send(input, { ...init, signal: AbortSignal.any([init?.signal, signal].filter((s): s is AbortSignal => !!s)) });
+		send(input, {
+			...init,
+			signal: AbortSignal.any([init?.signal, signal].filter((s): s is AbortSignal => !!s)),
+		});
 	const reconcile = createLocalZoteroReconciler({ fetchImpl });
 	return reconcile(acceptance).then(describeZoteroEvidence);
 }
@@ -113,7 +116,7 @@ export function zoteroAcceptanceOperations(): Record<"describe" | "verify", Plug
 			effect: "read",
 			inputSchema: acceptanceInput,
 			resultSchema: { type: "object" },
-			execute: async input => describeZoteroAcceptance((input as Acceptance | null) ?? null),
+			execute: async (input) => describeZoteroAcceptance((input as Acceptance | null) ?? null),
 		},
 		verify: {
 			effect: "read",

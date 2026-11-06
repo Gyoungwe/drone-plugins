@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-
 import { emptyReason, lastRunNote } from "./DailyIdeas";
 
 const t = (key: string) =>

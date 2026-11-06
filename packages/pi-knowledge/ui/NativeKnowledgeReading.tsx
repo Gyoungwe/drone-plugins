@@ -1,42 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import type {
-	KnowledgeJobsResult,
-	KnowledgeRecentByCategoryResult,
-} from "../src/desktop/contract";
-import type {
-	createKnowledgeRuntimeStore,
-	KnowledgeRuntimeState,
-} from "./runtime-store";
-import { Button, Markdown } from "./runtime-api";
-import { useNativeKnowledgeText } from "./native-copy";
-import { KnowledgeNoteView } from "./knowledge/KnowledgeNoteView";
+import type { KnowledgeJobsResult, KnowledgeRecentByCategoryResult } from "../src/desktop/contract";
 import { KnowledgeGraphView } from "./knowledge/KnowledgeGraphView";
+import { KnowledgeNoteView } from "./knowledge/KnowledgeNoteView";
 import { KnowledgeSearchView } from "./knowledge/KnowledgeSearchView";
 import type { KnowledgeCategory } from "./knowledge/knowledge-home-model";
+import { useNativeKnowledgeText } from "./native-copy";
+import { Button, Markdown } from "./runtime-api";
+import type { createKnowledgeRuntimeStore, KnowledgeRuntimeState } from "./runtime-store";
 
 type Store = ReturnType<typeof createKnowledgeRuntimeStore>;
-export function NativeKnowledgeReading({
-	store,
-	state,
-}: {
-	store: Store;
-	state: KnowledgeRuntimeState;
-}) {
+export function NativeKnowledgeReading({ store, state }: { store: Store; state: KnowledgeRuntimeState }) {
 	const t = useNativeKnowledgeText();
 	const [category, setCategory] = useState<KnowledgeCategory>("all");
-	const [recent, setRecent] = useState<KnowledgeRecentByCategoryResult | null>(
-		null,
-	);
+	const [recent, setRecent] = useState<KnowledgeRecentByCategoryResult | null>(null);
 	const [linkNotice, setLinkNotice] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [jobs, setJobs] = useState<KnowledgeJobsResult | null>(null);
 	const [offset, setOffset] = useState(0);
 	const binding = state.overview!.binding!;
 	useEffect(() => setLinkNotice(null), [state.selectedNote]);
-	const noteApi = useMemo(
-		() => ({ readNote: store.readNote, links: store.links }),
-		[store],
-	);
+	const noteApi = useMemo(() => ({ readNote: store.readNote, links: store.links }), [store]);
 	const graphApi = useMemo(
 		() => ({
 			getKnowledgeGraph: store.graph,
@@ -54,8 +37,7 @@ export function NativeKnowledgeReading({
 				if (live) setRecent(value);
 			},
 			(cause) => {
-				if (live)
-					setError(String(cause instanceof Error ? cause.message : cause));
+				if (live) setError(String(cause instanceof Error ? cause.message : cause));
 			},
 		);
 		return () => {
@@ -72,8 +54,7 @@ export function NativeKnowledgeReading({
 				if (live) setJobs(value);
 			},
 			(cause) => {
-				if (live)
-					setError(String(cause instanceof Error ? cause.message : cause));
+				if (live) setError(String(cause instanceof Error ? cause.message : cause));
 			},
 		);
 		return () => {
@@ -86,10 +67,7 @@ export function NativeKnowledgeReading({
 				...recent.counts,
 			}
 		: { all: null, paper: null, software: null, method: null, idea: null };
-	const notes =
-		category === "all"
-			? state.overview!.recentNotes
-			: (recent?.groups[category] ?? []);
+	const notes = category === "all" ? state.overview!.recentNotes : (recent?.groups[category] ?? []);
 	return (
 		<>
 			{error && (
@@ -126,11 +104,7 @@ export function NativeKnowledgeReading({
 								))}
 							</ul>
 							<div className="flex gap-2">
-								<Button
-									size="sm"
-									disabled={offset === 0}
-									onClick={() => setOffset(0)}
-								>
+								<Button size="sm" disabled={offset === 0} onClick={() => setOffset(0)}>
 									{t.firstPage}
 								</Button>
 								<Button
@@ -213,9 +187,7 @@ export function NativeKnowledgeReading({
 												onClick={() => store.openNote(note.path)}
 											>
 												<p className="text-sm">{note.title || note.path}</p>
-												<p className="mt-1 break-all font-mono text-xs text-ink-faint">
-													{note.path}
-												</p>
+												<p className="mt-1 break-all font-mono text-xs text-ink-faint">{note.path}</p>
 											</button>
 										</li>
 									))}

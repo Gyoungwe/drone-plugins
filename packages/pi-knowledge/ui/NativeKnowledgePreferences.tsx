@@ -1,12 +1,9 @@
 import type { PluginUiRuntimeClient } from "@gyoungwe/plugin-api/ui";
-import type {
-	KnowledgePreferences,
-	KnowledgeSetReviewPolicyInput,
-} from "../src/desktop/contract";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "./runtime-api";
-import { useNativeKnowledgeText } from "./native-copy";
+import type { KnowledgePreferences, KnowledgeSetReviewPolicyInput } from "../src/desktop/contract";
 import { NativeKnowledgeSemanticSettings } from "./NativeKnowledgeSemanticSettings";
+import { useNativeKnowledgeText } from "./native-copy";
+import { Button } from "./runtime-api";
 
 /** Package settings share the runtime owner; paths are display values, never new grants. */
 export function NativeKnowledgePreferences({
@@ -40,14 +37,10 @@ export function NativeKnowledgePreferences({
 					if (request !== epoch.current) return;
 					const preferences = result as KnowledgePreferences;
 					setValue(preferences);
-					setMode(
-						preferences.reviewPolicy.persistedMode ??
-							preferences.reviewPolicy.mode,
-					);
+					setMode(preferences.reviewPolicy.persistedMode ?? preferences.reviewPolicy.mode);
 				},
 				(cause) => {
-					if (request === epoch.current)
-						setError(cause instanceof Error ? cause.message : String(cause));
+					if (request === epoch.current) setError(cause instanceof Error ? cause.message : String(cause));
 				},
 			)
 			.finally(() => {
@@ -68,27 +61,19 @@ export function NativeKnowledgePreferences({
 			mode,
 		};
 		try {
-			const result = (await client.invoke(
-				"setReviewPolicy",
-				input,
-			)) as KnowledgePreferences;
+			const result = (await client.invoke("setReviewPolicy", input)) as KnowledgePreferences;
 			if (request !== epoch.current) return;
 			setValue(result);
 			setMode(result.reviewPolicy.persistedMode ?? result.reviewPolicy.mode);
 			setSaved(true);
 		} catch (cause) {
-			if (request === epoch.current)
-				setError(cause instanceof Error ? cause.message : String(cause));
+			if (request === epoch.current) setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			if (request === epoch.current) setSaving(false);
 		}
 	}
 	return (
-		<section
-			className="space-y-4"
-			aria-label={t.settings}
-			data-testid="native-knowledge-preferences"
-		>
+		<section className="space-y-4" aria-label={t.settings} data-testid="native-knowledge-preferences">
 			<h2 className="text-sm font-semibold">{t.settings}</h2>
 			{loading && (
 				<p role="status" className="text-sm text-ink-dim">
@@ -102,10 +87,7 @@ export function NativeKnowledgePreferences({
 			)}
 			{value && (
 				<>
-					<section
-						className="rounded-xl border border-border bg-surface p-4"
-						aria-label={t.bindingDetails}
-					>
+					<section className="rounded-xl border border-border bg-surface p-4" aria-label={t.bindingDetails}>
 						<h3 className="text-sm font-medium">{t.bindingDetails}</h3>
 						{value.binding ? (
 							<dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
@@ -125,23 +107,16 @@ export function NativeKnowledgePreferences({
 						) : (
 							<p className="mt-3 text-sm text-ink-dim">{t.unconfigured}</p>
 						)}
-						<p className="mt-3 text-xs text-ink-dim">
-							{t.bindingEditingUnavailable}
-						</p>
+						<p className="mt-3 text-xs text-ink-dim">{t.bindingEditingUnavailable}</p>
 					</section>
-					<section
-						className="rounded-xl border border-border bg-surface p-4"
-						aria-label={t.reviewPolicy}
-					>
+					<section className="rounded-xl border border-border bg-surface p-4" aria-label={t.reviewPolicy}>
 						<h3 className="text-sm font-medium">{t.reviewPolicy}</h3>
 						<dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
 							<dt>{t.effectiveMode}</dt>
 							<dd>{t[value.reviewPolicy.mode]}</dd>
 							<dt>{t.persistedMode}</dt>
 							<dd>
-								{value.reviewPolicy.persistedMode
-									? t[value.reviewPolicy.persistedMode]
-									: t.notPersisted}
+								{value.reviewPolicy.persistedMode ? t[value.reviewPolicy.persistedMode] : t.notPersisted}
 							</dd>
 						</dl>
 						<p className="mt-3 text-xs text-ink-dim">{t.reviewPolicyHint}</p>
@@ -155,11 +130,7 @@ export function NativeKnowledgePreferences({
 								{t[value.reviewPolicy.diagnostic]}
 							</p>
 						)}
-						{!value.canWriteState && (
-							<p className="mt-3 text-xs text-ink-dim">
-								{t.stateWriteRequired}
-							</p>
-						)}
+						{!value.canWriteState && <p className="mt-3 text-xs text-ink-dim">{t.stateWriteRequired}</p>}
 						{value.binding && (
 							<div className="mt-3 flex flex-wrap items-center gap-3">
 								<label className="text-xs">
@@ -194,9 +165,7 @@ export function NativeKnowledgePreferences({
 										!value.canWriteState ||
 										value.reviewPolicy.override !== null ||
 										value.reviewPolicy.diagnostic !== null ||
-										mode ===
-											(value.reviewPolicy.persistedMode ??
-												value.reviewPolicy.mode)
+										mode === (value.reviewPolicy.persistedMode ?? value.reviewPolicy.mode)
 									}
 									onClick={() => void save(value, value.binding!.revision)}
 								>

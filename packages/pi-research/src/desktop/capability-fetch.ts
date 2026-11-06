@@ -34,7 +34,8 @@ export function capabilityFetch(
 		const request = new Request(input, init);
 		const url = new URL(request.url);
 		const read =
-			READ_METHODS.has(request.method) || (request.method === "POST" && reads.includes(`${url.host}${url.pathname}`));
+			READ_METHODS.has(request.method) ||
+			(request.method === "POST" && reads.includes(`${url.host}${url.pathname}`));
 		const body = READ_METHODS.has(request.method) ? undefined : Buffer.from(await request.arrayBuffer());
 		const headers: Record<string, string> = {};
 		request.headers.forEach((value, name) => {
@@ -52,7 +53,8 @@ export function capabilityFetch(
 			},
 			request.signal,
 		)) as NetworkResult;
-		const bytes = NO_BODY.has(result.status) || request.method === "HEAD" ? null : Buffer.from(result.base64, "base64");
+		const bytes =
+			NO_BODY.has(result.status) || request.method === "HEAD" ? null : Buffer.from(result.base64, "base64");
 		return new Response(bytes, { status: result.status, headers: result.headers });
 	};
 }

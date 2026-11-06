@@ -62,10 +62,7 @@ for (const [source, target] of [
 ]) {
 	const path =
 			source === "sql.js/LICENSE"
-				? resolve(
-						dirname(require.resolve("sql.js/dist/sql-wasm.js")),
-						"../LICENSE",
-					)
+				? resolve(dirname(require.resolve("sql.js/dist/sql-wasm.js")), "../LICENSE")
 				: require.resolve(source),
 		bytes = await readFile(path);
 	inputs[source] = hash(bytes);

@@ -4,12 +4,12 @@ import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import { expect, it } from "vitest";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
-import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
-import { createKnowledgeUi } from "../src/core/ui-state.js";
-import { createKnowledgeServicePool } from "../src/core/service.js";
-import { createKnowledgeWorkerTransportFactory } from "../src/core/worker-transport.js";
-import { createSemanticSettingsApi } from "../src/core/semantic-settings.js";
 import { createKnowledgeReviewPolicy } from "../src/core/review-policy.js";
+import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
+import { createSemanticSettingsApi } from "../src/core/semantic-settings.js";
+import { createKnowledgeServicePool } from "../src/core/service.js";
+import { createKnowledgeUi } from "../src/core/ui-state.js";
+import { createKnowledgeWorkerTransportFactory } from "../src/core/worker-transport.js";
 import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
 
 it("reports failed drain and pool disposal while releasing the lease only after actual worker exit", async () => {
@@ -18,28 +18,44 @@ it("reports failed drain and pool disposal while releasing the lease only after 
 	await mkdir(vault);
 	const directory = join(root, "state");
 	const config = createKnowledgeConfigApi(undefined, directory);
-	const binding = await config.saveKnowledgeBinding({ vault, profile: "hybrid", depositMode: "verified", subagentPolicy: "none" });
+	const binding = await config.saveKnowledgeBinding({
+		vault,
+		profile: "hybrid",
+		depositMode: "verified",
+		subagentPolicy: "none",
+	});
 	const runtime = createKnowledgeRuntimeHost();
 	const receipts: unknown[] = [];
-	runtime.configureKnowledgeRuntime({ emitProcessEvent: (event, payload) => {
-		if (event === "drone:knowledge-worker-lifecycle/v1") receipts.push(payload);
-	} });
+	runtime.configureKnowledgeRuntime({
+		emitProcessEvent: (event, payload) => {
+			if (event === "drone:knowledge-worker-lifecycle/v1") receipts.push(payload);
+		},
+	});
 	let exitCode: number | null = null;
 	// A real worker responds to health-check but fails its graceful shutdown protocol.
 	runtime.configureKnowledgeWorker(() => {
-		const worker = new Worker(`const {parentPort}=require("node:worker_threads");
+		const worker = new Worker(
+			`const {parentPort}=require("node:worker_threads");
 		parentPort.on("message", ({id,op}) => parentPort.postMessage(op === "close"
 		 ? {id,error:"shutdown protocol failed"} : {id,result:{}}));
-		parentPort.postMessage({ready:true});`, { eval: true });
-		worker.once("exit", (code) => { exitCode = code; });
+		parentPort.postMessage({ready:true});`,
+			{ eval: true },
+		);
+		worker.once("exit", (code) => {
+			exitCode = code;
+		});
 		return worker;
 	});
 	const acquire = (input: Parameters<typeof acquireKnowledgeWriterLease>[0]) =>
 		acquireKnowledgeWriterLease(input, join(root, "leases"));
 	const ui = createKnowledgeUi(runtime, config);
-	const services = createKnowledgeServicePool(runtime, config,
-		createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config),
-		createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi, acquire));
+	const services = createKnowledgeServicePool(
+		runtime,
+		config,
+		createSemanticSettingsApi(undefined, directory),
+		createKnowledgeReviewPolicy(config),
+		createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi, acquire),
+	);
 	const service = await services.getKnowledgeService();
 	try {
 		await expect(service.close()).rejects.toThrow("shutdown protocol failed");
@@ -48,7 +64,9 @@ it("reports failed drain and pool disposal while releasing the lease only after 
 		expect(receipts.at(-1)).toMatchObject({ stage: "disabled", reason: "shutdown protocol failed" });
 		const lease = acquire({ vault, indexPath: join(directory, binding.vaultId, "index.sqlite") });
 		lease.release();
-		const pool = runtime.runtimeSlot("knowledge", "workerPool", () => { throw new Error("Expected existing service pool"); }) as { dispose(): Promise<void> };
+		const pool = runtime.runtimeSlot("knowledge", "workerPool", () => {
+			throw new Error("Expected existing service pool");
+		}) as { dispose(): Promise<void> };
 		await expect(pool.dispose()).rejects.toThrow("Knowledge service pool disposal failed");
 		await expect(services.getKnowledgeService()).rejects.toThrow("disposed");
 	} finally {
@@ -61,15 +79,26 @@ it("releases a constructor's acquired lease when the actual worker resource cann
 	const vault = join(root, "Vault");
 	await mkdir(vault);
 	const config = createKnowledgeConfigApi(undefined, join(root, "state"));
-	const binding = await config.saveKnowledgeBinding({ vault, profile: "hybrid", depositMode: "verified", subagentPolicy: "none" });
+	const binding = await config.saveKnowledgeBinding({
+		vault,
+		profile: "hybrid",
+		depositMode: "verified",
+		subagentPolicy: "none",
+	});
 	const runtime = createKnowledgeRuntimeHost();
-	runtime.configureKnowledgeWorker(() => { throw new Error("worker resource missing"); });
+	runtime.configureKnowledgeWorker(() => {
+		throw new Error("worker resource missing");
+	});
 	const acquire = (input: Parameters<typeof acquireKnowledgeWriterLease>[0]) =>
 		acquireKnowledgeWriterLease(input, join(root, "leases"));
 	const ui = createKnowledgeUi(runtime, config);
-	const services = createKnowledgeServicePool(runtime, config,
-		createSemanticSettingsApi(undefined, config.knowledgeDirectory()), createKnowledgeReviewPolicy(config),
-		createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi, acquire));
+	const services = createKnowledgeServicePool(
+		runtime,
+		config,
+		createSemanticSettingsApi(undefined, config.knowledgeDirectory()),
+		createKnowledgeReviewPolicy(config),
+		createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi, acquire),
+	);
 	try {
 		await expect(services.getKnowledgeService()).rejects.toThrow("worker resource missing");
 		const lease = acquire({ vault, indexPath: join(root, "state", binding.vaultId, "index.sqlite") });
@@ -86,13 +115,23 @@ it("closes accepted requests still reading their binding, then permits a later c
 	await mkdir(vault);
 	const directory = join(root, "state");
 	const config = createKnowledgeConfigApi(undefined, directory);
-	await config.saveKnowledgeBinding({ vault, profile: "hybrid", depositMode: "verified", subagentPolicy: "none" });
+	await config.saveKnowledgeBinding({
+		vault,
+		profile: "hybrid",
+		depositMode: "verified",
+		subagentPolicy: "none",
+	});
 	let release!: () => void;
-	const bindingGate = new Promise<void>((resolve) => { release = resolve; });
-	const delayedConfig = { ...config, readKnowledgeBinding: async () => {
-		await bindingGate;
-		return config.readKnowledgeBinding();
-	} };
+	const bindingGate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const delayedConfig = {
+		...config,
+		readKnowledgeBinding: async () => {
+			await bindingGate;
+			return config.readKnowledgeBinding();
+		},
+	};
 	const runtime = createKnowledgeRuntimeHost();
 	const live = new Set<Worker>();
 	runtime.configureKnowledgeWorker((_url, options) => {
@@ -102,14 +141,21 @@ it("closes accepted requests still reading their binding, then permits a later c
 		return worker;
 	});
 	const ui = createKnowledgeUi(runtime, config);
-	const services = createKnowledgeServicePool(runtime, delayedConfig,
-		createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config),
-		createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi,
-			(input) => acquireKnowledgeWriterLease(input, join(root, "leases"))));
+	const services = createKnowledgeServicePool(
+		runtime,
+		delayedConfig,
+		createSemanticSettingsApi(undefined, directory),
+		createKnowledgeReviewPolicy(config),
+		createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi, (input) =>
+			acquireKnowledgeWriterLease(input, join(root, "leases")),
+		),
+	);
 	try {
 		const accepted = services.getKnowledgeService();
 		let closeReturned = false;
-		const closing = services.closeKnowledgeServices().then(() => { closeReturned = true; });
+		const closing = services.closeKnowledgeServices().then(() => {
+			closeReturned = true;
+		});
 		await expect(services.getKnowledgeService()).rejects.toThrow("closing");
 		expect(closeReturned).toBe(false);
 		release();
@@ -135,28 +181,44 @@ for (const failure of ["exit", "error"] as const) {
 		await mkdir(vault);
 		const directory = join(root, "state");
 		const config = createKnowledgeConfigApi(undefined, directory);
-		const binding = await config.saveKnowledgeBinding({ vault, profile: "hybrid", depositMode: "verified", subagentPolicy: "none" });
+		const binding = await config.saveKnowledgeBinding({
+			vault,
+			profile: "hybrid",
+			depositMode: "verified",
+			subagentPolicy: "none",
+		});
 		const runtime = createKnowledgeRuntimeHost();
 		const receipts: unknown[] = [];
-		runtime.configureKnowledgeRuntime({ emitProcessEvent: (event, payload) => {
-			if (event === "drone:knowledge-worker-lifecycle/v1") receipts.push(payload);
-		} });
+		runtime.configureKnowledgeRuntime({
+			emitProcessEvent: (event, payload) => {
+				if (event === "drone:knowledge-worker-lifecycle/v1") receipts.push(payload);
+			},
+		});
 		let exitCode: number | null = null;
 		runtime.configureKnowledgeWorker(() => {
-			const worker = new Worker(`const {parentPort}=require("node:worker_threads");
+			const worker = new Worker(
+				`const {parentPort}=require("node:worker_threads");
 			parentPort.on("message", ({id,op}) => {
 			 parentPort.postMessage({id,result:{}});
 			 if(op === "close") setImmediate(() => { ${failure === "exit" ? "process.exit(7);" : 'throw new Error("shutdown crashed");'} });
-			}); parentPort.postMessage({ready:true});`, { eval: true });
-			worker.once("exit", (code) => { exitCode = code; });
+			}); parentPort.postMessage({ready:true});`,
+				{ eval: true },
+			);
+			worker.once("exit", (code) => {
+				exitCode = code;
+			});
 			return worker;
 		});
 		const acquire = (input: Parameters<typeof acquireKnowledgeWriterLease>[0]) =>
 			acquireKnowledgeWriterLease(input, join(root, "leases"));
 		const ui = createKnowledgeUi(runtime, config);
-		const services = createKnowledgeServicePool(runtime, config,
-			createSemanticSettingsApi(undefined, directory), createKnowledgeReviewPolicy(config),
-			createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi, acquire));
+		const services = createKnowledgeServicePool(
+			runtime,
+			config,
+			createSemanticSettingsApi(undefined, directory),
+			createKnowledgeReviewPolicy(config),
+			createKnowledgeWorkerTransportFactory(runtime, config, ui.invalidateKnowledgeUi, acquire),
+		);
 		try {
 			const service = await services.getKnowledgeService();
 			await expect(service.close()).rejects.toThrow(failure === "exit" ? "exited (7)" : "shutdown crashed");

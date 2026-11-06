@@ -15,11 +15,22 @@ export function diagnosticText(value: unknown, limit = 4096): string {
 	return String(value)
 		.slice(0, 8192)
 		.replace(/https?:\/\/[^\s<>"']+/gi, (raw) => {
-			try { const url = new URL(raw); url.username = ""; url.password = ""; url.search = ""; url.hash = ""; return url.toString(); }
-			catch { return "[URL omitted]"; }
+			try {
+				const url = new URL(raw);
+				url.username = "";
+				url.password = "";
+				url.search = "";
+				url.hash = "";
+				return url.toString();
+			} catch {
+				return "[URL omitted]";
+			}
 		})
 		.replace(/(?:bearer\s+)[^\s,;"']+/gi, "Bearer [redacted]")
-		.replace(/(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|authorization|cookie)["']?\s*[=:]\s*)(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s,;]+)/gi, "$1[redacted]")
+		.replace(
+			/(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|authorization|cookie)["']?\s*[=:]\s*)(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s,;]+)/gi,
+			"$1[redacted]",
+		)
 		.replace(/\b(?:sk-|ghp_|github_pat_)[A-Za-z0-9_-]{8,}/g, "[redacted]")
 		.replace(/[\u0000-\u001f\u007f<>]/g, " ")
 		.slice(0, Math.max(0, limit));
@@ -64,7 +75,11 @@ export type LayoutDefinition = { templates: Record<string, string>; noteTemplate
 /** One application owner: callbacks, slots and locks never cross instances. */
 export function createKnowledgeRuntimeHost() {
 	const locks = new Map<string, Promise<void>>();
-	const defaultRunRuntimeExclusive: RuntimeExclusive = async <T>(namespace: string, key: string, work: () => Promise<T>) => {
+	const defaultRunRuntimeExclusive: RuntimeExclusive = async <T>(
+		namespace: string,
+		key: string,
+		work: () => Promise<T>,
+	) => {
 		const lockKey = JSON.stringify([namespace, key]);
 		const previous = locks.get(lockKey) ?? Promise.resolve();
 		let release!: () => void;
@@ -89,14 +104,16 @@ export function createKnowledgeRuntimeHost() {
 	let deliveryLookup: DeliveryContract = () => null;
 	let hostSlotProvider: RuntimeSlotProvider | undefined;
 
-	function configureKnowledgeRuntime(host: {
-		runRuntimeExclusive?: RuntimeExclusive;
-		emitProcessEvent?: ProcessEventEmitter;
-		toolMeta?: ToolMetadataLookup;
-		flowCardBuilder?: FlowCardBuilder;
-		deliveryContract?: DeliveryContract;
-		runtimeSlot?: RuntimeSlotProvider;
-	} = {}): void {
+	function configureKnowledgeRuntime(
+		host: {
+			runRuntimeExclusive?: RuntimeExclusive;
+			emitProcessEvent?: ProcessEventEmitter;
+			toolMeta?: ToolMetadataLookup;
+			flowCardBuilder?: FlowCardBuilder;
+			deliveryContract?: DeliveryContract;
+			runtimeSlot?: RuntimeSlotProvider;
+		} = {},
+	): void {
 		// Multiple compatibility adapters can load in one process. Merge seams
 		// instead of resetting a previously installed host registry when another
 		// adapter (for example the service worker) initializes later.
@@ -202,22 +219,30 @@ export function createKnowledgeRuntimeHost() {
 	let requiresPaperEvidence = (query: string) => /paper|literature|article|文献|论文/i.test(query);
 	let hasPaperCitation = (sources: unknown[]) =>
 		Array.isArray(sources) &&
-			sources.some((source) => {
-				const value = source as { paperDois?: unknown };
-				return Array.isArray(value?.paperDois) && value.paperDois.some((doi) => /^10\.\d{4,9}\//i.test(String(doi)));
-			});
+		sources.some((source) => {
+			const value = source as { paperDois?: unknown };
+			return (
+				Array.isArray(value?.paperDois) && value.paperDois.some((doi) => /^10\.\d{4,9}\//i.test(String(doi)))
+			);
+		});
 
 	const deliveryContract: DeliveryContract = (prompt, options) => deliveryLookup(prompt, options);
-	let workspaceConfigLoader: WorkspaceConfigLoader = async () => { throw new Error("Workspace config host is not configured"); };
-	let explainerPublisher: ExplainerPublisher = async () => { throw new Error("Explainer publisher host is not configured"); };
+	let workspaceConfigLoader: WorkspaceConfigLoader = async () => {
+		throw new Error("Workspace config host is not configured");
+	};
+	let explainerPublisher: ExplainerPublisher = async () => {
+		throw new Error("Explainer publisher host is not configured");
+	};
 	let reviewPreviewConsumer: (cwd: string, token: string) => unknown = () => null;
 	let specialistSettingsReader: () => Promise<Record<string, unknown>> = async () => ({ mode: "strict" });
-	function configureKnowledgeHost(host: {
-		loadWorkspaceConfig?: WorkspaceConfigLoader;
-		publishExplainer?: ExplainerPublisher;
-		consumeKnowledgeReviewPreview?: (cwd: string, token: string) => unknown;
-		specialistSettings?: () => Promise<Record<string, unknown>>;
-	} = {}): void {
+	function configureKnowledgeHost(
+		host: {
+			loadWorkspaceConfig?: WorkspaceConfigLoader;
+			publishExplainer?: ExplainerPublisher;
+			consumeKnowledgeReviewPreview?: (cwd: string, token: string) => unknown;
+			specialistSettings?: () => Promise<Record<string, unknown>>;
+		} = {},
+	): void {
 		if (host.loadWorkspaceConfig) workspaceConfigLoader = host.loadWorkspaceConfig;
 		if (host.publishExplainer) explainerPublisher = host.publishExplainer;
 		if (host.consumeKnowledgeReviewPreview) reviewPreviewConsumer = host.consumeKnowledgeReviewPreview;
@@ -232,13 +257,15 @@ export function createKnowledgeRuntimeHost() {
 	let setupDirectoryInspector: (vault: string) => Promise<unknown> = async () => null;
 	let setupVaultResolver: (supplied: string, workspace: string) => string = (supplied) => supplied;
 	let setupOptionsReader: () => unknown = () => [];
-	function configureKnowledgeSetup(host: {
-		layout?: LayoutDefinition;
-		inspectObsidianSetup?: (input: Record<string, unknown>) => Promise<unknown>;
-		inspectSetupDirectory?: (vault: string) => Promise<unknown>;
-		resolveSetupVault?: (supplied: string, workspace: string) => string;
-		researchSetupOptions?: () => unknown;
-	} = {}): void {
+	function configureKnowledgeSetup(
+		host: {
+			layout?: LayoutDefinition;
+			inspectObsidianSetup?: (input: Record<string, unknown>) => Promise<unknown>;
+			inspectSetupDirectory?: (vault: string) => Promise<unknown>;
+			resolveSetupVault?: (supplied: string, workspace: string) => string;
+			researchSetupOptions?: () => unknown;
+		} = {},
+	): void {
 		if (host.layout) layoutDefinition = host.layout;
 		if (host.inspectObsidianSetup) obsidianSetupInspector = host.inspectObsidianSetup;
 		if (host.inspectSetupDirectory) setupDirectoryInspector = host.inspectSetupDirectory;

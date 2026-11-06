@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
-	KnowledgeReviewsResult,
-	KnowledgePreviewReviewResult,
 	KnowledgeApplyReviewResult,
+	KnowledgePreviewReviewResult,
+	KnowledgeReviewsResult,
 } from "../src/desktop/contract.js";
-import type { createKnowledgeRuntimeStore } from "./runtime-store";
-import { Button } from "./runtime-api";
-import { useNativeKnowledgeText } from "./native-copy";
-import { NativeKnowledgeModelReview } from "./NativeKnowledgeModelReview";
 import { WikiReviewContent } from "./knowledge/WikiReviewContent";
+import { NativeKnowledgeModelReview } from "./NativeKnowledgeModelReview";
+import { useNativeKnowledgeText } from "./native-copy";
+import { Button } from "./runtime-api";
+import type { createKnowledgeRuntimeStore } from "./runtime-store";
 
 type Store = ReturnType<typeof createKnowledgeRuntimeStore>;
 type Selection = { id: string; proposalHash: string };
@@ -261,9 +261,7 @@ export function NativeKnowledgeReviews({
 								</Button>
 								<p className="mt-1 break-all text-xs text-ink-dim">{item.path}</p>
 								{item.expired && <p className="text-xs text-warn">{t.reviewExpired}</p>}
-								{item.bindingChanged && (
-									<p className="text-xs text-warn">{t.reviewBindingChanged}</p>
-								)}
+								{item.bindingChanged && <p className="text-xs text-warn">{t.reviewBindingChanged}</p>}
 							</li>
 						))}
 					</ul>
@@ -271,11 +269,7 @@ export function NativeKnowledgeReviews({
 						<Button size="sm" disabled={offset === 0} onClick={() => setOffset(0)}>
 							{t.firstPage}
 						</Button>
-						<Button
-							size="sm"
-							disabled={page.nextOffset === null}
-							onClick={() => setOffset(page.nextOffset!)}
-						>
+						<Button size="sm" disabled={page.nextOffset === null} onClick={() => setOffset(page.nextOffset!)}>
 							{t.nextPage}
 						</Button>
 					</div>

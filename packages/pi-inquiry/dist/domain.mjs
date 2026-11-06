@@ -1,25 +1,10 @@
 // src/event-projection.ts
-var TERMINAL_COMPUTE_STATUSES = /* @__PURE__ */ new Set([
-  "succeeded",
-  "failed",
-  "cancelled",
-  "blocked",
-  "partial"
-]);
-var TERMINAL_TASK_STATUSES = /* @__PURE__ */ new Set([
-  "succeeded",
-  "failed",
-  "cancelled",
-  "blocked",
-  "partial",
-  "unknown"
-]);
+var TERMINAL_COMPUTE_STATUSES = /* @__PURE__ */ new Set(["succeeded", "failed", "cancelled", "blocked", "partial"]);
+var TERMINAL_TASK_STATUSES = /* @__PURE__ */ new Set(["succeeded", "failed", "cancelled", "blocked", "partial", "unknown"]);
 var SHA256 = /^[a-f0-9]{64}$/i;
 function asIso(value) {
-  if (typeof value === "number" && Number.isFinite(value))
-    return new Date(value).toISOString();
-  if (typeof value === "string" && Number.isFinite(Date.parse(value)))
-    return new Date(value).toISOString();
+  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
+  if (typeof value === "string" && Number.isFinite(Date.parse(value))) return new Date(value).toISOString();
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function outcomeFor(status, eventType) {
@@ -97,10 +82,7 @@ var InquiryEventProjector = class {
       ...event.runProvenance ? { runProvenance: event.runProvenance } : {}
     };
     await this.domain.recordAttempt(attempt);
-    await this.associateReceipts(
-      [`job:${event.jobId}`, `run:${executionId}`],
-      artifactIds
-    );
+    await this.associateReceipts([`job:${event.jobId}`, `run:${executionId}`], artifactIds);
   }
   /** Record a terminal task/workflow event and its verified artifact metadata. */
   async recordTaskTerminal(event) {
@@ -144,10 +126,7 @@ var InquiryEventProjector = class {
       ...event.runProvenance ? { runProvenance: event.runProvenance } : {}
     };
     await this.domain.recordAttempt(attempt);
-    await this.associateReceipts(
-      [`task:${event.taskId}`, `run:${executionId}`],
-      artifactIds
-    );
+    await this.associateReceipts([`task:${event.taskId}`, `run:${executionId}`], artifactIds);
   }
   /** Record provenance for host-local bash/kernel work without retaining source or output contents. */
   async recordLocalExecution(event) {
@@ -185,17 +164,12 @@ var InquiryEventProjector = class {
       ...event.turn !== void 0 ? { turn: event.turn } : {},
       runProvenance: event.runProvenance
     });
-    await this.associateReceipts(
-      [`tool:${event.id}`, `run:${event.id}`],
-      artifactIds
-    );
+    await this.associateReceipts([`tool:${event.id}`, `run:${event.id}`], artifactIds);
   }
   async recordDecision(event) {
     const eventProjectId = event.projectId ? this.canonicalProjectId(event.projectId) : void 0;
     if (eventProjectId && eventProjectId !== this.storage.projectId)
-      throw new Error(
-        `Inquiry decision belongs to another project: ${event.projectId}`
-      );
+      throw new Error(`Inquiry decision belongs to another project: ${event.projectId}`);
     const record = "schemaVersion" in event ? { ...event, projectId: this.storage.projectId } : {
       id: event.id,
       schemaVersion: 2,
@@ -215,12 +189,7 @@ var InquiryEventProjector = class {
     );
     await this.domain.recordDecision({
       ...record,
-      affectedArtifactIds: [
-        .../* @__PURE__ */ new Set([
-          ...record.affectedArtifactIds,
-          ...related.map((item) => item.id)
-        ])
-      ]
+      affectedArtifactIds: [.../* @__PURE__ */ new Set([...record.affectedArtifactIds, ...related.map((item) => item.id)])]
     });
   }
   async associateReceipts(basis, artifactIds) {
@@ -300,8 +269,7 @@ function nonEmpty2(value) {
 }
 function validateArtifactRecord(record) {
   const errors = [];
-  if (record.schemaVersion !== 1 && record.schemaVersion !== 2)
-    errors.push("unsupported schema version");
+  if (record.schemaVersion !== 1 && record.schemaVersion !== 2) errors.push("unsupported schema version");
   if (!nonEmpty2(record.id)) errors.push("id is required");
   if (!nonEmpty2(record.projectId)) errors.push("projectId is required");
   if (!isSafeArtifactPath(record.path)) errors.push("path must be a safe project-relative path");
@@ -314,12 +282,9 @@ function validateArtifactRecord(record) {
     errors.push("invalid source kind");
   if (!["input", "draft", "intermediate", "deliverable", "evidence"].includes(record.purpose))
     errors.push("invalid purpose");
-  if (!["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].includes(
-    record.status
-  ))
+  if (!["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].includes(record.status))
     errors.push("invalid status");
-  if (new Set(record.parentIds).size !== record.parentIds.length)
-    errors.push("parentIds must be unique");
+  if (new Set(record.parentIds).size !== record.parentIds.length) errors.push("parentIds must be unique");
   if (record.parentIds.some((id) => !nonEmpty2(id))) errors.push("parentIds must be non-empty");
   if (record.pendingReviewDecisionIds?.some((id) => !nonEmpty2(id)) || record.pendingReviewDecisionIds && new Set(record.pendingReviewDecisionIds).size !== record.pendingReviewDecisionIds.length)
     errors.push("pendingReviewDecisionIds must be unique and non-empty");
@@ -344,11 +309,9 @@ function validateArtifactLineage(record, artifacts) {
       errors.push(`missing parent artifact: ${parentId}`);
       continue;
     }
-    if (parent.projectId !== record.projectId)
-      errors.push(`parent belongs to another project: ${parentId}`);
+    if (parent.projectId !== record.projectId) errors.push(`parent belongs to another project: ${parentId}`);
     if (parent.id === record.id) errors.push("artifact cannot parent itself");
-    if (hasAncestor(parent.id, record.id, byId))
-      errors.push(`lineage cycle through parent: ${parentId}`);
+    if (hasAncestor(parent.id, record.id, byId)) errors.push(`lineage cycle through parent: ${parentId}`);
   }
   return [...new Set(errors)];
 }
@@ -424,8 +387,7 @@ function reproducibilityStatus(codeFingerprint, runProvenance) {
 // src/provenance.ts
 var MAX_PARENT_CHAIN = 20;
 function runProvenanceFor(artifact, attempts) {
-  if (artifact.runProvenance && Object.keys(artifact.runProvenance).length > 0)
-    return artifact.runProvenance;
+  if (artifact.runProvenance && Object.keys(artifact.runProvenance).length > 0) return artifact.runProvenance;
   const candidate = attempts.find(
     (attempt) => attempt.runProvenance && Object.keys(attempt.runProvenance).length > 0
   );
@@ -607,9 +569,7 @@ var InquiryService = class {
     const next = existing ? {
       ...record,
       ...existing,
-      affectedArtifactIds: [
-        .../* @__PURE__ */ new Set([...existing.affectedArtifactIds, ...record.affectedArtifactIds])
-      ]
+      affectedArtifactIds: [.../* @__PURE__ */ new Set([...existing.affectedArtifactIds, ...record.affectedArtifactIds])]
     } : record;
     await this.storage.decisions.put(next);
     if (next.status === "revoked") await this.markPendingReview(next);
@@ -617,9 +577,7 @@ var InquiryService = class {
   async listDecisions(projectId = this.storage.projectId) {
     if (projectId !== this.storage.projectId)
       throw new Error("Decision project does not match inquiry project");
-    return [...await this.storage.decisions.list()].sort(
-      (a, b) => b.createdAt.localeCompare(a.createdAt)
-    );
+    return [...await this.storage.decisions.list()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
   /**
    * Revocation is deliberately a ledger-only operation. It never calls a
@@ -668,9 +626,7 @@ var InquiryService = class {
       await this.storage.artifacts.put({
         ...artifact,
         status: "pending-review",
-        pendingReviewDecisionIds: [
-          .../* @__PURE__ */ new Set([...artifact.pendingReviewDecisionIds ?? [], decision.id])
-        ],
+        pendingReviewDecisionIds: [.../* @__PURE__ */ new Set([...artifact.pendingReviewDecisionIds ?? [], decision.id])],
         updatedAt: decision.revokedAt ?? (/* @__PURE__ */ new Date()).toISOString()
       });
     }
@@ -719,17 +675,14 @@ var InquiryService = class {
     return this.storage.snapshot();
   }
   async artifactProvenance(artifactId) {
-    if (typeof artifactId !== "string" || !artifactId.trim() || artifactId.length > 512 || [...artifactId].some(
-      (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127
-    ))
+    if (typeof artifactId !== "string" || !artifactId.trim() || artifactId.length > 512 || [...artifactId].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))
       return void 0;
     return artifactProvenance(await this.storage.snapshot(), artifactId);
   }
   async rerunArtifact(artifactId) {
     const provenance = await this.artifactProvenance(artifactId);
     if (!provenance) throw new Error(`Artifact not found: ${artifactId}`);
-    if (provenance.reproducibility !== "reproducible")
-      throw new Error("Artifact is not reproducible");
+    if (provenance.reproducibility !== "reproducible") throw new Error("Artifact is not reproducible");
     if (!this.rerunHandler) throw new Error("Artifact rerun is unavailable");
     const existing = [...await this.storage.reruns.list()].filter((item) => item.sourceArtifactId === provenance.artifact.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     if (existing && (existing.status === "submitted" || existing.status === "running"))

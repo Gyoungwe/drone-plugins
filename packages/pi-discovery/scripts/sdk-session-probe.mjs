@@ -2,11 +2,7 @@
 import assert from "node:assert/strict";
 import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import {
-	fauxProvider,
-	fauxAssistantMessage,
-	fauxToolCall,
-} from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
 import {
 	createAgentSession,
 	DefaultResourceLoader,
@@ -19,9 +15,7 @@ const [a, b, empty] = process.argv.slice(2);
 const agentDir = process.env.PI_CODING_AGENT_DIR;
 await mkdir(agentDir, { recursive: true });
 const packageRoot = resolve("node_modules/@gyoungwe/pi-discovery");
-const manifest = JSON.parse(
-	await readFile(join(packageRoot, "plugin.manifest.json"), "utf8"),
-);
+const manifest = JSON.parse(await readFile(join(packageRoot, "plugin.manifest.json"), "utf8"));
 const runtime = await ModelRuntime.create({
 	authPath: join(agentDir, "auth.json"),
 	modelsPath: null,
@@ -50,9 +44,7 @@ async function open(cwd) {
 	assert.deepEqual(resourceLoader.getExtensions().errors, []);
 	const loaded = resourceLoader
 		.getExtensions()
-		.extensions.find(
-			(item) => item.path === join(packageRoot, "dist/index.mjs"),
-		);
+		.extensions.find((item) => item.path === join(packageRoot, "dist/index.mjs"));
 	assert.deepEqual([...loaded.tools.keys()].sort(), [...manifest.tools].sort());
 	const { session } = await createAgentSession({
 		cwd,
@@ -77,16 +69,10 @@ async function call(session, name, args) {
 		fauxAssistantMessage("Discovery readback complete."),
 	]);
 	try {
-		await session.prompt(
-			"Read the existing discovery records with the specified tool.",
-		);
+		await session.prompt("Read the existing discovery records with the specified tool.");
 		assert.equal(receipts.length, 1);
 		assert.equal(receipts[0].toolName, name);
-		assert.equal(
-			receipts[0].isError,
-			false,
-			JSON.stringify(receipts[0].result),
-		);
+		assert.equal(receipts[0].isError, false, JSON.stringify(receipts[0].result));
 		dispatches++;
 		return receipts[0].result.details;
 	} finally {
@@ -101,10 +87,7 @@ try {
 	]) {
 		const session = await open(cwd);
 		sessions.push(session);
-		assert.equal(
-			(await call(session, "discovery_status", {})).status,
-			"configured",
-		);
+		assert.equal((await call(session, "discovery_status", {})).status, "configured");
 		const records = await call(session, "discovery_list_records", {
 			journal: "sessions",
 		});

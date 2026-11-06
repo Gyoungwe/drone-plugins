@@ -2,25 +2,25 @@
 	"version": 1,
 	"generator": "packages/pi-discovery/scripts/build.mjs",
 	"inputs": {
-		"src/domain/critic.ts": "b3f67dc0e4ab24b28796ab84ceebaf970085a879630d11492bc00ac35f5bed64",
-		"src/domain/deadline.ts": "25a63415348d0d98161764e11f0245ada71255eb1e6fd7c12f2cfdd167670447",
-		"src/domain/evaluation.ts": "bc5e95954d56b3b0a81882f50d09a6d6eac8c34b7eb907f835eee67fa091a3b5",
-		"src/domain/exploration.ts": "c2b96cea5327e0d4f479dc978633731111ef43874d54b416b0d2a0704cd419b5",
+		"src/domain/critic.ts": "4077a9b98adbe83485720cad5128dbad30ccfe2ab78d874d7316cc21c3691b65",
+		"src/domain/deadline.ts": "934451d19985b59eadb5aff7c69bc7a9654d53da6cc375214014c2462789ad51",
+		"src/domain/evaluation.ts": "a0c9614d7fbefadd65b78b9e0d54fee7ebda9f218adc44853fbcfdf20ed4f8d2",
+		"src/domain/exploration.ts": "b313e7bcf8574163b6be75dd032082fd3c0b14c45a78178df5edb4946286a84d",
 		"src/domain/index.ts": "89efa3feb980c5e58dbc1cacc53575dbb91aa6ffe5d0b90c468554443bf3d5cb",
 		"src/domain/inquiry-port.ts": "0fb5b3ec17da3723f4828105b8c3d0837525e3c06b2fb2cf721335c1b677be43",
-		"src/domain/kernel.ts": "c0243d4ed8e5911bdca03b20c4ce0fe141111bbe70d8afb0614b0358c7861cfb",
-		"src/domain/validation.ts": "e957d0827ed49a36fec1dff15e1c08d9387e0a0fa0f6efc00344f041a2c52a0e",
-		"src/host.ts": "bcbb9a28dc53e3216f9b15b5dcf23b199b9edf05cd7816a0a725bb3c044353f9",
-		"src/service.ts": "a8086f0bfd733c26da9e4b93beb2189723a02243d8ada728c32d0be60a5aa31a",
-		"src/index.ts": "4210381cc3a1df74c491a32532db79c8e7b59871cdb5986192ead43dd7ac3aef",
-		"src/inquiry-provider.ts": "d4b63121d2d08951af25fd529577084fbef0ea2e5fbdd41c315da63ad9b0c30b",
-		"src/native-records.ts": "f60bd173441c316952018d8f1c5268d40efea4e6ca5218e0f40ba8f9e322ea66",
-		"src/native-runtime.ts": "895bfc69cd6585068862fadb0488721ca6eeee50caf752c5346c8d24e83071b2",
-		"src/runtime.ts": "38f818e257cab6baf6ecd04bea1a36fd0863bcf4ca5a71ff8e4dc64977131fbf"
+		"src/domain/kernel.ts": "779e109feb627e70f1224e22c14b2cdb140bc39f5c38f1fe110afc7c25a3273a",
+		"src/domain/validation.ts": "08245c09a96c0a150c7694939856d6f37006f53adb064400353604f79e0719d6",
+		"src/host.ts": "492f96164728751f52012c4709ef12be1466a5fdf8861486591aadba33e433b2",
+		"src/service.ts": "0f2da44d749893e1649da8729d39040230021217ea2ffbc2844824b543357063",
+		"src/index.ts": "efd100f7b38809e570e5f286cc4eed78fa3f95cea82b35b2ab3f040b894c6598",
+		"src/inquiry-provider.ts": "48dcd40cf5ee4748f82fd0edcd1fae251cc665e21598b1fe772fb23b81b72872",
+		"src/native-records.ts": "104f33db050b6c4b69978c1962febf36d663274bb43ff1cfa53cbe598dc18c24",
+		"src/native-runtime.ts": "9e63a169a92dec7cf6408aaf2ceb145ffe208d1f0d812121a68bdba4a6b2e0e2",
+		"src/runtime.ts": "aff20bcca7934fbb50026dd72fe8c707607751227c577e2b7e7112062a24ffbf"
 	},
 	"outputs": {
-		"dist/host.mjs": "33d79915fe96e0853b6c3caae1c0af5c30e8cec50cc11ad5693acf51b8469171",
-		"dist/index.mjs": "c3959b23657ad3f9c64243038985f28ad76c168dadec0c2e4959b021eee12ce5",
-		"dist/runtime.mjs": "ed620e5e4a37ece5dd876704aaa6e20b1ad4fd4a069dc61501e48f48112c7599"
+		"dist/host.mjs": "9795d1b100ede2e0e05a40ba19daf3b46764c79bba355a2d65ebc7052bfb9f3b",
+		"dist/index.mjs": "65617ba37204479b8f8ddeb6fc679cb9243a8817796da85d8219b71c64162940",
+		"dist/runtime.mjs": "2de2477e9bd36fa06fea2efd7ba2e2b2f3ec1822ca9813cedb03c7d6c420e774"
 	}
 }

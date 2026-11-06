@@ -1,12 +1,14 @@
 // @ts-nocheck
 import { createHash } from "node:crypto";
-import { validateNote, canRead } from "./files.js";
+import { canRead, validateNote } from "./files.js";
 import {
 	immutableWikiProposalHash as immutableHash,
-	targetWikiPath as targetPath,
 	managedParts,
+	targetWikiPath as targetPath,
 } from "./wiki-policy.js";
-export { targetWikiPath as targetPath, managedParts } from "./wiki-policy.js";
+
+export { managedParts, targetWikiPath as targetPath } from "./wiki-policy.js";
+
 const MAX_PENDING = 100,
 	MAX_AGE = 24 * 60 * 60 * 1000;
 const digest = (text) => createHash("sha256").update(text).digest("hex");

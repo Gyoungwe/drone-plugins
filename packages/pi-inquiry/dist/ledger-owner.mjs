@@ -7859,8 +7859,7 @@ function nonEmpty(value) {
 }
 function validateArtifactRecord(record) {
   const errors = [];
-  if (record.schemaVersion !== 1 && record.schemaVersion !== 2)
-    errors.push("unsupported schema version");
+  if (record.schemaVersion !== 1 && record.schemaVersion !== 2) errors.push("unsupported schema version");
   if (!nonEmpty(record.id)) errors.push("id is required");
   if (!nonEmpty(record.projectId)) errors.push("projectId is required");
   if (!isSafeArtifactPath(record.path)) errors.push("path must be a safe project-relative path");
@@ -7873,12 +7872,9 @@ function validateArtifactRecord(record) {
     errors.push("invalid source kind");
   if (!["input", "draft", "intermediate", "deliverable", "evidence"].includes(record.purpose))
     errors.push("invalid purpose");
-  if (!["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].includes(
-    record.status
-  ))
+  if (!["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].includes(record.status))
     errors.push("invalid status");
-  if (new Set(record.parentIds).size !== record.parentIds.length)
-    errors.push("parentIds must be unique");
+  if (new Set(record.parentIds).size !== record.parentIds.length) errors.push("parentIds must be unique");
   if (record.parentIds.some((id) => !nonEmpty(id))) errors.push("parentIds must be non-empty");
   if (record.pendingReviewDecisionIds?.some((id) => !nonEmpty(id)) || record.pendingReviewDecisionIds && new Set(record.pendingReviewDecisionIds).size !== record.pendingReviewDecisionIds.length)
     errors.push("pendingReviewDecisionIds must be unique and non-empty");
@@ -7903,11 +7899,9 @@ function validateArtifactLineage(record, artifacts) {
       errors.push(`missing parent artifact: ${parentId}`);
       continue;
     }
-    if (parent.projectId !== record.projectId)
-      errors.push(`parent belongs to another project: ${parentId}`);
+    if (parent.projectId !== record.projectId) errors.push(`parent belongs to another project: ${parentId}`);
     if (parent.id === record.id) errors.push("artifact cannot parent itself");
-    if (hasAncestor(parent.id, record.id, byId))
-      errors.push(`lineage cycle through parent: ${parentId}`);
+    if (hasAncestor(parent.id, record.id, byId)) errors.push(`lineage cycle through parent: ${parentId}`);
   }
   return [...new Set(errors)];
 }
@@ -7980,8 +7974,7 @@ function reproducibilityStatus(codeFingerprint, runProvenance) {
 // src/provenance.ts
 var MAX_PARENT_CHAIN = 20;
 function runProvenanceFor(artifact, attempts) {
-  if (artifact.runProvenance && Object.keys(artifact.runProvenance).length > 0)
-    return artifact.runProvenance;
+  if (artifact.runProvenance && Object.keys(artifact.runProvenance).length > 0) return artifact.runProvenance;
   const candidate = attempts.find(
     (attempt) => attempt.runProvenance && Object.keys(attempt.runProvenance).length > 0
   );
@@ -8138,9 +8131,7 @@ var InquiryService = class {
     const next = existing ? {
       ...record,
       ...existing,
-      affectedArtifactIds: [
-        .../* @__PURE__ */ new Set([...existing.affectedArtifactIds, ...record.affectedArtifactIds])
-      ]
+      affectedArtifactIds: [.../* @__PURE__ */ new Set([...existing.affectedArtifactIds, ...record.affectedArtifactIds])]
     } : record;
     await this.storage.decisions.put(next);
     if (next.status === "revoked") await this.markPendingReview(next);
@@ -8148,9 +8139,7 @@ var InquiryService = class {
   async listDecisions(projectId = this.storage.projectId) {
     if (projectId !== this.storage.projectId)
       throw new Error("Decision project does not match inquiry project");
-    return [...await this.storage.decisions.list()].sort(
-      (a, b) => b.createdAt.localeCompare(a.createdAt)
-    );
+    return [...await this.storage.decisions.list()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
   /**
    * Revocation is deliberately a ledger-only operation. It never calls a
@@ -8199,9 +8188,7 @@ var InquiryService = class {
       await this.storage.artifacts.put({
         ...artifact,
         status: "pending-review",
-        pendingReviewDecisionIds: [
-          .../* @__PURE__ */ new Set([...artifact.pendingReviewDecisionIds ?? [], decision.id])
-        ],
+        pendingReviewDecisionIds: [.../* @__PURE__ */ new Set([...artifact.pendingReviewDecisionIds ?? [], decision.id])],
         updatedAt: decision.revokedAt ?? (/* @__PURE__ */ new Date()).toISOString()
       });
     }
@@ -8250,17 +8237,14 @@ var InquiryService = class {
     return this.storage.snapshot();
   }
   async artifactProvenance(artifactId) {
-    if (typeof artifactId !== "string" || !artifactId.trim() || artifactId.length > 512 || [...artifactId].some(
-      (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127
-    ))
+    if (typeof artifactId !== "string" || !artifactId.trim() || artifactId.length > 512 || [...artifactId].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))
       return void 0;
     return artifactProvenance(await this.storage.snapshot(), artifactId);
   }
   async rerunArtifact(artifactId) {
     const provenance = await this.artifactProvenance(artifactId);
     if (!provenance) throw new Error(`Artifact not found: ${artifactId}`);
-    if (provenance.reproducibility !== "reproducible")
-      throw new Error("Artifact is not reproducible");
+    if (provenance.reproducibility !== "reproducible") throw new Error("Artifact is not reproducible");
     if (!this.rerunHandler) throw new Error("Artifact rerun is unavailable");
     const existing = [...await this.storage.reruns.list()].filter((item) => item.sourceArtifactId === provenance.artifact.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     if (existing && (existing.status === "submitted" || existing.status === "running"))
@@ -8394,11 +8378,7 @@ var intentSchema = typebox_exports.Object(
     previousVersion: version,
     candidateVersion: sha,
     operation: typebox_exports.String({ minLength: 1 }),
-    status: typebox_exports.Union([
-      typebox_exports.Literal("pending"),
-      typebox_exports.Literal("committed"),
-      typebox_exports.Literal("not-committed")
-    ])
+    status: typebox_exports.Union([typebox_exports.Literal("pending"), typebox_exports.Literal("committed"), typebox_exports.Literal("not-committed")])
   },
   { additionalProperties: false }
 );
@@ -8424,11 +8404,7 @@ function parseInquiryBinding(result, workspaceId) {
 var inquiryBindingPath = () => "inquiry-binding.json";
 var bytes = (value) => new Uint8Array(Buffer.from(value, "base64"));
 var digest = (value) => createHash("sha256").update(value).digest("hex");
-var sidecars = [
-  "ledger.sqlite-wal",
-  "ledger.sqlite-shm",
-  "ledger.sqlite-journal"
-];
+var sidecars = ["ledger.sqlite-wal", "ledger.sqlite-shm", "ledger.sqlite-journal"];
 var InquiryRecoveryRequired = class extends Error {
   code = "INQUIRY_NEEDS_RECOVERY";
 };
@@ -8450,10 +8426,9 @@ var InquiryLedgerOwner = class {
     const result = this.pending.then(() => {
       if (this.stopped) throw new Error("Inquiry owner is disposed");
       if (this.cleanupFailure)
-        throw new Error(
-          "Inquiry cleanup failed; explicit recovery is required",
-          { cause: this.cleanupFailure }
-        );
+        throw new Error("Inquiry cleanup failed; explicit recovery is required", {
+          cause: this.cleanupFailure
+        });
       return operation();
     });
     this.pending = result.then(
@@ -8468,8 +8443,7 @@ var InquiryLedgerOwner = class {
         root: this.root.handle,
         path
       });
-      if (value.kind !== "missing")
-        throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
+      if (value.kind !== "missing") throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
     }
     const raw = await this.capabilities.call("state.readBinary", {
       root: this.root.handle,
@@ -8480,8 +8454,7 @@ var InquiryLedgerOwner = class {
         root: this.root.handle,
         path
       });
-      if (value.kind !== "missing")
-        throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
+      if (value.kind !== "missing") throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
     }
     return raw;
   }
@@ -8508,9 +8481,7 @@ var InquiryLedgerOwner = class {
   }
   async openCurrent() {
     if (this.binding.value.intent?.status === "pending")
-      throw new InquiryRecoveryRequired(
-        "A prior Inquiry write requires explicit SHA reconciliation"
-      );
+      throw new InquiryRecoveryRequired("A prior Inquiry write requires explicit SHA reconciliation");
     const raw = await this.readRaw();
     if (raw.version !== this.binding.value.headVersion)
       throw new InquiryRecoveryRequired(
@@ -8524,14 +8495,10 @@ var InquiryLedgerOwner = class {
     return this.current;
   }
   async snapshot() {
-    return this.serialize(
-      async () => new InquiryService(await this.openCurrent()).readOnlyState()
-    );
+    return this.serialize(async () => new InquiryService(await this.openCurrent()).readOnlyState());
   }
   async read(operation) {
-    return this.serialize(
-      async () => operation(new InquiryService(await this.openCurrent()))
-    );
+    return this.serialize(async () => operation(new InquiryService(await this.openCurrent())));
   }
   async backup(raw) {
     const original = this.binding.value.originalVersion;
@@ -8543,15 +8510,11 @@ var InquiryLedgerOwner = class {
     });
     if (stored.kind === "value") {
       if (stored.version !== original)
-        throw new InquiryRecoveryRequired(
-          "Original Inquiry backup bytes do not match their recorded SHA"
-        );
+        throw new InquiryRecoveryRequired("Original Inquiry backup bytes do not match their recorded SHA");
       return;
     }
     if (raw.kind !== "value" || raw.version !== original)
-      throw new InquiryRecoveryRequired(
-        "Original Inquiry backup is missing after the ledger changed"
-      );
+      throw new InquiryRecoveryRequired("Original Inquiry backup is missing after the ledger changed");
     const copied = await this.capabilities.call("state.writeBinary", {
       root: this.root.handle,
       path,
@@ -8582,10 +8545,7 @@ var InquiryLedgerOwner = class {
       const current = await this.openCurrent();
       const raw = await this.readRaw();
       signal.throwIfAborted();
-      const staged = this.engine.open(
-        this.binding.value.projectId,
-        await current.exportBytes()
-      );
+      const staged = this.engine.open(this.binding.value.projectId, await current.exportBytes());
       return this.withStaged(staged, async () => {
         const result = await mutate(new InquiryService(staged));
         signal.throwIfAborted();
@@ -8617,9 +8577,7 @@ var InquiryLedgerOwner = class {
           signal
         );
         if (committed.kind !== "value" || committed.version !== candidateVersion)
-          throw new InquiryRecoveryRequired(
-            "Inquiry write has no verified candidate SHA readback"
-          );
+          throw new InquiryRecoveryRequired("Inquiry write has no verified candidate SHA readback");
         signal.throwIfAborted();
         await this.writeBinding({
           ...this.binding.value,
@@ -8637,18 +8595,13 @@ var InquiryLedgerOwner = class {
       signal.throwIfAborted();
       await this.reserve();
       const intent = this.binding.value.intent;
-      if (intent?.status !== "pending")
-        return { state: "no-pending-write" };
+      if (intent?.status !== "pending") return { state: "no-pending-write" };
       const raw = await this.readRaw();
       const state = raw.version === intent.candidateVersion ? "committed" : raw.version === intent.previousVersion ? "not-committed" : null;
       if (!state)
-        throw new InquiryRecoveryRequired(
-          "Inquiry bytes match neither the previous nor the candidate SHA"
-        );
+        throw new InquiryRecoveryRequired("Inquiry bytes match neither the previous nor the candidate SHA");
       if (raw.kind === "value" && this.engine.inspect(bytes(raw.base64)).projectId !== this.binding.value.projectId)
-        throw new InquiryRecoveryRequired(
-          "Recovered Inquiry bytes belong to another project"
-        );
+        throw new InquiryRecoveryRequired("Recovered Inquiry bytes belong to another project");
       signal.throwIfAborted();
       await this.writeBinding({
         ...this.binding.value,
@@ -8665,12 +8618,9 @@ var InquiryLedgerOwner = class {
       signal.throwIfAborted();
       await this.reserve();
       if (this.binding.value.intent?.status === "pending")
-        throw new InquiryRecoveryRequired(
-          "Reconcile the pending write before restoring"
-        );
+        throw new InquiryRecoveryRequired("Reconcile the pending write before restoring");
       const version2 = this.binding.value.originalVersion;
-      if (version2 === null)
-        throw new Error("This Inquiry ledger had no original SQLite file");
+      if (version2 === null) throw new Error("This Inquiry ledger had no original SQLite file");
       const backup = await this.capabilities.call("state.readBinary", {
         root: this.root.handle,
         path: `ledger.sqlite.pre-plugin-${version2}.bak`
@@ -8679,9 +8629,7 @@ var InquiryLedgerOwner = class {
         throw new Error("Original Inquiry backup is missing or invalid");
       const raw = await this.readRaw();
       if (raw.version !== this.binding.value.headVersion)
-        throw new InquiryRecoveryRequired(
-          "Inquiry bytes changed before restore"
-        );
+        throw new InquiryRecoveryRequired("Inquiry bytes changed before restore");
       const intent = {
         previousVersion: raw.version,
         candidateVersion: version2,
@@ -8702,9 +8650,7 @@ var InquiryLedgerOwner = class {
         signal
       );
       if (restored.kind !== "value" || restored.version !== version2)
-        throw new InquiryRecoveryRequired(
-          "Original Inquiry restore has no SHA readback"
-        );
+        throw new InquiryRecoveryRequired("Original Inquiry restore has no SHA readback");
       signal.throwIfAborted();
       await this.writeBinding({
         ...this.binding.value,

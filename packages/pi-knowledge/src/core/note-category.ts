@@ -12,12 +12,18 @@ function keywordCategory(value: string): KnowledgeCategory | "other" {
 
 /** Explicit metadata wins; an untyped note uses its category folder before its filename. */
 export function noteCategory(row: { path: string; body: string }): KnowledgeCategory | "other" {
-	const type = String(parseFrontmatter(row.body).data?.type || "").trim().toLowerCase();
+	const type = String(parseFrontmatter(row.body).data?.type || "")
+		.trim()
+		.toLowerCase();
 	if (type) return keywordCategory(type);
 	const segments = row.path.toLowerCase().split("/");
 	const filename = segments.pop()!;
 	for (const directory of segments.reverse()) {
-		if (/^(papers?|literature|文献|论文|software|tools?|软件|methods?|protocols?|方法|ideas?|hypotheses|想法|假设)$/.test(directory))
+		if (
+			/^(papers?|literature|文献|论文|software|tools?|软件|methods?|protocols?|方法|ideas?|hypotheses|想法|假设)$/.test(
+				directory,
+			)
+		)
 			return keywordCategory(directory);
 	}
 	return keywordCategory(filename);

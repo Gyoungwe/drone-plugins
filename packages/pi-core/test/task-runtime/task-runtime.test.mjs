@@ -1,10 +1,15 @@
-import { it } from "./scoped-test.mjs";
-import { createEventBus } from "@earendil-works/pi-coding-agent";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { continuesTask, createTaskJournal, registerTaskRuntime, TASK_ENTRY } from "../../src/task-runtime/runtime.mjs";
+import { createEventBus } from "@earendil-works/pi-coding-agent";
 import { afterEach, expect, vi } from "vitest";
+import {
+	continuesTask,
+	createTaskJournal,
+	registerTaskRuntime,
+	TASK_ENTRY,
+} from "../../src/task-runtime/runtime.mjs";
+import { it } from "./scoped-test.mjs";
 
 let dirs = [];
 afterEach(async () => {
@@ -114,13 +119,19 @@ it("status command is read-only and never starts a model turn", async () => {
 		},
 		sendMessage,
 	});
-	const context={cwd:"/fixture",sessionManager:{getSessionId:()=>"a",getSessionFile:()=>undefined,getBranch:()=>[]}};
+	const context = {
+		cwd: "/fixture",
+		sessionManager: { getSessionId: () => "a", getSessionFile: () => undefined, getBranch: () => [] },
+	};
 	await commands["task-status"].handler("", context);
 	expect(sendMessage).toHaveBeenCalledWith(
 		expect.objectContaining({
 			customType: "drone-task-status",
 			display: true,
-			details: expect.objectContaining({ command: "task-status",taskStorage:{mode:"memory",state:"deferred"} }),
+			details: expect.objectContaining({
+				command: "task-status",
+				taskStorage: { mode: "memory", state: "deferred" },
+			}),
 		}),
 		{ triggerTurn: false },
 	);

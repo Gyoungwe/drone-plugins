@@ -55,8 +55,7 @@ const zh = {
 	rich: "详细记录",
 	none: "不启用",
 	"read-local": "读取本地资料",
-	bindingEditingUnavailable:
-		"切换目录和初始化尚在迁移，需要单独选择目录、确认写入并等待当前任务关闭。",
+	bindingEditingUnavailable: "切换目录和初始化尚在迁移，需要单独选择目录、确认写入并等待当前任务关闭。",
 	reviewPolicy: "审核策略",
 	effectiveMode: "当前生效",
 	persistedMode: "已保存",
@@ -66,8 +65,7 @@ const zh = {
 	reviewPolicyHint:
 		"此设置控制知识发布检查。自动模式仍保留授权、来源和写入检查；人工 Wiki 内容不因此获得自动修改权限。",
 	policyOverride: "环境策略强制严格审核；此处不能覆盖。",
-	"invalid-json":
-		"审核策略 JSON 已损坏；当前执行严格模式。请修复文件后刷新，界面不会覆盖损坏数据。",
+	"invalid-json": "审核策略 JSON 已损坏；当前执行严格模式。请修复文件后刷新，界面不会覆盖损坏数据。",
 	"invalid-policy": "审核策略内容无效；当前执行严格模式。请修复文件后刷新，界面不会覆盖无效数据。",
 	stateWriteRequired:
 		"当前仅授权读取状态。若需修改，请停用后重新启用插件，并在宿主目录授权中明确选择允许状态写入。",
@@ -84,8 +82,7 @@ const zh = {
 	saveSemantic: "保存相似内容设置",
 	semanticSaved: "相似内容设置已保存并回读核对。",
 
-	inlineLinkUnavailable:
-		"此链接暂不能打开。库内笔记请使用下方的双向链接；外部链接需等待受控打开能力。",
+	inlineLinkUnavailable: "此链接暂不能打开。库内笔记请使用下方的双向链接；外部链接需等待受控打开能力。",
 	readingNavigation: "知识阅读视图",
 	reading: "阅读",
 	graph: "图谱",
@@ -146,8 +143,7 @@ const en: Record<keyof typeof zh, string> = {
 	confirmUndo: "Confirm undo",
 	cancelUndo: "Cancel",
 	undoing: "Undoing…",
-	reviewPartial:
-		"The note was written, but its review record or index is incomplete. Inspect the receipt:",
+	reviewPartial: "The note was written, but its review record or index is incomplete. Inspect the receipt:",
 	reviewReadOnly:
 		"Applying a candidate requires explicit host permission for state and Vault writes. Check the diff and sources before applying.",
 	reviewBack: "Close preview",
@@ -159,8 +155,7 @@ const en: Record<keyof typeof zh, string> = {
 	reviewTargetChanged:
 		"The target note changed. This view shows the original text and suggestion recorded in the candidate.",
 	reviewVersion: "Candidate version",
-	reviewNotVerified:
-		"A diff is not scientific verification and does not approve or apply a candidate.",
+	reviewNotVerified: "A diff is not scientific verification and does not approve or apply a candidate.",
 	applyReview: "Apply candidate",
 	rejectReview: "Reject candidate",
 	applying: "Applying…",
@@ -222,8 +217,7 @@ const en: Record<keyof typeof zh, string> = {
 	jobCount: "jobs",
 	firstPage: "First page",
 	nextPage: "Next page",
-	openUnavailable:
-		"Opening in an external app is unavailable until controlled file opening is migrated.",
+	openUnavailable: "Opening in an external app is unavailable until controlled file opening is migrated.",
 	handoffUnavailable: "Session handoff is still being migrated.",
 	refresh: "Refresh",
 	loading: "Loading…",

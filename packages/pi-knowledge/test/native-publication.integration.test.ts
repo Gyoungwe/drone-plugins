@@ -1,19 +1,8 @@
-import {
-	mkdir,
-	mkdtemp,
-	readFile,
-	realpath,
-	rm,
-	writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
-import {
-	fauxAssistantMessage,
-	fauxProvider,
-	fauxToolCall,
-} from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
 import {
 	createAgentSessionFromServices,
 	createAgentSessionRuntime,
@@ -32,9 +21,7 @@ import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
 import { createNativeSession } from "../src/extension/knowledge-extension.js";
 
 it("real native SDK privately replays signed protocol, persists only tool calls and keeps provider metadata while rejecting an unchecked final answer", async () => {
-	const root = await realpath(
-		await mkdtemp(join(tmpdir(), "knowledge-native-publication-")),
-	);
+	const root = await realpath(await mkdtemp(join(tmpdir(), "knowledge-native-publication-")));
 	const vault = join(root, "Vault"),
 		agentDir = join(root, "agent");
 	await mkdir(join(vault, "Wiki"), { recursive: true });
@@ -49,28 +36,16 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 		depositMode: "verified",
 		subagentPolicy: "none",
 	});
-	await writeFile(
-		join(root, "state/review-policy.json"),
-		JSON.stringify({ version: 1, mode: "strict" }),
-	);
+	await writeFile(join(root, "state/review-policy.json"), JSON.stringify({ version: 1, mode: "strict" }));
 	const host = createKnowledgeRuntimeHost();
 	host.configureKnowledgeWorker(
-		(_url, options) =>
-			new Worker(
-				new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url),
-				options,
-			),
+		(_url, options) => new Worker(new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url), options),
 	);
 	const owner = createKnowledgeRuntime(config, host, {}, (input) =>
 		acquireKnowledgeWriterLease(input, join(root, "leases")),
 	);
 	const native = createNativeSession(owner);
-	const observer = createKnowledgePublication(
-		owner.ui,
-		owner.reviewPolicy,
-		config,
-		native.signal,
-	);
+	const observer = createKnowledgePublication(owner.ui, owner.reviewPolicy, config, native.signal);
 	const observedPublication: string[] = [];
 	const modelRuntime = await ModelRuntime.create({
 		authPath: join(agentDir, "auth.json"),
@@ -83,10 +58,7 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 		tokensPerSecond: 0,
 	});
 	modelRuntime.registerNativeProvider(provider.provider);
-	await modelRuntime.setRuntimeApiKey(
-		"native-publication",
-		"offline-test-only",
-	);
+	await modelRuntime.setRuntimeApiKey("native-publication", "offline-test-only");
 	const sdk = await createAgentSessionRuntime(
 		async ({ cwd, agentDir, sessionManager }) => {
 			const services = await createAgentSessionServices({
@@ -103,8 +75,7 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 						(pi) => {
 							pi.on("message_end", (event) => {
 								if (event.message.role !== "assistant") return;
-								const { knowledgePublication, ...message } =
-									event.message as any;
+								const { knowledgePublication, ...message } = event.message as any;
 								observedPublication.push(knowledgePublication.status);
 								// An untrusted domain proof is removed by transport; provider replay must survive.
 								return { message };
@@ -131,8 +102,7 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 	await sdk.session.bindExtensions({ onError: (error) => errors.push(error) });
 	const progress = "I will read the actual file before answering.";
 	const thinking = "PRIVATE_SIGNED_THINKING";
-	const unchecked =
-		"UNCHECKED_FINAL_CLAIM is scientifically established. [[Library/Papers/unread]]";
+	const unchecked = "UNCHECKED_FINAL_CLAIM is scientifically established. [[Library/Papers/unread]]";
 	const response = Object.assign(
 		fauxAssistantMessage(
 			[
@@ -175,21 +145,15 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 		},
 	]);
 	try {
-		await sdk.session.prompt(
-			"Research the bounded evidence in input.txt and explain the scientific result.",
-		);
+		await sdk.session.prompt("Research the bounded evidence in input.txt and explain the scientific result.");
 		const toolMessage: any = sdk.session.messages.find(
-			(message) =>
-				message.role === "assistant" && message.stopReason === "toolUse",
+			(message) => message.role === "assistant" && message.stopReason === "toolUse",
 		);
-		expect(toolMessage.content).toEqual(
-			response.content.filter((block) => block.type === "toolCall"),
-		);
+		expect(toolMessage.content).toEqual(response.content.filter((block) => block.type === "toolCall"));
 		expect(providerHistory).toHaveLength(1);
-		expect(
-			providerHistory[0].find((message: any) => message.role === "assistant")
-				.content,
-		).toEqual(response.content);
+		expect(providerHistory[0].find((message: any) => message.role === "assistant").content).toEqual(
+			response.content,
+		);
 		expect(toolMessage).toMatchObject({
 			responseModel: "provider-model-version",
 			rawStopReason: "tool_use",
@@ -210,14 +174,10 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 				},
 			},
 		]);
-		expect(
-			sdk.session.messages.find((message) => message.role === "toolResult"),
-		).toMatchObject({
+		expect(sdk.session.messages.find((message) => message.role === "toolResult")).toMatchObject({
 			toolName: "read",
 			isError: false,
-			content: [
-				expect.objectContaining({ text: "Actual SDK read evidence.\n" }),
-			],
+			content: [expect.objectContaining({ text: "Actual SDK read evidence.\n" })],
 		});
 		const untrustedProofCopy = structuredClone(toolMessage);
 		expect(
@@ -226,10 +186,9 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 				message: untrustedProofCopy,
 			}).message.content,
 		).not.toContainEqual(expect.objectContaining({ type: "toolCall" }));
-		expect(
-			observer.projectKnowledgeSnapshot([structuredClone(toolMessage)])[0]
-				.content,
-		).not.toContainEqual(expect.objectContaining({ type: "toolCall" }));
+		expect(observer.projectKnowledgeSnapshot([structuredClone(toolMessage)])[0].content).not.toContainEqual(
+			expect.objectContaining({ type: "toolCall" }),
+		);
 		expect(JSON.stringify(sdk.session.messages)).not.toContain(progress);
 		expect(JSON.stringify(sdk.session.messages)).not.toContain(thinking);
 		const persisted = await readFile(sdk.session.sessionFile!, "utf8");
@@ -237,12 +196,8 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 		expect(persisted).not.toContain(thinking);
 		expect(persisted).not.toContain(unchecked);
 		for (const visible of [JSON.stringify(sdk.session.messages), persisted])
-			expect(visible).not.toMatch(
-				/query-private|header-private|STACK_PRIVATE|DETAIL_HEADER_PRIVATE/,
-			);
-		const final: any = sdk.session.messages
-			.filter((message) => message.role === "assistant")
-			.at(-1);
+			expect(visible).not.toMatch(/query-private|header-private|STACK_PRIVATE|DETAIL_HEADER_PRIVATE/);
+		const final: any = sdk.session.messages.filter((message) => message.role === "assistant").at(-1);
 		expect(observedPublication).toEqual(["tool-only", "blocked"]);
 		expect(final.knowledgePublication).toBeUndefined();
 		expect(JSON.stringify(final.content)).not.toContain(unchecked);
@@ -258,10 +213,7 @@ it("real native SDK privately replays signed protocol, persists only tool calls 
 
 it("private protocol replay is isolated per owner and exact SDK identity/toolCall content, then cleared on invalidation", async () => {
 	function publication() {
-		const config = createKnowledgeConfigApi(
-			undefined,
-			"/tmp/knowledge-protocol-owner-test",
-		);
+		const config = createKnowledgeConfigApi(undefined, "/tmp/knowledge-protocol-owner-test");
 		const ui = createKnowledgeUi(createKnowledgeRuntimeHost(), config);
 		const api = createKnowledgePublication(
 			ui,
@@ -272,8 +224,7 @@ it("private protocol replay is isolated per owner and exact SDK identity/toolCal
 		const hooks = new Map<string, (...args: any[]) => any>();
 		const control = api.registerAnswerPublication(
 			{
-				on: (name: string, hook: (...args: any[]) => any) =>
-					hooks.set(name, hook),
+				on: (name: string, hook: (...args: any[]) => any) => hooks.set(name, hook),
 			},
 			{ getCurrent: () => null },
 		);
@@ -294,14 +245,10 @@ it("private protocol replay is isolated per owner and exact SDK identity/toolCal
 		{ stopReason: "toolUse", responseId: "same-response", timestamp: 123 },
 	);
 	const ctx = { cwd: "/tmp", sessionId: "protocol-owner" };
-	const { message } = await a.hooks.get("message_end")!(
-		{ message: original },
-		ctx,
-	);
+	const { message } = await a.hooks.get("message_end")!({ message: original }, ctx);
 	delete message.knowledgePublication;
 	const replay = async (owner: typeof a, current = message) =>
-		(await owner.hooks.get("context")!({ messages: [current] })).messages[0]
-			.content;
+		(await owner.hooks.get("context")!({ messages: [current] })).messages[0].content;
 	expect(await replay(a)).toEqual(original.content);
 	expect(await replay(b)).toEqual([call]);
 	const other = {
@@ -320,9 +267,7 @@ it("private protocol replay is isolated per owner and exact SDK identity/toolCal
 	expect(await replay(b)).toEqual(other.content);
 	expect(await replay(a, { ...message, timestamp: 124 })).toEqual([call]);
 	const changedCall = { ...call, arguments: { path: "changed.txt" } };
-	expect(await replay(a, { ...message, content: [changedCall] })).toEqual([
-		changedCall,
-	]);
+	expect(await replay(a, { ...message, content: [changedCall] })).toEqual([changedCall]);
 	a.control.invalidate();
 	expect(await replay(a)).toEqual([call]);
 	b.control.invalidate();

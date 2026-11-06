@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-
 import { isZoteroWebApiStatus } from "./ZoteroWebApiSection";
 import { formatZoteroText } from "./zotero-copy";
 

@@ -3,8 +3,23 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, normalize, resolve } from "node:path";
 
 export const CAPABILITIES = new Set([
-	"knowledge", "research", "search", "evidence-context", "analysis", "planning", "tasks", "files", "evidence",
-	"provenance", "replay", "connectors", "discovery", "read-only", "provenance-receipts", "ui", "core",
+	"knowledge",
+	"research",
+	"search",
+	"evidence-context",
+	"analysis",
+	"planning",
+	"tasks",
+	"files",
+	"evidence",
+	"provenance",
+	"replay",
+	"connectors",
+	"discovery",
+	"read-only",
+	"provenance-receipts",
+	"ui",
+	"core",
 ]);
 const FILESYSTEM_PERMISSIONS = new Set([
 	"workspace-read",
@@ -14,17 +29,27 @@ const FILESYSTEM_PERMISSIONS = new Set([
 	"vault-read",
 	"application-state",
 	"application-state-write",
- "binary-state-read",
- "binary-state-write",
+	"binary-state-read",
+	"binary-state-write",
 	"project-read",
 ]);
-const PERMISSION_KEYS = new Set(["filesystem", "network", "subprocess", "externalWrites", "credentials", "readWrite", "externalSideEffects"]);
+const PERMISSION_KEYS = new Set([
+	"filesystem",
+	"network",
+	"subprocess",
+	"externalWrites",
+	"credentials",
+	"readWrite",
+	"externalSideEffects",
+]);
 const HOSTS = new Set(["native-pi", "drone-desktop"]);
 const TOOL_RE = /^[a-z][a-z0-9_-]*$/u;
 const ID_RE = /^drone-[a-z0-9-]+$/u;
 const PACKAGES_ROOT = resolve(import.meta.dirname, "../packages");
 
-function failure(failures, packageName, message) { failures.push(`${packageName}: ${message}`); }
+function failure(failures, packageName, message) {
+	failures.push(`${packageName}: ${message}`);
+}
 
 function entrypointPaths(entrypoints) {
 	if (!entrypoints || typeof entrypoints !== "object") return [];
@@ -62,20 +87,41 @@ function validatePermissions(packageName, permissions, failures) {
 		failure(failures, packageName, "permissions must be an object");
 		return;
 	}
-	for (const key of Object.keys(permissions)) if (!PERMISSION_KEYS.has(key)) failure(failures, packageName, `permissions.${key} is not supported`);
+	for (const key of Object.keys(permissions))
+		if (!PERMISSION_KEYS.has(key)) failure(failures, packageName, `permissions.${key} is not supported`);
 	const value = permissions;
 	for (const key of ["filesystem", "network", "subprocess", "credentials", "externalSideEffects"]) {
-		if (value[key] !== undefined && (!Array.isArray(value[key]) || value[key].some((item) => typeof item !== "string")))
+		if (
+			value[key] !== undefined &&
+			(!Array.isArray(value[key]) || value[key].some((item) => typeof item !== "string"))
+		)
 			failure(failures, packageName, `permissions.${key} must be an array of strings`);
 	}
-	if (Array.isArray(value.filesystem)) for (const item of value.filesystem) if (!FILESYSTEM_PERMISSIONS.has(item)) failure(failures, packageName, `permissions.filesystem has invalid value ${item}`);
-	if (value.externalWrites !== undefined && typeof value.externalWrites !== "boolean") failure(failures, packageName, "permissions.externalWrites must be boolean");
+	if (Array.isArray(value.filesystem))
+		for (const item of value.filesystem)
+			if (!FILESYSTEM_PERMISSIONS.has(item))
+				failure(failures, packageName, `permissions.filesystem has invalid value ${item}`);
+	if (value.externalWrites !== undefined && typeof value.externalWrites !== "boolean")
+		failure(failures, packageName, "permissions.externalWrites must be boolean");
 	if (value.readWrite !== undefined) {
-		if (!value.readWrite || typeof value.readWrite !== "object" || Array.isArray(value.readWrite)) failure(failures, packageName, "permissions.readWrite must be an object");
+		if (!value.readWrite || typeof value.readWrite !== "object" || Array.isArray(value.readWrite))
+			failure(failures, packageName, "permissions.readWrite must be an object");
 		else {
-			for (const key of ["read", "write", "delete"]) if (typeof value.readWrite[key] !== "boolean") failure(failures, packageName, `permissions.readWrite.${key} must be boolean`);
-			if (value.externalWrites === true && value.readWrite.write === false) failure(failures, packageName, "permissions.externalWrites=true conflicts with permissions.readWrite.write=false");
-			if (value.externalWrites === false && value.readWrite.write === true) failure(failures, packageName, "permissions.externalWrites=false conflicts with permissions.readWrite.write=true");
+			for (const key of ["read", "write", "delete"])
+				if (typeof value.readWrite[key] !== "boolean")
+					failure(failures, packageName, `permissions.readWrite.${key} must be boolean`);
+			if (value.externalWrites === true && value.readWrite.write === false)
+				failure(
+					failures,
+					packageName,
+					"permissions.externalWrites=true conflicts with permissions.readWrite.write=false",
+				);
+			if (value.externalWrites === false && value.readWrite.write === true)
+				failure(
+					failures,
+					packageName,
+					"permissions.externalWrites=false conflicts with permissions.readWrite.write=true",
+				);
 		}
 	}
 }
@@ -104,71 +150,133 @@ function validateServices(packageName, manifest, failures) {
 				continue;
 			}
 			const keys =
-				kind === "provides" ? ["version", "operations"] : kind === "consumes" ? ["servicePrefix", "version"] : ["service", "version"];
-			if (Object.keys(declaration).some(key => !keys.includes(key)))
+				kind === "provides"
+					? ["version", "operations"]
+					: kind === "consumes"
+						? ["servicePrefix", "version"]
+						: ["service", "version"];
+			if (Object.keys(declaration).some((key) => !keys.includes(key)))
 				failure(failures, packageName, `${field} only accepts ${keys.join(" and ")}`);
 			if (!Number.isSafeInteger(declaration.version) || declaration.version < 1)
 				failure(failures, packageName, `${field}.version must be a positive safe integer`);
 			if (kind === "provides") {
 				const operations = declaration.operations;
-				if (!Array.isArray(operations) || operations.length === 0 || operations.some(value => typeof value !== "string" || value.length === 0 || value.length > 128))
-					failure(failures, packageName, `${field}.operations must be a nonempty array of 1–128 character strings`);
+				if (
+					!Array.isArray(operations) ||
+					operations.length === 0 ||
+					operations.some((value) => typeof value !== "string" || value.length === 0 || value.length > 128)
+				)
+					failure(
+						failures,
+						packageName,
+						`${field}.operations must be a nonempty array of 1–128 character strings`,
+					);
 				else if (new Set(operations).size !== operations.length)
 					failure(failures, packageName, `${field}.operations must be unique`);
 			} else if (kind === "consumes") {
-				if (typeof declaration.servicePrefix !== "string" || declaration.servicePrefix.length === 0 || declaration.servicePrefix.length > 128)
+				if (
+					typeof declaration.servicePrefix !== "string" ||
+					declaration.servicePrefix.length === 0 ||
+					declaration.servicePrefix.length > 128
+				)
 					failure(failures, packageName, `${field}.servicePrefix must have 1–128 characters`);
-			} else if (typeof declaration.service !== "string" || declaration.service.length === 0 || declaration.service.length > 128)
+			} else if (
+				typeof declaration.service !== "string" ||
+				declaration.service.length === 0 ||
+				declaration.service.length > 128
+			)
 				failure(failures, packageName, `${field}.service must have 1–128 characters`);
 		}
 	}
 }
 
 function validateNativeChildSessions(packageName, manifest, failures) {
-	const declared=manifest.drone?.nativeChildSessions;
-	if(declared===undefined)return;
-	if(declared!=="read-only")failure(failures,packageName,'drone.nativeChildSessions must be "read-only" when declared');
-	if(!manifest.entrypoints?.desktopRuntime)failure(failures,packageName,"drone.nativeChildSessions requires desktopRuntime ownership");
+	const declared = manifest.drone?.nativeChildSessions;
+	if (declared === undefined) return;
+	if (declared !== "read-only")
+		failure(failures, packageName, 'drone.nativeChildSessions must be "read-only" when declared');
+	if (!manifest.entrypoints?.desktopRuntime)
+		failure(failures, packageName, "drone.nativeChildSessions requires desktopRuntime ownership");
 }
 
 function validateNetworkReads(packageName, manifest, failures) {
-	const reads=manifest.drone?.networkReads;
-	if(reads===undefined)return;
-	if(!manifest.entrypoints?.desktopRuntime)failure(failures,packageName,"drone.networkReads requires desktopRuntime ownership");
-	const hosts=Array.isArray(manifest.permissions?.network)?manifest.permissions.network:[];
-	if(!Array.isArray(reads)||!reads.length){failure(failures,packageName,"drone.networkReads must be a non-empty array");return;}
-	for(const entry of reads)
-		if(typeof entry!=="string"||!/^[^/\s]+\/[^\s?#]*$/.test(entry)||!hosts.includes(entry.slice(0,entry.indexOf("/"))))
-			failure(failures,packageName,`drone.networkReads entry ${JSON.stringify(entry)} must be host/path on a host in permissions.network`);
+	const reads = manifest.drone?.networkReads;
+	if (reads === undefined) return;
+	if (!manifest.entrypoints?.desktopRuntime)
+		failure(failures, packageName, "drone.networkReads requires desktopRuntime ownership");
+	const hosts = Array.isArray(manifest.permissions?.network) ? manifest.permissions.network : [];
+	if (!Array.isArray(reads) || !reads.length) {
+		failure(failures, packageName, "drone.networkReads must be a non-empty array");
+		return;
+	}
+	for (const entry of reads)
+		if (
+			typeof entry !== "string" ||
+			!/^[^/\s]+\/[^\s?#]*$/.test(entry) ||
+			!hosts.includes(entry.slice(0, entry.indexOf("/")))
+		)
+			failure(
+				failures,
+				packageName,
+				`drone.networkReads entry ${JSON.stringify(entry)} must be host/path on a host in permissions.network`,
+			);
 }
 
 function validateRecordAdoptions(packageName, packageVersion, manifest, failures) {
-	const declarations=manifest.drone?.recordAdoptions;
-	if(declarations===undefined)return;
-	if(!manifest.entrypoints?.desktopRuntime)failure(failures,packageName,"drone.recordAdoptions requires desktopRuntime ownership");
-	if(!declarations || typeof declarations!=="object" || Array.isArray(declarations)) {
-		failure(failures,packageName,"drone.recordAdoptions must be an object");return;
+	const declarations = manifest.drone?.recordAdoptions;
+	if (declarations === undefined) return;
+	if (!manifest.entrypoints?.desktopRuntime)
+		failure(failures, packageName, "drone.recordAdoptions requires desktopRuntime ownership");
+	if (!declarations || typeof declarations !== "object" || Array.isArray(declarations)) {
+		failure(failures, packageName, "drone.recordAdoptions must be an object");
+		return;
 	}
-	const stable=value=>typeof value==="string" && value.length<=128 && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u.test(value);
-	if(!stable(packageVersion))failure(failures,packageName,"record adoption requires an exact stable package version");
-	for(const [type,declaration]of Object.entries(declarations)) {
-		const field=`drone.recordAdoptions.${type}`;
-		if(type.length===0 || type.length>128)failure(failures,packageName,`${field} logical type must have 1–128 characters`);
-		if(!declaration || typeof declaration!=="object" || Array.isArray(declaration)) {
-			failure(failures,packageName,`${field} must be an object`);continue;
+	const stable = (value) =>
+		typeof value === "string" &&
+		value.length <= 128 &&
+		/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u.test(value);
+	if (!stable(packageVersion))
+		failure(failures, packageName, "record adoption requires an exact stable package version");
+	for (const [type, declaration] of Object.entries(declarations)) {
+		const field = `drone.recordAdoptions.${type}`;
+		if (type.length === 0 || type.length > 128)
+			failure(failures, packageName, `${field} logical type must have 1–128 characters`);
+		if (!declaration || typeof declaration !== "object" || Array.isArray(declaration)) {
+			failure(failures, packageName, `${field} must be an object`);
+			continue;
 		}
-		if(Object.keys(declaration).some(key=>!["legacyType","fromVersions","removeBeforeVersion"].includes(key)))failure(failures,packageName,`${field} only accepts legacyType, fromVersions and removeBeforeVersion`);
-		const legacy=declaration.legacyType;
-		if(typeof legacy!=="string" || !legacy.length || legacy.length>128)failure(failures,packageName,`${field}.legacyType must have 1–128 characters`);
-		else if(legacy.startsWith("plugin-record:") || legacy.startsWith("plugin-notice:"))failure(failures,packageName,`${field}.legacyType cannot import a source-owned namespace`);
-		const versions=declaration.fromVersions;
-		if(!Array.isArray(versions) || !versions.length || versions.some(version=>!stable(version)))failure(failures,packageName,`${field}.fromVersions must list exact supported migrator versions`);
-		else if(new Set(versions).size!==versions.length)failure(failures,packageName,`${field}.fromVersions must be unique`);
-		if(!stable(declaration.removeBeforeVersion))failure(failures,packageName,`${field}.removeBeforeVersion must be an exact stable version`);
-		else if(stable(packageVersion)) {
-			const current=packageVersion.split(".").map(BigInt),removal=declaration.removeBeforeVersion.split(".").map(BigInt);
-			const differing=current.findIndex((part,index)=>part!==removal[index]);
-			if(differing===-1 || current[differing]>removal[differing])failure(failures,packageName,`${field} must be removed before package version ${declaration.removeBeforeVersion}`);
+		if (
+			Object.keys(declaration).some(
+				(key) => !["legacyType", "fromVersions", "removeBeforeVersion"].includes(key),
+			)
+		)
+			failure(
+				failures,
+				packageName,
+				`${field} only accepts legacyType, fromVersions and removeBeforeVersion`,
+			);
+		const legacy = declaration.legacyType;
+		if (typeof legacy !== "string" || !legacy.length || legacy.length > 128)
+			failure(failures, packageName, `${field}.legacyType must have 1–128 characters`);
+		else if (legacy.startsWith("plugin-record:") || legacy.startsWith("plugin-notice:"))
+			failure(failures, packageName, `${field}.legacyType cannot import a source-owned namespace`);
+		const versions = declaration.fromVersions;
+		if (!Array.isArray(versions) || !versions.length || versions.some((version) => !stable(version)))
+			failure(failures, packageName, `${field}.fromVersions must list exact supported migrator versions`);
+		else if (new Set(versions).size !== versions.length)
+			failure(failures, packageName, `${field}.fromVersions must be unique`);
+		if (!stable(declaration.removeBeforeVersion))
+			failure(failures, packageName, `${field}.removeBeforeVersion must be an exact stable version`);
+		else if (stable(packageVersion)) {
+			const current = packageVersion.split(".").map(BigInt),
+				removal = declaration.removeBeforeVersion.split(".").map(BigInt);
+			const differing = current.findIndex((part, index) => part !== removal[index]);
+			if (differing === -1 || current[differing] > removal[differing])
+				failure(
+					failures,
+					packageName,
+					`${field} must be removed before package version ${declaration.removeBeforeVersion}`,
+				);
 		}
 	}
 }
@@ -177,41 +285,72 @@ export function validatePackageManifest(packageJson, manifest, packageRoot) {
 	const failures = [];
 	const packageName = packageJson.name ?? packageRoot.split(/[\\/]/u).pop();
 	if (!ID_RE.test(manifest.id ?? "")) failure(failures, packageName, "id must match ^drone-[a-z0-9-]+$");
-	if (manifest.version !== packageJson.version) failure(failures, packageName, "manifest.version must match package.json version");
+	if (manifest.version !== packageJson.version)
+		failure(failures, packageName, "manifest.version must match package.json version");
 	if (manifest.schemaVersion !== 1) failure(failures, packageName, "schemaVersion must be 1");
 	if (manifest.drone?.pluginApi !== 1) failure(failures, packageName, "drone.pluginApi must be 1");
-	if (manifest.drone?.resultContract !== "drone-result/v3") failure(failures, packageName, "drone.resultContract must be drone-result/v3");
-	if (!Array.isArray(manifest.capabilities) || manifest.capabilities.length === 0) failure(failures, packageName, "capabilities must be a non-empty array");
-	for (const capability of manifest.capabilities ?? []) if (!CAPABILITIES.has(capability)) failure(failures, packageName, `unknown capability ${capability}`);
-	if (!Array.isArray(manifest.hosts) || manifest.hosts.length === 0) failure(failures, packageName, "hosts must be a non-empty array");
-	for (const host of manifest.hosts ?? []) if (!HOSTS.has(host)) failure(failures, packageName, `unknown host ${host}`);
-	if (!manifest.entrypoints || typeof manifest.entrypoints !== "object") failure(failures, packageName, "entrypoints must be an object");
-	else for (const { kind, path } of entrypointPaths(manifest.entrypoints)) {
-		if (typeof path !== "string" || path.length === 0 || path.includes("..")) { failure(failures, packageName, `entrypoints.${kind} has an invalid path`); continue; }
-		if (!existsSync(join(packageRoot, path))) failure(failures, packageName, `entrypoint does not exist: ${path}`);
-		if (!entrypointCovered(path, packageJson)) failure(failures, packageName, `entrypoint is not covered by files: ${path}`);
-	}
+	if (manifest.drone?.resultContract !== "drone-result/v3")
+		failure(failures, packageName, "drone.resultContract must be drone-result/v3");
+	if (!Array.isArray(manifest.capabilities) || manifest.capabilities.length === 0)
+		failure(failures, packageName, "capabilities must be a non-empty array");
+	for (const capability of manifest.capabilities ?? [])
+		if (!CAPABILITIES.has(capability)) failure(failures, packageName, `unknown capability ${capability}`);
+	if (!Array.isArray(manifest.hosts) || manifest.hosts.length === 0)
+		failure(failures, packageName, "hosts must be a non-empty array");
+	for (const host of manifest.hosts ?? [])
+		if (!HOSTS.has(host)) failure(failures, packageName, `unknown host ${host}`);
+	if (!manifest.entrypoints || typeof manifest.entrypoints !== "object")
+		failure(failures, packageName, "entrypoints must be an object");
+	else
+		for (const { kind, path } of entrypointPaths(manifest.entrypoints)) {
+			if (typeof path !== "string" || path.length === 0 || path.includes("..")) {
+				failure(failures, packageName, `entrypoints.${kind} has an invalid path`);
+				continue;
+			}
+			if (!existsSync(join(packageRoot, path)))
+				failure(failures, packageName, `entrypoint does not exist: ${path}`);
+			if (!entrypointCovered(path, packageJson))
+				failure(failures, packageName, `entrypoint is not covered by files: ${path}`);
+		}
 	if (manifest.entrypoints?.resources !== undefined) {
 		const resources = manifest.entrypoints.resources;
-		if (!resources || typeof resources !== "object" || Array.isArray(resources) || Object.keys(resources).some(id => !id.trim()))
-			failure(failures, packageName, "entrypoints.resources must map nonempty resource IDs to relative entries");
-		if (!manifest.entrypoints.desktopRuntime) failure(failures, packageName, "resources require desktopRuntime ownership");
+		if (
+			!resources ||
+			typeof resources !== "object" ||
+			Array.isArray(resources) ||
+			Object.keys(resources).some((id) => !id.trim())
+		)
+			failure(
+				failures,
+				packageName,
+				"entrypoints.resources must map nonempty resource IDs to relative entries",
+			);
+		if (!manifest.entrypoints.desktopRuntime)
+			failure(failures, packageName, "resources require desktopRuntime ownership");
 	}
 	if (!isUiOnly(manifest)) {
 		if (!Array.isArray(manifest.tools)) failure(failures, packageName, "L1 manifest must declare tools");
 		const tools = manifest.tools ?? [];
 		if (new Set(tools).size !== tools.length) failure(failures, packageName, "tools contains duplicates");
-		for (const tool of tools) if (typeof tool !== "string" || !TOOL_RE.test(tool)) failure(failures, packageName, `invalid tool name ${String(tool)}`);
+		for (const tool of tools)
+			if (typeof tool !== "string" || !TOOL_RE.test(tool))
+				failure(failures, packageName, `invalid tool name ${String(tool)}`);
 	}
 	validatePermissions(packageName, manifest.permissions, failures);
 	validateServices(packageName, manifest, failures);
-	validateRecordAdoptions(packageName,packageJson.version,manifest,failures);
-	validateNativeChildSessions(packageName,manifest,failures);
-	validateNetworkReads(packageName,manifest,failures);
-	const droneDependencies = Object.keys(packageJson.dependencies ?? {}).filter((name) => name.startsWith("@gyoungwe/"));
+	validateRecordAdoptions(packageName, packageJson.version, manifest, failures);
+	validateNativeChildSessions(packageName, manifest, failures);
+	validateNetworkReads(packageName, manifest, failures);
+	const droneDependencies = Object.keys(packageJson.dependencies ?? {}).filter((name) =>
+		name.startsWith("@gyoungwe/"),
+	);
 	const bundled = new Set(packageJson.bundleDependencies ?? []);
-	for (const dependency of droneDependencies) if (dependency !== "@gyoungwe/plugin-api" && !bundled.has(dependency)) failure(failures, packageName, `must not depend on another Drone plugin: ${dependency}`);
-	for (const dependency of Object.keys(packageJson.dependencies ?? {})) if (dependency.startsWith("@earendil-works/pi-")) failure(failures, packageName, `Pi runtime must be a peerDependency: ${dependency}`);
+	for (const dependency of droneDependencies)
+		if (dependency !== "@gyoungwe/plugin-api" && !bundled.has(dependency))
+			failure(failures, packageName, `must not depend on another Drone plugin: ${dependency}`);
+	for (const dependency of Object.keys(packageJson.dependencies ?? {}))
+		if (dependency.startsWith("@earendil-works/pi-"))
+			failure(failures, packageName, `Pi runtime must be a peerDependency: ${dependency}`);
 	return failures;
 }
 
@@ -233,6 +372,10 @@ export async function checkManifests(root = PACKAGES_ROOT) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
-	try { console.log(`Plugin manifests checked: ${await checkManifests()}`); }
-	catch (error) { console.error(error.message); process.exit(1); }
+	try {
+		console.log(`Plugin manifests checked: ${await checkManifests()}`);
+	} catch (error) {
+		console.error(error.message);
+		process.exit(1);
+	}
 }

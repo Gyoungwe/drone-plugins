@@ -38,14 +38,7 @@ export interface InquiryEventManifest {
 export interface InquiryComputeEvent {
 	readonly id: string;
 	readonly jobId: string;
-	readonly type:
-		| "created"
-		| "submitted"
-		| "status"
-		| "logs"
-		| "collected"
-		| "cancelled"
-		| "error";
+	readonly type: "created" | "submitted" | "status" | "logs" | "collected" | "cancelled" | "error";
 	readonly at: number | string;
 	readonly status?: string;
 	readonly cursor?: string;
@@ -53,9 +46,7 @@ export interface InquiryComputeEvent {
 	readonly runId?: string;
 	readonly startedAt?: number | string;
 	readonly codeFingerprint?: string;
-	readonly parameters?: Readonly<
-		Record<string, string | number | boolean | null>
-	>;
+	readonly parameters?: Readonly<Record<string, string | number | boolean | null>>;
 	readonly hostId?: string;
 	readonly sessionId?: string;
 	readonly turn?: number;
@@ -70,20 +61,12 @@ export interface InquiryTaskTerminalEvent {
 	readonly id: string;
 	readonly taskId: string;
 	readonly runId?: string;
-	readonly status:
-		| "succeeded"
-		| "failed"
-		| "cancelled"
-		| "blocked"
-		| "partial"
-		| "unknown";
+	readonly status: "succeeded" | "failed" | "cancelled" | "blocked" | "partial" | "unknown";
 	readonly at?: number | string;
 	readonly startedAt?: number | string;
 	readonly detail?: string;
 	readonly codeFingerprint?: string;
-	readonly parameters?: Readonly<
-		Record<string, string | number | boolean | null>
-	>;
+	readonly parameters?: Readonly<Record<string, string | number | boolean | null>>;
 	readonly sessionId?: string;
 	readonly turn?: number;
 	readonly runProvenance?: RunProvenanceSummary;
@@ -102,9 +85,7 @@ export interface InquiryLocalExecutionEvent {
 	readonly startedAt?: number | string;
 	readonly finishedAt?: number | string;
 	readonly codeFingerprint: string;
-	readonly parameters: Readonly<
-		Record<string, string | number | boolean | null>
-	>;
+	readonly parameters: Readonly<Record<string, string | number | boolean | null>>;
 	readonly runProvenance: RunProvenanceSummary;
 	readonly outcome: AttemptOutcome;
 	readonly artifacts?: readonly InquiryEventArtifact[];
@@ -112,21 +93,11 @@ export interface InquiryLocalExecutionEvent {
 
 /** Host callbacks keep the domain package independent from compute/tasks. */
 export interface InquiryEventSource {
-	readonly onComputeEvent?: (
-		handler: (event: InquiryComputeEvent) => void,
-	) => () => void;
-	readonly onTaskTerminal?: (
-		handler: (event: InquiryTaskTerminalEvent) => void,
-	) => () => void;
-	readonly onLocalExecution?: (
-		handler: (event: InquiryLocalExecutionEvent) => void,
-	) => () => void;
-	readonly onDecision?: (
-		handler: (event: InquiryDecisionEvent) => void,
-	) => () => void;
-	readonly enrichComputeEvent?: (
-		event: InquiryComputeEvent,
-	) => Promise<InquiryComputeEvent>;
+	readonly onComputeEvent?: (handler: (event: InquiryComputeEvent) => void) => () => void;
+	readonly onTaskTerminal?: (handler: (event: InquiryTaskTerminalEvent) => void) => () => void;
+	readonly onLocalExecution?: (handler: (event: InquiryLocalExecutionEvent) => void) => () => void;
+	readonly onDecision?: (handler: (event: InquiryDecisionEvent) => void) => () => void;
+	readonly enrichComputeEvent?: (event: InquiryComputeEvent) => Promise<InquiryComputeEvent>;
 }
 
 /** Successful host receipt for an agent-made decision. */
@@ -140,35 +111,17 @@ export interface InquiryDecisionEvent {
 	readonly projectId?: string;
 }
 
-const TERMINAL_COMPUTE_STATUSES = new Set([
-	"succeeded",
-	"failed",
-	"cancelled",
-	"blocked",
-	"partial",
-]);
-const TERMINAL_TASK_STATUSES = new Set([
-	"succeeded",
-	"failed",
-	"cancelled",
-	"blocked",
-	"partial",
-	"unknown",
-]);
+const TERMINAL_COMPUTE_STATUSES = new Set(["succeeded", "failed", "cancelled", "blocked", "partial"]);
+const TERMINAL_TASK_STATUSES = new Set(["succeeded", "failed", "cancelled", "blocked", "partial", "unknown"]);
 const SHA256 = /^[a-f0-9]{64}$/i;
 
 function asIso(value: number | string | undefined): string {
-	if (typeof value === "number" && Number.isFinite(value))
-		return new Date(value).toISOString();
-	if (typeof value === "string" && Number.isFinite(Date.parse(value)))
-		return new Date(value).toISOString();
+	if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
+	if (typeof value === "string" && Number.isFinite(Date.parse(value))) return new Date(value).toISOString();
 	return new Date().toISOString();
 }
 
-function outcomeFor(
-	status: string | undefined,
-	eventType?: InquiryComputeEvent["type"],
-): AttemptOutcome {
+function outcomeFor(status: string | undefined, eventType?: InquiryComputeEvent["type"]): AttemptOutcome {
 	if (eventType === "error" || status === "failed") return "failed";
 	if (eventType === "collected" || status === "succeeded") return "succeeded";
 	if (eventType === "cancelled") return "blocked";
@@ -219,9 +172,7 @@ export class InquiryEventProjector {
 			executionId,
 			event.artifacts ?? event.manifest?.entries,
 			eventAt,
-			event.status === "succeeded" || event.type === "collected"
-				? "deliverable"
-				: "intermediate",
+			event.status === "succeeded" || event.type === "collected" ? "deliverable" : "intermediate",
 			"remote",
 			event.runId ?? event.jobId,
 			event.sessionId,
@@ -243,25 +194,18 @@ export class InquiryEventProjector {
 				...(event.parameters ?? {}),
 			},
 			artifactIds,
-			...(summary(event.detail)
-				? { resultSummary: summary(event.detail) }
-				: {}),
+			...(summary(event.detail) ? { resultSummary: summary(event.detail) } : {}),
 			outcome: outcomeFor(event.status, event.type),
 			enteredReport: false,
 			startedAt: asIso(event.startedAt ?? event.at),
 			finishedAt: eventAt,
-			...(event.codeFingerprint
-				? { codeFingerprint: event.codeFingerprint }
-				: {}),
+			...(event.codeFingerprint ? { codeFingerprint: event.codeFingerprint } : {}),
 			...(event.sessionId ? { sessionId: event.sessionId } : {}),
 			...(event.turn !== undefined ? { turn: event.turn } : {}),
 			...(event.runProvenance ? { runProvenance: event.runProvenance } : {}),
 		};
 		await this.domain.recordAttempt(attempt);
-		await this.associateReceipts(
-			[`job:${event.jobId}`, `run:${executionId}`],
-			artifactIds,
-		);
+		await this.associateReceipts([`job:${event.jobId}`, `run:${executionId}`], artifactIds);
 	}
 
 	/** Record a terminal task/workflow event and its verified artifact metadata. */
@@ -295,25 +239,18 @@ export class InquiryEventProjector {
 				...(event.parameters ?? {}),
 			},
 			artifactIds,
-			...(summary(event.detail)
-				? { resultSummary: summary(event.detail) }
-				: {}),
+			...(summary(event.detail) ? { resultSummary: summary(event.detail) } : {}),
 			outcome: outcomeFor(event.status),
 			enteredReport: false,
 			startedAt: asIso(event.startedAt ?? event.at),
 			finishedAt: eventAt,
-			...(event.codeFingerprint
-				? { codeFingerprint: event.codeFingerprint }
-				: {}),
+			...(event.codeFingerprint ? { codeFingerprint: event.codeFingerprint } : {}),
 			...(event.sessionId ? { sessionId: event.sessionId } : {}),
 			...(event.turn !== undefined ? { turn: event.turn } : {}),
 			...(event.runProvenance ? { runProvenance: event.runProvenance } : {}),
 		};
 		await this.domain.recordAttempt(attempt);
-		await this.associateReceipts(
-			[`task:${event.taskId}`, `run:${executionId}`],
-			artifactIds,
-		);
+		await this.associateReceipts([`task:${event.taskId}`, `run:${executionId}`], artifactIds);
 	}
 
 	/** Record provenance for host-local bash/kernel work without retaining source or output contents. */
@@ -352,22 +289,13 @@ export class InquiryEventProjector {
 			...(event.turn !== undefined ? { turn: event.turn } : {}),
 			runProvenance: event.runProvenance,
 		});
-		await this.associateReceipts(
-			[`tool:${event.id}`, `run:${event.id}`],
-			artifactIds,
-		);
+		await this.associateReceipts([`tool:${event.id}`, `run:${event.id}`], artifactIds);
 	}
 
-	async recordDecision(
-		event: InquiryDecisionEvent | DecisionRecord,
-	): Promise<void> {
-		const eventProjectId = event.projectId
-			? this.canonicalProjectId(event.projectId)
-			: undefined;
+	async recordDecision(event: InquiryDecisionEvent | DecisionRecord): Promise<void> {
+		const eventProjectId = event.projectId ? this.canonicalProjectId(event.projectId) : undefined;
 		if (eventProjectId && eventProjectId !== this.storage.projectId)
-			throw new Error(
-				`Inquiry decision belongs to another project: ${event.projectId}`,
-			);
+			throw new Error(`Inquiry decision belongs to another project: ${event.projectId}`);
 		const record: DecisionRecord =
 			"schemaVersion" in event
 				? { ...event, projectId: this.storage.projectId }
@@ -385,26 +313,16 @@ export class InquiryEventProjector {
 		const snapshot = await this.storage.snapshot();
 		const related = snapshot.artifacts.filter((item) =>
 			record.basis.some(
-				(basis) =>
-					basis === `${item.source.kind}:${item.source.id}` ||
-					basis === `run:${item.runId}`,
+				(basis) => basis === `${item.source.kind}:${item.source.id}` || basis === `run:${item.runId}`,
 			),
 		);
 		await this.domain.recordDecision({
 			...record,
-			affectedArtifactIds: [
-				...new Set([
-					...record.affectedArtifactIds,
-					...related.map((item) => item.id),
-				]),
-			],
+			affectedArtifactIds: [...new Set([...record.affectedArtifactIds, ...related.map((item) => item.id)])],
 		});
 	}
 
-	private async associateReceipts(
-		basis: readonly string[],
-		artifactIds: readonly string[],
-	): Promise<void> {
+	private async associateReceipts(basis: readonly string[], artifactIds: readonly string[]): Promise<void> {
 		if (!artifactIds.length) return;
 		for (const decision of await this.domain.listDecisions()) {
 			if (decision.basis.some((item) => basis.includes(item)))
@@ -413,10 +331,7 @@ export class InquiryEventProjector {
 	}
 
 	private assertProject(projectId: string | undefined): void {
-		if (
-			projectId &&
-			this.canonicalProjectId(projectId) !== this.storage.projectId
-		)
+		if (projectId && this.canonicalProjectId(projectId) !== this.storage.projectId)
 			throw new Error(`Inquiry event belongs to another project: ${projectId}`);
 	}
 

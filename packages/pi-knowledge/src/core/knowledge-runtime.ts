@@ -1,21 +1,21 @@
 import type { KnowledgeExtensionHost } from "@gyoungwe/plugin-api/knowledge";
 import type { KnowledgeConfigApi } from "./config.js";
-import type { KnowledgeRuntimeHost } from "./runtime-host.js";
-import { createKnowledgeUi } from "./ui-state.js";
-import { createSemanticSettingsApi } from "./semantic-settings.js";
+import { createKnowledgeOwnerLifecycle } from "./owner-lifecycle.js";
 import { createKnowledgeReviewPolicy } from "./review-policy.js";
+import type { KnowledgeRuntimeHost } from "./runtime-host.js";
+import { createSemanticSettingsApi } from "./semantic-settings.js";
 import { createKnowledgeServicePool } from "./service.js";
-import { createKnowledgeWorkerTransportFactory } from "./worker-transport.js";
+import { createSpecialistDelivery } from "./specialist-delivery.js";
 import { createKnowledgeSpecialistHost } from "./specialist-host.js";
 import { createKnowledgeSpecialistTools } from "./specialists.js";
+import { createTopicMemoryApi } from "./topic-memory.js";
+import { createKnowledgeUi } from "./ui-state.js";
 import { createKnowledgeModelReview } from "./wiki-model-review.js";
 import { createKnowledgeWikiReview } from "./wiki-review.js";
 import { createLocalWikiReviewPorts } from "./wiki-review-node.js";
-import { createTopicMemoryApi } from "./topic-memory.js";
-import { createSpecialistDelivery } from "./specialist-delivery.js";
+import { createKnowledgeWorkerTransportFactory } from "./worker-transport.js";
 import { acquireKnowledgeWriterLease } from "./writer-lease.js";
 import { createKnowledgeWriterLeaseGroup } from "./writer-lease-group.js";
-import { createKnowledgeOwnerLifecycle } from "./owner-lifecycle.js";
 
 /** Plugin-owned application resources. Publication identities live in session adapters. */
 export function createKnowledgeRuntime(

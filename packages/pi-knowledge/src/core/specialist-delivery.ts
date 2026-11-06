@@ -2,8 +2,8 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { type KnowledgeConfigApi, withKnowledgeBinding } from "./config.js";
 import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
-import { withKnowledgeBinding, type KnowledgeConfigApi } from "./config.js";
 
 const contained = (root, path) => {
 	const rel = relative(root, path);
@@ -70,7 +70,6 @@ export function createSpecialistDelivery(
 
 // pi-knowledge 0.2 compatibility. Remove once every native/Desktop consumer uses
 // the same explicitly composed 0.3 runtime owner instead of module facades.
-export const { saveSpecialistExplainer } = createSpecialistDelivery(
-	compatibilityKnowledgeRuntimeHost,
-	{ withKnowledgeBinding },
-);
+export const { saveSpecialistExplainer } = createSpecialistDelivery(compatibilityKnowledgeRuntimeHost, {
+	withKnowledgeBinding,
+});

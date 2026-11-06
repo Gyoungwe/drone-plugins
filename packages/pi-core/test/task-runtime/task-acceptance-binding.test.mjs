@@ -1,12 +1,9 @@
-import { it } from "./scoped-test.mjs";
-import {
-	effectiveAcceptance,
-	registerAcceptanceVerifier,
-} from "../../src/task-runtime/acceptance.mjs";
+import { expect, vi } from "vitest";
+import { effectiveAcceptance, registerAcceptanceVerifier } from "../../src/task-runtime/acceptance.mjs";
 import { createTaskAuthorization } from "../../src/task-runtime/ask-authorization.mjs";
 import { remainingExplanation } from "../../src/task-runtime/remaining.mjs";
-import { expect, vi } from "vitest";
 import { createTaskWorkbench } from "./fixture.mjs";
+import { it } from "./scoped-test.mjs";
 
 vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 });
 
@@ -275,7 +272,12 @@ it("a host that keeps the authorization renders a rebind through amendAllowance;
 		},
 	};
 	const ask = createTaskAuthorization(j, async () => null, ui);
-	const request = () => ({ taskId: j.snapshot().id, revision: j.view().revision, action: "ask-authorization", actionId: action.id });
+	const request = () => ({
+		taskId: j.snapshot().id,
+		revision: j.view().revision,
+		action: "ask-authorization",
+		actionId: action.id,
+	});
 	expect(await ask(request(), {})).toBe(false);
 	expect(j.snapshot().milestones[0].bound).toBeUndefined();
 	answer = true;

@@ -2,12 +2,7 @@ import { Type } from "typebox";
 
 const text = Type.String({ minLength: 1, maxLength: 4096 });
 const timestamp = Type.Union([Type.Number(), text]);
-const scalar = Type.Union([
-	Type.String({ maxLength: 8192 }),
-	Type.Number(),
-	Type.Boolean(),
-	Type.Null(),
-]);
+const scalar = Type.Union([Type.String({ maxLength: 8192 }), Type.Number(), Type.Boolean(), Type.Null()]);
 const parameters = Type.Record(Type.String(), scalar);
 const provenance = Type.Object(
 	{
@@ -15,9 +10,7 @@ const provenance = Type.Object(
 		workflow: Type.Optional(text),
 		modules: Type.Optional(Type.Array(text, { maxItems: 128 })),
 		commandSummary: Type.Optional(text),
-		environment: Type.Optional(
-			Type.Record(Type.String(), Type.String({ maxLength: 8192 })),
-		),
+		environment: Type.Optional(Type.Record(Type.String(), Type.String({ maxLength: 8192 }))),
 	},
 	{ additionalProperties: false },
 );
@@ -28,35 +21,23 @@ const artifact = Type.Object(
 		bytes: Type.Optional(Type.Integer({ minimum: 0 })),
 		size: Type.Optional(Type.Integer({ minimum: 0 })),
 		sha256: Type.Optional(Type.String({ pattern: "^[a-fA-F0-9]{64}$" })),
-		location: Type.Optional(
-			Type.Union([Type.Literal("local"), Type.Literal("remote")]),
-		),
+		location: Type.Optional(Type.Union([Type.Literal("local"), Type.Literal("remote")])),
 		purpose: Type.Optional(
 			Type.Union(
-				["input", "draft", "intermediate", "deliverable", "evidence"].map(
-					(value) => Type.Literal(value),
-				),
+				["input", "draft", "intermediate", "deliverable", "evidence"].map((value) => Type.Literal(value)),
 			),
 		),
 		status: Type.Optional(
 			Type.Union(
-				[
-					"valid",
-					"superseded",
-					"cleanup-candidate",
-					"archived",
-					"pending-review",
-				].map((value) => Type.Literal(value)),
+				["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].map((value) =>
+					Type.Literal(value),
+				),
 			),
 		),
 		parentIds: Type.Optional(Type.Array(text, { maxItems: 256 })),
 		runId: Type.Optional(text),
 		sourceKind: Type.Optional(
-			Type.Union(
-				["task", "run", "input", "tool", "workflow", "manual"].map((value) =>
-					Type.Literal(value),
-				),
-			),
+			Type.Union(["task", "run", "input", "tool", "workflow", "manual"].map((value) => Type.Literal(value))),
 		),
 		sourceId: Type.Optional(text),
 	},
@@ -78,15 +59,9 @@ const compute = Type.Object(
 		...common,
 		jobId: text,
 		type: Type.Union(
-			[
-				"created",
-				"submitted",
-				"status",
-				"logs",
-				"collected",
-				"cancelled",
-				"error",
-			].map((value) => Type.Literal(value)),
+			["created", "submitted", "status", "logs", "collected", "cancelled", "error"].map((value) =>
+				Type.Literal(value),
+			),
 		),
 		at: timestamp,
 		status: Type.Optional(text),
@@ -96,10 +71,7 @@ const compute = Type.Object(
 		startedAt: Type.Optional(timestamp),
 		hostId: Type.Optional(text),
 		manifest: Type.Optional(
-			Type.Object(
-				{ entries: Type.Optional(artifacts) },
-				{ additionalProperties: false },
-			),
+			Type.Object({ entries: Type.Optional(artifacts) }, { additionalProperties: false }),
 		),
 	},
 	{ additionalProperties: false },
@@ -110,18 +82,15 @@ const task = Type.Object(
 		taskId: text,
 		runId: Type.Optional(text),
 		status: Type.Union(
-			["succeeded", "failed", "cancelled", "blocked", "partial", "unknown"].map(
-				(value) => Type.Literal(value),
+			["succeeded", "failed", "cancelled", "blocked", "partial", "unknown"].map((value) =>
+				Type.Literal(value),
 			),
 		),
 		at: Type.Optional(timestamp),
 		startedAt: Type.Optional(timestamp),
 		detail: Type.Optional(text),
 		manifest: Type.Optional(
-			Type.Object(
-				{ entries: Type.Optional(artifacts) },
-				{ additionalProperties: false },
-			),
+			Type.Object({ entries: Type.Optional(artifacts) }, { additionalProperties: false }),
 		),
 	},
 	{ additionalProperties: false },
@@ -136,9 +105,7 @@ const local = Type.Object(
 		parameters,
 		runProvenance: provenance,
 		outcome: Type.Union(
-			["running", "succeeded", "failed", "blocked", "unknown"].map((value) =>
-				Type.Literal(value),
-			),
+			["running", "succeeded", "failed", "blocked", "unknown"].map((value) => Type.Literal(value)),
 		),
 	},
 	{ additionalProperties: false },
@@ -149,10 +116,7 @@ export const assertedEventWriteSchema = Type.Union([
 		{ action: Type.Literal("recordComputeEvent"), event: compute },
 		{ additionalProperties: false },
 	),
-	Type.Object(
-		{ action: Type.Literal("recordTaskTerminal"), event: task },
-		{ additionalProperties: false },
-	),
+	Type.Object({ action: Type.Literal("recordTaskTerminal"), event: task }, { additionalProperties: false }),
 	Type.Object(
 		{ action: Type.Literal("recordLocalExecution"), event: local },
 		{ additionalProperties: false },

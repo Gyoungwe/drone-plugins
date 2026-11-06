@@ -2,9 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import { access, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
-import { createEvidenceGate } from "./evidence-gate.js";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { WorkerMessageHandler } from "pdfjs-dist/legacy/build/pdf.worker.mjs";
+import { createEvidenceGate } from "./evidence-gate.js";
 
 // pdf.js disables worker threads in Node. Register its bundled handler so the
 // published extension can read PDFs without relying on a host checkout's worker file.

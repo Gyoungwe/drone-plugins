@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { contactEmail, normalizePmcid, pmcCloudHttps, resolveOpenAccess } from "../../src/core/open-access.js";
+import {
+	contactEmail,
+	normalizePmcid,
+	pmcCloudHttps,
+	resolveOpenAccess,
+} from "../../src/core/open-access.js";
 
 const DOI = "10.1111/imb.12628";
 const PMCID = "PMC7079136";

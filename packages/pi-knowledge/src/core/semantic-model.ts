@@ -85,7 +85,10 @@ export function contentCategory(node: Pick<SemanticNodeInput, "path" | "kind" | 
 	return "other";
 }
 
-function isMainNode(node: Pick<SemanticNodeInput, "path" | "title" | "contentType">, category: string): boolean {
+function isMainNode(
+	node: Pick<SemanticNodeInput, "path" | "title" | "contentType">,
+	category: string,
+): boolean {
 	if (MAIN_TYPES.has(category)) return true;
 	return /(?:^|\/)(?:Questions?|Research[-_ ]?Questions?)\/|(?:研究问题|研究主题|research question)/i.test(
 		`${node.path} ${node.title}`,
@@ -113,7 +116,11 @@ function sectorLayout(
 	nodes: Map<string, SemanticNodeInput>,
 	relations: SemanticRelation[],
 	seed: number,
-): { layout: Record<string, { x: number; y: number }>; mains: Set<string>; sharedWith: Map<string, string[]> } {
+): {
+	layout: Record<string, { x: number; y: number }>;
+	mains: Set<string>;
+	sharedWith: Map<string, string[]>;
+} {
 	const paths = [...nodes.keys()].sort(comparePath);
 	const adjacency = new Map<string, Set<string>>(paths.map((path) => [path, new Set()]));
 	for (const relation of relations) {
@@ -121,8 +128,12 @@ function sectorLayout(
 		adjacency.get(relation.source)?.add(relation.target);
 		adjacency.get(relation.target)?.add(relation.source);
 	}
-	const categories = new Map(paths.map((path) => [path, contentCategory(nodes.get(path) as SemanticNodeInput)]));
-	const mains = new Set(paths.filter((path) => isMainNode(nodes.get(path) as SemanticNodeInput, categories.get(path) ?? "other")));
+	const categories = new Map(
+		paths.map((path) => [path, contentCategory(nodes.get(path) as SemanticNodeInput)]),
+	);
+	const mains = new Set(
+		paths.filter((path) => isMainNode(nodes.get(path) as SemanticNodeInput, categories.get(path) ?? "other")),
+	);
 	if (!mains.size) {
 		paths
 			.slice()
@@ -135,7 +146,9 @@ function sectorLayout(
 	const sharedWith = new Map<string, string[]>();
 	for (const path of paths) {
 		if (mains.has(path)) continue;
-		const connected = [...(adjacency.get(path) ?? [])].filter((candidate) => mains.has(candidate)).sort(comparePath);
+		const connected = [...(adjacency.get(path) ?? [])]
+			.filter((candidate) => mains.has(candidate))
+			.sort(comparePath);
 		if (connected.length > 1) sharedWith.set(path, connected);
 	}
 	const mainPaths = [...mains].sort(comparePath);
@@ -180,11 +193,17 @@ function sectorLayout(
 		const bridges = sharedWith.get(path);
 		if (bridges?.length) {
 			const average = bridges.reduce(
-				(point, main) => ({ x: point.x + (centers.get(main)?.x ?? WIDTH / 2), y: point.y + (centers.get(main)?.y ?? centerY) }),
+				(point, main) => ({
+					x: point.x + (centers.get(main)?.x ?? WIDTH / 2),
+					y: point.y + (centers.get(main)?.y ?? centerY),
+				}),
 				{ x: 0, y: 0 },
 			);
 			const jitter = (hash(`${path}:bridge`, seed) - 0.5) * 30;
-			layout[path] = clampPoint({ x: average.x / bridges.length, y: average.y / bridges.length - 36 + jitter });
+			layout[path] = clampPoint({
+				x: average.x / bridges.length,
+				y: average.y / bridges.length - 36 + jitter,
+			});
 			continue;
 		}
 		const connectedMain = [...(adjacency.get(path) ?? [])].find((candidate) => mains.has(candidate));
@@ -214,7 +233,9 @@ export function isInfrastructureNode(node: Pick<SemanticNodeInput, "path" | "kin
 	return node.kind === "navigation" || INFRASTRUCTURE.test(node.path);
 }
 
-export function nodeType(node: Pick<SemanticNodeInput, "path" | "kind"> & { contentType?: string | null }): SemanticNode["nodeType"] {
+export function nodeType(
+	node: Pick<SemanticNodeInput, "path" | "kind"> & { contentType?: string | null },
+): SemanticNode["nodeType"] {
 	if (isInfrastructureNode(node)) return "infrastructure";
 	if (contentCategory(node) === "memory") return "memory";
 	if (node.kind === "wiki") return "wiki";
@@ -235,10 +256,16 @@ export function classifyRelation(
 
 function normalizeIdentity(value: string | null | undefined): string | null {
 	if (!value) return null;
-	const normalized = value.trim().toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
-	if (/^doi:\s*/.test(normalized) || /^10\.\d{4,9}\//.test(normalized)) return `doi:${normalized.replace(/^doi:\s*/, "")}`;
-	if (/^pmid:\s*\d+$/.test(normalized) || /^\d{1,9}$/.test(normalized)) return `pmid:${normalized.replace(/^pmid:\s*/, "")}`;
-	if (/^arxiv:\s*/.test(normalized) || /^\d{4}\.\d{4,5}(?:v\d+)?$/.test(normalized)) return `arxiv:${normalized.replace(/^arxiv:\s*/, "")}`;
+	const normalized = value
+		.trim()
+		.toLowerCase()
+		.replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
+	if (/^doi:\s*/.test(normalized) || /^10\.\d{4,9}\//.test(normalized))
+		return `doi:${normalized.replace(/^doi:\s*/, "")}`;
+	if (/^pmid:\s*\d+$/.test(normalized) || /^\d{1,9}$/.test(normalized))
+		return `pmid:${normalized.replace(/^pmid:\s*/, "")}`;
+	if (/^arxiv:\s*/.test(normalized) || /^\d{4}\.\d{4,5}(?:v\d+)?$/.test(normalized))
+		return `arxiv:${normalized.replace(/^arxiv:\s*/, "")}`;
 	return normalized || null;
 }
 
@@ -263,7 +290,11 @@ function hash(value: string, seed = 42): number {
 
 /** A deterministic local-moving modularity pass. It is intentionally small,
  * dependency-free, and uses sorted keys for stable results across input order. */
-export function assignCommunities(paths: string[], edges: SemanticRelation[], seed = 42): Record<string, number> {
+export function assignCommunities(
+	paths: string[],
+	edges: SemanticRelation[],
+	seed = 42,
+): Record<string, number> {
 	const ordered = [...new Set(paths)].sort(comparePath);
 	const adjacency = new Map<string, Set<string>>(ordered.map((path) => [path, new Set()]));
 	for (const edge of edges) {
@@ -282,10 +313,15 @@ export function assignCommunities(paths: string[], edges: SemanticRelation[], se
 			const scores = new Map<number, number>();
 			for (const neighbour of neighbours) {
 				const label = labels.get(neighbour) ?? 0;
-				scores.set(label, (scores.get(label) ?? 0) + 1 - (degree.get(path) ?? 0) * (degree.get(neighbour) ?? 0) / total);
+				scores.set(
+					label,
+					(scores.get(label) ?? 0) + 1 - ((degree.get(path) ?? 0) * (degree.get(neighbour) ?? 0)) / total,
+				);
 			}
 			const current = labels.get(path) ?? 0;
-			const best = [...scores.entries()].sort((a, b) => b[1] - a[1] || hash(`${path}:${a[0]}`, seed) - hash(`${path}:${b[0]}`, seed) || a[0] - b[0])[0];
+			const best = [...scores.entries()].sort(
+				(a, b) => b[1] - a[1] || hash(`${path}:${a[0]}`, seed) - hash(`${path}:${b[0]}`, seed) || a[0] - b[0],
+			)[0];
 			if (best && best[1] > 0 && best[0] !== current) {
 				labels.set(path, best[0]);
 				changed = true;
@@ -295,8 +331,12 @@ export function assignCommunities(paths: string[], edges: SemanticRelation[], se
 	}
 	const counts = new Map<number, number>();
 	for (const label of labels.values()) counts.set(label, (counts.get(label) ?? 0) + 1);
-	const rank = new Map([...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([label], index) => [label, index]));
-	return Object.fromEntries(ordered.map((path) => [path, (degree.get(path) ?? 0) ? (rank.get(labels.get(path) ?? -1) ?? -1) : -1]));
+	const rank = new Map(
+		[...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([label], index) => [label, index]),
+	);
+	return Object.fromEntries(
+		ordered.map((path) => [path, (degree.get(path) ?? 0) ? (rank.get(labels.get(path) ?? -1) ?? -1) : -1]),
+	);
 }
 
 export function createSemanticModel(
@@ -371,7 +411,8 @@ export function createSemanticModel(
 			}
 		}
 	}
-	for (const duplicate of duplicates) addRelation({ source: duplicate.canonical, target: duplicate.duplicate, type: "duplicate" });
+	for (const duplicate of duplicates)
+		addRelation({ source: duplicate.canonical, target: duplicate.duplicate, type: "duplicate" });
 	const communities = assignCommunities([...modelNodes.keys()], relations, seed);
 	const { layout, mains, sharedWith } = sectorLayout(modelNodes, relations, seed);
 	const linkRelations = relations.filter((edge) => edge.type === "link");
@@ -388,24 +429,33 @@ export function createSemanticModel(
 		mirrorsByCanonical.set(canonical, mirrors);
 	}
 	for (const mirrors of mirrorsByCanonical.values()) mirrors.sort(comparePath);
-	const nodes = [...modelNodes.entries()].sort(([a], [b]) => comparePath(a, b)).map(([path, node]) => {
-		const mirrorPaths = mirrorsByCanonical.get(path) ?? [];
-		const type = nodeType(node);
-		const category = contentCategory(node);
-		return {
-			path,
-			title: node.title,
-			kind: node.kind,
-			degree: degree.get(path) ?? 0,
-			nodeType: mirrorPaths.length ? "mirror" : type,
-			isInfrastructure: type === "infrastructure",
-			community: communities[path] ?? -1,
-			contentType: category,
-			isMain: mains.has(path),
-			...(sharedWith.has(path) ? { sharedWith: sharedWith.get(path) } : {}),
-			...(layout[path] ?? { x: WIDTH / 2, y: HEIGHT / 2 }),
-			...(mirrorPaths.length ? { mirrors: mirrorPaths, warnings: ["mirror"] } : {}),
-		};
-	});
-	return { nodes, edges: linkRelations.map(({ source, target }) => ({ source, target })), relations, duplicates, communities, layout };
+	const nodes = [...modelNodes.entries()]
+		.sort(([a], [b]) => comparePath(a, b))
+		.map(([path, node]) => {
+			const mirrorPaths = mirrorsByCanonical.get(path) ?? [];
+			const type = nodeType(node);
+			const category = contentCategory(node);
+			return {
+				path,
+				title: node.title,
+				kind: node.kind,
+				degree: degree.get(path) ?? 0,
+				nodeType: mirrorPaths.length ? "mirror" : type,
+				isInfrastructure: type === "infrastructure",
+				community: communities[path] ?? -1,
+				contentType: category,
+				isMain: mains.has(path),
+				...(sharedWith.has(path) ? { sharedWith: sharedWith.get(path) } : {}),
+				...(layout[path] ?? { x: WIDTH / 2, y: HEIGHT / 2 }),
+				...(mirrorPaths.length ? { mirrors: mirrorPaths, warnings: ["mirror"] } : {}),
+			};
+		});
+	return {
+		nodes,
+		edges: linkRelations.map(({ source, target }) => ({ source, target })),
+		relations,
+		duplicates,
+		communities,
+		layout,
+	};
 }

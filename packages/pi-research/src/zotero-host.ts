@@ -49,7 +49,10 @@ export interface ZoteroHostLoader {
 }
 
 /** Build a read-only Zotero identity adapter over a host-owned transport. */
-export function createZoteroHost(port: ZoteroHostPort, context: ZoteroReconcileContext = {}): ZoteroHostAdapter {
+export function createZoteroHost(
+	port: ZoteroHostPort,
+	context: ZoteroReconcileContext = {},
+): ZoteroHostAdapter {
 	return {
 		contractVersion: 1,
 		operations: {

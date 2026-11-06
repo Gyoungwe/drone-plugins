@@ -56,9 +56,9 @@ it("progress means accepted deliverables, not 191/192 spent calls", () => {
 	expect(html).toContain("继续做剩下的");
 });
 it("no milestones does not invent a percentage", () =>
-	expect(
-		render({ ...task, milestones: [], remainingSummary: undefined }),
-	).not.toContain('role="progressbar"'));
+	expect(render({ ...task, milestones: [], remainingSummary: undefined })).not.toContain(
+		'role="progressbar"',
+	));
 it("completed deliverables show full progress and no reopening button", () => {
 	const html = render({
 		...task,

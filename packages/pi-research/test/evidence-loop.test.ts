@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { citationUri, pageRange, registerEvidenceLoop } from "../src/evidence-loop.js";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { citationUri, pageRange, registerEvidenceLoop } from "../src/evidence-loop.js";
 
 describe("PDF page citation markers", () => {
 	it("returns separate native source ranges without claiming their unread gap", async () => {

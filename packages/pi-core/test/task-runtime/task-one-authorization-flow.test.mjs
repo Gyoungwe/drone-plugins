@@ -1,11 +1,11 @@
-import { it } from "./scoped-test.mjs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { shouldAskToContinue } from "../../src/task-runtime/turn-end-prompt.mjs";
-import { remainingExplanation } from "../../src/task-runtime/remaining.mjs";
 import { afterEach, expect, vi } from "vitest";
+import { remainingExplanation } from "../../src/task-runtime/remaining.mjs";
+import { shouldAskToContinue } from "../../src/task-runtime/turn-end-prompt.mjs";
 import { createTaskWorkbench, LIMITS, WORKBENCH_ENTRY } from "./fixture.mjs";
+import { it } from "./scoped-test.mjs";
 
 /**
  * 一次授权闭环的宿主机制：授权后模型中途收口 → 自动接续（有进展才续、有上限）；

@@ -10,32 +10,19 @@ export function MilestoneEvidence({
 	sessionId: string | null;
 }) {
 	const cwd = useSessionsStore(
-		(state) =>
-			state.sessions.find((session) => session.sessionId === sessionId)?.cwd,
+		(state) => state.sessions.find((session) => session.sessionId === sessionId)?.cwd,
 	);
-	if (
-		milestone.acceptance.kind === "file" ||
-		milestone.acceptance.kind === "human_review"
-	)
-		return null;
+	if (milestone.acceptance.kind === "file" || milestone.acceptance.kind === "human_review") return null;
 	const { acceptance, evidence } = milestone;
-	const state =
-		milestone.state === "completed" ? "found" : evidence?.state || "pending";
+	const state = milestone.state === "completed" ? "found" : evidence?.state || "pending";
 	const fields = Object.entries(acceptance).filter(
-		([key, value]) =>
-			!["kind", "path", "sha256"].includes(key) &&
-			typeof value === "string" &&
-			value,
+		([key, value]) => !["kind", "path", "sha256"].includes(key) && typeof value === "string" && value,
 	);
 	return (
 		<div className="ml-5 mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-dim">
 			<span>{evidence?.summary || state}</span>
-			{evidence?.note && (
-				<span className="text-ink-faint">{evidence.note}</span>
-			)}
-			{state !== "found" && evidence?.reason && !evidence.summary && (
-				<span>{evidence.reason}</span>
-			)}
+			{evidence?.note && <span className="text-ink-faint">{evidence.note}</span>}
+			{state !== "found" && evidence?.reason && !evidence.summary && <span>{evidence.reason}</span>}
 			{fields.map(([key, value]) => (
 				<code key={key} className="break-all text-ink-faint" title={key}>
 					{value}

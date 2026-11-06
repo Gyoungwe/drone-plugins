@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-
 import { isZoteroLocalWriteStatus, localWriteStateKey } from "./ZoteroLocalWriteSection";
 
 const base = {

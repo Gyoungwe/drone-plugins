@@ -15,7 +15,18 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
-const packageNames = ["pi-core", "pi-workbench", "pi-discovery", "pi-knowledge", "pi-research", "pi-analysis", "pi-evidence", "pi-connectors", "desktop-ui-pack", "research-suite"];
+const packageNames = [
+	"pi-core",
+	"pi-workbench",
+	"pi-discovery",
+	"pi-knowledge",
+	"pi-research",
+	"pi-analysis",
+	"pi-evidence",
+	"pi-connectors",
+	"desktop-ui-pack",
+	"research-suite",
+];
 const smokeRoot = await mkdtemp(join(tmpdir(), "drone-plugin-install-smoke-"));
 const tarballRoot = join(smokeRoot, "tarballs");
 const installRoot = join(smokeRoot, "install");
@@ -23,15 +34,20 @@ const candidateApi = await candidatePluginApi();
 await mkdir(tarballRoot, { recursive: true });
 await mkdir(installRoot, { recursive: true });
 
-const packageJsonFor = async (name) => JSON.parse(await readFile(join(root, "packages", name, "package.json"), "utf8"));
+const packageJsonFor = async (name) =>
+	JSON.parse(await readFile(join(root, "packages", name, "package.json"), "utf8"));
 const tarballs = {};
 try {
 	for (const name of packageNames) {
 		const packageJson = await packageJsonFor(name);
-		const output = await execFileAsync("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", tarballRoot], {
-			cwd: join(root, "packages", name),
-			maxBuffer: 8 * 1024 * 1024,
-		});
+		const output = await execFileAsync(
+			"npm",
+			["pack", "--json", "--ignore-scripts", "--pack-destination", tarballRoot],
+			{
+				cwd: join(root, "packages", name),
+				maxBuffer: 8 * 1024 * 1024,
+			},
+		);
 		const metadata = JSON.parse(output.stdout.trim())[0];
 		assert(metadata?.filename?.endsWith(".tgz"), `${name} did not produce an npm tarball`);
 		tarballs[name] = { packageJson, path: join(tarballRoot, metadata.filename) };
@@ -86,12 +102,27 @@ try {
 		"research-suite tarball contains a duplicate pi-knowledge research-workflow skill",
 	);
 
-	const knowledgeUi = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/pi-knowledge/ui/plugin.json"), "utf8"));
-	const desktopUi = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/desktop-ui-pack/ui/plugin.json"), "utf8"));
+	const knowledgeUi = JSON.parse(
+		await readFile(join(installRoot, "node_modules/@gyoungwe/pi-knowledge/ui/plugin.json"), "utf8"),
+	);
+	const desktopUi = JSON.parse(
+		await readFile(join(installRoot, "node_modules/@gyoungwe/desktop-ui-pack/ui/plugin.json"), "utf8"),
+	);
 	assert.notEqual(knowledgeUi.name, desktopUi.name);
-	assert.deepEqual(knowledgeUi.contributions.map(entry => entry.region), ["knowledge.page", "knowledge.surface"]);
-	assert.deepEqual(desktopUi.contributions.map(entry => entry.region), ["panel.tab"]);
-	assert(!desktopUi.contributions.some(entry => knowledgeUi.contributions.some(knowledge => knowledge.id === entry.id)), "installed candidates duplicate knowledge contributions");
+	assert.deepEqual(
+		knowledgeUi.contributions.map((entry) => entry.region),
+		["knowledge.page", "knowledge.surface"],
+	);
+	assert.deepEqual(
+		desktopUi.contributions.map((entry) => entry.region),
+		["panel.tab"],
+	);
+	assert(
+		!desktopUi.contributions.some((entry) =>
+			knowledgeUi.contributions.some((knowledge) => knowledge.id === entry.id),
+		),
+		"installed candidates duplicate knowledge contributions",
+	);
 
 	const piAnalysisRoot = join(installRoot, "node_modules", "@gyoungwe", "pi-analysis");
 	const piAnalysisPackage = JSON.parse(await readFile(join(piAnalysisRoot, "package.json"), "utf8"));
@@ -102,7 +133,9 @@ try {
 		"pi-analysis",
 		piAnalysisPackage.pi.extensions[0],
 	);
-	const { createEventBus, DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+	const { createEventBus, DefaultResourceLoader, SettingsManager } = await import(
+		"@earendil-works/pi-coding-agent"
+	);
 	const loader = new DefaultResourceLoader({
 		cwd: installRoot,
 		agentDir: join(installRoot, "agent"),
@@ -116,7 +149,10 @@ try {
 	assert.deepEqual(loaded.errors, [], JSON.stringify(loaded.errors));
 	const piAnalysis = loaded.extensions.find((item) => item.path === piAnalysisExtensionPath);
 	assert(piAnalysis, "installed pi-analysis extension was not discovered by Pi loader");
-	assert.deepEqual([...piAnalysis.tools.keys()], ["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"]);
+	assert.deepEqual(
+		[...piAnalysis.tools.keys()],
+		["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"],
+	);
 
 	async function discoverInstalled(name, expectedTools) {
 		const packageRoot = join(installRoot, "node_modules", "@gyoungwe", name);
@@ -167,8 +203,12 @@ try {
 	await suiteLoader.reload();
 	const suiteLoaded = suiteLoader.getExtensions();
 	assert.deepEqual(suiteLoaded.errors, [], JSON.stringify(suiteLoaded.errors));
-	const suiteCore = suiteLoaded.extensions.find((item) => item.path.endsWith("@gyoungwe/pi-core/dist/index.mjs"));
-	const suiteKnowledge = suiteLoaded.extensions.find((item) => item.path.endsWith("@gyoungwe/pi-knowledge/dist/index.mjs"));
+	const suiteCore = suiteLoaded.extensions.find((item) =>
+		item.path.endsWith("@gyoungwe/pi-core/dist/index.mjs"),
+	);
+	const suiteKnowledge = suiteLoaded.extensions.find((item) =>
+		item.path.endsWith("@gyoungwe/pi-knowledge/dist/index.mjs"),
+	);
 	assert(suiteCore, "research-suite did not load bundled pi-core");
 	assert(suiteKnowledge, "research-suite did not load bundled pi-knowledge");
 	assert(suiteCore.tools.has("task_plan"), "bundled pi-core did not register task_plan");
@@ -201,13 +241,12 @@ try {
 	assert(tools.has("knowledge_status"), "installed pi-knowledge did not register knowledge_status");
 	assert(tools.has("knowledge_search"), "installed pi-knowledge did not register knowledge_search");
 	try {
-		const status = await tools.get("knowledge_status").execute(
-			"combined:status",
-			{},
-			new AbortController().signal,
-			() => undefined,
-			{ cwd: installRoot, sessionId: "combined-install-smoke" },
-		);
+		const status = await tools
+			.get("knowledge_status")
+			.execute("combined:status", {}, new AbortController().signal, () => undefined, {
+				cwd: installRoot,
+				sessionId: "combined-install-smoke",
+			});
 		assert.equal(status.details.status, "unconfigured");
 		console.log(
 			JSON.stringify({

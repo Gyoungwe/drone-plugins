@@ -53,7 +53,9 @@ export function normalizeDoi(input: unknown): string | null {
 export function normalizePmid(input: unknown): string | null {
 	let text = clean(input, 256);
 	if (!text) return null;
-	const url = text.match(/^https?:\/\/(?:www\.)?(?:pubmed\.ncbi\.nlm\.nih\.gov|ncbi\.nlm\.nih\.gov\/pubmed)\/(\d+)\/?$/i);
+	const url = text.match(
+		/^https?:\/\/(?:www\.)?(?:pubmed\.ncbi\.nlm\.nih\.gov|ncbi\.nlm\.nih\.gov\/pubmed)\/(\d+)\/?$/i,
+	);
 	if (url) text = url[1] ?? "";
 	text = text.replace(/^pmid\s*:?\s*/i, "");
 	if (!/^\d{1,9}$/.test(text)) return null;
@@ -65,7 +67,9 @@ export function normalizePmid(input: unknown): string | null {
 export function normalizePmcid(input: unknown): string | null {
 	let text = clean(input, 256);
 	if (!text) return null;
-	const url = text.match(/\/pmc\/articles\/(PMC\d+)\/?/i) ?? text.match(/^https?:\/\/pmc\.ncbi\.nlm\.nih\.gov\/articles\/(PMC\d+)\/?$/i);
+	const url =
+		text.match(/\/pmc\/articles\/(PMC\d+)\/?/i) ??
+		text.match(/^https?:\/\/pmc\.ncbi\.nlm\.nih\.gov\/articles\/(PMC\d+)\/?$/i);
 	if (url) text = url[1] ?? "";
 	text = text.replace(/^pmcid\s*:?\s*/i, "");
 	const match = text.match(/^(?:PMC)?(\d{1,10})$/i);
@@ -209,8 +213,10 @@ function pushUnique(list: string[], value: string | null): void {
 export function extractIdentifiers(text: unknown): ExtractedIdentifiers {
 	const body = typeof text === "string" ? text.slice(0, 2_000_000) : "";
 	const out: ExtractedIdentifiers = { doi: [], pmid: [], pmcid: [], arxiv: [], url: [] };
-	for (const match of body.matchAll(/\b10\.\d{4,9}\/[^\s"'<>()[\]{}]+/g)) pushUnique(out.doi, normalizeDoi(match[0]));
-	for (const match of body.matchAll(/\bPMID\s*:?\s*(\d{1,9})\b/gi)) pushUnique(out.pmid, normalizePmid(match[1]));
+	for (const match of body.matchAll(/\b10\.\d{4,9}\/[^\s"'<>()[\]{}]+/g))
+		pushUnique(out.doi, normalizeDoi(match[0]));
+	for (const match of body.matchAll(/\bPMID\s*:?\s*(\d{1,9})\b/gi))
+		pushUnique(out.pmid, normalizePmid(match[1]));
 	for (const match of body.matchAll(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d{1,9})/gi))
 		pushUnique(out.pmid, normalizePmid(match[1]));
 	for (const match of body.matchAll(/\bPMC\d{1,10}\b/gi)) pushUnique(out.pmcid, normalizePmcid(match[0]));

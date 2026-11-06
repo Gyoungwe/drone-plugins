@@ -1,6 +1,6 @@
-import { type AskRequest, type AskResponse } from "../contracts";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { type AskRequest, type AskResponse } from "../contracts";
 declare const paramsSchema: Type.TObject<{
     title: Type.TOptional<Type.TString>;
     kind: Type.TOptional<Type.TUnion<[Type.TLiteral<"clarification">, Type.TLiteral<"authorization">]>>;

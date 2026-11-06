@@ -3,7 +3,7 @@
  * 临时内容（ephemeral）。九条规则按顺序执行，第一条命中即生效；每条都只依赖可机器判定的信号。
  * 纯函数：不读写文件，调用方提供路径、来源与（可选）正文。规则说明见 docs/knowledge-ingest-standard.md。
  */
-import { extractIdentifiers } from "./ingest-identity.js";
+
 import {
 	classForType,
 	type IngestClass,
@@ -14,6 +14,7 @@ import {
 	type NoteType,
 	parseFrontmatter,
 } from "./ingest-frontmatter.js";
+import { extractIdentifiers } from "./ingest-identity.js";
 
 /** 运行结果的用途（与 inquiry `ArtifactPurpose` 对齐，另加日志、来源、摘要、卡片和展示层）。 */
 export type IngestPurpose =
@@ -259,12 +260,18 @@ function vaultFolderDecision(parts: string[]): IngestDecision | null {
 		return decision(2, { class: "knowledge", purpose: "navigation" }, ["Vault navigation page"]);
 	if (root === "Wiki") return decision(2, { class: "knowledge", type: "wiki" }, ["Vault folder Wiki/"]);
 	if (root === "Inbox")
-		return decision(2, { class: "knowledge", candidate: true }, ["Vault folder Inbox/ holds unreviewed input"]);
+		return decision(2, { class: "knowledge", candidate: true }, [
+			"Vault folder Inbox/ holds unreviewed input",
+		]);
 	if (root === "Library" && second && LIBRARY_FOLDERS[second]) {
 		const type = LIBRARY_FOLDERS[second] as NoteType;
 		return decision(
 			2,
-			{ class: classForType(type), type, ...(type === "explainer" ? { purpose: "presentation" as const } : {}) },
+			{
+				class: classForType(type),
+				type,
+				...(type === "explainer" ? { purpose: "presentation" as const } : {}),
+			},
 			[`Vault folder Library/${second}/`],
 		);
 	}
@@ -288,7 +295,8 @@ function bodyOf(text: string | undefined): string {
 
 function citesSources(body: string): boolean {
 	const ids = extractIdentifiers(body);
-	if (ids.doi.length || ids.pmid.length || ids.pmcid.length || ids.arxiv.length || ids.url.length) return true;
+	if (ids.doi.length || ids.pmid.length || ids.pmcid.length || ids.arxiv.length || ids.url.length)
+		return true;
 	return /\[\[(?:Library|Projects|Wiki)\/[^\]]+\]\]/.test(body);
 }
 
@@ -321,18 +329,24 @@ export function classifyIngest(input: IngestInput): IngestDecision {
 	// 1. 临时路径
 	const ephemeralDir = parts.slice(0, -1).find((part) => EPHEMERAL_DIRS.has(part.toLowerCase()));
 	if (ephemeralDir) return decision(1, { class: "ephemeral" }, [`inside ${ephemeralDir}/`]);
-	if (file && EPHEMERAL_FILE.test(file)) return decision(1, { class: "ephemeral" }, [`temporary file ${file}`]);
+	if (file && EPHEMERAL_FILE.test(file))
+		return decision(1, { class: "ephemeral" }, [`temporary file ${file}`]);
 
 	// 2. 显式声明
 	const frontmatter = frontmatterOf(input);
 	if (frontmatter) {
 		const declared = frontmatter.class;
 		const type = String(frontmatter.type ?? "").toLowerCase();
-		if (declared === "ephemeral") return decision(2, { class: "ephemeral" }, ["frontmatter class: ephemeral"]);
+		if (declared === "ephemeral")
+			return decision(2, { class: "ephemeral" }, ["frontmatter class: ephemeral"]);
 		if (declared === "knowledge" || declared === "run-result")
 			return decision(
 				2,
-				{ class: declared, type: isNoteType(type) ? type : null, candidate: frontmatter.status === "candidate" },
+				{
+					class: declared,
+					type: isNoteType(type) ? type : null,
+					candidate: frontmatter.status === "candidate",
+				},
 				[`frontmatter class: ${declared}`],
 			);
 		if (isNoteType(type))
@@ -350,16 +364,20 @@ export function classifyIngest(input: IngestInput): IngestDecision {
 	if (tool && KNOWLEDGE_TOOLS[tool]) {
 		const mapped = KNOWLEDGE_TOOLS[tool];
 		const type = mapped === "from-type" ? String(input.origin?.type ?? "").toLowerCase() : mapped;
-		if (isKnowledgeType(type)) return decision(3, { class: "knowledge", type }, [`written by ${tool} (${type})`]);
+		if (isKnowledgeType(type))
+			return decision(3, { class: "knowledge", type }, [`written by ${tool} (${type})`]);
 	}
 	if (tool && RUN_RESULT_TOOLS[tool]) {
 		const mapped = RUN_RESULT_TOOLS[tool];
-		return decision(3, { class: "run-result", type: mapped.type, purpose: mapped.purpose }, [`written by ${tool}`]);
+		return decision(3, { class: "run-result", type: mapped.type, purpose: mapped.purpose }, [
+			`written by ${tool}`,
+		]);
 	}
 
 	// 4. 运行记录文件名
 	const inHistory = parts.slice(0, -1).some((part) => part.toLowerCase() === "summary-history");
-	if (inHistory) return decision(4, { class: "run-result", purpose: "summary" }, ["summary-history/ snapshot"]);
+	if (inHistory)
+		return decision(4, { class: "run-result", purpose: "summary" }, ["summary-history/ snapshot"]);
 	for (const [pattern, purpose] of RUN_RECORD_FILES)
 		if (pattern.test(file)) return decision(4, { class: "run-result", purpose }, [`run record file ${file}`]);
 
@@ -400,7 +418,8 @@ export function classifyIngest(input: IngestInput): IngestDecision {
 	}
 
 	// 9. 兜底
-	if (inRunDir) return decision(9, { class: "run-result", purpose: "intermediate" }, ["inside a run directory"]);
+	if (inRunDir)
+		return decision(9, { class: "run-result", purpose: "intermediate" }, ["inside a run directory"]);
 	return decision(9, { class: "ephemeral" }, ["no knowledge or run-result signal"]);
 }
 

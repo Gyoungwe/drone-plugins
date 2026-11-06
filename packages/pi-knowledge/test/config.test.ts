@@ -45,8 +45,18 @@ describe("knowledge binding", () => {
 		await mkdir(otherVault);
 		vi.stubEnv("DRONE_KNOWLEDGE_DIR", join(root, "unrelated-state"));
 		const [firstBinding, secondBinding] = await Promise.all([
-			first.saveKnowledgeBinding({ vault, profile: "hybrid", depositMode: "verified", subagentPolicy: "none" }),
-			second.saveKnowledgeBinding({ vault: otherVault, profile: "project", depositMode: "run-only", subagentPolicy: "none" }),
+			first.saveKnowledgeBinding({
+				vault,
+				profile: "hybrid",
+				depositMode: "verified",
+				subagentPolicy: "none",
+			}),
+			second.saveKnowledgeBinding({
+				vault: otherVault,
+				profile: "project",
+				depositMode: "run-only",
+				subagentPolicy: "none",
+			}),
 		]);
 		expect(first.knowledgeDirectory()).toBe(join(root, "app"));
 		expect(second.knowledgeDirectory()).toBe(join(root, "second-state"));
@@ -56,7 +66,9 @@ describe("knowledge binding", () => {
 		});
 		expect(await readKnowledgeBinding()).toBeNull();
 		expect(JSON.parse(await readFile(join(root, "app/binding.json"), "utf8"))).toEqual(firstBinding);
-		expect(JSON.parse(await readFile(join(root, "second-state/binding.json"), "utf8"))).toEqual(secondBinding);
+		expect(JSON.parse(await readFile(join(root, "second-state/binding.json"), "utf8"))).toEqual(
+			secondBinding,
+		);
 	});
 
 	it("derives stable identities and rejects an unconfigured relative directory", () => {

@@ -181,11 +181,11 @@ async function assertDirectory(path: string, create: boolean): Promise<void> {
 		if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("Semantic settings path is unsafe");
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        if (create) {
-         await mkdir(path, { recursive: true, mode: 0o700 });
-         const stat = await lstat(path);
-         if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("Semantic settings path is unsafe");
-        }
+		if (create) {
+			await mkdir(path, { recursive: true, mode: 0o700 });
+			const stat = await lstat(path);
+			if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("Semantic settings path is unsafe");
+		}
 	}
 	let ancestor = path;
 	for (let depth = 0; depth < 8 && ancestor !== dirname(ancestor); depth++) {
@@ -248,68 +248,99 @@ function defaultSettings(state: SemanticSettingsState, path: string): SemanticSe
 	return { version: 1, revision: 0, ...validateSemanticConfig({}), updatedAt };
 }
 
-export type SemanticSettingsDocument = {kind:"missing";version:null} | {kind:"value";value:unknown;version:string};
+export type SemanticSettingsDocument =
+	| { kind: "missing"; version: null }
+	| { kind: "value"; value: unknown; version: string };
 export interface SemanticSettingsStorage {
- read(vaultId:string):Promise<SemanticSettingsDocument>;
- write(vaultId:string,value:SemanticSettings,expectedVersion:string|null):Promise<void>;
+	read(vaultId: string): Promise<SemanticSettingsDocument>;
+	write(vaultId: string, value: SemanticSettings, expectedVersion: string | null): Promise<void>;
 }
 
 /** One normalization/revision algorithm for local CLI files and authorized Desktop JSON. */
-export function createStoredSemanticSettingsApi(storage:SemanticSettingsStorage,state:SemanticSettingsState=createSemanticSettingsState()):SemanticSettingsApi {
- function unpack(vaultId:string,document:SemanticSettingsDocument) {
-  if (document.kind === "missing") return defaultSettings(state,vaultId);
-  const value=document.value as Record<string,unknown>;
-  return normalize(value,value?.revision,value?.updatedAt);
- }
- return {
-  readSemanticSettings:async vaultId=>unpack(vaultId,await storage.read(vaultId)),
-  async saveSemanticSettings(vaultId,input,expectedRevision) {
-   const document=await storage.read(vaultId), current=unpack(vaultId,document);
-   if (!Number.isSafeInteger(expectedRevision) || expectedRevision !== current.revision) throw new Error("Semantic settings revision is stale");
-   const value=normalize({version:1,...input},current.revision+1);
-   await storage.write(vaultId,value,document.version);
-   const saved=unpack(vaultId,await storage.read(vaultId));
-   if (JSON.stringify(saved)!==JSON.stringify(value)) throw new Error("Semantic settings write readback did not match");
-   return saved;
-  },
- };
+export function createStoredSemanticSettingsApi(
+	storage: SemanticSettingsStorage,
+	state: SemanticSettingsState = createSemanticSettingsState(),
+): SemanticSettingsApi {
+	function unpack(vaultId: string, document: SemanticSettingsDocument) {
+		if (document.kind === "missing") return defaultSettings(state, vaultId);
+		const value = document.value as Record<string, unknown>;
+		return normalize(value, value?.revision, value?.updatedAt);
+	}
+	return {
+		readSemanticSettings: async (vaultId) => unpack(vaultId, await storage.read(vaultId)),
+		async saveSemanticSettings(vaultId, input, expectedRevision) {
+			const document = await storage.read(vaultId),
+				current = unpack(vaultId, document);
+			if (!Number.isSafeInteger(expectedRevision) || expectedRevision !== current.revision)
+				throw new Error("Semantic settings revision is stale");
+			const value = normalize({ version: 1, ...input }, current.revision + 1);
+			await storage.write(vaultId, value, document.version);
+			const saved = unpack(vaultId, await storage.read(vaultId));
+			if (JSON.stringify(saved) !== JSON.stringify(value))
+				throw new Error("Semantic settings write readback did not match");
+			return saved;
+		},
+	};
 }
 
-function localSemanticStorage(directory:()=>string|null):SemanticSettingsStorage {
- async function read(vaultId:string):Promise<SemanticSettingsDocument> {
-  const path=pathFor(vaultId,directory());
-  await assertDirectory(dirname(path),false);
-  await assertFile(path);
-  let raw:string;
-  try {raw=await readFile(path,"utf8");}
-  catch(error){if((error as NodeJS.ErrnoException).code==="ENOENT")return {kind:"missing",version:null};throw error;}
-  if(Buffer.byteLength(raw)>MAX_FILE_BYTES)throw new Error("Semantic settings file is too large");
-  return {kind:"value",value:JSON.parse(raw),version:createHash("sha256").update(raw).digest("hex")};
- }
- const queues=new Map<string,Promise<void>>();
- return {
-  read,
-  write(vaultId,value,expectedVersion){
-   const prior=queues.get(vaultId)??Promise.resolve();
-   // A previous caller observes its own rejection; it must not poison later queued writes.
-   const operation=prior.catch(()=>undefined).then(async()=>{
-    const path=pathFor(vaultId,directory());
-    if((await read(vaultId)).version!==expectedVersion)throw new Error("Semantic settings revision is stale");
-    await assertDirectory(dirname(path),true);
-    const temp=join(dirname(path),`semantic.${randomUUID()}.tmp`);
-    try {await writeFile(temp,`${JSON.stringify(value,null,2)}\n`,{mode:0o600,flag:"wx"});await rename(temp,path);}
-    finally {try{await unlink(temp);}catch(error){if((error as NodeJS.ErrnoException).code!=="ENOENT")throw error;}}
-   });
-   queues.set(vaultId,operation);
-   return operation.finally(()=>{if(queues.get(vaultId)===operation)queues.delete(vaultId);});
-  },
- };
+function localSemanticStorage(directory: () => string | null): SemanticSettingsStorage {
+	async function read(vaultId: string): Promise<SemanticSettingsDocument> {
+		const path = pathFor(vaultId, directory());
+		await assertDirectory(dirname(path), false);
+		await assertFile(path);
+		let raw: string;
+		try {
+			raw = await readFile(path, "utf8");
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing", version: null };
+			throw error;
+		}
+		if (Buffer.byteLength(raw) > MAX_FILE_BYTES) throw new Error("Semantic settings file is too large");
+		return { kind: "value", value: JSON.parse(raw), version: createHash("sha256").update(raw).digest("hex") };
+	}
+	const queues = new Map<string, Promise<void>>();
+	return {
+		read,
+		write(vaultId, value, expectedVersion) {
+			const prior = queues.get(vaultId) ?? Promise.resolve();
+			// A previous caller observes its own rejection; it must not poison later queued writes.
+			const operation = prior
+				.catch(() => undefined)
+				.then(async () => {
+					const path = pathFor(vaultId, directory());
+					if ((await read(vaultId)).version !== expectedVersion)
+						throw new Error("Semantic settings revision is stale");
+					await assertDirectory(dirname(path), true);
+					const temp = join(dirname(path), `semantic.${randomUUID()}.tmp`);
+					try {
+						await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+						await rename(temp, path);
+					} finally {
+						try {
+							await unlink(temp);
+						} catch (error) {
+							if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+						}
+					}
+				});
+			queues.set(vaultId, operation);
+			return operation.finally(() => {
+				if (queues.get(vaultId) === operation) queues.delete(vaultId);
+			});
+		},
+	};
 }
-export function createSemanticSettingsApi(state:SemanticSettingsState=createSemanticSettingsState(),directory:string|null=knowledgeDirectory()):SemanticSettingsApi {
- return semanticSettingsApiForDirectory(state,()=>directory);
+export function createSemanticSettingsApi(
+	state: SemanticSettingsState = createSemanticSettingsState(),
+	directory: string | null = knowledgeDirectory(),
+): SemanticSettingsApi {
+	return semanticSettingsApiForDirectory(state, () => directory);
 }
-function semanticSettingsApiForDirectory(state:SemanticSettingsState,directory:()=>string|null):SemanticSettingsApi {
- return createStoredSemanticSettingsApi(localSemanticStorage(directory),state);
+function semanticSettingsApiForDirectory(
+	state: SemanticSettingsState,
+	directory: () => string | null,
+): SemanticSettingsApi {
+	return createStoredSemanticSettingsApi(localSemanticStorage(directory), state);
 }
 
 // pi-knowledge 0.2 compatibility; remove the dynamic directory facade after
