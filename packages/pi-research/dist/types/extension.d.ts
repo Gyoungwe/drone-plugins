@@ -1,5 +1,5 @@
-import { type ResearchLoopPorts } from "./core/research-loop.js";
 import { type PreparedResearchDelivery, type ResearchDeliveryCopy, type ResearchDeliveryReceipt, type ResearchSummaryReviewPacket } from "./core/research-delivery.js";
+import { type ResearchLoopPorts } from "./core/research-loop.js";
 export interface ResearchExtensionPorts extends ResearchLoopPorts {
     resolveSessionProject(ctx: any, requested?: string): Promise<{
         project: string;

@@ -5,10 +5,10 @@
  * the extension's root implementation path. The implementation remains in
  * pi-core; the host entry is the stable composition boundary.
  */
+import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
 import type { MemoryType } from "./memory";
 import { memoryIndexPrompt as memoryIndexPromptImpl } from "./memory";
 import { normalizeTaskMilestones } from "./milestone-plan";
-import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
 import type { TaskAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
 import { makeDeliverFilesTool as makeDeliverFilesToolImpl } from "./tools/deliver-files";
 import { makeMemorySaveTool as makeMemorySaveToolImpl } from "./tools/memory-save";

@@ -14,8 +14,7 @@ function nonEmpty(value) {
 }
 function validateArtifactRecord(record) {
   const errors = [];
-  if (record.schemaVersion !== 1 && record.schemaVersion !== 2)
-    errors.push("unsupported schema version");
+  if (record.schemaVersion !== 1 && record.schemaVersion !== 2) errors.push("unsupported schema version");
   if (!nonEmpty(record.id)) errors.push("id is required");
   if (!nonEmpty(record.projectId)) errors.push("projectId is required");
   if (!isSafeArtifactPath(record.path)) errors.push("path must be a safe project-relative path");
@@ -28,12 +27,9 @@ function validateArtifactRecord(record) {
     errors.push("invalid source kind");
   if (!["input", "draft", "intermediate", "deliverable", "evidence"].includes(record.purpose))
     errors.push("invalid purpose");
-  if (!["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].includes(
-    record.status
-  ))
+  if (!["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].includes(record.status))
     errors.push("invalid status");
-  if (new Set(record.parentIds).size !== record.parentIds.length)
-    errors.push("parentIds must be unique");
+  if (new Set(record.parentIds).size !== record.parentIds.length) errors.push("parentIds must be unique");
   if (record.parentIds.some((id) => !nonEmpty(id))) errors.push("parentIds must be non-empty");
   if (record.pendingReviewDecisionIds?.some((id) => !nonEmpty(id)) || record.pendingReviewDecisionIds && new Set(record.pendingReviewDecisionIds).size !== record.pendingReviewDecisionIds.length)
     errors.push("pendingReviewDecisionIds must be unique and non-empty");
@@ -58,11 +54,9 @@ function validateArtifactLineage(record, artifacts) {
       errors.push(`missing parent artifact: ${parentId}`);
       continue;
     }
-    if (parent.projectId !== record.projectId)
-      errors.push(`parent belongs to another project: ${parentId}`);
+    if (parent.projectId !== record.projectId) errors.push(`parent belongs to another project: ${parentId}`);
     if (parent.id === record.id) errors.push("artifact cannot parent itself");
-    if (hasAncestor(parent.id, record.id, byId))
-      errors.push(`lineage cycle through parent: ${parentId}`);
+    if (hasAncestor(parent.id, record.id, byId)) errors.push(`lineage cycle through parent: ${parentId}`);
   }
   return [...new Set(errors)];
 }
@@ -108,11 +102,8 @@ function configureInquirySqlite(database) {
   database.exec("PRAGMA synchronous = FULL");
 }
 function readInquirySqliteMetadata(database) {
-  const rows = database.prepare(
-    "SELECT project_id, schema_version, revision, updated_at FROM inquiry_meta"
-  ).all();
-  if (rows.length !== 1)
-    throw new Error("Inquiry SQLite metadata must contain exactly one project");
+  const rows = database.prepare("SELECT project_id, schema_version, revision, updated_at FROM inquiry_meta").all();
+  if (rows.length !== 1) throw new Error("Inquiry SQLite metadata must contain exactly one project");
   const meta = rows[0];
   if (meta.schema_version !== INQUIRY_SCHEMA_VERSION && meta.schema_version !== LEGACY_INQUIRY_SCHEMA_VERSION || !Number.isSafeInteger(meta.revision) || meta.revision < 0 || typeof meta.updated_at !== "string")
     throw new Error("Invalid inquiry SQLite metadata");
@@ -127,8 +118,7 @@ var CanonicalSqliteInquiryStorage = class {
       if (tables.some((table) => table.name === "inquiry_meta")) {
         if (readInquirySqliteMetadata(database).project_id !== projectId)
           throw new Error("Inquiry SQLite ledger belongs to another project");
-      } else if (tables.length)
-        throw new Error("Unrecognized Inquiry SQLite schema");
+      } else if (tables.length) throw new Error("Unrecognized Inquiry SQLite schema");
       configureInquirySqlite(database);
       this.database.exec(`
 			CREATE TABLE IF NOT EXISTS inquiry_meta (
@@ -181,9 +171,7 @@ var CanonicalSqliteInquiryStorage = class {
       if (meta && meta.schema_version === LEGACY_INQUIRY_SCHEMA_VERSION) {
         this.database.exec("BEGIN IMMEDIATE");
         try {
-          this.database.exec(
-            "ALTER TABLE inquiry_meta RENAME TO inquiry_meta_v1"
-          );
+          this.database.exec("ALTER TABLE inquiry_meta RENAME TO inquiry_meta_v1");
           this.database.exec(`
 					CREATE TABLE inquiry_meta (
 						project_id TEXT PRIMARY KEY NOT NULL,
@@ -202,10 +190,7 @@ var CanonicalSqliteInquiryStorage = class {
           try {
             this.database.exec("ROLLBACK");
           } catch (rollbackError) {
-            throw new AggregateError(
-              [error, rollbackError],
-              "Inquiry migration and rollback failed"
-            );
+            throw new AggregateError([error, rollbackError], "Inquiry migration and rollback failed");
           }
           throw error;
         }
@@ -215,38 +200,17 @@ var CanonicalSqliteInquiryStorage = class {
           "INSERT INTO inquiry_meta (project_id, schema_version, revision, updated_at) VALUES (?, ?, 0, ?)"
         ).run(projectId, INQUIRY_SCHEMA_VERSION, (/* @__PURE__ */ new Date(0)).toISOString());
       }
-      this.artifacts = new SqliteLedgerCollection(
-        this,
-        "artifacts"
-      );
-      this.findings = new SqliteLedgerCollection(
-        this,
-        "findings"
-      );
-      this.questions = new SqliteLedgerCollection(
-        this,
-        "questions"
-      );
-      this.attempts = new SqliteLedgerCollection(
-        this,
-        "attempts"
-      );
-      this.decisions = new SqliteLedgerCollection(
-        this,
-        "decisions"
-      );
-      this.reruns = new SqliteLedgerCollection(
-        this,
-        "reruns"
-      );
+      this.artifacts = new SqliteLedgerCollection(this, "artifacts");
+      this.findings = new SqliteLedgerCollection(this, "findings");
+      this.questions = new SqliteLedgerCollection(this, "questions");
+      this.attempts = new SqliteLedgerCollection(this, "attempts");
+      this.decisions = new SqliteLedgerCollection(this, "decisions");
+      this.reruns = new SqliteLedgerCollection(this, "reruns");
     } catch (error) {
       try {
         database.close();
       } catch (closeError) {
-        throw new AggregateError(
-          [error, closeError],
-          "Inquiry initialization and close failed"
-        );
+        throw new AggregateError([error, closeError], "Inquiry initialization and close failed");
       }
       throw error;
     }
@@ -267,9 +231,7 @@ var CanonicalSqliteInquiryStorage = class {
     const meta = readInquirySqliteMetadata(this.database);
     if (!meta || meta.project_id !== this.projectId || meta.schema_version !== INQUIRY_SCHEMA_VERSION)
       throw new Error("Invalid inquiry SQLite metadata");
-    const read = (key) => this.database.prepare(
-      `SELECT payload FROM ${quotedTable(key)} WHERE project_id = ? ORDER BY id ASC`
-    ).all(this.projectId).map((row) => JSON.parse(row.payload));
+    const read = (key) => this.database.prepare(`SELECT payload FROM ${quotedTable(key)} WHERE project_id = ? ORDER BY id ASC`).all(this.projectId).map((row) => JSON.parse(row.payload));
     return {
       schemaVersion: INQUIRY_SCHEMA_VERSION,
       projectId: this.projectId,
@@ -294,18 +256,13 @@ var CanonicalSqliteInquiryStorage = class {
         this.database.prepare(
           `INSERT INTO ${quotedTable(key)} (id, project_id, payload, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, payload = excluded.payload, updated_at = excluded.updated_at`
         ).run(record.id, this.projectId, JSON.stringify(record), updatedAt);
-        this.database.prepare(
-          "UPDATE inquiry_meta SET revision = revision + 1, updated_at = ? WHERE project_id = ?"
-        ).run(updatedAt, this.projectId);
+        this.database.prepare("UPDATE inquiry_meta SET revision = revision + 1, updated_at = ? WHERE project_id = ?").run(updatedAt, this.projectId);
         this.database.exec("COMMIT");
       } catch (error) {
         try {
           this.database.exec("ROLLBACK");
         } catch (rollbackError) {
-          throw new AggregateError(
-            [error, rollbackError],
-            "Inquiry write and rollback failed"
-          );
+          throw new AggregateError([error, rollbackError], "Inquiry write and rollback failed");
         }
         throw error;
       }
@@ -315,20 +272,12 @@ var CanonicalSqliteInquiryStorage = class {
     if (!record.id || record.projectId !== this.projectId || record.schemaVersion !== INQUIRY_SCHEMA_VERSION && record.schemaVersion !== LEGACY_INQUIRY_SCHEMA_VERSION)
       throw new Error(`Invalid ${key.slice(0, -1)} record`);
     if (key === "artifacts") {
-      const errors = validateArtifactLineage(
-        record,
-        current.artifacts
-      );
-      if (errors.length)
-        throw new Error(`Invalid artifact record: ${errors.join("; ")}`);
+      const errors = validateArtifactLineage(record, current.artifacts);
+      if (errors.length) throw new Error(`Invalid artifact record: ${errors.join("; ")}`);
     }
     if (key === "findings") {
-      const errors = validateFindingReferences(
-        record,
-        current
-      );
-      if (errors.length)
-        throw new Error(`Invalid finding record: ${errors.join("; ")}`);
+      const errors = validateFindingReferences(record, current);
+      if (errors.length) throw new Error(`Invalid finding record: ${errors.join("; ")}`);
     }
     if (key === "decisions") {
       const decision = record;
@@ -363,10 +312,7 @@ var SqliteLedgerCollection = class {
     return snapshot[this.key] ?? [];
   }
   async put(record) {
-    await this.owner.update(
-      this.key,
-      record
-    );
+    await this.owner.update(this.key, record);
   }
 };
 
@@ -454,12 +400,8 @@ async function createInquiryWasmEngine(wasmBinary) {
       }
     },
     open(projectId, bytes) {
-      if (!projectId.trim())
-        throw new Error("Inquiry projectId cannot be empty");
-      return new WasmInquiryStorage(
-        projectId,
-        new WasmConnection(new SQL.Database(bytes))
-      );
+      if (!projectId.trim()) throw new Error("Inquiry projectId cannot be empty");
+      return new WasmInquiryStorage(projectId, new WasmConnection(new SQL.Database(bytes)));
     }
   };
 }

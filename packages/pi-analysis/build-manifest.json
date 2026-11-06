@@ -3,9 +3,9 @@
 	"generator": "packages/pi-analysis/scripts/build.mjs",
 	"inputsSha256": "ca3fd08116622001762fda23f5d029a154844d3a2d00d20e5173a800abf5c39f",
 	"outputs": {
-		"dist/index.mjs": "ed699f84e73f8b3a06acbf868c92658beb42b658266de9ee49a093924916da61",
-		"dist/host.mjs": "9072bfa65585e4371ebe980e7e5a62b40ac911599cb523a54ed765945e045b95",
-		"dist/index.d.ts": "eb5f2142c02090044ed1b05061d0e43ba5a6edfda52443dbcbebad41ee582df9",
-		"dist/host.d.ts": "559bd458593b403d1ba51517b2842f4bef4c6f663b1b56084c81283643d93cff"
+		"dist/index.mjs": "d753ecf6f61fb4920783e5cff3140ef8f0b70f391f9d812e2289aad1e8644e05",
+		"dist/host.mjs": "926595ea98497ea6266cdd581b15acfb3b3a81c73f6013912eedb30af117e6dd",
+		"dist/index.d.ts": "a8b2586cdc21364d7666da3ab24754740e0d7666a57cb94ab601b969ad6efdf2",
+		"dist/host.d.ts": "c5dfb6404829ce5dbfb8a80efff8ac8f69808b6188bead17566e54d17af9b8fd"
 	}
 }

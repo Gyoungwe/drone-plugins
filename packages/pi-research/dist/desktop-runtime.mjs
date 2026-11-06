@@ -64,7 +64,10 @@ async function fetchText(fetchImpl, url, options) {
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
   try {
     const response = await fetchImpl(url, {
-      headers: { accept: "application/atom+xml,application/xml,text/xml", "user-agent": "Drone-Research-Workbench/0.33" },
+      headers: {
+        accept: "application/atom+xml,application/xml,text/xml",
+        "user-agent": "Drone-Research-Workbench/0.33"
+      },
       signal
     });
     if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
@@ -171,9 +174,9 @@ function createArxivConnector(fetchImpl) {
         const title = xmlTag(entry, "title");
         if (!arxivId || !title) return [];
         const locator = `https://arxiv.org/abs/${arxivId}`;
-        const authors = [...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/giu)].map(
-          (item) => text(item[1]).replaceAll("&amp;", "&")
-        );
+        const authors = [
+          ...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/giu)
+        ].map((item) => text(item[1]).replaceAll("&amp;", "&"));
         const publishedAt = xmlTag(entry, "published") || void 0;
         return [
           {
@@ -246,10 +249,14 @@ function createResearchConnectorHostLoader(options) {
         status: "unavailable",
         list: () => [],
         recommend: async () => {
-          throw new Error("Research connector transport is unavailable; the host must inject an authorized connector registry");
+          throw new Error(
+            "Research connector transport is unavailable; the host must inject an authorized connector registry"
+          );
         },
         search: async () => {
-          throw new Error("Research connector transport is unavailable; the host must inject an authorized connector registry");
+          throw new Error(
+            "Research connector transport is unavailable; the host must inject an authorized connector registry"
+          );
         }
       })
     };
@@ -268,7 +275,14 @@ function createResearchConnectorHostLoader(options) {
           if (!connector) {
             return {
               hits: [],
-              failures: [{ connectorId, message: `Unknown research connector: ${connectorId}`, retryable: false, at: isoNow() }]
+              failures: [
+                {
+                  connectorId,
+                  message: `Unknown research connector: ${connectorId}`,
+                  retryable: false,
+                  at: isoNow()
+                }
+              ]
             };
           }
           if (!connector.recommend) return { hits: [], failures: [] };
@@ -284,7 +298,12 @@ function createResearchConnectorHostLoader(options) {
           const requested = input.connectorIds ? [...input.connectorIds] : connectors.map((connector) => connector.descriptor.id);
           const selected = requested.map((id) => byId.get(id)).filter((connector) => Boolean(connector));
           const limit = clampLimit(input.limit);
-          const failures = requested.filter((id) => !byId.has(id)).map((connectorId) => ({ connectorId, message: `Unknown research connector: ${connectorId}`, retryable: false, at: isoNow() }));
+          const failures = requested.filter((id) => !byId.has(id)).map((connectorId) => ({
+            connectorId,
+            message: `Unknown research connector: ${connectorId}`,
+            retryable: false,
+            at: isoNow()
+          }));
           const settled = await Promise.allSettled(
             selected.map(
               (connector) => connector.search(query, {
@@ -302,7 +321,10 @@ function createResearchConnectorHostLoader(options) {
             if (result.status === "fulfilled") hits.push(...result.value);
             else failures.push(failure(connector.descriptor.id, result.reason));
           });
-          const deduped = [...new Map(hits.map((hit) => [hit.id, hit])).values()].slice(0, limit * Math.max(1, selected.length));
+          const deduped = [...new Map(hits.map((hit) => [hit.id, hit])).values()].slice(
+            0,
+            limit * Math.max(1, selected.length)
+          );
           return { query, hits: deduped, failures, connectors: requested, complete: failures.length === 0 };
         }
       };
@@ -331,15 +353,19 @@ function relativePath(value, label) {
   return normalized;
 }
 function asObject(value, label) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error(`${label} must be an object`);
   return value;
 }
 function isErrno(error, code) {
-  return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
+  return Boolean(
+    error && typeof error === "object" && "code" in error && error.code === code
+  );
 }
 function gate(metadata) {
   const value = metadata.evidence_gate;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { stage: "created", answerable: false };
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return { stage: "created", answerable: false };
   const candidate = value;
   const stage = text2(candidate.stage, 80);
   return { stage: STAGES.has(stage) ? stage : "created", answerable: candidate.answerable === true };
@@ -395,15 +421,26 @@ function detail(metadata, runDir, resultsPath) {
     };
   });
   const sourceRefs = Array.isArray(gateObject.source_refs) ? gateObject.source_refs : [];
-  const sources = sourceRefs.map((source) => ({ path: text2(source, 480), status: "inspected", hash: null, verified: false }));
+  const sources = sourceRefs.map((source) => ({
+    path: text2(source, 480),
+    status: "inspected",
+    hash: null,
+    verified: false
+  }));
   const bindings = Array.isArray(gateObject.claim_bindings) ? gateObject.claim_bindings : [];
   const claims = bindings.map((binding) => {
     const value = binding && typeof binding === "object" && !Array.isArray(binding) ? binding : {};
     const support = Array.isArray(value.sources) ? value.sources.map((source) => {
-      if (source && typeof source === "object" && !Array.isArray(source)) return text2(source.path, 480);
+      if (source && typeof source === "object" && !Array.isArray(source))
+        return text2(source.path, 480);
       return text2(source, 480);
     }).filter(Boolean) : [];
-    return { id: text2(value.id, 120) || null, claim: text2(value.claim, 480), support, status: text2(value.status || value.relationship, 80) || "bound" };
+    return {
+      id: text2(value.id, 120) || null,
+      claim: text2(value.claim, 480),
+      support,
+      status: text2(value.status || value.relationship, 80) || "bound"
+    };
   }).filter((claim) => claim.claim);
   const warnings = Array.isArray(gateObject.warnings) ? gateObject.warnings.map((warning) => text2(warning, 240)).filter(Boolean) : [];
   const archiveCount = Number(gateObject.archive_count);
@@ -416,7 +453,11 @@ function detail(metadata, runDir, resultsPath) {
     claims,
     warnings,
     coverage: metadata.retrieval_coverage && typeof metadata.retrieval_coverage === "object" && !Array.isArray(metadata.retrieval_coverage) ? metadata.retrieval_coverage : null,
-    archive: { count: Number.isFinite(archiveCount) ? archiveCount : 0, reused: Number.isFinite(reuseCount) ? reuseCount : 0, verified: false }
+    archive: {
+      count: Number.isFinite(archiveCount) ? archiveCount : 0,
+      reused: Number.isFinite(reuseCount) ? reuseCount : 0,
+      verified: false
+    }
   };
 }
 async function configuredResultsRoot(port, workspace) {
@@ -424,13 +465,20 @@ async function configuredResultsRoot(port, workspace) {
   if (!workspaceRoot.handle) throw new Error("Host did not grant a workspace files root");
   let config = {};
   try {
-    config = asObject(JSON.parse(await port.readText(workspaceRoot.handle, ".pi/research-workspace.json")), "research workspace configuration");
+    config = asObject(
+      JSON.parse(await port.readText(workspaceRoot.handle, ".pi/research-workspace.json")),
+      "research workspace configuration"
+    );
   } catch (error) {
     if (!isErrno(error, "ENOENT")) throw error;
   }
-  if (config.resultsRoot !== void 0 && typeof config.resultsRoot !== "string") throw new Error("resultsRoot must be a path");
+  if (config.resultsRoot !== void 0 && typeof config.resultsRoot !== "string")
+    throw new Error("resultsRoot must be a path");
   if (!config.resultsRoot || !config.resultsRoot.startsWith("/"))
-    return { handle: workspaceRoot.handle, path: relativePath(config.resultsRoot || "results", "resultsRoot") };
+    return {
+      handle: workspaceRoot.handle,
+      path: relativePath(config.resultsRoot || "results", "resultsRoot")
+    };
   const resultRoot = await port.resolveRoot(config.resultsRoot);
   if (!resultRoot.handle) throw new Error("Host did not grant the configured results root");
   return { handle: resultRoot.handle, path: "" };
@@ -458,7 +506,8 @@ async function discover(port, root, project) {
     for (const run of runs.filter((entry) => entry.kind === "directory" && entry.name.startsWith("run-"))) {
       const runDir = `${slug.name}/${run.name}`;
       const metadata = await readMetadata(port, root, runDir);
-      if (!project || text2(metadata.project, 180) === text2(project, 180)) found.push(summary(metadata, runDir, root.path));
+      if (!project || text2(metadata.project, 180) === text2(project, 180))
+        found.push(summary(metadata, runDir, root.path));
     }
   }
   return found.sort((left, right) => (right.updatedAt || "").localeCompare(left.updatedAt || ""));
@@ -746,7 +795,10 @@ function verifyZoteroAcceptance(call, acceptance, signal) {
   if (!text3(acceptance.doi))
     return Promise.resolve({ state: "pending", reason: "doi-unbound", summary: "\u8FD8\u6CA1\u6709\u6587\u732E\u7ED1\u5B9A\u5230\u8FD9\u4E00\u9879" });
   const send = capabilityFetch(call);
-  const fetchImpl = (input, init) => send(input, { ...init, signal: AbortSignal.any([init?.signal, signal].filter((s) => !!s)) });
+  const fetchImpl = (input, init) => send(input, {
+    ...init,
+    signal: AbortSignal.any([init?.signal, signal].filter((s) => !!s))
+  });
   const reconcile = createLocalZoteroReconciler({ fetchImpl });
   return reconcile(acceptance).then(describeZoteroEvidence);
 }
@@ -1909,7 +1961,10 @@ async function updateInZotero(call, params, cwd, signal) {
     signal
   });
   if (writes.declinedBeforeAnyWrite())
-    return { ...receiptWithoutUpdate({ ...plan, action: "cancelled", reason: "user-declined" }), consent: { via: "host-dialog" } };
+    return {
+      ...receiptWithoutUpdate({ ...plan, action: "cancelled", reason: "user-declined" }),
+      consent: { via: "host-dialog" }
+    };
   return { ...receipt2, consent: { via: "host-dialog" } };
 }
 async function zoteroStatus(call, signal) {
@@ -1947,7 +2002,11 @@ function registerManagedZoteroTools(pi, call) {
       properties: {
         doi: { type: "string", description: "Exact DOI, e.g. 10.1038/s41586-020-2649-2" },
         title: { type: "string" },
-        item_type: { type: "string", enum: [...ZOTERO_ITEM_TYPES], description: "Zotero item type; default journalArticle." },
+        item_type: {
+          type: "string",
+          enum: [...ZOTERO_ITEM_TYPES],
+          description: "Zotero item type; default journalArticle."
+        },
         creators: {
           type: "array",
           description: "Authors in order. Use last_name/first_name, or name for organisations.",
@@ -1990,12 +2049,27 @@ function registerManagedZoteroTools(pi, call) {
       type: "object",
       properties: {
         zotero_key: { type: "string", description: "8-character key of the existing item (preferred)." },
-        doi: { type: "string", description: "Exact DOI when the key is unknown; must match exactly one item." },
-        collection_key: { type: "string", description: "8-character key of the collection to add the item to." },
-        collection_name: { type: "string", description: "Exact collection name, used when the key is unknown." },
-        attachment_url: { type: "string", description: "http(s) URL of an open-access PDF to attach as a link." },
+        doi: {
+          type: "string",
+          description: "Exact DOI when the key is unknown; must match exactly one item."
+        },
+        collection_key: {
+          type: "string",
+          description: "8-character key of the collection to add the item to."
+        },
+        collection_name: {
+          type: "string",
+          description: "Exact collection name, used when the key is unknown."
+        },
+        attachment_url: {
+          type: "string",
+          description: "http(s) URL of an open-access PDF to attach as a link."
+        },
         attachment_title: { type: "string" },
-        local_file: { type: "string", description: "Path (inside the project) of a PDF to upload as a stored attachment." }
+        local_file: {
+          type: "string",
+          description: "Path (inside the project) of a PDF to upload as a stored attachment."
+        }
       }
     },
     execute: async (_id, params, signal, _update, ctx) => text4(await updateInZotero(call, params || {}, ctx.cwd, signal))
@@ -2020,16 +2094,19 @@ function portFor(capabilities) {
     },
     async readText(root, path) {
       const response = await capabilities.call("files.readText", { root, path });
-      if (!response || typeof response.text !== "string") throw new Error(`Host returned invalid text for ${path}`);
+      if (!response || typeof response.text !== "string")
+        throw new Error(`Host returned invalid text for ${path}`);
       return response.text;
     },
     async listFiles(root, path) {
       const response = await capabilities.call("files.list", { root, path });
       if (!Array.isArray(response)) throw new Error(`Host returned invalid directory listing for ${path}`);
       return response.map((value) => {
-        if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("directory entry must be an object");
+        if (!value || typeof value !== "object" || Array.isArray(value))
+          throw new Error("directory entry must be an object");
         const entry = value;
-        if (typeof entry.name !== "string" || typeof entry.kind !== "string") throw new Error("Host returned an invalid directory entry");
+        if (typeof entry.name !== "string" || typeof entry.kind !== "string")
+          throw new Error("Host returned an invalid directory entry");
         return {
           name: entry.name,
           kind: ["file", "directory", "symlink", "other"].includes(entry.kind) ? entry.kind : "other"
@@ -2057,7 +2134,11 @@ var createDesktopRuntime = async (context) => {
       if (name === "status") return adapter.operations.status({ ...base, runDir });
       if (name === "detail") {
         if (!adapter.operations.detail) throw new Error("Research detail operation is unavailable");
-        return adapter.operations.detail({ ...base, runDir, runId: params.runId === void 0 ? void 0 : String(params.runId) });
+        return adapter.operations.detail({
+          ...base,
+          runDir,
+          runId: params.runId === void 0 ? void 0 : String(params.runId)
+        });
       }
       return adapter.operations.listRuns(base);
     }
@@ -2072,7 +2153,10 @@ var createDesktopRuntime = async (context) => {
     createNativeSession: async () => ({
       toolEffects: ZOTERO_TOOL_EFFECTS,
       nativeOperations: { identify: zoteroIdentifyNativeOperation },
-      extension: (pi) => registerManagedZoteroTools(pi, (name, input, signal) => context.capabilities.call(name, input, signal)),
+      extension: (pi) => registerManagedZoteroTools(
+        pi,
+        (name, input, signal) => context.capabilities.call(name, input, signal)
+      ),
       dispose: async () => {
       }
     }),

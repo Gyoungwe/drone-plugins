@@ -8,6 +8,294 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// src/core/config.ts
+var config_exports = {};
+__export(config_exports, {
+  createKnowledgeConfigApi: () => createKnowledgeConfigApi,
+  createKnowledgeConfigState: () => createKnowledgeConfigState,
+  knowledgeDirectory: () => knowledgeDirectory,
+  parseKnowledgeBinding: () => parseKnowledgeBinding,
+  projectIdentity: () => projectIdentity,
+  readKnowledgeBinding: () => readKnowledgeBinding,
+  saveKnowledgeBinding: () => saveKnowledgeBinding,
+  withKnowledgeBinding: () => withKnowledgeBinding
+});
+import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
+import { basename, isAbsolute, join, resolve } from "node:path";
+function createKnowledgeConfigState() {
+  return { local: new AsyncLocalStorage(), queues: /* @__PURE__ */ new Map() };
+}
+function errorCode(error) {
+  return error && typeof error === "object" && "code" in error ? error.code : void 0;
+}
+function knowledgeDirectory() {
+  const value = process.env.DRONE_KNOWLEDGE_DIR;
+  if (!value) return null;
+  if (!isAbsolute(value)) throw new Error("DRONE_KNOWLEDGE_DIR must be absolute");
+  return resolve(value);
+}
+function projectIdentity(cwd, configured) {
+  if (typeof configured === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(configured)) return configured;
+  const path = resolve(cwd);
+  const stem = basename(path).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "project";
+  return `${stem}-${createHash("sha256").update(path).digest("hex").slice(0, 10)}`;
+}
+function validateBinding(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1 || !isAbsolute(String(value.vault || "")) || !/^[a-f0-9]{24}$/.test(String(value.vaultId || "")) || !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !["project", "literature", "hybrid"].includes(String(value.profile)) || !["run-only", "verified", "rich"].includes(String(value.depositMode)) || !["none", "read-local"].includes(String(value.subagentPolicy)) || typeof value.updatedAt !== "string")
+    throw new Error("Invalid application knowledge binding; no project fallback was used");
+}
+function parseKnowledgeBinding(value) {
+  validateBinding(value);
+  return value;
+}
+async function readKnowledgeBindingWithState(state, directory, { fresh = false } = {}) {
+  if (!fresh && state.local.getStore()) return state.local.getStore() ?? null;
+  if (!directory) return null;
+  let value;
+  try {
+    value = JSON.parse((await readFile(join(directory, "binding.json"), "utf8")).replace(/^\uFEFF/, ""));
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return null;
+    throw new Error(
+      `Knowledge binding cannot be read: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+  validateBinding(value);
+  return value;
+}
+async function readKnowledgeBinding(options = {}) {
+  return readKnowledgeBindingWithState(defaultState, knowledgeDirectory(), options);
+}
+async function saveKnowledgeBindingWithState(state, directory, input, expectedRevision = null) {
+  if (!directory) throw new Error("Application knowledge directory is not configured");
+  const previous = state.queues.get(directory) || Promise.resolve();
+  const operation = previous.catch(() => void 0).then(async () => {
+    const current = await readKnowledgeBindingWithState(state, directory, { fresh: true });
+    if (expectedRevision !== null && (current?.revision || 0) !== expectedRevision)
+      throw new Error("Knowledge binding changed while confirming; review the new binding");
+    const vault = await realpath(input.vault);
+    const value = {
+      version: 1,
+      vault,
+      vaultId: createHash("sha256").update(vault).digest("hex").slice(0, 24),
+      revision: (current?.revision || 0) + 1,
+      profile: input.profile,
+      depositMode: input.depositMode,
+      subagentPolicy: input.subagentPolicy,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    validateBinding(value);
+    await mkdir(directory, { recursive: true, mode: 448 });
+    const temporary = join(directory, `binding.${randomUUID()}.tmp`);
+    await writeFile(temporary, `${JSON.stringify(value, null, 2)}
+`, { mode: 384, flag: "wx" });
+    await rename(temporary, join(directory, "binding.json"));
+    return value;
+  });
+  state.queues.set(directory, operation);
+  try {
+    return await operation;
+  } finally {
+    if (state.queues.get(directory) === operation) state.queues.delete(directory);
+  }
+}
+async function saveKnowledgeBinding(input, expectedRevision = null) {
+  return saveKnowledgeBindingWithState(defaultState, knowledgeDirectory(), input, expectedRevision);
+}
+async function withKnowledgeBindingWithState(state, directory, binding, operation) {
+  const current = await readKnowledgeBindingWithState(state, directory, { fresh: true });
+  if (!binding || current?.vaultId !== binding.vaultId || current?.revision !== binding.revision)
+    throw new Error("Knowledge binding changed; start a new turn before reading or writing");
+  return state.local.run(binding, operation);
+}
+async function withKnowledgeBinding(binding, operation) {
+  return withKnowledgeBindingWithState(defaultState, knowledgeDirectory(), binding, operation);
+}
+function createKnowledgeConfigApi(state = createKnowledgeConfigState(), directory = knowledgeDirectory()) {
+  if (directory !== null && !isAbsolute(directory)) throw new Error("Knowledge directory must be absolute");
+  const fixedDirectory = directory === null ? null : resolve(directory);
+  return {
+    knowledgeDirectory: () => fixedDirectory,
+    projectIdentity,
+    readKnowledgeBinding: (options = {}) => readKnowledgeBindingWithState(state, fixedDirectory, options),
+    saveKnowledgeBinding: (input, expectedRevision = null) => saveKnowledgeBindingWithState(state, fixedDirectory, input, expectedRevision),
+    withKnowledgeBinding: (binding, operation) => withKnowledgeBindingWithState(state, fixedDirectory, binding, operation)
+  };
+}
+var defaultState;
+var init_config = __esm({
+  "src/core/config.ts"() {
+    "use strict";
+    defaultState = createKnowledgeConfigState();
+  }
+});
+
+// src/core/review-policy-storage.ts
+import { createHash as createHash2, randomUUID as randomUUID2 } from "node:crypto";
+import { mkdir as mkdir2, readFile as readFile2, rename as rename2, unlink, writeFile as writeFile2 } from "node:fs/promises";
+import { join as join2 } from "node:path";
+function createLocalReviewPolicyStorage(config) {
+  let queue = Promise.resolve();
+  async function read() {
+    const directory = config.knowledgeDirectory();
+    if (!directory) return { kind: "missing", version: null };
+    let bytes;
+    try {
+      bytes = await readFile2(join2(directory, "review-policy.json"));
+    } catch (error) {
+      if (error.code === "ENOENT") return { kind: "missing", version: null };
+      throw error;
+    }
+    let value;
+    try {
+      value = JSON.parse(bytes.toString("utf8"));
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      console.warn("[knowledge review policy] Invalid JSON; strict mode applies");
+      return { kind: "corrupt", version: null };
+    }
+    return {
+      kind: "value",
+      value,
+      version: createHash2("sha256").update(bytes).digest("hex")
+    };
+  }
+  return {
+    read,
+    write(value, expectedVersion) {
+      const operation = queue.catch(() => void 0).then(async () => {
+        const directory = config.knowledgeDirectory();
+        if (!directory) throw new Error("No application knowledge directory");
+        const current = await read();
+        if (current.kind === "corrupt")
+          throw new Error("Review policy is damaged; repair it before changing settings");
+        if (current.version !== expectedVersion)
+          throw Object.assign(new Error("Review policy changed; refresh before saving"), {
+            code: "ESTATECONFLICT"
+          });
+        await mkdir2(directory, { recursive: true, mode: 448 });
+        const temporary = join2(directory, `review-policy.${randomUUID2()}.tmp`);
+        await writeFile2(temporary, JSON.stringify(value), {
+          flag: "wx",
+          mode: 384
+        });
+        try {
+          await rename2(temporary, join2(directory, "review-policy.json"));
+        } catch (error) {
+          await unlink(temporary);
+          throw error;
+        }
+        return read();
+      });
+      queue = operation;
+      return operation;
+    }
+  };
+}
+var init_review_policy_storage = __esm({
+  "src/core/review-policy-storage.ts"() {
+    "use strict";
+  }
+});
+
+// src/core/review-policy.ts
+var review_policy_exports = {};
+__export(review_policy_exports, {
+  advisoryCodes: () => advisoryCodes,
+  createKnowledgeReviewPolicy: () => createKnowledgeReviewPolicy,
+  createStoredKnowledgeReviewPolicy: () => createStoredKnowledgeReviewPolicy,
+  readReviewMode: () => readReviewMode,
+  saveReviewMode: () => saveReviewMode
+});
+function createStoredKnowledgeReviewPolicy(storage, strictOverride) {
+  async function readReviewPolicy() {
+    const document = await storage.read();
+    const override = strictOverride() ? "environment" : null;
+    if (document.kind === "missing")
+      return {
+        mode: override ? "strict" : "automatic",
+        persistedMode: null,
+        version: null,
+        override,
+        diagnostic: null
+      };
+    if (document.kind === "corrupt")
+      return {
+        mode: "strict",
+        persistedMode: null,
+        version: null,
+        override,
+        diagnostic: "invalid-json"
+      };
+    const value = document.value;
+    const mode = value && typeof value === "object" && "mode" in value ? value.mode : void 0;
+    if (mode !== "automatic" && mode !== "strict")
+      return {
+        mode: "strict",
+        persistedMode: null,
+        version: document.version,
+        override,
+        diagnostic: "invalid-policy"
+      };
+    return {
+      mode: override ? "strict" : mode,
+      persistedMode: mode,
+      version: document.version,
+      override,
+      diagnostic: null
+    };
+  }
+  async function readReviewMode2() {
+    return (await readReviewPolicy()).mode;
+  }
+  async function saveReviewMode2(mode, expectedVersion) {
+    if (mode !== "automatic" && mode !== "strict") throw new Error("Invalid review mode");
+    const current = await readReviewPolicy();
+    if (current.diagnostic) throw new Error("Review policy is damaged; repair it before changing settings");
+    await storage.write(
+      { version: 1, mode },
+      expectedVersion === void 0 ? current.version : expectedVersion
+    );
+    const saved = await readReviewPolicy();
+    if (saved.diagnostic || saved.persistedMode !== mode)
+      throw new Error("Review policy changed during write verification");
+    return { mode: saved.mode };
+  }
+  return { readReviewMode: readReviewMode2, readReviewPolicy, saveReviewMode: saveReviewMode2 };
+}
+function createKnowledgeReviewPolicy(config) {
+  return createStoredKnowledgeReviewPolicy(
+    createLocalReviewPolicyStorage(config),
+    () => process.env.DRONE_REVIEW_MODE === "strict"
+  );
+}
+var readReviewMode, saveReviewMode, advisoryCodes;
+var init_review_policy = __esm({
+  "src/core/review-policy.ts"() {
+    "use strict";
+    init_config();
+    init_review_policy_storage();
+    ({ readReviewMode, saveReviewMode } = createKnowledgeReviewPolicy(config_exports));
+    advisoryCodes = /* @__PURE__ */ new Set([
+      "paper-citation-required",
+      "search-required",
+      "coverage-incomplete",
+      "wiki-changed",
+      "citation-required",
+      "source-unread",
+      "source-changed",
+      "delivery-changed",
+      "search-stale",
+      "check-timeout",
+      "not-prepared",
+      "citation-invalid",
+      "citation-budget"
+    ]);
+  }
+});
+
 // src/core/runtime-host.ts
 var runtime_host_exports = {};
 __export(runtime_host_exports, {
@@ -54,7 +342,10 @@ function diagnosticText(value, limit = 4096) {
     } catch {
       return "[URL omitted]";
     }
-  }).replace(/(?:bearer\s+)[^\s,;"']+/gi, "Bearer [redacted]").replace(/(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|authorization|cookie)["']?\s*[=:]\s*)(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s,;]+)/gi, "$1[redacted]").replace(/\b(?:sk-|ghp_|github_pat_)[A-Za-z0-9_-]{8,}/g, "[redacted]").replace(/[\u0000-\u001f\u007f<>]/g, " ").slice(0, Math.max(0, limit));
+  }).replace(/(?:bearer\s+)[^\s,;"']+/gi, "Bearer [redacted]").replace(
+    /(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|authorization|cookie)["']?\s*[=:]\s*)(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|[^\s,;]+)/gi,
+    "$1[redacted]"
+  ).replace(/\b(?:sk-|ghp_|github_pat_)[A-Za-z0-9_-]{8,}/g, "[redacted]").replace(/[\u0000-\u001f\u007f<>]/g, " ").slice(0, Math.max(0, limit));
 }
 function createKnowledgeRuntimeHost() {
   const locks = /* @__PURE__ */ new Map();
@@ -265,132 +556,8 @@ var init_runtime_host = __esm({
   }
 });
 
-// src/core/config.ts
-var config_exports = {};
-__export(config_exports, {
-  createKnowledgeConfigApi: () => createKnowledgeConfigApi,
-  createKnowledgeConfigState: () => createKnowledgeConfigState,
-  knowledgeDirectory: () => knowledgeDirectory,
-  parseKnowledgeBinding: () => parseKnowledgeBinding,
-  projectIdentity: () => projectIdentity,
-  readKnowledgeBinding: () => readKnowledgeBinding,
-  saveKnowledgeBinding: () => saveKnowledgeBinding,
-  withKnowledgeBinding: () => withKnowledgeBinding
-});
-import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
-import { basename as basename2, isAbsolute, join as join2, resolve } from "node:path";
-function createKnowledgeConfigState() {
-  return { local: new AsyncLocalStorage(), queues: /* @__PURE__ */ new Map() };
-}
-function errorCode(error) {
-  return error && typeof error === "object" && "code" in error ? error.code : void 0;
-}
-function knowledgeDirectory() {
-  const value = process.env.DRONE_KNOWLEDGE_DIR;
-  if (!value) return null;
-  if (!isAbsolute(value)) throw new Error("DRONE_KNOWLEDGE_DIR must be absolute");
-  return resolve(value);
-}
-function projectIdentity(cwd, configured) {
-  if (typeof configured === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(configured)) return configured;
-  const path = resolve(cwd);
-  const stem = basename2(path).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "project";
-  return `${stem}-${createHash("sha256").update(path).digest("hex").slice(0, 10)}`;
-}
-function validateBinding(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1 || !isAbsolute(String(value.vault || "")) || !/^[a-f0-9]{24}$/.test(String(value.vaultId || "")) || !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !["project", "literature", "hybrid"].includes(String(value.profile)) || !["run-only", "verified", "rich"].includes(String(value.depositMode)) || !["none", "read-local"].includes(String(value.subagentPolicy)) || typeof value.updatedAt !== "string")
-    throw new Error("Invalid application knowledge binding; no project fallback was used");
-}
-function parseKnowledgeBinding(value) {
-  validateBinding(value);
-  return value;
-}
-async function readKnowledgeBindingWithState(state, directory, { fresh = false } = {}) {
-  if (!fresh && state.local.getStore()) return state.local.getStore() ?? null;
-  if (!directory) return null;
-  let value;
-  try {
-    value = JSON.parse((await readFile(join2(directory, "binding.json"), "utf8")).replace(/^\uFEFF/, ""));
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") return null;
-    throw new Error(
-      `Knowledge binding cannot be read: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-  validateBinding(value);
-  return value;
-}
-async function readKnowledgeBinding(options = {}) {
-  return readKnowledgeBindingWithState(defaultState, knowledgeDirectory(), options);
-}
-async function saveKnowledgeBindingWithState(state, directory, input, expectedRevision = null) {
-  if (!directory) throw new Error("Application knowledge directory is not configured");
-  const previous = state.queues.get(directory) || Promise.resolve();
-  const operation = previous.catch(() => void 0).then(async () => {
-    const current = await readKnowledgeBindingWithState(state, directory, { fresh: true });
-    if (expectedRevision !== null && (current?.revision || 0) !== expectedRevision)
-      throw new Error("Knowledge binding changed while confirming; review the new binding");
-    const vault = await realpath(input.vault);
-    const value = {
-      version: 1,
-      vault,
-      vaultId: createHash("sha256").update(vault).digest("hex").slice(0, 24),
-      revision: (current?.revision || 0) + 1,
-      profile: input.profile,
-      depositMode: input.depositMode,
-      subagentPolicy: input.subagentPolicy,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    validateBinding(value);
-    await mkdir(directory, { recursive: true, mode: 448 });
-    const temporary = join2(directory, `binding.${randomUUID()}.tmp`);
-    await writeFile(temporary, `${JSON.stringify(value, null, 2)}
-`, { mode: 384, flag: "wx" });
-    await rename(temporary, join2(directory, "binding.json"));
-    return value;
-  });
-  state.queues.set(directory, operation);
-  try {
-    return await operation;
-  } finally {
-    if (state.queues.get(directory) === operation) state.queues.delete(directory);
-  }
-}
-async function saveKnowledgeBinding(input, expectedRevision = null) {
-  return saveKnowledgeBindingWithState(defaultState, knowledgeDirectory(), input, expectedRevision);
-}
-async function withKnowledgeBindingWithState(state, directory, binding, operation) {
-  const current = await readKnowledgeBindingWithState(state, directory, { fresh: true });
-  if (!binding || current?.vaultId !== binding.vaultId || current?.revision !== binding.revision)
-    throw new Error("Knowledge binding changed; start a new turn before reading or writing");
-  return state.local.run(binding, operation);
-}
-async function withKnowledgeBinding(binding, operation) {
-  return withKnowledgeBindingWithState(defaultState, knowledgeDirectory(), binding, operation);
-}
-function createKnowledgeConfigApi(state = createKnowledgeConfigState(), directory = knowledgeDirectory()) {
-  if (directory !== null && !isAbsolute(directory)) throw new Error("Knowledge directory must be absolute");
-  const fixedDirectory = directory === null ? null : resolve(directory);
-  return {
-    knowledgeDirectory: () => fixedDirectory,
-    projectIdentity,
-    readKnowledgeBinding: (options = {}) => readKnowledgeBindingWithState(state, fixedDirectory, options),
-    saveKnowledgeBinding: (input, expectedRevision = null) => saveKnowledgeBindingWithState(state, fixedDirectory, input, expectedRevision),
-    withKnowledgeBinding: (binding, operation) => withKnowledgeBindingWithState(state, fixedDirectory, binding, operation)
-  };
-}
-var defaultState;
-var init_config = __esm({
-  "src/core/config.ts"() {
-    "use strict";
-    defaultState = createKnowledgeConfigState();
-  }
-});
-
 // src/core/files.ts
-import { createHash as createHash2 } from "node:crypto";
+import { createHash as createHash3 } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, realpath as realpath2 } from "node:fs/promises";
 import { isAbsolute as isAbsolute2, join as join3, relative, sep } from "node:path";
@@ -463,7 +630,7 @@ async function readNoteFile(vault, path) {
     return {
       path,
       text: bytes.toString("utf8"),
-      hash: createHash2("sha256").update(bytes).digest("hex"),
+      hash: createHash3("sha256").update(bytes).digest("hex"),
       signature: fileVersion(after),
       bytes: offset
     };
@@ -493,183 +660,6 @@ var init_files = __esm({
       "_template"
     ]);
     RESERVED = ["Projects", "Library", "Wiki", "Attachments", "Templates", "Indexes", "Inbox"];
-  }
-});
-
-// src/core/review-policy-storage.ts
-import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
-import { mkdir as mkdir2, readFile as readFile2, rename as rename2, unlink, writeFile as writeFile2 } from "node:fs/promises";
-import { join as join4 } from "node:path";
-function createLocalReviewPolicyStorage(config) {
-  let queue = Promise.resolve();
-  async function read() {
-    const directory = config.knowledgeDirectory();
-    if (!directory) return { kind: "missing", version: null };
-    let bytes;
-    try {
-      bytes = await readFile2(join4(directory, "review-policy.json"));
-    } catch (error) {
-      if (error.code === "ENOENT")
-        return { kind: "missing", version: null };
-      throw error;
-    }
-    let value;
-    try {
-      value = JSON.parse(bytes.toString("utf8"));
-    } catch (error) {
-      if (!(error instanceof SyntaxError)) throw error;
-      console.warn(
-        "[knowledge review policy] Invalid JSON; strict mode applies"
-      );
-      return { kind: "corrupt", version: null };
-    }
-    return {
-      kind: "value",
-      value,
-      version: createHash3("sha256").update(bytes).digest("hex")
-    };
-  }
-  return {
-    read,
-    write(value, expectedVersion) {
-      const operation = queue.catch(() => void 0).then(async () => {
-        const directory = config.knowledgeDirectory();
-        if (!directory) throw new Error("No application knowledge directory");
-        const current = await read();
-        if (current.kind === "corrupt")
-          throw new Error(
-            "Review policy is damaged; repair it before changing settings"
-          );
-        if (current.version !== expectedVersion)
-          throw Object.assign(
-            new Error("Review policy changed; refresh before saving"),
-            { code: "ESTATECONFLICT" }
-          );
-        await mkdir2(directory, { recursive: true, mode: 448 });
-        const temporary = join4(
-          directory,
-          `review-policy.${randomUUID2()}.tmp`
-        );
-        await writeFile2(temporary, JSON.stringify(value), {
-          flag: "wx",
-          mode: 384
-        });
-        try {
-          await rename2(temporary, join4(directory, "review-policy.json"));
-        } catch (error) {
-          await unlink(temporary);
-          throw error;
-        }
-        return read();
-      });
-      queue = operation;
-      return operation;
-    }
-  };
-}
-var init_review_policy_storage = __esm({
-  "src/core/review-policy-storage.ts"() {
-    "use strict";
-  }
-});
-
-// src/core/review-policy.ts
-var review_policy_exports = {};
-__export(review_policy_exports, {
-  advisoryCodes: () => advisoryCodes,
-  createKnowledgeReviewPolicy: () => createKnowledgeReviewPolicy,
-  createStoredKnowledgeReviewPolicy: () => createStoredKnowledgeReviewPolicy,
-  readReviewMode: () => readReviewMode,
-  saveReviewMode: () => saveReviewMode
-});
-function createStoredKnowledgeReviewPolicy(storage, strictOverride) {
-  async function readReviewPolicy() {
-    const document = await storage.read();
-    const override = strictOverride() ? "environment" : null;
-    if (document.kind === "missing")
-      return {
-        mode: override ? "strict" : "automatic",
-        persistedMode: null,
-        version: null,
-        override,
-        diagnostic: null
-      };
-    if (document.kind === "corrupt")
-      return {
-        mode: "strict",
-        persistedMode: null,
-        version: null,
-        override,
-        diagnostic: "invalid-json"
-      };
-    const value = document.value;
-    const mode = value && typeof value === "object" && "mode" in value ? value.mode : void 0;
-    if (mode !== "automatic" && mode !== "strict")
-      return {
-        mode: "strict",
-        persistedMode: null,
-        version: document.version,
-        override,
-        diagnostic: "invalid-policy"
-      };
-    return {
-      mode: override ? "strict" : mode,
-      persistedMode: mode,
-      version: document.version,
-      override,
-      diagnostic: null
-    };
-  }
-  async function readReviewMode2() {
-    return (await readReviewPolicy()).mode;
-  }
-  async function saveReviewMode2(mode, expectedVersion) {
-    if (mode !== "automatic" && mode !== "strict")
-      throw new Error("Invalid review mode");
-    const current = await readReviewPolicy();
-    if (current.diagnostic)
-      throw new Error(
-        "Review policy is damaged; repair it before changing settings"
-      );
-    await storage.write(
-      { version: 1, mode },
-      expectedVersion === void 0 ? current.version : expectedVersion
-    );
-    const saved = await readReviewPolicy();
-    if (saved.diagnostic || saved.persistedMode !== mode)
-      throw new Error("Review policy changed during write verification");
-    return { mode: saved.mode };
-  }
-  return { readReviewMode: readReviewMode2, readReviewPolicy, saveReviewMode: saveReviewMode2 };
-}
-function createKnowledgeReviewPolicy(config) {
-  return createStoredKnowledgeReviewPolicy(
-    createLocalReviewPolicyStorage(config),
-    () => process.env.DRONE_REVIEW_MODE === "strict"
-  );
-}
-var readReviewMode, saveReviewMode, advisoryCodes;
-var init_review_policy = __esm({
-  "src/core/review-policy.ts"() {
-    "use strict";
-    init_config();
-    init_review_policy_storage();
-    ({ readReviewMode, saveReviewMode } = createKnowledgeReviewPolicy(config_exports));
-    advisoryCodes = /* @__PURE__ */ new Set([
-      "paper-citation-required",
-      "search-required",
-      "coverage-incomplete",
-      "wiki-changed",
-      "citation-required",
-      "source-unread",
-      "source-changed",
-      "delivery-changed",
-      "search-stale",
-      "check-timeout",
-      "not-prepared",
-      "citation-invalid",
-      "citation-budget"
-    ]);
   }
 });
 
@@ -779,8 +769,8 @@ __export(ui_state_exports, {
   updateKnowledgeFlow: () => updateKnowledgeFlow
 });
 import { randomUUID as randomUUID4 } from "node:crypto";
-import { mkdirSync as mkdirSync2, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join as join6 } from "node:path";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { join as join5 } from "node:path";
 function createKnowledgeUi(runtime, config, metrics) {
   const { runtimeSlot: runtimeSlot2, emitProcessEvent: emitProcessEvent2, flowCardBuilder: flowCardBuilder2, toolMeta: toolMeta2 } = runtime;
   const knowledgeDirectory2 = () => config?.knowledgeDirectory() ?? null;
@@ -828,7 +818,7 @@ function createKnowledgeUi(runtime, config, metrics) {
   const metricsFile = () => {
     try {
       const dir = knowledgeDirectory2();
-      return dir ? join6(dir, "answer-metrics.json") : null;
+      return dir ? join5(dir, "answer-metrics.json") : null;
     } catch {
       return null;
     }
@@ -855,7 +845,7 @@ function createKnowledgeUi(runtime, config, metrics) {
     const file = metricsFile();
     if (!file) return;
     try {
-      mkdirSync2(join6(file, ".."), { recursive: true });
+      mkdirSync(join5(file, ".."), { recursive: true });
       const tmp = `${file}.${process.pid}.tmp`;
       writeFileSync(tmp, JSON.stringify(state.localAnswerStats));
       renameSync(tmp, file);
@@ -1137,21 +1127,57 @@ function createKnowledgeUi(runtime, config, metrics) {
   function publicationKnowledgeFlow2(ctx, proof) {
     return metrics ? runtime.runRuntimeExclusive("knowledge-ui", "answer-metrics", () => updatePublicationFlow(ctx, proof)) : updatePublicationFlow(ctx, proof);
   }
-  return { dispose: () => {
-    state.listeners.clear();
-    state.flows.clear();
-  }, subscribeKnowledgeUi: subscribeKnowledgeUi2, emitKnowledgeUi: emitKnowledgeUi2, flowFor: flowFor2, knowledgeAnswerRate: knowledgeAnswerRate2, beginKnowledgeFlow: beginKnowledgeFlow2, updateKnowledgeFlow: updateKnowledgeFlow2, noteKnowledgeRead: noteKnowledgeRead2, publicationKnowledgeFlow: publicationKnowledgeFlow2, requestWikiReviewUi: requestWikiReviewUi2, notifyKnowledgeUi: notifyKnowledgeUi2, invalidateKnowledgeUi: invalidateKnowledgeUi2, clearKnowledgeFlow: clearKnowledgeFlow2, knowledgeExcerpt: knowledgeExcerpt2, noteKnowledgeSearch: noteKnowledgeSearch2, noteKnowledgeOperation: noteKnowledgeOperation2, noteKnowledgeSpecialist: noteKnowledgeSpecialist2, receiveCompatibilityEvent };
+  return {
+    dispose: () => {
+      state.listeners.clear();
+      state.flows.clear();
+    },
+    subscribeKnowledgeUi: subscribeKnowledgeUi2,
+    emitKnowledgeUi: emitKnowledgeUi2,
+    flowFor: flowFor2,
+    knowledgeAnswerRate: knowledgeAnswerRate2,
+    beginKnowledgeFlow: beginKnowledgeFlow2,
+    updateKnowledgeFlow: updateKnowledgeFlow2,
+    noteKnowledgeRead: noteKnowledgeRead2,
+    publicationKnowledgeFlow: publicationKnowledgeFlow2,
+    requestWikiReviewUi: requestWikiReviewUi2,
+    notifyKnowledgeUi: notifyKnowledgeUi2,
+    invalidateKnowledgeUi: invalidateKnowledgeUi2,
+    clearKnowledgeFlow: clearKnowledgeFlow2,
+    knowledgeExcerpt: knowledgeExcerpt2,
+    noteKnowledgeSearch: noteKnowledgeSearch2,
+    noteKnowledgeOperation: noteKnowledgeOperation2,
+    noteKnowledgeSpecialist: noteKnowledgeSpecialist2,
+    receiveCompatibilityEvent
+  };
 }
 var compatibilityKnowledgeUi, subscribeKnowledgeUi, emitKnowledgeUi, flowFor, knowledgeAnswerRate, beginKnowledgeFlow, updateKnowledgeFlow, noteKnowledgeRead, publicationKnowledgeFlow, requestWikiReviewUi, notifyKnowledgeUi, invalidateKnowledgeUi, clearKnowledgeFlow, knowledgeExcerpt, noteKnowledgeSearch, noteKnowledgeOperation, noteKnowledgeSpecialist;
 var init_ui_state = __esm({
   "src/core/ui-state.ts"() {
     "use strict";
     init_config();
-    init_runtime_host();
     init_flow_cards();
+    init_runtime_host();
     compatibilityKnowledgeUi = createKnowledgeUi(compatibilityKnowledgeRuntimeHost, config_exports);
     process.on("drone:knowledge-ui/v1", compatibilityKnowledgeUi.receiveCompatibilityEvent);
-    ({ subscribeKnowledgeUi, emitKnowledgeUi, flowFor, knowledgeAnswerRate, beginKnowledgeFlow, updateKnowledgeFlow, noteKnowledgeRead, publicationKnowledgeFlow, requestWikiReviewUi, notifyKnowledgeUi, invalidateKnowledgeUi, clearKnowledgeFlow, knowledgeExcerpt, noteKnowledgeSearch, noteKnowledgeOperation, noteKnowledgeSpecialist } = compatibilityKnowledgeUi);
+    ({
+      subscribeKnowledgeUi,
+      emitKnowledgeUi,
+      flowFor,
+      knowledgeAnswerRate,
+      beginKnowledgeFlow,
+      updateKnowledgeFlow,
+      noteKnowledgeRead,
+      publicationKnowledgeFlow,
+      requestWikiReviewUi,
+      notifyKnowledgeUi,
+      invalidateKnowledgeUi,
+      clearKnowledgeFlow,
+      knowledgeExcerpt,
+      noteKnowledgeSearch,
+      noteKnowledgeOperation,
+      noteKnowledgeSpecialist
+    } = compatibilityKnowledgeUi);
   }
 });
 
@@ -1168,9 +1194,9 @@ __export(specialist_host_exports, {
   specialistSettings: () => specialistSettings2,
   withSpecialistSlot: () => withSpecialistSlot
 });
-import { randomUUID as randomUUID6 } from "node:crypto";
-import { mkdir as mkdir4, readFile as readFile4, rename as rename4, unlink as unlink3, writeFile as writeFile4 } from "node:fs/promises";
-import { join as join7 } from "node:path";
+import { randomUUID as randomUUID7 } from "node:crypto";
+import { mkdir as mkdir5, readFile as readFile4, rename as rename4, unlink as unlink3, writeFile as writeFile5 } from "node:fs/promises";
+import { join as join8 } from "node:path";
 function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEvent, storage) {
   const { runtimeSlot: runtimeSlot2 } = runtime;
   const { knowledgeDirectory: knowledgeDirectory2, readKnowledgeBinding: readKnowledgeBinding2, withKnowledgeBinding: withKnowledgeBinding2 } = config;
@@ -1235,7 +1261,7 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
       const dir = knowledgeDirectory2();
       if (!dir) return { mode: "off", revision: 0, ...SPECIALIST_LIMITS2 };
       try {
-        data = JSON.parse(await readFile4(join7(dir, "specialists.json"), "utf8"));
+        data = JSON.parse(await readFile4(join8(dir, "specialists.json"), "utf8"));
       } catch (e) {
         if (e.code !== "ENOENT") throw new Error("Knowledge specialist settings cannot be read");
       }
@@ -1331,12 +1357,12 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
         data.revision = revision + 1;
         if (storage) await storage.write(data, revision);
         else {
-          const dir = knowledgeDirectory2(), temp = join7(dir, `specialists.${randomUUID6()}.tmp`);
-          await mkdir4(dir, { recursive: true, mode: 448 });
+          const dir = knowledgeDirectory2(), temp = join8(dir, `specialists.${randomUUID7()}.tmp`);
+          await mkdir5(dir, { recursive: true, mode: 448 });
           try {
-            await writeFile4(temp, `${JSON.stringify(data)}
+            await writeFile5(temp, `${JSON.stringify(data)}
 `, { flag: "wx", mode: 384 });
-            await rename4(temp, join7(dir, "specialists.json"));
+            await rename4(temp, join8(dir, "specialists.json"));
           } finally {
             await unlink3(temp).catch((e) => {
               if (e.code !== "ENOENT") throw e;
@@ -1359,7 +1385,11 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
       SPECIALIST_LIMITS2.concurrency,
       SPECIALIST_LIMITS2.maxConcurrency
     );
-    const queueLimit = bounded2(options.queueLimit, SPECIALIST_LIMITS2.queueLimit, SPECIALIST_LIMITS2.queueLimit);
+    const queueLimit = bounded2(
+      options.queueLimit,
+      SPECIALIST_LIMITS2.queueLimit,
+      SPECIALIST_LIMITS2.queueLimit
+    );
     const queueWaitMs = bounded2(
       options.queueWaitMs,
       SPECIALIST_LIMITS2.queueWaitMs,
@@ -1414,7 +1444,18 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
       else state.active--;
     }
   }
-  return { dispose: () => state.dispose(), SPECIALIST_LIMITS: SPECIALIST_LIMITS2, contextSessionId: contextSessionId2, specialistQueueSnapshot: specialistQueueSnapshot2, registerKnowledgeSpecialistHost: registerKnowledgeSpecialistHost2, knowledgeSpecialistHost: knowledgeSpecialistHost2, specialistSettings: specialistSettings3, setSpecialistSettings: setSpecialistSettings2, withSpecialistSlot: withSpecialistSlot2, receiveCompatibilityEvent };
+  return {
+    dispose: () => state.dispose(),
+    SPECIALIST_LIMITS: SPECIALIST_LIMITS2,
+    contextSessionId: contextSessionId2,
+    specialistQueueSnapshot: specialistQueueSnapshot2,
+    registerKnowledgeSpecialistHost: registerKnowledgeSpecialistHost2,
+    knowledgeSpecialistHost: knowledgeSpecialistHost2,
+    specialistSettings: specialistSettings3,
+    setSpecialistSettings: setSpecialistSettings2,
+    withSpecialistSlot: withSpecialistSlot2,
+    receiveCompatibilityEvent
+  };
 }
 function createKnowledgeSpecialistHost(runtime, config, ui, storage) {
   return createKnowledgeSpecialistHostApi(runtime, config, ui, null, storage);
@@ -1423,17 +1464,830 @@ var compatibilityKnowledgeSpecialists, SPECIALIST_LIMITS, contextSessionId, spec
 var init_specialist_host = __esm({
   "src/core/specialist-host.ts"() {
     "use strict";
-    init_runtime_host();
     init_config();
+    init_runtime_host();
     init_ui_state();
-    compatibilityKnowledgeSpecialists = createKnowledgeSpecialistHostApi(compatibilityKnowledgeRuntimeHost, config_exports, ui_state_exports, compatibilityKnowledgeRuntimeHost.emitProcessEvent);
+    compatibilityKnowledgeSpecialists = createKnowledgeSpecialistHostApi(
+      compatibilityKnowledgeRuntimeHost,
+      config_exports,
+      ui_state_exports,
+      compatibilityKnowledgeRuntimeHost.emitProcessEvent
+    );
     process.on("drone:knowledge-specialist-host/v1", compatibilityKnowledgeSpecialists.receiveCompatibilityEvent);
-    ({ SPECIALIST_LIMITS, contextSessionId, specialistQueueSnapshot, registerKnowledgeSpecialistHost, knowledgeSpecialistHost, specialistSettings: specialistSettings2, setSpecialistSettings, withSpecialistSlot } = compatibilityKnowledgeSpecialists);
+    ({
+      SPECIALIST_LIMITS,
+      contextSessionId,
+      specialistQueueSnapshot,
+      registerKnowledgeSpecialistHost,
+      knowledgeSpecialistHost,
+      specialistSettings: specialistSettings2,
+      setSpecialistSettings,
+      withSpecialistSlot
+    } = compatibilityKnowledgeSpecialists);
+  }
+});
+
+// src/core/claim-conflicts.ts
+function direction(claim) {
+  if (claim.direction) return claim.direction;
+  const text4 = normalize2(`${claim.predicate} ${claim.value || claim.claim}`);
+  const negated = /\b(?:not|no|without|fails)\b|不|未|无/.test(text4);
+  const increase = /\b(?:increases?|increased|upregulated)\b|增加|升高|上调/.test(text4);
+  const decrease = /\b(?:decreases?|decreased|downregulated)\b|减少|降低|下调/.test(text4);
+  if (increase && decrease || negated && (increase || decrease)) return "unknown";
+  if (increase) return "increase";
+  if (decrease) return "decrease";
+  if (/\b(?:activates?|promotes?|supports?)\b|激活|促进|支持/.test(text4))
+    return negated ? "negated" : "affirmed";
+  return "unknown";
+}
+function comparableValue(value) {
+  return normalize2(value).replace(
+    /\b(?:does|do|not|no|without|fails|increase[sd]?|decrease[sd]?|activate[sd]?)\b|不|无|未|增加|减少|降低|升高|激活/g,
+    " "
+  );
+}
+function compareClaims(previous, incoming) {
+  if (!previous || !incoming) {
+    return {
+      relation: "unresolved",
+      confidence: "low",
+      reason: "\u7F3A\u5C11\u4E00\u65B9\u7ED3\u6784\u5316\u4E3B\u5F20\uFF0C\u65E0\u6CD5\u6BD4\u8F83\u3002",
+      blocking: false
+    };
+  }
+  if (!field(previous, "subject") || !field(previous, "predicate") || field(previous, "subject") !== field(incoming, "subject") || field(previous, "predicate") !== field(incoming, "predicate"))
+    return {
+      relation: "unresolved",
+      confidence: "low",
+      reason: "\u4E3B\u8BED\u6216\u8C13\u8BCD\u4E0D\u540C\uFF0C\u4E0D\u80FD\u89C6\u4E3A\u540C\u4E00\u547D\u9898\u3002",
+      blocking: false
+    };
+  const conditions = ["organism", "tissue", "stage", "method"];
+  const optional = ["endpoint", "unit"].filter((key) => field(previous, key) || field(incoming, key));
+  const required = [...conditions, ...optional];
+  const missing = required.filter((key) => !field(previous, key) || !field(incoming, key));
+  if (missing.length)
+    return {
+      relation: "unresolved",
+      confidence: "low",
+      blocking: false,
+      missingConditions: missing,
+      reason: `\u7F3A\u5C11\u53EF\u6BD4\u8F83\u6761\u4EF6\uFF08${missing.join("\u3001")}\uFF09\uFF0C\u4E0D\u80FD\u5224\u65AD\u652F\u6301\u6216\u51B2\u7A81\u3002`
+    };
+  const changed = required.filter(
+    (key) => field(previous, key) && field(incoming, key) && field(previous, key) !== field(incoming, key)
+  );
+  if (changed.length)
+    return {
+      relation: "unresolved",
+      confidence: "medium",
+      reason: `\u5B9E\u9A8C\u6761\u4EF6\u4E0D\u540C\uFF08${changed.join("\u3001")}\uFF09\uFF0C\u9700\u8981\u6309\u6761\u4EF6\u5E76\u5217\u89E3\u91CA\u3002`,
+      differingConditions: changed,
+      blocking: false
+    };
+  if (field(previous, "relation") !== "observation" || field(incoming, "relation") !== "observation")
+    return {
+      relation: "unresolved",
+      confidence: "medium",
+      reason: "\u89E3\u91CA\u6216\u5047\u8BBE\u4E0D\u80FD\u76F4\u63A5\u63A8\u7FFB\u89C2\u5BDF\u7ED3\u679C\u3002",
+      blocking: false
+    };
+  const priorValue = comparableValue(`${previous.predicate} ${previous.value || previous.claim}`);
+  const nextValue = comparableValue(`${incoming.predicate} ${incoming.value || incoming.claim}`);
+  if (overlap(priorValue, nextValue) < 0.5)
+    return {
+      relation: "unresolved",
+      confidence: "low",
+      reason: "\u547D\u9898\u5185\u5BB9\u76F8\u4F3C\u5EA6\u4E0D\u8DB3\uFF0C\u4EA4\u7531\u4EBA\u5DE5\u5224\u65AD\u3002",
+      blocking: false
+    };
+  const priorDirection = direction(previous), nextDirection = direction(incoming);
+  if (priorDirection === "unknown" || nextDirection === "unknown")
+    return {
+      relation: "unresolved",
+      confidence: "low",
+      blocking: false,
+      reason: "\u89C2\u5BDF\u65B9\u5411\u672A\u77E5\uFF0C\u4E0D\u80FD\u5224\u65AD\u652F\u6301\u6216\u51B2\u7A81\u3002"
+    };
+  if (priorDirection === nextDirection)
+    return {
+      relation: "supports",
+      confidence: "medium",
+      blocking: false,
+      reason: "\u540C\u6761\u4EF6\u4E0B\u65B9\u5411\u4E00\u81F4\uFF0C\u53EF\u5E76\u5217\u4FDD\u7559\u3002"
+    };
+  const opposite = /* @__PURE__ */ new Set([priorDirection, nextDirection]);
+  if (!(opposite.has("increase") && opposite.has("decrease")) && !(opposite.has("affirmed") && opposite.has("negated")))
+    return {
+      relation: "unresolved",
+      confidence: "low",
+      blocking: false,
+      reason: "\u65B9\u5411\u7C7B\u578B\u4E0D\u540C\uFF0C\u4E0D\u80FD\u76F4\u63A5\u6BD4\u8F83\u3002"
+    };
+  return {
+    relation: "contradicts",
+    confidence: "high",
+    reason: "\u540C\u4E00\u5BF9\u8C61\u3001\u540C\u4E00\u6761\u4EF6\u3001\u540C\u4E00\u89C2\u5BDF\u547D\u9898\u7684\u65B9\u5411\u76F8\u53CD\u3002",
+    blocking: true
+  };
+}
+function compareClaimSets(previousClaims = [], incomingClaims = []) {
+  const comparisons = [];
+  for (const incoming of incomingClaims) {
+    for (const previous of previousClaims) {
+      const result2 = compareClaims(previous, incoming);
+      if (field(previous, "subject") && field(previous, "subject") === field(incoming, "subject") && field(previous, "predicate") === field(incoming, "predicate"))
+        comparisons.push({ previous, incoming, ...result2 });
+    }
+  }
+  return comparisons;
+}
+var normalize2, tokens2, overlap, field;
+var init_claim_conflicts = __esm({
+  "src/core/claim-conflicts.ts"() {
+    "use strict";
+    normalize2 = (value) => String(value ?? "").normalize("NFKC").toLowerCase().replace(/[\u0000-\u001f\u007f]/g, " ").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    tokens2 = (value) => new Set(
+      normalize2(value).split(/\s+/).filter((token) => token.length > 1)
+    );
+    overlap = (left, right) => {
+      const a = tokens2(left);
+      const b = tokens2(right);
+      if (!a.size || !b.size) return 0;
+      let common = 0;
+      for (const token of a) if (b.has(token)) common++;
+      return common / Math.max(a.size, b.size);
+    };
+    field = (claim, key) => normalize2(claim[key]);
+  }
+});
+
+// src/core/topic-memory.ts
+var topic_memory_exports = {};
+__export(topic_memory_exports, {
+  TOPIC_MEMORY_LIMITS: () => TOPIC_MEMORY_LIMITS,
+  TOPIC_MEMORY_VERSION: () => TOPIC_MEMORY_VERSION,
+  archiveTopic: () => archiveTopic,
+  classifyTopic: () => classifyTopic,
+  createTopicMemory: () => createTopicMemory,
+  createTopicMemoryApi: () => createTopicMemoryApi,
+  listTopics: () => listTopics,
+  readTopic: () => readTopic,
+  topicRunHash: () => topicRunHash,
+  updateTopic: () => updateTopic
+});
+import { createHash as createHash7, randomUUID as randomUUID9 } from "node:crypto";
+import { lstat as lstat5, mkdir as mkdir6, readFile as readFile6, realpath as realpath4, rename as rename5, unlink as unlink4, writeFile as writeFile6 } from "node:fs/promises";
+import { dirname as dirname3, isAbsolute as isAbsolute4, join as join9, relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
+function projectKey(project) {
+  const value = text(project, 120);
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) throw new Error("Invalid knowledge project");
+  return value;
+}
+function memoryPath(directory, vaultId, project) {
+  if (!isAbsolute4(directory) || !/^[a-f0-9]{24}$/.test(vaultId))
+    throw new Error("Invalid topic memory binding");
+  return join9(resolve4(directory), vaultId, "topic-memory", `${projectKey(project)}.json`);
+}
+async function ensureWithin(root, target) {
+  const lexicalRoot = resolve4(root);
+  const actualRoot = await realpath4(root).catch(() => lexicalRoot);
+  const lexicalParent = resolve4(dirname3(target));
+  const rebased = lexicalParent.startsWith(lexicalRoot) ? join9(actualRoot, lexicalParent.slice(lexicalRoot.length)) : lexicalParent;
+  const parent = await realpath4(rebased).catch(() => rebased);
+  const rel = relative4(actualRoot, parent);
+  if (isAbsolute4(rel) || rel === ".." || rel.startsWith(`..${sep4}`))
+    throw new Error("Topic memory path escapes knowledge directory");
+  let cursor = actualRoot;
+  for (const part of relative4(actualRoot, rebased).split(sep4).filter(Boolean)) {
+    cursor = join9(cursor, part);
+    try {
+      if ((await lstat5(cursor)).isSymbolicLink())
+        throw new Error("Topic memory path cannot traverse symlinks");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      break;
+    }
+  }
+  try {
+    const stat4 = await lstat5(target);
+    if (stat4.isSymbolicLink()) throw new Error("Topic memory file cannot be a symlink");
+    if (!stat4.isFile()) throw new Error("Topic memory path is not a regular file");
+    if (stat4.size > TOPIC_MEMORY_LIMITS.maxFileBytes) throw new Error("Topic memory file exceeds size limit");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  return target;
+}
+function blank(vaultId, project) {
+  const now2 = (/* @__PURE__ */ new Date()).toISOString();
+  return {
+    version: TOPIC_MEMORY_VERSION,
+    vaultId,
+    project,
+    revision: 0,
+    updatedAt: now2,
+    topics: []
+  };
+}
+function validateSource(source, project = null) {
+  if (!source || typeof source !== "object" || typeof source.path !== "string" || isAbsolute4(source.path) || source.path.includes("\\") || source.path.split("/").includes("..") || !/^[^\0]+\.md$/.test(source.path) || source.path.length > 240 || /(?:^|\/)(?:Runs|Explainers)\//i.test(source.path) || !/^[a-f0-9]{64}$/.test(source.hash || ""))
+    return null;
+  try {
+    validateNote(source.path);
+  } catch {
+    return null;
+  }
+  if (project && !canRead(source.path, project)) return null;
+  return { path: source.path, hash: source.hash };
+}
+function normalizeTopic(topic, binding, project) {
+  if (!topic || typeof topic !== "object" || typeof topic.id !== "string")
+    throw new Error("Invalid topic record");
+  const sources = Array.isArray(topic.sources) ? (topic.sources.some((source) => !validateSource(source, project)) ? (() => {
+    throw new Error("Invalid or out-of-scope topic source");
+  })() : topic.sources).map((source) => validateSource(source, project)).filter(Boolean).slice(0, TOPIC_MEMORY_LIMITS.maxSources) : [];
+  const id2 = text(topic.id, 120);
+  if (!/^[a-z0-9][a-z0-9_-]{0,95}$/i.test(id2)) throw new Error("Invalid topic id");
+  return {
+    id: id2,
+    title: text(topic.title || topic.id, 180),
+    aliases: [
+      ...new Set(
+        (Array.isArray(topic.aliases) ? topic.aliases : []).map((x) => text(x, 120)).filter(Boolean)
+      )
+    ].slice(0, 12),
+    summary: text(topic.summary, TOPIC_MEMORY_LIMITS.maxSummaryChars),
+    entities: [
+      ...new Set(
+        (Array.isArray(topic.entities) ? topic.entities : []).map((x) => text(x, 100)).filter(Boolean)
+      )
+    ].slice(0, TOPIC_MEMORY_LIMITS.maxEntities),
+    unresolvedQuestions: [
+      ...new Set(
+        (Array.isArray(topic.unresolvedQuestions) ? topic.unresolvedQuestions : []).map((x) => text(x, 240)).filter(Boolean)
+      )
+    ].slice(0, TOPIC_MEMORY_LIMITS.maxQuestions),
+    sources,
+    artifacts: [
+      ...new Set(
+        (Array.isArray(topic.artifacts) ? topic.artifacts : []).map((x) => text(x, 240)).filter(Boolean)
+      )
+    ].slice(0, TOPIC_MEMORY_LIMITS.maxArtifacts),
+    sessionId: topic.sessionId ? text(topic.sessionId, 160) : null,
+    status: ["active", "stale", "conflict-candidate", "archived"].includes(topic.status) ? topic.status : "active",
+    createdAt: topic.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+    updatedAt: topic.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
+    lastRunHash: /^[a-f0-9]{64}$/.test(topic.lastRunHash || "") ? topic.lastRunHash : null,
+    lastRunId: topic.lastRunId ? text(topic.lastRunId, 200) : null,
+    recentRuns: Array.isArray(topic.recentRuns) ? topic.recentRuns.filter((x) => /^[a-f0-9]{64}$/.test(x)).slice(-TOPIC_MEMORY_LIMITS.maxRecentRuns) : [],
+    proposalIds: [
+      ...new Set(
+        (Array.isArray(topic.proposalIds) ? topic.proposalIds : []).map((x) => text(x, 120)).filter(Boolean)
+      )
+    ].slice(0, 12),
+    keyFindings: Array.isArray(topic.keyFindings) ? topic.keyFindings.map((x) => text(x, 300)).filter(Boolean).slice(0, 16) : [],
+    claims: Array.isArray(topic.claims) ? topic.claims.map((claim) => normalizeClaim(claim, project)).filter(Boolean).slice(-TOPIC_MEMORY_LIMITS.maxClaims) : [],
+    conflicts: Array.isArray(topic.conflicts) ? topic.conflicts.map((conflict) => normalizeConflict(conflict, project)).filter(Boolean).slice(-TOPIC_MEMORY_LIMITS.maxConflicts) : [],
+    history: Array.isArray(topic.history) ? topic.history.slice(-TOPIC_MEMORY_LIMITS.maxHistory).map((entry) => ({
+      summary: text(entry?.summary, 800),
+      updatedAt: text(entry?.updatedAt, 40)
+    })).filter((entry) => entry.summary) : [],
+    vaultId: typeof binding === "string" ? binding : binding?.vaultId,
+    project
+  };
+}
+function normalizeClaim(claim, project) {
+  if (!claim || typeof claim !== "object") return null;
+  const sourcePath = text(claim.sourcePath || claim.source_path, 240);
+  const sourceHash = text(claim.sourceHash || claim.source_hash, 64);
+  if (!sourcePath || !/^[a-f0-9]{64}$/.test(sourceHash) || !validateSource({ path: sourcePath, hash: sourceHash }, project))
+    return null;
+  const relation = ["observation", "interpretation", "hypothesis"].includes(claim.relation) ? claim.relation : "observation";
+  const value = text(claim.value, 600);
+  const statement = text(claim.claim, 1200);
+  if (!statement || !text(claim.subject, 180) || !text(claim.predicate, 180)) return null;
+  return {
+    claim: statement,
+    subject: text(claim.subject, 180),
+    predicate: text(claim.predicate, 180),
+    ...value ? { value } : {},
+    ...["organism", "tissue", "stage", "method", "endpoint", "unit"].reduce((result2, key) => {
+      const value2 = text(claim[key], 180);
+      if (value2) result2[key] = value2;
+      return result2;
+    }, {}),
+    ...claim.direction !== void 0 ? {
+      direction: ["increase", "decrease", "affirmed", "negated", "unknown"].includes(claim.direction) ? claim.direction : "unknown"
+    } : {},
+    ...Number.isFinite(claim.effect) ? { effect: claim.effect } : {},
+    sourcePath,
+    sourceHash,
+    ...claim.location ? { location: text(claim.location, 120) } : {},
+    ...claim.limitations ? { limitations: text(claim.limitations, 4e3) } : {},
+    relation
+  };
+}
+function validateConflictPath(path, project) {
+  if (typeof path !== "string" || !path || isAbsolute4(path) || path.includes("\\") || path.split("/").includes("..") || /(?:^|\/)(?:Runs|Explainers)\//i.test(path))
+    return false;
+  try {
+    validateNote(path);
+  } catch {
+    return false;
+  }
+  return canRead(path, project);
+}
+function normalizeConflict(conflict, project) {
+  if (!conflict || typeof conflict !== "object") return null;
+  const result2 = {
+    relation: text(conflict.relation, 40),
+    confidence: text(conflict.confidence, 20),
+    reason: text(conflict.reason, 600),
+    previousSourcePath: text(conflict.previousSourcePath, 240),
+    incomingSourcePath: text(conflict.incomingSourcePath, 240),
+    detectedAt: text(conflict.detectedAt, 40),
+    ...conflict.comparisonVersion === 2 ? {
+      comparisonVersion: 2,
+      previousSourceHash: text(conflict.previousSourceHash, 64),
+      incomingSourceHash: text(conflict.incomingSourceHash, 64),
+      missingConditions: conflict.missingConditions,
+      differingConditions: conflict.differingConditions
+    } : {}
+  };
+  if (!["contradicts", "supports", "refines", "supersedes", "unresolved"].includes(result2.relation))
+    return null;
+  if (!result2.reason || !validateConflictPath(result2.previousSourcePath, project) || !validateConflictPath(result2.incomingSourcePath, project))
+    return null;
+  return result2;
+}
+function validateDocument(value, vaultId, project) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Corrupt topic memory; refusing overwrite");
+  if (value.version !== TOPIC_MEMORY_VERSION)
+    throw new Error("Unsupported topic memory schema version; refusing overwrite");
+  if (value.vaultId !== vaultId || value.project !== project || !Number.isSafeInteger(value.revision) || value.revision < 0 || !Array.isArray(value.topics))
+    throw new Error("Corrupt topic memory; refusing overwrite");
+  if (value.topics.length > TOPIC_MEMORY_LIMITS.maxTopics)
+    throw new Error("Topic memory exceeds its bounded record limit");
+  return {
+    ...value,
+    topics: value.topics.map((topic) => normalizeTopic(topic, vaultId, project))
+  };
+}
+async function readDocument(path, vaultId, project) {
+  try {
+    const raw = await readFile6(path, "utf8");
+    if (Buffer.byteLength(raw) > TOPIC_MEMORY_LIMITS.maxFileBytes)
+      throw new Error("Topic memory file exceeds size limit");
+    const parsed = JSON.parse(raw);
+    return validateDocument(parsed, vaultId, project);
+  } catch (error) {
+    if (error.code === "ENOENT") return blank(vaultId, project);
+    if (error instanceof SyntaxError) throw new Error("Corrupt topic memory; refusing overwrite");
+    throw error;
+  }
+}
+async function atomicWrite(path, value) {
+  await mkdir6(dirname3(path), { recursive: true, mode: 448 });
+  const temp = join9(dirname3(path), `.${randomUUID9()}.tmp`);
+  try {
+    await writeFile6(temp, `${JSON.stringify(value, null, 2)}
+`, {
+      flag: "wx",
+      mode: 384
+    });
+    await rename5(temp, path);
+  } finally {
+    await unlink4(temp).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
+}
+function classifyTopic(existing, incoming) {
+  if (!existing) return "new";
+  if (incoming.runHash && (incoming.runHash === existing.lastRunHash || existing.recentRuns?.includes(incoming.runHash)))
+    return "duplicate";
+  const oldSources = new Map((existing.sources || []).map((source) => [source.path, source.hash]));
+  const changed = (incoming.sources || []).some(
+    (source) => oldSources.has(source.path) && oldSources.get(source.path) !== source.hash
+  );
+  if (changed) return "stale";
+  const previousClaims = existing.claims || [];
+  const incomingClaims = incoming.claims || [];
+  if (previousClaims.length && incomingClaims.length && compareClaimSets(previousClaims, incomingClaims).some((comparison) => comparison.blocking))
+    return "conflict-candidate";
+  return "additional";
+}
+function createTopicMemoryWithHost(runtime, config, { binding, project, directory = config?.knowledgeDirectory() } = {}, storageFactory) {
+  if (!binding?.vaultId) throw new Error("Topic memory requires a bound Vault");
+  const scope = { vaultId: binding.vaultId, project: projectKey(project) };
+  const storage = storageFactory?.(binding, scope.project);
+  const path = storage ? storage.key : memoryPath(directory, scope.vaultId, scope.project);
+  const read = async () => {
+    if (storage) {
+      const value = await storage.read();
+      if (value === null) return blank(scope.vaultId, scope.project);
+      if (Buffer.byteLength(JSON.stringify(value)) > TOPIC_MEMORY_LIMITS.maxFileBytes)
+        throw new Error("Topic memory file exceeds size limit");
+      return validateDocument(value, scope.vaultId, scope.project);
+    }
+    await ensureWithin(directory, path);
+    return readDocument(path, scope.vaultId, scope.project);
+  };
+  const mutate = async (expectedRevision, updater) => runtime.runRuntimeExclusive("topic-memory", path, async () => {
+    const current = await read();
+    if (expectedRevision !== void 0 && expectedRevision !== null && current.revision !== expectedRevision)
+      throw new Error("Topic memory revision changed");
+    const next = updater(structuredClone(current));
+    if (next?.__topicNoop) return current;
+    const value = validateDocument(
+      {
+        ...next,
+        version: TOPIC_MEMORY_VERSION,
+        vaultId: scope.vaultId,
+        project: scope.project,
+        revision: current.revision + 1,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      },
+      scope.vaultId,
+      scope.project
+    );
+    if (value.topics.length > TOPIC_MEMORY_LIMITS.maxTopics) {
+      const archived = value.topics.filter((topic) => topic.status === "archived");
+      if (!archived.length)
+        throw new Error("Topic memory quota exceeded; archive a topic before adding another");
+      const remove = value.topics.length - TOPIC_MEMORY_LIMITS.maxTopics;
+      const evict = new Set(archived.slice(-remove).map((topic) => topic.id));
+      value.topics = value.topics.filter((topic) => !evict.has(topic.id));
+    }
+    if (storage) await storage.write(value, current.revision);
+    else await atomicWrite(path, value);
+    return value;
+  });
+  const compact = (topic) => ({
+    id: topic.id,
+    title: topic.title,
+    aliases: topic.aliases,
+    summary: topic.summary.slice(0, TOPIC_MEMORY_LIMITS.maxContextChars),
+    entities: topic.entities,
+    unresolvedQuestions: topic.unresolvedQuestions,
+    sources: topic.sources,
+    artifacts: topic.artifacts,
+    status: topic.status,
+    revision: topic.revision,
+    updatedAt: topic.updatedAt,
+    lastRunHash: topic.lastRunHash,
+    lastRunId: topic.lastRunId,
+    recentRuns: topic.recentRuns,
+    proposalIds: topic.proposalIds,
+    keyFindings: topic.keyFindings,
+    claims: topic.claims,
+    conflicts: topic.conflicts,
+    history: topic.history
+  });
+  const context = (topic) => {
+    const value = {
+      id: topic.id,
+      title: topic.title,
+      entities: topic.entities.slice(0, 12),
+      summary: topic.summary.slice(0, 900),
+      claims: topic.claims.slice(-6).map((claim) => ({
+        claim: claim.claim,
+        subject: claim.subject,
+        predicate: claim.predicate,
+        value: claim.value,
+        organism: claim.organism,
+        tissue: claim.tissue,
+        stage: claim.stage,
+        method: claim.method,
+        relation: claim.relation
+      })),
+      conflicts: topic.conflicts.slice(-4)
+    };
+    let output = JSON.stringify(value);
+    if (output.length > TOPIC_MEMORY_LIMITS.maxContextChars)
+      output = JSON.stringify({
+        ...value,
+        summary: value.summary.slice(0, 400),
+        entities: value.entities.slice(0, 6)
+      });
+    if (output.length > TOPIC_MEMORY_LIMITS.maxContextChars)
+      output = JSON.stringify({
+        id: value.id,
+        title: value.title,
+        entities: value.entities.slice(0, 3)
+      });
+    return output;
+  };
+  return {
+    path,
+    scope,
+    read,
+    list: async (query = "", { includeArchived = false } = {}) => {
+      const doc = await read();
+      const q = text(query, 180).toLowerCase();
+      return {
+        revision: doc.revision,
+        topics: doc.topics.filter((topic) => includeArchived || topic.status !== "archived").filter(
+          (topic) => !q || [topic.id, topic.title, ...topic.aliases].some((value) => value.toLowerCase().includes(q))
+        ).map(compact)
+      };
+    },
+    get: async (idOrName) => {
+      const doc = await read();
+      const q = text(idOrName, 180).toLowerCase();
+      const matches = doc.topics.filter(
+        (topic) => [topic.id, topic.title, ...topic.aliases].some((value) => value.toLowerCase() === q)
+      );
+      return { revision: doc.revision, matches: matches.map(compact) };
+    },
+    context: async (topic) => {
+      const doc = await read();
+      const item = typeof topic === "string" ? doc.topics.find((x) => x.id === topic) : topic;
+      return item ? context(item) : null;
+    },
+    refreshSourceCheck: async (topicId) => {
+      const doc = await read();
+      const topic = doc.topics.find((item) => item.id === text(topicId, 120));
+      if (!topic) throw new Error("Topic not found");
+      const stale = [];
+      for (const source of topic.sources) {
+        try {
+          validateNote(source.path);
+          if (!canRead(source.path, scope.project) || /(?:^|\/)(?:Runs|Explainers)\//i.test(source.path)) {
+            stale.push({ path: source.path, reason: "out-of-scope" });
+            continue;
+          }
+          const current = storage ? await storage.readSource(source.path) : await readNoteFile(binding.vault, source.path);
+          if (current.hash !== source.hash) stale.push({ path: source.path, reason: "changed" });
+        } catch {
+          stale.push({ path: source.path, reason: "missing-or-invalid" });
+        }
+      }
+      if (stale.length && topic.status !== "stale") {
+        await mutate(void 0, (value) => {
+          const current = value.topics.find((item) => item.id === topic.id);
+          if (current) current.status = "stale";
+          return value;
+        });
+      }
+      return {
+        topic: {
+          ...compact(topic),
+          status: stale.length ? "stale" : topic.status
+        },
+        stale,
+        status: stale.length ? "stale" : topic.status
+      };
+    },
+    link: async (topicId, { proposalIds = [], artifacts = [] } = {}) => mutate(void 0, (doc) => {
+      const topic = doc.topics.find((item) => item.id === text(topicId, 120));
+      if (!topic) throw new Error("Topic not found");
+      topic.proposalIds = [.../* @__PURE__ */ new Set([...topic.proposalIds || [], ...proposalIds])].slice(-12);
+      topic.artifacts = [.../* @__PURE__ */ new Set([...topic.artifacts || [], ...artifacts])].slice(
+        -TOPIC_MEMORY_LIMITS.maxArtifacts
+      );
+      topic.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      return doc;
+    }),
+    update: async (input, expectedRevision) => {
+      if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
+      return mutate(expectedRevision, (doc) => {
+        const allowed = /* @__PURE__ */ new Set([
+          "id",
+          "title",
+          "summary",
+          "aliases",
+          "entities",
+          "unresolvedQuestions",
+          "keyFindings",
+          "claims"
+        ]);
+        for (const key of Object.keys(input || {}))
+          if (!allowed.has(key)) throw new Error(`Unsupported topic metadata field: ${key}`);
+        const id2 = text(input.id, 120);
+        if (!id2) throw new Error("Topic id is required");
+        const index = doc.topics.findIndex((topic) => topic.id === id2);
+        const previous = index >= 0 ? doc.topics[index] : null;
+        const incomingClaims = Array.isArray(input.claims) ? input.claims.map((claim) => normalizeClaim(claim, scope.project)).filter(Boolean) : [];
+        const claimComparisons = compareClaimSets(previous?.claims || [], incomingClaims);
+        const merged = normalizeTopic(
+          {
+            ...previous,
+            ...input,
+            ...claimComparisons.some((comparison) => comparison.blocking) ? { status: "conflict-candidate" } : previous?.status === "conflict-candidate" ? { status: "conflict-candidate" } : {},
+            conflicts: [
+              ...previous?.conflicts || [],
+              ...claimComparisons.map((comparison) => ({
+                comparisonVersion: 2,
+                previousSourceHash: comparison.previous.sourceHash,
+                incomingSourceHash: comparison.incoming.sourceHash,
+                missingConditions: comparison.missingConditions,
+                differingConditions: comparison.differingConditions,
+                relation: comparison.relation,
+                confidence: comparison.confidence,
+                reason: comparison.reason,
+                previousSourcePath: comparison.previous.sourcePath,
+                incomingSourcePath: comparison.incoming.sourcePath,
+                detectedAt: (/* @__PURE__ */ new Date()).toISOString()
+              }))
+            ],
+            id: id2,
+            createdAt: previous?.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+          },
+          scope.vaultId,
+          scope.project
+        );
+        if (index >= 0) doc.topics[index] = merged;
+        else doc.topics.unshift(merged);
+        return doc;
+      });
+    },
+    archive: async (id2, expectedRevision) => {
+      if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
+      return mutate(expectedRevision, (doc) => {
+        const topic = doc.topics.find((item) => item.id === text(id2, 120));
+        if (!topic) throw new Error("Topic not found");
+        topic.status = "archived";
+        topic.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+        return doc;
+      });
+    },
+    record: async (input, expectedRevision) => {
+      if (!input || typeof input !== "object") throw new Error("Invalid topic record input");
+      let receipt;
+      let claimComparisons = [];
+      const next = await mutate(expectedRevision, (value) => {
+        if (Array.isArray(input.sources) && input.sources.some((source) => !validateSource(source, scope.project)))
+          throw new Error("Invalid or out-of-scope topic source");
+        const key = text(input.topicId || input.title, 180).toLowerCase();
+        const matches = value.topics.filter(
+          (topic) => [topic.id, topic.title, ...topic.aliases].some((v) => v.toLowerCase() === key)
+        );
+        if (matches.length > 1) throw new Error("Ambiguous topic identity; choose an exact topic id");
+        const existing = matches[0] || (input.topicId ? value.topics.find((topic) => topic.id === text(input.topicId, 120)) : null);
+        const classification = classifyTopic(existing, input);
+        if (classification === "duplicate") {
+          receipt = {
+            classification,
+            revision: value.revision,
+            topic: compact(existing),
+            changed: false
+          };
+          value.__topicNoop = true;
+          return value;
+        }
+        const id2 = existing?.id || text(input.topicId, 96) || `${slug(input.title)}-${digest2(input.title).slice(0, 8)}`;
+        if (!/^[a-z0-9][a-z0-9_-]{0,95}$/i.test(id2)) throw new Error("Invalid topic id");
+        const index = value.topics.findIndex((topic) => topic.id === id2);
+        const prior = index >= 0 ? value.topics[index] : null;
+        const priorClaims = prior?.claims || [];
+        const incomingClaims = Array.isArray(input.claims) ? input.claims.map((claim) => normalizeClaim(claim, scope.project)).filter(Boolean) : [];
+        claimComparisons = compareClaimSets(priorClaims, incomingClaims);
+        const conflictRecords = claimComparisons.map((comparison) => ({
+          comparisonVersion: 2,
+          previousSourceHash: comparison.previous.sourceHash,
+          incomingSourceHash: comparison.incoming.sourceHash,
+          missingConditions: comparison.missingConditions,
+          differingConditions: comparison.differingConditions,
+          relation: comparison.relation,
+          confidence: comparison.confidence,
+          reason: comparison.reason,
+          previousSourcePath: comparison.previous.sourcePath,
+          incomingSourcePath: comparison.incoming.sourcePath,
+          detectedAt: (/* @__PURE__ */ new Date()).toISOString()
+        }));
+        const mergedClaims = [...priorClaims, ...incomingClaims].filter(
+          (claim, claimIndex, all) => all.findIndex(
+            (candidate) => candidate.sourcePath === claim.sourcePath && candidate.sourceHash === claim.sourceHash && candidate.claim === claim.claim
+          ) === claimIndex
+        );
+        const mergedSources = [];
+        for (const source of [...prior?.sources || [], ...input.sources || []]) {
+          if (!validateSource(source, scope.project) || mergedSources.some((item) => item.path === source.path && item.hash === source.hash))
+            continue;
+          mergedSources.push(source);
+        }
+        mergedSources.splice(0, Math.max(0, mergedSources.length - TOPIC_MEMORY_LIMITS.maxSources));
+        const updated = normalizeTopic(
+          {
+            ...prior,
+            ...input,
+            id: id2,
+            aliases: [.../* @__PURE__ */ new Set([...prior?.aliases || [], ...input.aliases || []])].slice(-12),
+            entities: [.../* @__PURE__ */ new Set([...prior?.entities || [], ...input.entities || []])].slice(
+              -TOPIC_MEMORY_LIMITS.maxEntities
+            ),
+            unresolvedQuestions: [
+              .../* @__PURE__ */ new Set([...prior?.unresolvedQuestions || [], ...input.unresolvedQuestions || []])
+            ].slice(-TOPIC_MEMORY_LIMITS.maxQuestions),
+            artifacts: [.../* @__PURE__ */ new Set([...prior?.artifacts || [], ...input.artifacts || []])].slice(
+              -TOPIC_MEMORY_LIMITS.maxArtifacts
+            ),
+            proposalIds: [.../* @__PURE__ */ new Set([...prior?.proposalIds || [], ...input.proposalIds || []])].slice(
+              -12
+            ),
+            keyFindings: [.../* @__PURE__ */ new Set([...prior?.keyFindings || [], ...input.keyFindings || []])].slice(
+              -16
+            ),
+            claims: mergedClaims,
+            conflicts: [...prior?.conflicts || [], ...conflictRecords].slice(
+              -TOPIC_MEMORY_LIMITS.maxConflicts
+            ),
+            history: [
+              ...prior?.history || [],
+              ...prior?.summary ? [{ summary: prior.summary, updatedAt: prior.updatedAt }] : []
+            ].slice(-TOPIC_MEMORY_LIMITS.maxHistory),
+            sources: mergedSources,
+            status: classification === "stale" || classification === "conflict-candidate" ? classification : prior?.status === "conflict-candidate" ? "conflict-candidate" : "active",
+            lastRunHash: input.runHash || prior?.lastRunHash,
+            recentRuns: input.runHash ? [.../* @__PURE__ */ new Set([...prior?.recentRuns || [], input.runHash])].slice(
+              -TOPIC_MEMORY_LIMITS.maxRecentRuns
+            ) : prior?.recentRuns,
+            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+          },
+          scope.vaultId,
+          scope.project
+        );
+        if (index >= 0) value.topics[index] = updated;
+        else value.topics.unshift(updated);
+        receipt = { classification, topic: compact(updated), changed: true };
+        return value;
+      });
+      return {
+        ...receipt,
+        ...claimComparisons.length ? { conflicts: claimComparisons } : {},
+        revision: next.revision,
+        topic: receipt.topic && next.topics.find((topic) => topic.id === receipt.topic.id) ? compact(next.topics.find((topic) => topic.id === receipt.topic.id)) : receipt.topic
+      };
+    }
+  };
+}
+function topicRunHash(summary, sources = []) {
+  return digest2(
+    JSON.stringify({
+      summary: text(summary, TOPIC_MEMORY_LIMITS.maxSummaryChars),
+      sources: sources.map(validateSource).filter(Boolean).sort((a, b) => a.path.localeCompare(b.path) || a.hash.localeCompare(b.hash))
+    })
+  );
+}
+function createTopicMemoryApi(runtime, config, storageFactory) {
+  const createTopicMemory2 = (options = {}) => createTopicMemoryWithHost(runtime, config, options, storageFactory);
+  async function listTopics2(options = {}) {
+    return (await createTopicMemory2(options).list(options.query || "")).topics;
+  }
+  async function readTopic2(options = {}) {
+    return (await createTopicMemory2(options).get(options.topic || options.id || "")).matches;
+  }
+  async function updateTopic2(options = {}) {
+    const { binding, project, directory, expectedRevision, ...input } = options;
+    if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
+    return createTopicMemory2({ binding, project, directory }).update(input, expectedRevision);
+  }
+  async function archiveTopic2(options = {}) {
+    if (!Number.isSafeInteger(options.expectedRevision)) throw new Error("expectedRevision is required");
+    return createTopicMemory2(options).archive(options.id, options.expectedRevision);
+  }
+  return { createTopicMemory: createTopicMemory2, listTopics: listTopics2, readTopic: readTopic2, updateTopic: updateTopic2, archiveTopic: archiveTopic2 };
+}
+var TOPIC_MEMORY_VERSION, TOPIC_MEMORY_LIMITS, digest2, text, slug, createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic;
+var init_topic_memory = __esm({
+  "src/core/topic-memory.ts"() {
+    "use strict";
+    init_claim_conflicts();
+    init_config();
+    init_files();
+    init_runtime_host();
+    TOPIC_MEMORY_VERSION = 1;
+    TOPIC_MEMORY_LIMITS = Object.freeze({
+      maxTopics: 64,
+      maxSummaryChars: 4e3,
+      maxContextChars: 2400,
+      maxEntities: 24,
+      maxQuestions: 16,
+      maxSources: 24,
+      maxArtifacts: 12,
+      maxHistory: 8,
+      maxRecentRuns: 12,
+      maxClaims: 64,
+      maxConflicts: 32,
+      maxFileBytes: 512 * 1024
+    });
+    digest2 = (value) => createHash7("sha256").update(String(value)).digest("hex");
+    text = (value, limit) => String(value ?? "").normalize("NFKC").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, limit);
+    slug = (value) => text(value, 160).toLowerCase().replace(/[^a-z0-9\u0080-\uffff]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 96) || "topic";
+    ({ createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic } = createTopicMemoryApi(
+      compatibilityKnowledgeRuntimeHost,
+      { knowledgeDirectory }
+    ));
   }
 });
 
 // src/core/wiki-policy.ts
-import { createHash as createHash6 } from "node:crypto";
+import { createHash as createHash8 } from "node:crypto";
 function targetWikiPath(path, project) {
   if (typeof path !== "string")
     throw new Error("Target must be a shared or current-project Wiki page, not navigation");
@@ -1447,7 +2301,7 @@ function targetWikiPath(path, project) {
   return path;
 }
 function immutableWikiProposalHash(proposal) {
-  return createHash6("sha256").update(
+  return createHash8("sha256").update(
     JSON.stringify({
       id: proposal.id,
       vaultId: proposal.vaultId,
@@ -1493,8 +2347,166 @@ var init_wiki_policy = __esm({
   }
 });
 
+// src/core/layout.ts
+import { createHash as createHash9, randomUUID as randomUUID10 } from "node:crypto";
+import { constants as constants2 } from "node:fs";
+import { link, lstat as lstat6, mkdir as mkdir7, open as open2, realpath as realpath5, rename as rename6, unlink as unlink5, writeFile as writeFile7 } from "node:fs/promises";
+import { basename as basename2, dirname as dirname4, isAbsolute as isAbsolute5, join as join10, relative as relative5, resolve as resolve5, sep as sep5 } from "node:path";
+function containsPath(root, target) {
+  const relativePath = relative5(root, target);
+  return relativePath === "" || !isAbsolute5(relativePath) && relativePath !== ".." && !relativePath.startsWith(`..${sep5}`);
+}
+async function canonicalPath(path) {
+  try {
+    return await realpath5(path);
+  } catch (error) {
+    if (error.code !== "ENOENT" || dirname4(path) === path) throw error;
+    return join10(await canonicalPath(dirname4(path)), basename2(path));
+  }
+}
+async function containedVaultFile(root, path) {
+  const vault = resolve5(root);
+  const target = resolve5(vault, path);
+  if (!containsPath(vault, target) || !containsPath(vault, await canonicalPath(target)))
+    throw new Error("Path must stay inside Vault");
+  return target;
+}
+var init_layout = __esm({
+  "src/core/layout.ts"() {
+    "use strict";
+    init_files();
+  }
+});
+
+// src/core/wiki-review-node.ts
+import { createHash as createHash10, randomUUID as randomUUID11 } from "node:crypto";
+import { link as link2, lstat as lstat7, mkdir as mkdir8, readdir, readFile as readFile7, rename as rename7, rm, unlink as unlink6, writeFile as writeFile8 } from "node:fs/promises";
+import { basename as basename3, dirname as dirname5, join as join11 } from "node:path";
+async function renameWithRetry(from, to, options = {}) {
+  const attempts = options.attempts ?? 6, delay = options.delayMs ?? 40, doRename = options.renameImpl ?? rename7;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await doRename(from, to);
+      return;
+    } catch (error) {
+      const code = error.code;
+      if (!code || !RENAME_RETRY_CODES.has(code) || attempt >= attempts) throw error;
+      await new Promise((resolve14) => setTimeout(resolve14, delay * attempt));
+    }
+  }
+}
+function createLocalWikiReviewPorts(config) {
+  async function statePath(path) {
+    const root = config.knowledgeDirectory();
+    if (!root) throw new Error("No application knowledge directory");
+    return containedVaultFile(root, path);
+  }
+  const state = {
+    async read(path) {
+      const full = await statePath(path);
+      let bytes;
+      try {
+        const info = await lstat7(full);
+        if (!info.isFile() || info.isSymbolicLink()) throw new Error("Expected a regular review record");
+        bytes = await readFile7(full);
+      } catch (error) {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      }
+      if (bytes.length > 256 * 1024) throw new Error("Wiki proposal exceeds its storage budget");
+      return { value: JSON.parse(bytes.toString("utf8")), version: digest3(bytes) };
+    },
+    async list(path) {
+      return readdir(await statePath(path));
+    },
+    async write(path, value, expectedVersion) {
+      const full = await statePath(path);
+      await mkdir8(dirname5(full), { recursive: true, mode: 448 });
+      const temporary = join11(dirname5(full), `.${randomUUID11()}.tmp`);
+      const text4 = `${JSON.stringify(value, null, 2)}
+`;
+      await writeFile8(temporary, text4, { flag: "wx", mode: 384 });
+      try {
+        const current = await state.read(path);
+        if ((current?.version ?? null) !== expectedVersion)
+          throw new Error("Wiki review state changed; refresh before writing");
+        if (expectedVersion === null) await link2(temporary, full);
+        else await renameWithRetry(temporary, full);
+      } finally {
+        await rm(temporary, { force: true });
+      }
+      if ((await state.read(path))?.version !== digest3(text4))
+        throw new Error("Wiki review state write could not be read back");
+    },
+    async remove(path, expectedVersion) {
+      const current = await state.read(path);
+      if (current?.version !== expectedVersion)
+        throw new Error("Wiki review state changed; refresh before deleting");
+      await unlink6(await statePath(path));
+      if (await state.read(path)) throw new Error("Wiki review state removal could not be read back");
+    }
+  };
+  const files = {
+    async read(binding, path) {
+      try {
+        return await readNoteFile(binding.vault, path);
+      } catch (error) {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      }
+    },
+    async write(binding, path, text4, expectedHash, check) {
+      let parent = binding.vault;
+      for (const part of path.split("/").slice(0, -1)) {
+        parent = join11(parent, part);
+        try {
+          await mkdir8(parent);
+        } catch (error) {
+          if (error.code !== "EEXIST") throw error;
+        }
+        const info = await lstat7(parent);
+        if (!info.isDirectory() || info.isSymbolicLink())
+          throw new Error("Wiki parent must be a regular directory");
+      }
+      const full = await containedVaultFile(binding.vault, path);
+      const temporary = join11(dirname5(full), `.${basename3(full)}.${randomUUID11()}.tmp`);
+      const mode = expectedHash === null ? 384 : (await lstat7(full)).mode & 511;
+      await writeFile8(temporary, text4, { flag: "wx", mode });
+      try {
+        await check();
+        if (((await files.read(binding, path))?.hash ?? null) !== expectedHash)
+          throw new Error("Wiki changed during review; no overwrite applied");
+        if (expectedHash === null) await link2(temporary, full);
+        else await renameWithRetry(temporary, full);
+      } finally {
+        await rm(temporary, { force: true });
+      }
+      if ((await files.read(binding, path))?.hash !== digest3(text4))
+        throw new Error("Wiki write could not be read back");
+    },
+    async remove(binding, path, expectedHash, check) {
+      await check();
+      if ((await files.read(binding, path))?.hash !== expectedHash)
+        throw new Error("Wiki changed during undo");
+      await unlink6(await containedVaultFile(binding.vault, path));
+      if (await files.read(binding, path)) throw new Error("Wiki removal could not be read back");
+    }
+  };
+  return { state, files };
+}
+var digest3, RENAME_RETRY_CODES;
+var init_wiki_review_node = __esm({
+  "src/core/wiki-review-node.ts"() {
+    "use strict";
+    init_files();
+    init_layout();
+    digest3 = (text4) => createHash10("sha256").update(text4).digest("hex");
+    RENAME_RETRY_CODES = /* @__PURE__ */ new Set(["EPERM", "EACCES", "EBUSY"]);
+  }
+});
+
 // src/core/wiki-review-reader.ts
-import { createHash as createHash7 } from "node:crypto";
+import { createHash as createHash11 } from "node:crypto";
 function createWikiReviewReader(storage, currentNote) {
   async function loadProposal(service, id2, project) {
     if (typeof id2 !== "string" || !/^[0-9a-f-]{36}$/.test(id2)) throw new Error("Invalid Wiki proposal id");
@@ -1506,7 +2518,7 @@ function createWikiReviewReader(storage, currentNote) {
     if (p.id !== id2 || p.project !== project || p.vaultId !== service.binding.vaultId || p.bindingRevision !== service.binding.revision)
       throw new Error("Proposal belongs to a different project or binding");
     targetWikiPath(p.path, project);
-    if (immutableWikiProposalHash(p) !== p.proposalHash || digest(p.after) !== p.afterHash || (p.before === null ? p.beforeHash !== null : digest(p.before) !== p.beforeHash))
+    if (immutableWikiProposalHash(p) !== p.proposalHash || digest4(p.after) !== p.afterHash || (p.before === null ? p.beforeHash !== null : digest4(p.before) !== p.beforeHash))
       throw new Error("Wiki proposal content changed");
     return p;
   }
@@ -1598,7 +2610,7 @@ function createWikiReviewReader(storage, currentNote) {
   }
   return { loadProposal, previewWikiProposal: previewWikiProposal2, listWikiProposals: listWikiProposals2 };
 }
-var MAX_PENDING, MAX_AGE, digest;
+var MAX_PENDING, MAX_AGE, digest4;
 var init_wiki_review_reader = __esm({
   "src/core/wiki-review-reader.ts"() {
     "use strict";
@@ -1607,165 +2619,7 @@ var init_wiki_review_reader = __esm({
     init_wiki_policy();
     MAX_PENDING = 100;
     MAX_AGE = 24 * 60 * 60 * 1e3;
-    digest = (text4) => createHash7("sha256").update(text4).digest("hex");
-  }
-});
-
-// src/core/layout.ts
-import { createHash as createHash8, randomUUID as randomUUID7 } from "node:crypto";
-import { constants as constants2 } from "node:fs";
-import { link, lstat as lstat3, mkdir as mkdir5, open as open2, realpath as realpath3, rename as rename5, unlink as unlink4, writeFile as writeFile5 } from "node:fs/promises";
-import { basename as basename3, dirname as dirname3, isAbsolute as isAbsolute3, join as join8, relative as relative3, resolve as resolve3, sep as sep3 } from "node:path";
-function containsPath(root, target) {
-  const relativePath = relative3(root, target);
-  return relativePath === "" || !isAbsolute3(relativePath) && relativePath !== ".." && !relativePath.startsWith(`..${sep3}`);
-}
-async function canonicalPath(path) {
-  try {
-    return await realpath3(path);
-  } catch (error) {
-    if (error.code !== "ENOENT" || dirname3(path) === path) throw error;
-    return join8(await canonicalPath(dirname3(path)), basename3(path));
-  }
-}
-async function containedVaultFile(root, path) {
-  const vault = resolve3(root);
-  const target = resolve3(vault, path);
-  if (!containsPath(vault, target) || !containsPath(vault, await canonicalPath(target)))
-    throw new Error("Path must stay inside Vault");
-  return target;
-}
-var init_layout = __esm({
-  "src/core/layout.ts"() {
-    "use strict";
-    init_files();
-  }
-});
-
-// src/core/wiki-review-node.ts
-import { createHash as createHash9, randomUUID as randomUUID8 } from "node:crypto";
-import { link as link2, lstat as lstat4, mkdir as mkdir6, readFile as readFile5, readdir, rename as rename6, rm, unlink as unlink5, writeFile as writeFile6 } from "node:fs/promises";
-import { basename as basename4, dirname as dirname4, join as join9 } from "node:path";
-async function renameWithRetry(from, to, options = {}) {
-  const attempts = options.attempts ?? 6, delay = options.delayMs ?? 40, doRename = options.renameImpl ?? rename6;
-  for (let attempt = 1; ; attempt++) {
-    try {
-      await doRename(from, to);
-      return;
-    } catch (error) {
-      const code = error.code;
-      if (!code || !RENAME_RETRY_CODES.has(code) || attempt >= attempts) throw error;
-      await new Promise((resolve14) => setTimeout(resolve14, delay * attempt));
-    }
-  }
-}
-function createLocalWikiReviewPorts(config) {
-  async function statePath(path) {
-    const root = config.knowledgeDirectory();
-    if (!root) throw new Error("No application knowledge directory");
-    return containedVaultFile(root, path);
-  }
-  const state = {
-    async read(path) {
-      const full = await statePath(path);
-      let bytes;
-      try {
-        const info = await lstat4(full);
-        if (!info.isFile() || info.isSymbolicLink()) throw new Error("Expected a regular review record");
-        bytes = await readFile5(full);
-      } catch (error) {
-        if (error.code === "ENOENT") return null;
-        throw error;
-      }
-      if (bytes.length > 256 * 1024) throw new Error("Wiki proposal exceeds its storage budget");
-      return { value: JSON.parse(bytes.toString("utf8")), version: digest2(bytes) };
-    },
-    async list(path) {
-      return readdir(await statePath(path));
-    },
-    async write(path, value, expectedVersion) {
-      const full = await statePath(path);
-      await mkdir6(dirname4(full), { recursive: true, mode: 448 });
-      const temporary = join9(dirname4(full), `.${randomUUID8()}.tmp`);
-      const text4 = `${JSON.stringify(value, null, 2)}
-`;
-      await writeFile6(temporary, text4, { flag: "wx", mode: 384 });
-      try {
-        const current = await state.read(path);
-        if ((current?.version ?? null) !== expectedVersion)
-          throw new Error("Wiki review state changed; refresh before writing");
-        if (expectedVersion === null) await link2(temporary, full);
-        else await renameWithRetry(temporary, full);
-      } finally {
-        await rm(temporary, { force: true });
-      }
-      if ((await state.read(path))?.version !== digest2(text4))
-        throw new Error("Wiki review state write could not be read back");
-    },
-    async remove(path, expectedVersion) {
-      const current = await state.read(path);
-      if (current?.version !== expectedVersion)
-        throw new Error("Wiki review state changed; refresh before deleting");
-      await unlink5(await statePath(path));
-      if (await state.read(path)) throw new Error("Wiki review state removal could not be read back");
-    }
-  };
-  const files = {
-    async read(binding, path) {
-      try {
-        return await readNoteFile(binding.vault, path);
-      } catch (error) {
-        if (error.code === "ENOENT") return null;
-        throw error;
-      }
-    },
-    async write(binding, path, text4, expectedHash, check) {
-      let parent = binding.vault;
-      for (const part of path.split("/").slice(0, -1)) {
-        parent = join9(parent, part);
-        try {
-          await mkdir6(parent);
-        } catch (error) {
-          if (error.code !== "EEXIST") throw error;
-        }
-        const info = await lstat4(parent);
-        if (!info.isDirectory() || info.isSymbolicLink())
-          throw new Error("Wiki parent must be a regular directory");
-      }
-      const full = await containedVaultFile(binding.vault, path);
-      const temporary = join9(dirname4(full), `.${basename4(full)}.${randomUUID8()}.tmp`);
-      const mode = expectedHash === null ? 384 : (await lstat4(full)).mode & 511;
-      await writeFile6(temporary, text4, { flag: "wx", mode });
-      try {
-        await check();
-        if (((await files.read(binding, path))?.hash ?? null) !== expectedHash)
-          throw new Error("Wiki changed during review; no overwrite applied");
-        if (expectedHash === null) await link2(temporary, full);
-        else await renameWithRetry(temporary, full);
-      } finally {
-        await rm(temporary, { force: true });
-      }
-      if ((await files.read(binding, path))?.hash !== digest2(text4))
-        throw new Error("Wiki write could not be read back");
-    },
-    async remove(binding, path, expectedHash, check) {
-      await check();
-      if ((await files.read(binding, path))?.hash !== expectedHash)
-        throw new Error("Wiki changed during undo");
-      await unlink5(await containedVaultFile(binding.vault, path));
-      if (await files.read(binding, path)) throw new Error("Wiki removal could not be read back");
-    }
-  };
-  return { state, files };
-}
-var digest2, RENAME_RETRY_CODES;
-var init_wiki_review_node = __esm({
-  "src/core/wiki-review-node.ts"() {
-    "use strict";
-    init_files();
-    init_layout();
-    digest2 = (text4) => createHash9("sha256").update(text4).digest("hex");
-    RENAME_RETRY_CODES = /* @__PURE__ */ new Set(["EPERM", "EACCES", "EBUSY"]);
+    digest4 = (text4) => createHash11("sha256").update(text4).digest("hex");
   }
 });
 
@@ -1784,7 +2638,7 @@ __export(wiki_review_exports, {
   validateWikiSourcePaths: () => validateWikiSourcePaths,
   wikiHistory: () => wikiHistory
 });
-import { createHash as createHash10, randomUUID as randomUUID9 } from "node:crypto";
+import { createHash as createHash12, randomUUID as randomUUID12 } from "node:crypto";
 function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui, io) {
   const { runRuntimeExclusive: runRuntimeExclusive2 } = runtime;
   const { withKnowledgeBinding: withKnowledgeBinding2 } = config;
@@ -1792,7 +2646,7 @@ function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui, io) {
   const { invalidateKnowledgeUi: invalidateKnowledgeUi2 } = ui;
   const AUTOMATIC_AUTHORITY = Symbol("host-automatic-wiki");
   const START2 = "<!-- pi-agent:managed:start -->", END2 = "<!-- pi-agent:managed:end -->";
-  const digest6 = (text4) => createHash10("sha256").update(text4).digest("hex");
+  const digest6 = (text4) => createHash12("sha256").update(text4).digest("hex");
   const MAX_PENDING2 = 100, MAX_AGE2 = 24 * 60 * 60 * 1e3;
   async function exclusive(key, operation) {
     return runRuntimeExclusive2("wiki-review", key, operation);
@@ -1916,7 +2770,7 @@ ${block}
 ${refs}`
       );
       const proposal = {
-        id: randomUUID9(),
+        id: randomUUID12(),
         status: "pending",
         vaultId: service.binding.vaultId,
         bindingRevision: service.binding.revision,
@@ -2222,19 +3076,19 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
     renameWithRetry
   };
 }
-var compatibility, validateWikiSourcePaths, stageWikiProposal, mergeWikiProposal, previewWikiProposal, listWikiProposals, decideWikiProposal, autoApplyWikiProposal, wikiHistory, undoWikiUpdate, renameWithRetry2;
+var compatibility2, validateWikiSourcePaths, stageWikiProposal, mergeWikiProposal, previewWikiProposal, listWikiProposals, decideWikiProposal, autoApplyWikiProposal, wikiHistory, undoWikiUpdate, renameWithRetry2;
 var init_wiki_review = __esm({
   "src/core/wiki-review.ts"() {
     "use strict";
-    init_runtime_host();
     init_config();
     init_files();
     init_review_policy();
+    init_runtime_host();
     init_ui_state();
-    init_wiki_review_reader();
     init_wiki_policy();
     init_wiki_review_node();
-    compatibility = createKnowledgeWikiReview(
+    init_wiki_review_reader();
+    compatibility2 = createKnowledgeWikiReview(
       compatibilityKnowledgeRuntimeHost,
       config_exports,
       review_policy_exports,
@@ -2252,12 +3106,12 @@ var init_wiki_review = __esm({
       wikiHistory,
       undoWikiUpdate,
       renameWithRetry: renameWithRetry2
-    } = compatibility);
+    } = compatibility2);
   }
 });
 
 // src/core/wiki-model-review.ts
-import { randomUUID as randomUUID10 } from "node:crypto";
+import { randomUUID as randomUUID13 } from "node:crypto";
 function validateReview(data, paths) {
   if (!data || typeof data.summary !== "string" || !data.summary.trim() || data.summary.length > 1600 || !["approve", "needs-human", "reject"].includes(data.verdict) || !Array.isArray(data.cautions) || data.cautions.length > 4 || data.cautions.some((s) => typeof s !== "string" || s.length > 300) || !Array.isArray(data.source_paths) || data.source_paths.length !== paths.length || new Set(data.source_paths).size !== paths.length || paths.some((p) => !data.source_paths.includes(p)) || !data.checks || WIKI_MODEL_REVIEW_CHECKS.some((k) => typeof data.checks[k] !== "boolean"))
     throw new Error("Invalid or incomplete model review; no candidate was applied");
@@ -2283,8 +3137,7 @@ function createKnowledgeModelReview(runtime, config, wiki, io, specialistSetting
   async function lastWikiModelReview2(service, id2, hash3) {
     if (!/^[0-9a-f-]{36}$/.test(id2)) throw new Error("Invalid proposal id");
     const index = (await io.state.read(`${rootFor(service)}/${id2}.latest.json`))?.value;
-    if (!index || index.proposalHash !== hash3 || !/^[0-9a-f-]{36}$/.test(index.auditId))
-      return null;
+    if (!index || index.proposalHash !== hash3 || !/^[0-9a-f-]{36}$/.test(index.auditId)) return null;
     const data = (await io.state.read(`${rootFor(service)}/${index.auditId}.json`))?.value;
     return data?.proposalHash === hash3 && data.vaultId === service.binding.vaultId ? data : null;
   }
@@ -2300,7 +3153,7 @@ function createKnowledgeModelReview(runtime, config, wiki, io, specialistSetting
     const key = `${binding.vaultId}:${id2}`;
     if (state.active.has(key)) throw new Error("This Wiki candidate is already being reviewed");
     state.active.add(key);
-    const startedAt = Date.now(), auditId = randomUUID10();
+    const startedAt = Date.now(), auditId = randomUUID13();
     let audit = null;
     const stillCurrent = async () => {
       signal?.throwIfAborted();
@@ -2330,16 +3183,12 @@ function createKnowledgeModelReview(runtime, config, wiki, io, specialistSetting
       if (input.autoApply && binding.depositMode === "run-only")
         throw new Error("run-only policy forbids applying Wiki changes");
       if (!preview.sources.length || preview.sources.length > 6)
-        throw new Error(
-          "Model review accepts 1\u20136 sources; split or manually review this candidate"
-        );
+        throw new Error("Model review accepts 1\u20136 sources; split or manually review this candidate");
       const sources = [];
       for (const source of preview.sources) {
         validateNote(source.path);
         if (!canRead(source.path, project) || /(?:^|\/)(?:Explainers|Runs|Wiki)\//i.test(source.path))
-          throw new Error(
-            "Model review requires underlying evidence, not summaries or another Wiki"
-          );
+          throw new Error("Model review requires underlying evidence, not summaries or another Wiki");
         if (!Number.isSafeInteger(source.startLine) || !Number.isSafeInteger(source.endLine) || source.startLine < 1 || source.endLine < source.startLine)
           throw new Error("Source has an invalid original read range");
         const original = await io.files.read(binding, source.path);
@@ -2489,9 +3338,7 @@ async function generateWikiModelReview(capabilities, selection, request) {
         verdict: { enum: ["approve", "needs-human", "reject"] },
         checks: {
           type: "object",
-          properties: Object.fromEntries(
-            WIKI_MODEL_REVIEW_CHECKS.map((key) => [key, { type: "boolean" }])
-          ),
+          properties: Object.fromEntries(WIKI_MODEL_REVIEW_CHECKS.map((key) => [key, { type: "boolean" }])),
           required: WIKI_MODEL_REVIEW_CHECKS,
           additionalProperties: false
         }
@@ -2507,14 +3354,14 @@ async function generateWikiModelReview(capabilities, selection, request) {
     usage: response.usage
   };
 }
-var WIKI_MODEL_REVIEW_CHECKS, compatibility2, lastWikiModelReview;
+var WIKI_MODEL_REVIEW_CHECKS, compatibility3, lastWikiModelReview;
 var init_wiki_model_review = __esm({
   "src/core/wiki-model-review.ts"() {
     "use strict";
     init_config();
     init_files();
-    init_specialist_host();
     init_runtime_host();
+    init_specialist_host();
     init_wiki_review();
     init_wiki_review_node();
     WIKI_MODEL_REVIEW_CHECKS = [
@@ -2524,1346 +3371,67 @@ var init_wiki_model_review = __esm({
       "humanContentPreserved",
       "noInstructionInjection"
     ];
-    compatibility2 = createKnowledgeModelReview(
+    compatibility3 = createKnowledgeModelReview(
       compatibilityKnowledgeRuntimeHost,
       config_exports,
       wiki_review_exports,
       createLocalWikiReviewPorts(config_exports),
       specialistSettings2
     );
-    lastWikiModelReview = compatibility2.lastWikiModelReview;
+    lastWikiModelReview = compatibility3.lastWikiModelReview;
   }
 });
 
-// src/core/claim-conflicts.ts
-function direction(claim) {
-  if (claim.direction) return claim.direction;
-  const text4 = normalize2(`${claim.predicate} ${claim.value || claim.claim}`);
-  const negated = /\b(?:not|no|without|fails)\b|不|未|无/.test(text4);
-  const increase = /\b(?:increases?|increased|upregulated)\b|增加|升高|上调/.test(text4);
-  const decrease = /\b(?:decreases?|decreased|downregulated)\b|减少|降低|下调/.test(text4);
-  if (increase && decrease || negated && (increase || decrease)) return "unknown";
-  if (increase) return "increase";
-  if (decrease) return "decrease";
-  if (/\b(?:activates?|promotes?|supports?)\b|激活|促进|支持/.test(text4))
-    return negated ? "negated" : "affirmed";
-  return "unknown";
-}
-function comparableValue(value) {
-  return normalize2(value).replace(
-    /\b(?:does|do|not|no|without|fails|increase[sd]?|decrease[sd]?|activate[sd]?)\b|不|无|未|增加|减少|降低|升高|激活/g,
-    " "
-  );
-}
-function compareClaims(previous, incoming) {
-  if (!previous || !incoming) {
-    return {
-      relation: "unresolved",
-      confidence: "low",
-      reason: "\u7F3A\u5C11\u4E00\u65B9\u7ED3\u6784\u5316\u4E3B\u5F20\uFF0C\u65E0\u6CD5\u6BD4\u8F83\u3002",
-      blocking: false
-    };
-  }
-  if (!field(previous, "subject") || !field(previous, "predicate") || field(previous, "subject") !== field(incoming, "subject") || field(previous, "predicate") !== field(incoming, "predicate"))
-    return {
-      relation: "unresolved",
-      confidence: "low",
-      reason: "\u4E3B\u8BED\u6216\u8C13\u8BCD\u4E0D\u540C\uFF0C\u4E0D\u80FD\u89C6\u4E3A\u540C\u4E00\u547D\u9898\u3002",
-      blocking: false
-    };
-  const conditions = ["organism", "tissue", "stage", "method"];
-  const optional = ["endpoint", "unit"].filter((key) => field(previous, key) || field(incoming, key));
-  const required = [...conditions, ...optional];
-  const missing = required.filter((key) => !field(previous, key) || !field(incoming, key));
-  if (missing.length)
-    return {
-      relation: "unresolved",
-      confidence: "low",
-      blocking: false,
-      missingConditions: missing,
-      reason: `\u7F3A\u5C11\u53EF\u6BD4\u8F83\u6761\u4EF6\uFF08${missing.join("\u3001")}\uFF09\uFF0C\u4E0D\u80FD\u5224\u65AD\u652F\u6301\u6216\u51B2\u7A81\u3002`
-    };
-  const changed = required.filter(
-    (key) => field(previous, key) && field(incoming, key) && field(previous, key) !== field(incoming, key)
-  );
-  if (changed.length)
-    return {
-      relation: "unresolved",
-      confidence: "medium",
-      reason: `\u5B9E\u9A8C\u6761\u4EF6\u4E0D\u540C\uFF08${changed.join("\u3001")}\uFF09\uFF0C\u9700\u8981\u6309\u6761\u4EF6\u5E76\u5217\u89E3\u91CA\u3002`,
-      differingConditions: changed,
-      blocking: false
-    };
-  if (field(previous, "relation") !== "observation" || field(incoming, "relation") !== "observation")
-    return {
-      relation: "unresolved",
-      confidence: "medium",
-      reason: "\u89E3\u91CA\u6216\u5047\u8BBE\u4E0D\u80FD\u76F4\u63A5\u63A8\u7FFB\u89C2\u5BDF\u7ED3\u679C\u3002",
-      blocking: false
-    };
-  const priorValue = comparableValue(`${previous.predicate} ${previous.value || previous.claim}`);
-  const nextValue = comparableValue(`${incoming.predicate} ${incoming.value || incoming.claim}`);
-  if (overlap(priorValue, nextValue) < 0.5)
-    return {
-      relation: "unresolved",
-      confidence: "low",
-      reason: "\u547D\u9898\u5185\u5BB9\u76F8\u4F3C\u5EA6\u4E0D\u8DB3\uFF0C\u4EA4\u7531\u4EBA\u5DE5\u5224\u65AD\u3002",
-      blocking: false
-    };
-  const priorDirection = direction(previous), nextDirection = direction(incoming);
-  if (priorDirection === "unknown" || nextDirection === "unknown")
-    return {
-      relation: "unresolved",
-      confidence: "low",
-      blocking: false,
-      reason: "\u89C2\u5BDF\u65B9\u5411\u672A\u77E5\uFF0C\u4E0D\u80FD\u5224\u65AD\u652F\u6301\u6216\u51B2\u7A81\u3002"
-    };
-  if (priorDirection === nextDirection)
-    return {
-      relation: "supports",
-      confidence: "medium",
-      blocking: false,
-      reason: "\u540C\u6761\u4EF6\u4E0B\u65B9\u5411\u4E00\u81F4\uFF0C\u53EF\u5E76\u5217\u4FDD\u7559\u3002"
-    };
-  const opposite = /* @__PURE__ */ new Set([priorDirection, nextDirection]);
-  if (!(opposite.has("increase") && opposite.has("decrease")) && !(opposite.has("affirmed") && opposite.has("negated")))
-    return {
-      relation: "unresolved",
-      confidence: "low",
-      blocking: false,
-      reason: "\u65B9\u5411\u7C7B\u578B\u4E0D\u540C\uFF0C\u4E0D\u80FD\u76F4\u63A5\u6BD4\u8F83\u3002"
-    };
-  return {
-    relation: "contradicts",
-    confidence: "high",
-    reason: "\u540C\u4E00\u5BF9\u8C61\u3001\u540C\u4E00\u6761\u4EF6\u3001\u540C\u4E00\u89C2\u5BDF\u547D\u9898\u7684\u65B9\u5411\u76F8\u53CD\u3002",
-    blocking: true
-  };
-}
-function compareClaimSets(previousClaims = [], incomingClaims = []) {
-  const comparisons = [];
-  for (const incoming of incomingClaims) {
-    for (const previous of previousClaims) {
-      const result2 = compareClaims(previous, incoming);
-      if (field(previous, "subject") && field(previous, "subject") === field(incoming, "subject") && field(previous, "predicate") === field(incoming, "predicate"))
-        comparisons.push({ previous, incoming, ...result2 });
-    }
-  }
-  return comparisons;
-}
-var normalize2, tokens2, overlap, field;
-var init_claim_conflicts = __esm({
-  "src/core/claim-conflicts.ts"() {
-    "use strict";
-    normalize2 = (value) => String(value ?? "").normalize("NFKC").toLowerCase().replace(/[\u0000-\u001f\u007f]/g, " ").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-    tokens2 = (value) => new Set(
-      normalize2(value).split(/\s+/).filter((token) => token.length > 1)
-    );
-    overlap = (left, right) => {
-      const a = tokens2(left);
-      const b = tokens2(right);
-      if (!a.size || !b.size) return 0;
-      let common = 0;
-      for (const token of a) if (b.has(token)) common++;
-      return common / Math.max(a.size, b.size);
-    };
-    field = (claim, key) => normalize2(claim[key]);
-  }
-});
+// src/desktop/runtime.ts
+init_config();
 
-// src/core/topic-memory.ts
-var topic_memory_exports = {};
-__export(topic_memory_exports, {
-  TOPIC_MEMORY_LIMITS: () => TOPIC_MEMORY_LIMITS,
-  TOPIC_MEMORY_VERSION: () => TOPIC_MEMORY_VERSION,
-  archiveTopic: () => archiveTopic,
-  classifyTopic: () => classifyTopic,
-  createTopicMemory: () => createTopicMemory,
-  createTopicMemoryApi: () => createTopicMemoryApi,
-  listTopics: () => listTopics,
-  readTopic: () => readTopic,
-  topicRunHash: () => topicRunHash,
-  updateTopic: () => updateTopic
-});
-import { createHash as createHash13, randomUUID as randomUUID11 } from "node:crypto";
-import { lstat as lstat6, mkdir as mkdir7, readFile as readFile7, realpath as realpath6, rename as rename7, unlink as unlink6, writeFile as writeFile7 } from "node:fs/promises";
-import { dirname as dirname5, isAbsolute as isAbsolute5, join as join11, relative as relative6, resolve as resolve7, sep as sep6 } from "node:path";
-function projectKey(project) {
-  const value = text(project, 120);
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) throw new Error("Invalid knowledge project");
-  return value;
-}
-function memoryPath(directory, vaultId, project) {
-  if (!isAbsolute5(directory) || !/^[a-f0-9]{24}$/.test(vaultId))
-    throw new Error("Invalid topic memory binding");
-  return join11(resolve7(directory), vaultId, "topic-memory", `${projectKey(project)}.json`);
-}
-async function ensureWithin(root, target) {
-  const lexicalRoot = resolve7(root);
-  const actualRoot = await realpath6(root).catch(() => lexicalRoot);
-  const lexicalParent = resolve7(dirname5(target));
-  const rebased = lexicalParent.startsWith(lexicalRoot) ? join11(actualRoot, lexicalParent.slice(lexicalRoot.length)) : lexicalParent;
-  const parent = await realpath6(rebased).catch(() => rebased);
-  const rel = relative6(actualRoot, parent);
-  if (isAbsolute5(rel) || rel === ".." || rel.startsWith(`..${sep6}`))
-    throw new Error("Topic memory path escapes knowledge directory");
-  let cursor = actualRoot;
-  for (const part of relative6(actualRoot, rebased).split(sep6).filter(Boolean)) {
-    cursor = join11(cursor, part);
-    try {
-      if ((await lstat6(cursor)).isSymbolicLink())
-        throw new Error("Topic memory path cannot traverse symlinks");
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-      break;
-    }
+// src/core/owner-lifecycle.ts
+function createKnowledgeOwnerLifecycle(resources) {
+  const operations = /* @__PURE__ */ new Set();
+  const sessions = /* @__PURE__ */ new Set();
+  let disposed = false;
+  let disposal = null;
+  function assertActive() {
+    if (disposed) throw new Error("Knowledge runtime has been disposed");
   }
-  try {
-    const stat4 = await lstat6(target);
-    if (stat4.isSymbolicLink()) throw new Error("Topic memory file cannot be a symlink");
-    if (!stat4.isFile()) throw new Error("Topic memory path is not a regular file");
-    if (stat4.size > TOPIC_MEMORY_LIMITS.maxFileBytes) throw new Error("Topic memory file exceeds size limit");
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
+  function run(work) {
+    assertActive();
+    const operation = Promise.resolve().then(work);
+    operations.add(operation);
+    return operation.finally(() => operations.delete(operation));
   }
-  return target;
-}
-function blank(vaultId, project) {
-  const now2 = (/* @__PURE__ */ new Date()).toISOString();
-  return {
-    version: TOPIC_MEMORY_VERSION,
-    vaultId,
-    project,
-    revision: 0,
-    updatedAt: now2,
-    topics: []
-  };
-}
-function validateSource(source, project = null) {
-  if (!source || typeof source !== "object" || typeof source.path !== "string" || isAbsolute5(source.path) || source.path.includes("\\") || source.path.split("/").includes("..") || !/^[^\0]+\.md$/.test(source.path) || source.path.length > 240 || /(?:^|\/)(?:Runs|Explainers)\//i.test(source.path) || !/^[a-f0-9]{64}$/.test(source.hash || ""))
-    return null;
-  try {
-    validateNote(source.path);
-  } catch {
-    return null;
-  }
-  if (project && !canRead(source.path, project)) return null;
-  return { path: source.path, hash: source.hash };
-}
-function normalizeTopic(topic, binding, project) {
-  if (!topic || typeof topic !== "object" || typeof topic.id !== "string")
-    throw new Error("Invalid topic record");
-  const sources = Array.isArray(topic.sources) ? (topic.sources.some((source) => !validateSource(source, project)) ? (() => {
-    throw new Error("Invalid or out-of-scope topic source");
-  })() : topic.sources).map((source) => validateSource(source, project)).filter(Boolean).slice(0, TOPIC_MEMORY_LIMITS.maxSources) : [];
-  const id2 = text(topic.id, 120);
-  if (!/^[a-z0-9][a-z0-9_-]{0,95}$/i.test(id2)) throw new Error("Invalid topic id");
-  return {
-    id: id2,
-    title: text(topic.title || topic.id, 180),
-    aliases: [
-      ...new Set(
-        (Array.isArray(topic.aliases) ? topic.aliases : []).map((x) => text(x, 120)).filter(Boolean)
-      )
-    ].slice(0, 12),
-    summary: text(topic.summary, TOPIC_MEMORY_LIMITS.maxSummaryChars),
-    entities: [
-      ...new Set(
-        (Array.isArray(topic.entities) ? topic.entities : []).map((x) => text(x, 100)).filter(Boolean)
-      )
-    ].slice(0, TOPIC_MEMORY_LIMITS.maxEntities),
-    unresolvedQuestions: [
-      ...new Set(
-        (Array.isArray(topic.unresolvedQuestions) ? topic.unresolvedQuestions : []).map((x) => text(x, 240)).filter(Boolean)
-      )
-    ].slice(0, TOPIC_MEMORY_LIMITS.maxQuestions),
-    sources,
-    artifacts: [
-      ...new Set(
-        (Array.isArray(topic.artifacts) ? topic.artifacts : []).map((x) => text(x, 240)).filter(Boolean)
-      )
-    ].slice(0, TOPIC_MEMORY_LIMITS.maxArtifacts),
-    sessionId: topic.sessionId ? text(topic.sessionId, 160) : null,
-    status: ["active", "stale", "conflict-candidate", "archived"].includes(topic.status) ? topic.status : "active",
-    createdAt: topic.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
-    updatedAt: topic.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
-    lastRunHash: /^[a-f0-9]{64}$/.test(topic.lastRunHash || "") ? topic.lastRunHash : null,
-    lastRunId: topic.lastRunId ? text(topic.lastRunId, 200) : null,
-    recentRuns: Array.isArray(topic.recentRuns) ? topic.recentRuns.filter((x) => /^[a-f0-9]{64}$/.test(x)).slice(-TOPIC_MEMORY_LIMITS.maxRecentRuns) : [],
-    proposalIds: [
-      ...new Set(
-        (Array.isArray(topic.proposalIds) ? topic.proposalIds : []).map((x) => text(x, 120)).filter(Boolean)
-      )
-    ].slice(0, 12),
-    keyFindings: Array.isArray(topic.keyFindings) ? topic.keyFindings.map((x) => text(x, 300)).filter(Boolean).slice(0, 16) : [],
-    claims: Array.isArray(topic.claims) ? topic.claims.map((claim) => normalizeClaim(claim, project)).filter(Boolean).slice(-TOPIC_MEMORY_LIMITS.maxClaims) : [],
-    conflicts: Array.isArray(topic.conflicts) ? topic.conflicts.map((conflict) => normalizeConflict(conflict, project)).filter(Boolean).slice(-TOPIC_MEMORY_LIMITS.maxConflicts) : [],
-    history: Array.isArray(topic.history) ? topic.history.slice(-TOPIC_MEMORY_LIMITS.maxHistory).map((entry) => ({
-      summary: text(entry?.summary, 800),
-      updatedAt: text(entry?.updatedAt, 40)
-    })).filter((entry) => entry.summary) : [],
-    vaultId: typeof binding === "string" ? binding : binding?.vaultId,
-    project
-  };
-}
-function normalizeClaim(claim, project) {
-  if (!claim || typeof claim !== "object") return null;
-  const sourcePath = text(claim.sourcePath || claim.source_path, 240);
-  const sourceHash = text(claim.sourceHash || claim.source_hash, 64);
-  if (!sourcePath || !/^[a-f0-9]{64}$/.test(sourceHash) || !validateSource({ path: sourcePath, hash: sourceHash }, project))
-    return null;
-  const relation = ["observation", "interpretation", "hypothesis"].includes(claim.relation) ? claim.relation : "observation";
-  const value = text(claim.value, 600);
-  const statement = text(claim.claim, 1200);
-  if (!statement || !text(claim.subject, 180) || !text(claim.predicate, 180)) return null;
-  return {
-    claim: statement,
-    subject: text(claim.subject, 180),
-    predicate: text(claim.predicate, 180),
-    ...value ? { value } : {},
-    ...["organism", "tissue", "stage", "method", "endpoint", "unit"].reduce((result2, key) => {
-      const value2 = text(claim[key], 180);
-      if (value2) result2[key] = value2;
-      return result2;
-    }, {}),
-    ...claim.direction !== void 0 ? {
-      direction: ["increase", "decrease", "affirmed", "negated", "unknown"].includes(claim.direction) ? claim.direction : "unknown"
-    } : {},
-    ...Number.isFinite(claim.effect) ? { effect: claim.effect } : {},
-    sourcePath,
-    sourceHash,
-    ...claim.location ? { location: text(claim.location, 120) } : {},
-    ...claim.limitations ? { limitations: text(claim.limitations, 4e3) } : {},
-    relation
-  };
-}
-function validateConflictPath(path, project) {
-  if (typeof path !== "string" || !path || isAbsolute5(path) || path.includes("\\") || path.split("/").includes("..") || /(?:^|\/)(?:Runs|Explainers)\//i.test(path))
-    return false;
-  try {
-    validateNote(path);
-  } catch {
-    return false;
-  }
-  return canRead(path, project);
-}
-function normalizeConflict(conflict, project) {
-  if (!conflict || typeof conflict !== "object") return null;
-  const result2 = {
-    relation: text(conflict.relation, 40),
-    confidence: text(conflict.confidence, 20),
-    reason: text(conflict.reason, 600),
-    previousSourcePath: text(conflict.previousSourcePath, 240),
-    incomingSourcePath: text(conflict.incomingSourcePath, 240),
-    detectedAt: text(conflict.detectedAt, 40),
-    ...conflict.comparisonVersion === 2 ? {
-      comparisonVersion: 2,
-      previousSourceHash: text(conflict.previousSourceHash, 64),
-      incomingSourceHash: text(conflict.incomingSourceHash, 64),
-      missingConditions: conflict.missingConditions,
-      differingConditions: conflict.differingConditions
-    } : {}
-  };
-  if (!["contradicts", "supports", "refines", "supersedes", "unresolved"].includes(result2.relation))
-    return null;
-  if (!result2.reason || !validateConflictPath(result2.previousSourcePath, project) || !validateConflictPath(result2.incomingSourcePath, project))
-    return null;
-  return result2;
-}
-function validateDocument(value, vaultId, project) {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("Corrupt topic memory; refusing overwrite");
-  if (value.version !== TOPIC_MEMORY_VERSION)
-    throw new Error("Unsupported topic memory schema version; refusing overwrite");
-  if (value.vaultId !== vaultId || value.project !== project || !Number.isSafeInteger(value.revision) || value.revision < 0 || !Array.isArray(value.topics))
-    throw new Error("Corrupt topic memory; refusing overwrite");
-  if (value.topics.length > TOPIC_MEMORY_LIMITS.maxTopics)
-    throw new Error("Topic memory exceeds its bounded record limit");
-  return {
-    ...value,
-    topics: value.topics.map((topic) => normalizeTopic(topic, vaultId, project))
-  };
-}
-async function readDocument(path, vaultId, project) {
-  try {
-    const raw = await readFile7(path, "utf8");
-    if (Buffer.byteLength(raw) > TOPIC_MEMORY_LIMITS.maxFileBytes)
-      throw new Error("Topic memory file exceeds size limit");
-    const parsed = JSON.parse(raw);
-    return validateDocument(parsed, vaultId, project);
-  } catch (error) {
-    if (error.code === "ENOENT") return blank(vaultId, project);
-    if (error instanceof SyntaxError) throw new Error("Corrupt topic memory; refusing overwrite");
-    throw error;
-  }
-}
-async function atomicWrite(path, value) {
-  await mkdir7(dirname5(path), { recursive: true, mode: 448 });
-  const temp = join11(dirname5(path), `.${randomUUID11()}.tmp`);
-  try {
-    await writeFile7(temp, `${JSON.stringify(value, null, 2)}
-`, {
-      flag: "wx",
-      mode: 384
-    });
-    await rename7(temp, path);
-  } finally {
-    await unlink6(temp).catch((error) => {
-      if (error.code !== "ENOENT") throw error;
-    });
-  }
-}
-function classifyTopic(existing, incoming) {
-  if (!existing) return "new";
-  if (incoming.runHash && (incoming.runHash === existing.lastRunHash || existing.recentRuns?.includes(incoming.runHash)))
-    return "duplicate";
-  const oldSources = new Map((existing.sources || []).map((source) => [source.path, source.hash]));
-  const changed = (incoming.sources || []).some(
-    (source) => oldSources.has(source.path) && oldSources.get(source.path) !== source.hash
-  );
-  if (changed) return "stale";
-  const previousClaims = existing.claims || [];
-  const incomingClaims = incoming.claims || [];
-  if (previousClaims.length && incomingClaims.length && compareClaimSets(previousClaims, incomingClaims).some((comparison) => comparison.blocking))
-    return "conflict-candidate";
-  return "additional";
-}
-function createTopicMemoryWithHost(runtime, config, { binding, project, directory = config?.knowledgeDirectory() } = {}, storageFactory) {
-  if (!binding?.vaultId) throw new Error("Topic memory requires a bound Vault");
-  const scope = { vaultId: binding.vaultId, project: projectKey(project) };
-  const storage = storageFactory?.(binding, scope.project);
-  const path = storage ? storage.key : memoryPath(directory, scope.vaultId, scope.project);
-  const read = async () => {
-    if (storage) {
-      const value = await storage.read();
-      if (value === null) return blank(scope.vaultId, scope.project);
-      if (Buffer.byteLength(JSON.stringify(value)) > TOPIC_MEMORY_LIMITS.maxFileBytes)
-        throw new Error("Topic memory file exceeds size limit");
-      return validateDocument(value, scope.vaultId, scope.project);
-    }
-    await ensureWithin(directory, path);
-    return readDocument(path, scope.vaultId, scope.project);
-  };
-  const mutate = async (expectedRevision, updater) => runtime.runRuntimeExclusive("topic-memory", path, async () => {
-    const current = await read();
-    if (expectedRevision !== void 0 && expectedRevision !== null && current.revision !== expectedRevision)
-      throw new Error("Topic memory revision changed");
-    const next = updater(structuredClone(current));
-    if (next?.__topicNoop) return current;
-    const value = validateDocument(
-      {
-        ...next,
-        version: TOPIC_MEMORY_VERSION,
-        vaultId: scope.vaultId,
-        project: scope.project,
-        revision: current.revision + 1,
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      scope.vaultId,
-      scope.project
-    );
-    if (value.topics.length > TOPIC_MEMORY_LIMITS.maxTopics) {
-      const archived = value.topics.filter((topic) => topic.status === "archived");
-      if (!archived.length)
-        throw new Error("Topic memory quota exceeded; archive a topic before adding another");
-      const remove = value.topics.length - TOPIC_MEMORY_LIMITS.maxTopics;
-      const evict = new Set(archived.slice(-remove).map((topic) => topic.id));
-      value.topics = value.topics.filter((topic) => !evict.has(topic.id));
-    }
-    if (storage) await storage.write(value, current.revision);
-    else await atomicWrite(path, value);
-    return value;
-  });
-  const compact = (topic) => ({
-    id: topic.id,
-    title: topic.title,
-    aliases: topic.aliases,
-    summary: topic.summary.slice(0, TOPIC_MEMORY_LIMITS.maxContextChars),
-    entities: topic.entities,
-    unresolvedQuestions: topic.unresolvedQuestions,
-    sources: topic.sources,
-    artifacts: topic.artifacts,
-    status: topic.status,
-    revision: topic.revision,
-    updatedAt: topic.updatedAt,
-    lastRunHash: topic.lastRunHash,
-    lastRunId: topic.lastRunId,
-    recentRuns: topic.recentRuns,
-    proposalIds: topic.proposalIds,
-    keyFindings: topic.keyFindings,
-    claims: topic.claims,
-    conflicts: topic.conflicts,
-    history: topic.history
-  });
-  const context = (topic) => {
-    const value = {
-      id: topic.id,
-      title: topic.title,
-      entities: topic.entities.slice(0, 12),
-      summary: topic.summary.slice(0, 900),
-      claims: topic.claims.slice(-6).map((claim) => ({
-        claim: claim.claim,
-        subject: claim.subject,
-        predicate: claim.predicate,
-        value: claim.value,
-        organism: claim.organism,
-        tissue: claim.tissue,
-        stage: claim.stage,
-        method: claim.method,
-        relation: claim.relation
-      })),
-      conflicts: topic.conflicts.slice(-4)
+  function attachSession(close) {
+    assertActive();
+    sessions.add(close);
+    return () => {
+      sessions.delete(close);
     };
-    let output = JSON.stringify(value);
-    if (output.length > TOPIC_MEMORY_LIMITS.maxContextChars)
-      output = JSON.stringify({
-        ...value,
-        summary: value.summary.slice(0, 400),
-        entities: value.entities.slice(0, 6)
-      });
-    if (output.length > TOPIC_MEMORY_LIMITS.maxContextChars)
-      output = JSON.stringify({
-        id: value.id,
-        title: value.title,
-        entities: value.entities.slice(0, 3)
-      });
-    return output;
-  };
-  return {
-    path,
-    scope,
-    read,
-    list: async (query = "", { includeArchived = false } = {}) => {
-      const doc = await read();
-      const q = text(query, 180).toLowerCase();
-      return {
-        revision: doc.revision,
-        topics: doc.topics.filter((topic) => includeArchived || topic.status !== "archived").filter(
-          (topic) => !q || [topic.id, topic.title, ...topic.aliases].some((value) => value.toLowerCase().includes(q))
-        ).map(compact)
-      };
-    },
-    get: async (idOrName) => {
-      const doc = await read();
-      const q = text(idOrName, 180).toLowerCase();
-      const matches = doc.topics.filter(
-        (topic) => [topic.id, topic.title, ...topic.aliases].some((value) => value.toLowerCase() === q)
+  }
+  function dispose() {
+    if (disposal) return disposal;
+    disposed = true;
+    disposal = (async () => {
+      const sessionResults = await Promise.allSettled([...sessions].map((close) => close()));
+      sessions.clear();
+      resources.beforeDrain?.();
+      const operationResults = await Promise.allSettled([...operations]);
+      const resourceResults = await Promise.allSettled([resources.dispose()]);
+      const failures = [...sessionResults, ...operationResults, ...resourceResults].filter(
+        (result2) => result2.status === "rejected"
       );
-      return { revision: doc.revision, matches: matches.map(compact) };
-    },
-    context: async (topic) => {
-      const doc = await read();
-      const item = typeof topic === "string" ? doc.topics.find((x) => x.id === topic) : topic;
-      return item ? context(item) : null;
-    },
-    refreshSourceCheck: async (topicId) => {
-      const doc = await read();
-      const topic = doc.topics.find((item) => item.id === text(topicId, 120));
-      if (!topic) throw new Error("Topic not found");
-      const stale = [];
-      for (const source of topic.sources) {
-        try {
-          validateNote(source.path);
-          if (!canRead(source.path, scope.project) || /(?:^|\/)(?:Runs|Explainers)\//i.test(source.path)) {
-            stale.push({ path: source.path, reason: "out-of-scope" });
-            continue;
-          }
-          const current = storage ? await storage.readSource(source.path) : await readNoteFile(binding.vault, source.path);
-          if (current.hash !== source.hash) stale.push({ path: source.path, reason: "changed" });
-        } catch {
-          stale.push({ path: source.path, reason: "missing-or-invalid" });
-        }
-      }
-      if (stale.length && topic.status !== "stale") {
-        await mutate(void 0, (value) => {
-          const current = value.topics.find((item) => item.id === topic.id);
-          if (current) current.status = "stale";
-          return value;
-        });
-      }
-      return {
-        topic: {
-          ...compact(topic),
-          status: stale.length ? "stale" : topic.status
-        },
-        stale,
-        status: stale.length ? "stale" : topic.status
-      };
-    },
-    link: async (topicId, { proposalIds = [], artifacts = [] } = {}) => mutate(void 0, (doc) => {
-      const topic = doc.topics.find((item) => item.id === text(topicId, 120));
-      if (!topic) throw new Error("Topic not found");
-      topic.proposalIds = [.../* @__PURE__ */ new Set([...topic.proposalIds || [], ...proposalIds])].slice(-12);
-      topic.artifacts = [.../* @__PURE__ */ new Set([...topic.artifacts || [], ...artifacts])].slice(
-        -TOPIC_MEMORY_LIMITS.maxArtifacts
-      );
-      topic.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-      return doc;
-    }),
-    update: async (input, expectedRevision) => {
-      if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
-      return mutate(expectedRevision, (doc) => {
-        const allowed = /* @__PURE__ */ new Set([
-          "id",
-          "title",
-          "summary",
-          "aliases",
-          "entities",
-          "unresolvedQuestions",
-          "keyFindings",
-          "claims"
-        ]);
-        for (const key of Object.keys(input || {}))
-          if (!allowed.has(key)) throw new Error(`Unsupported topic metadata field: ${key}`);
-        const id2 = text(input.id, 120);
-        if (!id2) throw new Error("Topic id is required");
-        const index = doc.topics.findIndex((topic) => topic.id === id2);
-        const previous = index >= 0 ? doc.topics[index] : null;
-        const incomingClaims = Array.isArray(input.claims) ? input.claims.map((claim) => normalizeClaim(claim, scope.project)).filter(Boolean) : [];
-        const claimComparisons = compareClaimSets(previous?.claims || [], incomingClaims);
-        const merged = normalizeTopic(
-          {
-            ...previous,
-            ...input,
-            ...claimComparisons.some((comparison) => comparison.blocking) ? { status: "conflict-candidate" } : previous?.status === "conflict-candidate" ? { status: "conflict-candidate" } : {},
-            conflicts: [
-              ...previous?.conflicts || [],
-              ...claimComparisons.map((comparison) => ({
-                comparisonVersion: 2,
-                previousSourceHash: comparison.previous.sourceHash,
-                incomingSourceHash: comparison.incoming.sourceHash,
-                missingConditions: comparison.missingConditions,
-                differingConditions: comparison.differingConditions,
-                relation: comparison.relation,
-                confidence: comparison.confidence,
-                reason: comparison.reason,
-                previousSourcePath: comparison.previous.sourcePath,
-                incomingSourcePath: comparison.incoming.sourcePath,
-                detectedAt: (/* @__PURE__ */ new Date()).toISOString()
-              }))
-            ],
-            id: id2,
-            createdAt: previous?.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
-            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-          },
-          scope.vaultId,
-          scope.project
+      if (failures.length)
+        throw new AggregateError(
+          failures.map((result2) => result2.reason),
+          "Knowledge runtime disposal failed"
         );
-        if (index >= 0) doc.topics[index] = merged;
-        else doc.topics.unshift(merged);
-        return doc;
-      });
-    },
-    archive: async (id2, expectedRevision) => {
-      if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
-      return mutate(expectedRevision, (doc) => {
-        const topic = doc.topics.find((item) => item.id === text(id2, 120));
-        if (!topic) throw new Error("Topic not found");
-        topic.status = "archived";
-        topic.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-        return doc;
-      });
-    },
-    record: async (input, expectedRevision) => {
-      if (!input || typeof input !== "object") throw new Error("Invalid topic record input");
-      let receipt;
-      let claimComparisons = [];
-      const next = await mutate(expectedRevision, (value) => {
-        if (Array.isArray(input.sources) && input.sources.some((source) => !validateSource(source, scope.project)))
-          throw new Error("Invalid or out-of-scope topic source");
-        const key = text(input.topicId || input.title, 180).toLowerCase();
-        const matches = value.topics.filter(
-          (topic) => [topic.id, topic.title, ...topic.aliases].some((v) => v.toLowerCase() === key)
-        );
-        if (matches.length > 1) throw new Error("Ambiguous topic identity; choose an exact topic id");
-        const existing = matches[0] || (input.topicId ? value.topics.find((topic) => topic.id === text(input.topicId, 120)) : null);
-        const classification = classifyTopic(existing, input);
-        if (classification === "duplicate") {
-          receipt = {
-            classification,
-            revision: value.revision,
-            topic: compact(existing),
-            changed: false
-          };
-          value.__topicNoop = true;
-          return value;
-        }
-        const id2 = existing?.id || text(input.topicId, 96) || `${slug(input.title)}-${digest4(input.title).slice(0, 8)}`;
-        if (!/^[a-z0-9][a-z0-9_-]{0,95}$/i.test(id2)) throw new Error("Invalid topic id");
-        const index = value.topics.findIndex((topic) => topic.id === id2);
-        const prior = index >= 0 ? value.topics[index] : null;
-        const priorClaims = prior?.claims || [];
-        const incomingClaims = Array.isArray(input.claims) ? input.claims.map((claim) => normalizeClaim(claim, scope.project)).filter(Boolean) : [];
-        claimComparisons = compareClaimSets(priorClaims, incomingClaims);
-        const conflictRecords = claimComparisons.map((comparison) => ({
-          comparisonVersion: 2,
-          previousSourceHash: comparison.previous.sourceHash,
-          incomingSourceHash: comparison.incoming.sourceHash,
-          missingConditions: comparison.missingConditions,
-          differingConditions: comparison.differingConditions,
-          relation: comparison.relation,
-          confidence: comparison.confidence,
-          reason: comparison.reason,
-          previousSourcePath: comparison.previous.sourcePath,
-          incomingSourcePath: comparison.incoming.sourcePath,
-          detectedAt: (/* @__PURE__ */ new Date()).toISOString()
-        }));
-        const mergedClaims = [...priorClaims, ...incomingClaims].filter(
-          (claim, claimIndex, all) => all.findIndex(
-            (candidate) => candidate.sourcePath === claim.sourcePath && candidate.sourceHash === claim.sourceHash && candidate.claim === claim.claim
-          ) === claimIndex
-        );
-        const mergedSources = [];
-        for (const source of [...prior?.sources || [], ...input.sources || []]) {
-          if (!validateSource(source, scope.project) || mergedSources.some((item) => item.path === source.path && item.hash === source.hash))
-            continue;
-          mergedSources.push(source);
-        }
-        mergedSources.splice(0, Math.max(0, mergedSources.length - TOPIC_MEMORY_LIMITS.maxSources));
-        const updated = normalizeTopic(
-          {
-            ...prior,
-            ...input,
-            id: id2,
-            aliases: [.../* @__PURE__ */ new Set([...prior?.aliases || [], ...input.aliases || []])].slice(-12),
-            entities: [.../* @__PURE__ */ new Set([...prior?.entities || [], ...input.entities || []])].slice(
-              -TOPIC_MEMORY_LIMITS.maxEntities
-            ),
-            unresolvedQuestions: [
-              .../* @__PURE__ */ new Set([...prior?.unresolvedQuestions || [], ...input.unresolvedQuestions || []])
-            ].slice(-TOPIC_MEMORY_LIMITS.maxQuestions),
-            artifacts: [.../* @__PURE__ */ new Set([...prior?.artifacts || [], ...input.artifacts || []])].slice(
-              -TOPIC_MEMORY_LIMITS.maxArtifacts
-            ),
-            proposalIds: [.../* @__PURE__ */ new Set([...prior?.proposalIds || [], ...input.proposalIds || []])].slice(
-              -12
-            ),
-            keyFindings: [.../* @__PURE__ */ new Set([...prior?.keyFindings || [], ...input.keyFindings || []])].slice(
-              -16
-            ),
-            claims: mergedClaims,
-            conflicts: [...prior?.conflicts || [], ...conflictRecords].slice(
-              -TOPIC_MEMORY_LIMITS.maxConflicts
-            ),
-            history: [
-              ...prior?.history || [],
-              ...prior?.summary ? [{ summary: prior.summary, updatedAt: prior.updatedAt }] : []
-            ].slice(-TOPIC_MEMORY_LIMITS.maxHistory),
-            sources: mergedSources,
-            status: classification === "stale" || classification === "conflict-candidate" ? classification : prior?.status === "conflict-candidate" ? "conflict-candidate" : "active",
-            lastRunHash: input.runHash || prior?.lastRunHash,
-            recentRuns: input.runHash ? [.../* @__PURE__ */ new Set([...prior?.recentRuns || [], input.runHash])].slice(
-              -TOPIC_MEMORY_LIMITS.maxRecentRuns
-            ) : prior?.recentRuns,
-            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-          },
-          scope.vaultId,
-          scope.project
-        );
-        if (index >= 0) value.topics[index] = updated;
-        else value.topics.unshift(updated);
-        receipt = { classification, topic: compact(updated), changed: true };
-        return value;
-      });
-      return {
-        ...receipt,
-        ...claimComparisons.length ? { conflicts: claimComparisons } : {},
-        revision: next.revision,
-        topic: receipt.topic && next.topics.find((topic) => topic.id === receipt.topic.id) ? compact(next.topics.find((topic) => topic.id === receipt.topic.id)) : receipt.topic
-      };
-    }
-  };
-}
-function topicRunHash(summary, sources = []) {
-  return digest4(
-    JSON.stringify({
-      summary: text(summary, TOPIC_MEMORY_LIMITS.maxSummaryChars),
-      sources: sources.map(validateSource).filter(Boolean).sort((a, b) => a.path.localeCompare(b.path) || a.hash.localeCompare(b.hash))
-    })
-  );
-}
-function createTopicMemoryApi(runtime, config, storageFactory) {
-  const createTopicMemory2 = (options = {}) => createTopicMemoryWithHost(runtime, config, options, storageFactory);
-  async function listTopics2(options = {}) {
-    return (await createTopicMemory2(options).list(options.query || "")).topics;
+    })();
+    return disposal;
   }
-  async function readTopic2(options = {}) {
-    return (await createTopicMemory2(options).get(options.topic || options.id || "")).matches;
-  }
-  async function updateTopic2(options = {}) {
-    const { binding, project, directory, expectedRevision, ...input } = options;
-    if (!Number.isSafeInteger(expectedRevision)) throw new Error("expectedRevision is required");
-    return createTopicMemory2({ binding, project, directory }).update(input, expectedRevision);
-  }
-  async function archiveTopic2(options = {}) {
-    if (!Number.isSafeInteger(options.expectedRevision)) throw new Error("expectedRevision is required");
-    return createTopicMemory2(options).archive(options.id, options.expectedRevision);
-  }
-  return { createTopicMemory: createTopicMemory2, listTopics: listTopics2, readTopic: readTopic2, updateTopic: updateTopic2, archiveTopic: archiveTopic2 };
-}
-var TOPIC_MEMORY_VERSION, TOPIC_MEMORY_LIMITS, digest4, text, slug, createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic;
-var init_topic_memory = __esm({
-  "src/core/topic-memory.ts"() {
-    "use strict";
-    init_runtime_host();
-    init_claim_conflicts();
-    init_config();
-    init_files();
-    TOPIC_MEMORY_VERSION = 1;
-    TOPIC_MEMORY_LIMITS = Object.freeze({
-      maxTopics: 64,
-      maxSummaryChars: 4e3,
-      maxContextChars: 2400,
-      maxEntities: 24,
-      maxQuestions: 16,
-      maxSources: 24,
-      maxArtifacts: 12,
-      maxHistory: 8,
-      maxRecentRuns: 12,
-      maxClaims: 64,
-      maxConflicts: 32,
-      maxFileBytes: 512 * 1024
-    });
-    digest4 = (value) => createHash13("sha256").update(String(value)).digest("hex");
-    text = (value, limit) => String(value ?? "").normalize("NFKC").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, limit);
-    slug = (value) => text(value, 160).toLowerCase().replace(/[^a-z0-9\u0080-\uffff]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 96) || "topic";
-    ({ createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic } = createTopicMemoryApi(compatibilityKnowledgeRuntimeHost, { knowledgeDirectory }));
-  }
-});
-
-// src/desktop/contract.ts
-var string = { type: "string" };
-var integer = { type: "integer", minimum: 0 };
-var coverage = { enum: ["uninitialized", "indexing", "partial", "ready"] };
-var nullable = (schema) => ({ anyOf: [schema, { type: "null" }] });
-var object = (properties, required = Object.keys(properties)) => ({
-  type: "object",
-  properties,
-  required,
-  additionalProperties: false
-});
-var overviewInputSchema = { type: "null" };
-var overviewResultSchema = object({
-  state: { enum: ["unconfigured", "bound"] },
-  binding: nullable(
-    object({
-      vaultId: string,
-      revision: { type: "integer", minimum: 1 },
-      label: string
-    })
-  ),
-  project: nullable(string),
-  index: nullable(
-    object({
-      revision: integer,
-      coverage,
-      noteCount: integer,
-      pendingChanges: integer,
-      lastReconciledAt: nullable(string)
-    })
-  ),
-  recentNotes: {
-    type: "array",
-    items: object({
-      path: string,
-      title: string,
-      kind: string,
-      updatedAt: { type: "number" }
-    })
-  }
-});
-var searchInputSchema = object(
-  {
-    query: { type: "string", minLength: 1, maxLength: 2e3 },
-    revision: { type: "integer", minimum: 1 },
-    limit: { type: "integer", minimum: 1, maximum: 12 }
-  },
-  ["query", "revision"]
-);
-var searchResultSchema = object({
-  query: string,
-  revision: integer,
-  bindingRevision: { type: "integer", minimum: 1 },
-  coverage,
-  complete: { type: "boolean" },
-  hits: {
-    type: "array",
-    items: object({
-      path: string,
-      title: string,
-      kind: string,
-      hash: string,
-      text: string,
-      startLine: { type: "integer", minimum: 1 },
-      endLine: integer
-    })
-  }
-});
-var boolean = { type: "boolean" };
-var array = (items) => ({ type: "array", items });
-var record = (additionalProperties) => ({
-  type: "object",
-  additionalProperties
-});
-var bindingRevision = { type: "integer", minimum: 1 };
-var readScope = {
-  revision: integer,
-  bindingRevision,
-  project: nullable(string)
-};
-var notePath = { type: "string", minLength: 1, maxLength: 1e3 };
-var snippetProperties = {
-  text: string,
-  startLine: bindingRevision,
-  endLine: integer,
-  totalLines: integer,
-  truncated: boolean
-};
-var snippetSchema = object(snippetProperties);
-var recentNoteSchema = object({
-  path: string,
-  title: string,
-  kind: string,
-  updatedAt: { type: "number" }
-});
-var readNoteInputSchema = object(
-  {
-    path: notePath,
-    revision: bindingRevision,
-    startLine: bindingRevision,
-    expectedHash: { type: "string", pattern: "^[a-f0-9]{64}$" }
-  },
-  ["path", "revision"]
-);
-var readNoteResultSchema = {
-  anyOf: [
-    object({ ...readScope, path: string, missing: { const: true } }),
-    object({
-      ...readScope,
-      path: string,
-      missing: { const: false },
-      title: string,
-      kind: string,
-      category: { enum: ["paper", "software", "method", "idea", "other"] },
-      hash: string,
-      ...snippetProperties,
-      humanReview: nullable(snippetSchema),
-      pending: array(object({ kind: string, revision: integer }))
-    })
-  ]
-};
-var linksInputSchema = object({
-  path: notePath,
-  revision: bindingRevision
-});
-var linksResultSchema = object({
-  ...readScope,
-  path: string,
-  title: string,
-  outgoing: array(object({ path: string, title: string, exists: boolean })),
-  incoming: array(object({ path: string, title: string, exists: boolean }))
-});
-var graphInputSchema = object(
-  {
-    revision: bindingRevision,
-    limit: { type: "integer", minimum: 10, maximum: 500 },
-    view: { enum: ["semantic", "all"] },
-    mergeMirrors: boolean
-  },
-  ["revision"]
-);
-var edgeSchema = object({ source: string, target: string });
-var graphNodeProperties = {
-  path: string,
-  title: string,
-  kind: string,
-  degree: integer,
-  warnings: array(string)
-};
-var semanticNodeSchema = object(
-  {
-    ...graphNodeProperties,
-    nodeType: {
-      enum: ["note", "wiki", "navigation", "mirror", "infrastructure", "memory"]
-    },
-    isInfrastructure: boolean,
-    community: { type: "integer", minimum: -1 },
-    x: { type: "number" },
-    y: { type: "number" },
-    mirrors: array(string),
-    contentType: string,
-    isMain: boolean,
-    sharedWith: array(string)
-  },
-  ["path", "title", "kind", "degree", "nodeType", "isInfrastructure", "community", "x", "y"]
-);
-var graphResultSchema = object({
-  ...readScope,
-  nodes: array(object(graphNodeProperties, ["path", "title", "kind", "degree"])),
-  edges: array(edgeSchema),
-  totalNotes: integer,
-  semantic: object({
-    nodes: array(semanticNodeSchema),
-    edges: array(edgeSchema),
-    totalNotes: integer,
-    view: { enum: ["semantic", "all"] },
-    mergeMirrors: boolean,
-    relations: array(
-      object({
-        source: string,
-        target: string,
-        type: { enum: ["link", "directory", "duplicate"] }
-      })
-    ),
-    duplicates: array(object({ canonical: string, duplicate: string })),
-    communities: record({ type: "integer", minimum: -1 }),
-    layout: record(object({ x: { type: "number" }, y: { type: "number" } })),
-    health: object({
-      isolated: integer,
-      duplicates: integer,
-      infrastructure: integer,
-      truncated: boolean,
-      candidateNodes: integer,
-      candidateLimit: integer
-    })
-  })
-});
-var jobsInputSchema = object(
-  {
-    revision: bindingRevision,
-    offset: { type: "integer", minimum: 0, maximum: 1e5 },
-    limit: { type: "integer", minimum: 1, maximum: 50 }
-  },
-  ["revision"]
-);
-var jobsResultSchema = object({
-  ...readScope,
-  items: array(
-    object({
-      key: string,
-      kind: string,
-      path: string,
-      scope: string,
-      revision: integer,
-      updated: string
-    })
-  ),
-  total: integer,
-  offset: integer,
-  nextOffset: nullable(integer)
-});
-var recentByCategoryInputSchema = object(
-  {
-    revision: bindingRevision,
-    limit: { type: "integer", minimum: 1, maximum: 24 }
-  },
-  ["revision"]
-);
-var recentByCategoryResultSchema = object({
-  ...readScope,
-  groups: object({
-    paper: array(recentNoteSchema),
-    software: array(recentNoteSchema),
-    method: array(recentNoteSchema),
-    idea: array(recentNoteSchema)
-  }),
-  counts: object({
-    paper: integer,
-    software: integer,
-    method: integer,
-    idea: integer,
-    other: integer
-  })
-});
-var reviewModeSchema = { enum: ["automatic", "strict"] };
-var preferencesInputSchema = { type: "null" };
-var preferencesResultSchema = object({
-  binding: nullable(
-    object({
-      vaultId: string,
-      revision: bindingRevision,
-      label: string,
-      vault: string,
-      profile: { enum: ["project", "literature", "hybrid"] },
-      depositMode: { enum: ["run-only", "verified", "rich"] },
-      subagentPolicy: { enum: ["none", "read-local"] },
-      updatedAt: string
-    })
-  ),
-  canWriteState: boolean,
-  reviewPolicy: object({
-    mode: reviewModeSchema,
-    persistedMode: nullable(reviewModeSchema),
-    version: nullable(string),
-    override: nullable({ const: "environment" }),
-    diagnostic: nullable({ enum: ["invalid-json", "invalid-policy"] })
-  })
-});
-var setReviewPolicyInputSchema = object({
-  bindingRevision,
-  expectedVersion: nullable(string),
-  mode: reviewModeSchema
-});
-var proposalId = { type: "string", pattern: "^[0-9a-f-]{36}$" };
-var proposalHash = { type: "string", pattern: "^[a-f0-9]{64}$" };
-var reviewsInputSchema = object(
-  {
-    revision: bindingRevision,
-    offset: { type: "integer", minimum: 0, maximum: 100 },
-    limit: { type: "integer", minimum: 1, maximum: 25 }
-  },
-  ["revision"]
-);
-var reviewsResultSchema = object({
-  bindingRevision,
-  project: nullable(string),
-  items: array(
-    object({
-      id: proposalId,
-      path: string,
-      title: string,
-      status: string,
-      proposalHash,
-      expiresAt: integer,
-      expired: boolean,
-      bindingChanged: boolean
-    })
-  ),
-  problems: array(object({ id: string, error: string })),
-  total: integer,
-  offset: integer,
-  nextOffset: nullable(integer)
-});
-var previewReviewInputSchema = object({
-  revision: bindingRevision,
-  id: proposalId,
-  expectedProposalHash: proposalHash
-});
-var previewReviewResultSchema = object({
-  bindingRevision,
-  id: proposalId,
-  path: string,
-  project: string,
-  status: string,
-  proposalHash,
-  title: string,
-  rationale: string,
-  before: string,
-  after: string,
-  protectedText: string,
-  sources: array(
-    object(
-      {
-        path: string,
-        hash: nullable(string),
-        startLine: bindingRevision,
-        endLine: bindingRevision,
-        excerptHash: string,
-        paperDois: array(string),
-        currentHash: nullable(string),
-        changed: boolean,
-        error: nullable(string)
-      },
-      ["path", "hash", "startLine", "endLine", "excerptHash", "currentHash", "changed", "error"]
-    )
-  ),
-  expired: boolean,
-  targetChanged: boolean,
-  canApply: boolean,
-  expiresAt: integer,
-  scientificallyVerified: { const: false }
-});
-var rejectReviewInputSchema = object({
-  revision: bindingRevision,
-  id: proposalId,
-  expectedProposalHash: proposalHash
-});
-var rejectReviewResultSchema = object({
-  id: proposalId,
-  status: { const: "rejected" },
-  vaultWritten: { const: false },
-  reviewRecorded: boolean
-});
-var applyReviewInputSchema = object({
-  revision: bindingRevision,
-  id: proposalId,
-  expectedProposalHash: proposalHash
-});
-var applyReviewResultSchema = object({
-  id: proposalId,
-  status: { const: "applied" },
-  path: { type: "string", minLength: 1 },
-  vaultWritten: { const: true },
-  reviewRecorded: boolean,
-  indexed: boolean,
-  recovered: boolean,
-  recordError: nullable(string),
-  indexError: nullable(string)
-});
-var semanticConfigProperties = {
-  enabled: boolean,
-  provider: { enum: ["none", "ollama", "openai-compatible"] },
-  baseUrl: string,
-  model: string,
-  credentialEnv: string,
-  remoteConsent: boolean,
-  timeoutMs: { type: "integer", minimum: 500, maximum: 3e4 },
-  chunkChars: { type: "integer", minimum: 256, maximum: 8e3 },
-  minSimilarity: { type: "number", minimum: 0, maximum: 1 }
-};
-var semanticPreferencesInputSchema = { type: "null" };
-var semanticPreferencesResultSchema = object({
-  binding: nullable(object({ vaultId: string, revision: bindingRevision, label: string })),
-  settings: nullable(
-    object(
-      { ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string },
-      [
-        "enabled",
-        "provider",
-        "baseUrl",
-        "model",
-        "credentialEnv",
-        "remoteConsent",
-        "version",
-        "revision",
-        "updatedAt"
-      ]
-    )
-  ),
-  canWriteState: boolean,
-  providerExecution: { const: "unavailable" }
-});
-var setSemanticSettingsInputSchema = object({
-  bindingRevision,
-  expectedSettingsRevision: integer,
-  settings: object(semanticConfigProperties, [])
-});
-var reviewHistoryInputSchema = object({ revision: bindingRevision });
-var reviewHistoryResultSchema = object({
-  bindingRevision,
-  project: string,
-  items: array(
-    object({
-      id: proposalId,
-      path: string,
-      afterHash: proposalHash,
-      reviewedAt: integer,
-      reviewMethod: string
-    })
-  )
-});
-var undoReviewInputSchema = object({
-  revision: bindingRevision,
-  id: proposalId,
-  expectedHash: proposalHash
-});
-var undoReviewResultSchema = object({ status: { const: "reverted" }, path: string });
-var modelReviewProfile = { const: "knowledge-wiki-reviewer" };
-var modelReviewInputSchema = object(
-  {
-    revision: bindingRevision,
-    id: proposalId,
-    expectedProposalHash: proposalHash,
-    acknowledged: { const: true },
-    autoApply: boolean,
-    profile: modelReviewProfile
-  },
-  ["revision", "id", "expectedProposalHash", "acknowledged", "autoApply"]
-);
-var modelReviewInfoInputSchema = object(
-  {
-    revision: bindingRevision,
-    id: proposalId,
-    expectedProposalHash: proposalHash,
-    profile: modelReviewProfile
-  },
-  ["revision", "id", "expectedProposalHash"]
-);
-var modelReviewUsageSchema = object({
-  inputTokens: nullable({ type: "number", minimum: 0 }),
-  outputTokens: nullable({ type: "number", minimum: 0 }),
-  cost: nullable({ type: "number", minimum: 0 })
-});
-var modelReviewResultSchema = {
-  type: "object",
-  properties: {
-    auditId: proposalId,
-    proposalId,
-    proposalHash,
-    path: string,
-    model: string,
-    startedAt: integer,
-    completedAt: integer,
-    verdict: { enum: ["approve", "needs-human", "reject"] },
-    summary: string,
-    cautions: array(string),
-    checks: { type: "object", additionalProperties: boolean },
-    source_paths: array(string),
-    canAutoApply: boolean,
-    autoApplyAuthorized: boolean,
-    applied: boolean,
-    humanReviewed: { const: false },
-    scientificallyVerified: { const: false },
-    usage: modelReviewUsageSchema,
-    partial: boolean,
-    applyError: string,
-    auditSaveError: string,
-    writeResult: { type: "object" }
-  },
-  required: [
-    "auditId",
-    "proposalId",
-    "proposalHash",
-    "path",
-    "model",
-    "startedAt",
-    "completedAt",
-    "verdict",
-    "summary",
-    "cautions",
-    "checks",
-    "source_paths",
-    "canAutoApply",
-    "autoApplyAuthorized",
-    "applied",
-    "humanReviewed",
-    "scientificallyVerified",
-    "usage"
-  ],
-  additionalProperties: true
-};
-var modelReviewInfoResultSchema = object({
-  selection: object({ provider: string, model: string, thinkingLevel: string, profile: string }, [
-    "provider",
-    "model",
-    "thinkingLevel"
-  ]),
-  lastReview: nullable(modelReviewResultSchema)
-});
-
-// src/desktop/semantic-preferences.ts
-import { basename } from "node:path";
-function createKnowledgeSemanticPreferences(owner, semantic, canWriteState) {
-  async function snapshot() {
-    const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-    if (!binding) return { binding: null, settings: null, canWriteState, providerExecution: "unavailable" };
-    const settings2 = await semantic.readSemanticSettings(binding.vaultId);
-    return owner.config.withKnowledgeBinding(binding, () => ({ binding: { vaultId: binding.vaultId, revision: binding.revision, label: basename(binding.vault) }, settings: settings2, canWriteState, providerExecution: "unavailable" }));
-  }
-  return {
-    read: () => owner.run(snapshot),
-    write: (input) => owner.run(async () => {
-      if (!canWriteState) throw new Error("Semantic settings require an application-state write grant");
-      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-      if (!binding || binding.revision !== input.bindingRevision) throw new Error("Knowledge binding changed; refresh before saving semantic settings");
-      await owner.config.withKnowledgeBinding(binding, () => semantic.saveSemanticSettings(binding.vaultId, input.settings, input.expectedSettingsRevision));
-      await owner.config.withKnowledgeBinding(binding, () => void 0);
-      return snapshot();
-    })
-  };
+  return { assertActive, run, attachSession, dispose };
 }
 
 // src/desktop/runtime.ts
+init_review_policy();
 init_runtime_host();
 
 // src/core/service.ts
@@ -3875,27 +3443,10 @@ __export(service_exports, {
   getKnowledgeService: () => getKnowledgeService,
   notifyKnowledgeChange: () => notifyKnowledgeChange
 });
-
-// src/core/topic-probe.ts
-var STOP = new Set(
-  "what when where which with from that this have about into your their there these those does using used make more most some such than then them they will would could should also only over very just like".split(
-    " "
-  )
-);
-var tokens = (text4) => String(text4 || "").toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-function mentionedWikiTitle(query, titles) {
-  const q = String(query || "").toLocaleLowerCase();
-  if (q.trim().length < 3) return null;
-  const queryTokens = new Set(tokens(q).filter((t) => /[a-z0-9]/.test(t) && t.length >= 4 && !STOP.has(t)));
-  for (const raw of titles) {
-    const title = String(raw || "").toLocaleLowerCase().replace(/\.md$/, "").replace(/[-_]+/g, " ").trim();
-    if (!title) continue;
-    if (title.length >= 3 && q.includes(title)) return raw;
-    const lead = tokens(title).filter((t) => t.length >= 4 && !STOP.has(t));
-    if (lead.some((t) => queryTokens.has(t))) return raw;
-  }
-  return null;
-}
+init_config();
+init_files();
+import { createHash as createHash5, randomUUID as randomUUID5 } from "node:crypto";
+import { relative as relative2, resolve as resolve2, sep as sep2 } from "node:path";
 
 // src/core/graph-retrieval.ts
 var GRAPH_RETRIEVAL_DEFAULTS = {
@@ -3955,282 +3506,8 @@ function expandWithGraph(hits, neighbors, options) {
 }
 
 // src/core/service.ts
-import { createHash as createHash5, randomUUID as randomUUID5 } from "node:crypto";
-import { relative as relative2, resolve as resolve2, sep as sep2 } from "node:path";
-
-// src/core/worker-transport.ts
-import { mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-function createKnowledgeWorkerTransportFactory(runtime, config, invalidateKnowledgeUi2, acquireWriterLease) {
-  const {
-    createKnowledgeWorker: createKnowledgeWorker2,
-    knowledgeWorkerMetadata: knowledgeWorkerMetadata2,
-    emitKnowledgeWorkerLifecycle: emitKnowledgeWorkerLifecycle2
-  } = runtime;
-  class KnowledgeWorkerTransport {
-    pending;
-    inFlightRequests;
-    next;
-    closed;
-    closing;
-    closePromise;
-    metadata;
-    version;
-    lifecycle;
-    readyPromise;
-    ready;
-    writerLease;
-    leaseReleaseError;
-    workerFailure;
-    worker;
-    constructor(binding, directory2, options) {
-      this.pending = /* @__PURE__ */ new Map();
-      this.inFlightRequests = 0;
-      this.next = 0;
-      this.closed = false;
-      this.closing = false;
-      this.closePromise = null;
-      this.metadata = knowledgeWorkerMetadata2();
-      this.version = typeof options.workerVersion === "string" && options.workerVersion ? options.workerVersion.slice(0, 200) : this.metadata.version;
-      this.lifecycle = "staged";
-      let readyResolve;
-      let readyReject;
-      this.readyPromise = new Promise((resolve14, reject) => {
-        readyResolve = resolve14;
-        readyReject = reject;
-      });
-      this.readyPromise.catch(() => void 0);
-      this.ready = false;
-      const workerOptions = {
-        workerData: {
-          vault: binding.vault,
-          database: join(directory2, binding.vaultId, "index.sqlite"),
-          workerVersion: this.version
-        },
-        execArgv: process.execArgv.filter(
-          (arg) => !arg.startsWith("--input-type") && !arg.startsWith("--test")
-        )
-      };
-      mkdirSync(dirname(workerOptions.workerData.database), {
-        recursive: true
-      });
-      this.writerLease = acquireWriterLease?.({
-        vault: binding.vault,
-        indexPath: workerOptions.workerData.database
-      });
-      this.leaseReleaseError = null;
-      this.workerFailure = null;
-      try {
-        this.worker = createKnowledgeWorker2(
-          new URL("./worker.mjs", import.meta.url),
-          workerOptions
-        );
-      } catch (error) {
-        this.writerLease?.release();
-        this.closed = true;
-        this.lifecycle = "disabled";
-        readyReject(error);
-        emitKnowledgeWorkerLifecycle2("disabled", {
-          version: this.version,
-          source: this.metadata.source,
-          integrity: this.metadata.integrity,
-          reason: String(error instanceof Error ? error.message : error).slice(
-            0,
-            400
-          )
-        });
-        throw error;
-      }
-      const fail = (error) => {
-        this.workerFailure ??= error;
-        if (!this.ready) readyReject(error);
-        this.closed = true;
-        this.lifecycle = "disabled";
-        for (const item of this.pending.values()) {
-          clearTimeout(item.timer);
-          item.reject(error);
-        }
-        this.pending.clear();
-        this.worker.unref();
-        emitKnowledgeWorkerLifecycle2("disabled", {
-          version: this.version,
-          source: this.metadata.source,
-          integrity: this.metadata.integrity,
-          reason: String(error instanceof Error ? error.message : error).slice(
-            0,
-            400
-          )
-        });
-      };
-      this.worker.on("message", (message) => {
-        if (message.ready) {
-          this.ready = true;
-          this.lifecycle = "verified";
-          readyResolve({ version: this.version });
-          emitKnowledgeWorkerLifecycle2("verified", {
-            version: this.version,
-            source: this.metadata.source,
-            integrity: this.metadata.integrity
-          });
-          if (!this.pending.size) this.worker.unref();
-          return;
-        }
-        if (message.uiChanged) {
-          invalidateKnowledgeUi2();
-          return;
-        }
-        const item = this.pending.get(message.id);
-        if (!item) return;
-        clearTimeout(item.timer);
-        this.pending.delete(message.id);
-        if (!this.pending.size) this.worker.unref();
-        if (message.error) item.reject(new Error(message.error));
-        else item.resolve(message.result);
-      });
-      this.worker.on("error", fail);
-      this.worker.on("exit", (code) => {
-        try {
-          this.writerLease?.release();
-        } catch (error) {
-          this.leaseReleaseError = error;
-          fail(error);
-        }
-        if (code !== 0 || !this.closed && !this.closing)
-          fail(new Error(`Knowledge worker exited (${code})`));
-      });
-      emitKnowledgeWorkerLifecycle2("staged", {
-        version: this.version,
-        source: this.metadata.source,
-        integrity: this.metadata.integrity
-      });
-    }
-    async waitUntilReady() {
-      if (this.ready) return { version: this.version };
-      if (this.closed) throw new Error("Knowledge worker failed to initialize");
-      return this.readyPromise;
-    }
-    request(op, args = {}) {
-      if (this.closed || this.closing && op !== "close")
-        return Promise.reject(new Error("Knowledge service is closed"));
-      const post = () => {
-        if (this.closed)
-          return Promise.reject(new Error("Knowledge service is closed"));
-        const id2 = ++this.next;
-        this.worker.ref();
-        return new Promise((resolvePromise, reject) => {
-          const timer = setTimeout(
-            () => {
-              this.pending.delete(id2);
-              if (!this.pending.size) this.worker.unref();
-              reject(
-                new Error(
-                  `Knowledge ${op} timed out; it was not reported as a successful empty result`
-                )
-              );
-            },
-            op === "reconcile" ? 12e4 : 2e4
-          );
-          this.pending.set(id2, { resolve: resolvePromise, reject, timer });
-          this.worker.postMessage({ id: id2, op, args });
-        });
-      };
-      if (op === "close") return post();
-      this.inFlightRequests += 1;
-      return this.waitUntilReady().then(post).finally(() => {
-        this.inFlightRequests = Math.max(0, this.inFlightRequests - 1);
-      });
-    }
-    close() {
-      if (this.closePromise) return this.closePromise;
-      this.closing = true;
-      this.lifecycle = "disabled";
-      emitKnowledgeWorkerLifecycle2("disabled", {
-        version: this.version,
-        previousVersion: this.version,
-        source: this.metadata.source,
-        integrity: this.metadata.integrity,
-        pendingRequests: this.pending.size
-      });
-      this.closePromise = (async () => {
-        let drainFailure = null;
-        const exited = new Promise((resolve14) => {
-          if (this.worker.threadId === -1) resolve14();
-          else this.worker.once("exit", resolve14);
-        });
-        try {
-          if (!this.closed) await this.waitUntilReady();
-          while (!this.closed && (this.pending.size || this.inFlightRequests))
-            await new Promise((resolve14) => setTimeout(resolve14, 10));
-          if (!this.closed) await this.request("close");
-        } catch (error) {
-          drainFailure = error;
-          await this.worker.terminate();
-        } finally {
-          this.closed = true;
-          for (const item of this.pending.values()) {
-            clearTimeout(item.timer);
-            item.reject(new Error("Knowledge service closed"));
-          }
-          this.pending.clear();
-          this.worker.ref();
-          const fallback = setTimeout(() => {
-            drainFailure = new Error(
-              "Knowledge worker required forced termination; drain did not complete"
-            );
-            void this.worker.terminate();
-          }, 5e3);
-          try {
-            await exited;
-          } finally {
-            clearTimeout(fallback);
-          }
-          if (this.leaseReleaseError) throw this.leaseReleaseError;
-          if (drainFailure) {
-            emitKnowledgeWorkerLifecycle2("disabled", {
-              version: this.version,
-              reason: String(
-                drainFailure instanceof Error ? drainFailure.message : drainFailure
-              ).slice(0, 400)
-            });
-            throw drainFailure;
-          }
-          if (this.workerFailure) throw this.workerFailure;
-          emitKnowledgeWorkerLifecycle2("drained", {
-            version: this.version,
-            source: this.metadata.source,
-            integrity: this.metadata.integrity
-          });
-        }
-      })();
-      return this.closePromise;
-    }
-    prepareUnload() {
-      if (this.closing || this.closed)
-        return { pendingRequests: this.pending.size, version: this.version };
-      this.closing = true;
-      return { pendingRequests: this.pending.size, version: this.version };
-    }
-    get pendingRequestCount() {
-      return this.pending.size;
-    }
-  }
-  function directory() {
-    const value = config.knowledgeDirectory();
-    if (!value) throw new Error("No application knowledge directory");
-    return value;
-  }
-  return {
-    metadata: knowledgeWorkerMetadata2,
-    resourceKey: (binding) => join(directory(), binding.vaultId, "index.sqlite"),
-    create: ({ binding, workerVersion }) => new KnowledgeWorkerTransport(binding, directory(), { workerVersion })
-  };
-}
-
-// src/core/service.ts
-init_runtime_host();
-init_config();
-init_files();
 init_review_policy();
+init_runtime_host();
 
 // src/core/semantic-provider.ts
 import { URL as URL2 } from "node:url";
@@ -4464,7 +3741,7 @@ __export(semantic_settings_exports, {
 init_config();
 import { createHash as createHash4, randomUUID as randomUUID3 } from "node:crypto";
 import { lstat as lstat2, mkdir as mkdir3, readFile as readFile3, rename as rename3, unlink as unlink2, writeFile as writeFile3 } from "node:fs/promises";
-import { dirname as dirname2, join as join5 } from "node:path";
+import { dirname, join as join4 } from "node:path";
 var MAX_FILE_BYTES = 256 * 1024;
 var ENV_NAME2 = /^[A-Z_][A-Z0-9_]{0,127}$/;
 var SETTINGS_KEYS = /* @__PURE__ */ new Set([
@@ -4584,7 +3861,7 @@ function createSemanticSettingsState() {
 function pathFor(vaultId, directory) {
   if (!/^[a-f0-9]{24}$/.test(vaultId || "")) throw new Error("Invalid Vault binding");
   if (!directory) throw new Error("Application knowledge directory is not configured");
-  return join5(directory, vaultId, "semantic.json");
+  return join4(directory, vaultId, "semantic.json");
 }
 async function assertDirectory(path, create) {
   try {
@@ -4599,13 +3876,13 @@ async function assertDirectory(path, create) {
     }
   }
   let ancestor = path;
-  for (let depth = 0; depth < 8 && ancestor !== dirname2(ancestor); depth++) {
+  for (let depth = 0; depth < 8 && ancestor !== dirname(ancestor); depth++) {
     try {
       if ((await lstat2(ancestor)).isSymbolicLink()) throw new Error("Semantic settings ancestor is unsafe");
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
-    ancestor = dirname2(ancestor);
+    ancestor = dirname(ancestor);
   }
 }
 async function assertFile(path) {
@@ -4660,11 +3937,13 @@ function createStoredSemanticSettingsApi(storage, state = createSemanticSettings
     readSemanticSettings: async (vaultId) => unpack(vaultId, await storage.read(vaultId)),
     async saveSemanticSettings(vaultId, input, expectedRevision) {
       const document = await storage.read(vaultId), current = unpack(vaultId, document);
-      if (!Number.isSafeInteger(expectedRevision) || expectedRevision !== current.revision) throw new Error("Semantic settings revision is stale");
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision !== current.revision)
+        throw new Error("Semantic settings revision is stale");
       const value = normalize({ version: 1, ...input }, current.revision + 1);
       await storage.write(vaultId, value, document.version);
       const saved = unpack(vaultId, await storage.read(vaultId));
-      if (JSON.stringify(saved) !== JSON.stringify(value)) throw new Error("Semantic settings write readback did not match");
+      if (JSON.stringify(saved) !== JSON.stringify(value))
+        throw new Error("Semantic settings write readback did not match");
       return saved;
     }
   };
@@ -4672,7 +3951,7 @@ function createStoredSemanticSettingsApi(storage, state = createSemanticSettings
 function localSemanticStorage(directory) {
   async function read(vaultId) {
     const path = pathFor(vaultId, directory());
-    await assertDirectory(dirname2(path), false);
+    await assertDirectory(dirname(path), false);
     await assertFile(path);
     let raw;
     try {
@@ -4691,9 +3970,10 @@ function localSemanticStorage(directory) {
       const prior = queues.get(vaultId) ?? Promise.resolve();
       const operation = prior.catch(() => void 0).then(async () => {
         const path = pathFor(vaultId, directory());
-        if ((await read(vaultId)).version !== expectedVersion) throw new Error("Semantic settings revision is stale");
-        await assertDirectory(dirname2(path), true);
-        const temp = join5(dirname2(path), `semantic.${randomUUID3()}.tmp`);
+        if ((await read(vaultId)).version !== expectedVersion)
+          throw new Error("Semantic settings revision is stale");
+        await assertDirectory(dirname(path), true);
+        const temp = join4(dirname(path), `semantic.${randomUUID3()}.tmp`);
         try {
           await writeFile3(temp, `${JSON.stringify(value, null, 2)}
 `, { mode: 384, flag: "wx" });
@@ -4723,8 +4003,284 @@ var defaultApi = semanticSettingsApiForDirectory(createSemanticSettingsState(), 
 var readSemanticSettings = (vaultId) => defaultApi.readSemanticSettings(vaultId);
 var saveSemanticSettings = (vaultId, input, expectedRevision) => defaultApi.saveSemanticSettings(vaultId, input, expectedRevision);
 
+// src/core/topic-probe.ts
+var STOP = new Set(
+  "what when where which with from that this have about into your their there these those does using used make more most some such than then them they will would could should also only over very just like".split(
+    " "
+  )
+);
+var tokens = (text4) => String(text4 || "").toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+function mentionedWikiTitle(query, titles) {
+  const q = String(query || "").toLocaleLowerCase();
+  if (q.trim().length < 3) return null;
+  const queryTokens = new Set(tokens(q).filter((t) => /[a-z0-9]/.test(t) && t.length >= 4 && !STOP.has(t)));
+  for (const raw of titles) {
+    const title = String(raw || "").toLocaleLowerCase().replace(/\.md$/, "").replace(/[-_]+/g, " ").trim();
+    if (!title) continue;
+    if (title.length >= 3 && q.includes(title)) return raw;
+    const lead = tokens(title).filter((t) => t.length >= 4 && !STOP.has(t));
+    if (lead.some((t) => queryTokens.has(t))) return raw;
+  }
+  return null;
+}
+
 // src/core/service.ts
 init_ui_state();
+
+// src/core/worker-transport.ts
+import { mkdirSync as mkdirSync2 } from "node:fs";
+import { dirname as dirname2, join as join6 } from "node:path";
+function createKnowledgeWorkerTransportFactory(runtime, config, invalidateKnowledgeUi2, acquireWriterLease) {
+  const { createKnowledgeWorker: createKnowledgeWorker2, knowledgeWorkerMetadata: knowledgeWorkerMetadata2, emitKnowledgeWorkerLifecycle: emitKnowledgeWorkerLifecycle2 } = runtime;
+  class KnowledgeWorkerTransport {
+    pending;
+    inFlightRequests;
+    next;
+    closed;
+    closing;
+    closePromise;
+    metadata;
+    version;
+    lifecycle;
+    readyPromise;
+    ready;
+    writerLease;
+    leaseReleaseError;
+    workerFailure;
+    worker;
+    constructor(binding, directory2, options) {
+      this.pending = /* @__PURE__ */ new Map();
+      this.inFlightRequests = 0;
+      this.next = 0;
+      this.closed = false;
+      this.closing = false;
+      this.closePromise = null;
+      this.metadata = knowledgeWorkerMetadata2();
+      this.version = typeof options.workerVersion === "string" && options.workerVersion ? options.workerVersion.slice(0, 200) : this.metadata.version;
+      this.lifecycle = "staged";
+      let readyResolve;
+      let readyReject;
+      this.readyPromise = new Promise((resolve14, reject) => {
+        readyResolve = resolve14;
+        readyReject = reject;
+      });
+      this.readyPromise.catch(() => void 0);
+      this.ready = false;
+      const workerOptions = {
+        workerData: {
+          vault: binding.vault,
+          database: join6(directory2, binding.vaultId, "index.sqlite"),
+          workerVersion: this.version
+        },
+        execArgv: process.execArgv.filter(
+          (arg) => !arg.startsWith("--input-type") && !arg.startsWith("--test")
+        )
+      };
+      mkdirSync2(dirname2(workerOptions.workerData.database), {
+        recursive: true
+      });
+      this.writerLease = acquireWriterLease?.({
+        vault: binding.vault,
+        indexPath: workerOptions.workerData.database
+      });
+      this.leaseReleaseError = null;
+      this.workerFailure = null;
+      try {
+        this.worker = createKnowledgeWorker2(
+          new URL("./worker.mjs", import.meta.url),
+          workerOptions
+        );
+      } catch (error) {
+        this.writerLease?.release();
+        this.closed = true;
+        this.lifecycle = "disabled";
+        readyReject(error);
+        emitKnowledgeWorkerLifecycle2("disabled", {
+          version: this.version,
+          source: this.metadata.source,
+          integrity: this.metadata.integrity,
+          reason: String(error instanceof Error ? error.message : error).slice(0, 400)
+        });
+        throw error;
+      }
+      const fail = (error) => {
+        this.workerFailure ??= error;
+        if (!this.ready) readyReject(error);
+        this.closed = true;
+        this.lifecycle = "disabled";
+        for (const item of this.pending.values()) {
+          clearTimeout(item.timer);
+          item.reject(error);
+        }
+        this.pending.clear();
+        this.worker.unref();
+        emitKnowledgeWorkerLifecycle2("disabled", {
+          version: this.version,
+          source: this.metadata.source,
+          integrity: this.metadata.integrity,
+          reason: String(error instanceof Error ? error.message : error).slice(0, 400)
+        });
+      };
+      this.worker.on("message", (message) => {
+        if (message.ready) {
+          this.ready = true;
+          this.lifecycle = "verified";
+          readyResolve({ version: this.version });
+          emitKnowledgeWorkerLifecycle2("verified", {
+            version: this.version,
+            source: this.metadata.source,
+            integrity: this.metadata.integrity
+          });
+          if (!this.pending.size) this.worker.unref();
+          return;
+        }
+        if (message.uiChanged) {
+          invalidateKnowledgeUi2();
+          return;
+        }
+        const item = this.pending.get(message.id);
+        if (!item) return;
+        clearTimeout(item.timer);
+        this.pending.delete(message.id);
+        if (!this.pending.size) this.worker.unref();
+        if (message.error) item.reject(new Error(message.error));
+        else item.resolve(message.result);
+      });
+      this.worker.on("error", fail);
+      this.worker.on("exit", (code) => {
+        try {
+          this.writerLease?.release();
+        } catch (error) {
+          this.leaseReleaseError = error;
+          fail(error);
+        }
+        if (code !== 0 || !this.closed && !this.closing)
+          fail(new Error(`Knowledge worker exited (${code})`));
+      });
+      emitKnowledgeWorkerLifecycle2("staged", {
+        version: this.version,
+        source: this.metadata.source,
+        integrity: this.metadata.integrity
+      });
+    }
+    async waitUntilReady() {
+      if (this.ready) return { version: this.version };
+      if (this.closed) throw new Error("Knowledge worker failed to initialize");
+      return this.readyPromise;
+    }
+    request(op, args = {}) {
+      if (this.closed || this.closing && op !== "close")
+        return Promise.reject(new Error("Knowledge service is closed"));
+      const post = () => {
+        if (this.closed) return Promise.reject(new Error("Knowledge service is closed"));
+        const id2 = ++this.next;
+        this.worker.ref();
+        return new Promise((resolvePromise, reject) => {
+          const timer = setTimeout(
+            () => {
+              this.pending.delete(id2);
+              if (!this.pending.size) this.worker.unref();
+              reject(
+                new Error(`Knowledge ${op} timed out; it was not reported as a successful empty result`)
+              );
+            },
+            op === "reconcile" ? 12e4 : 2e4
+          );
+          this.pending.set(id2, { resolve: resolvePromise, reject, timer });
+          this.worker.postMessage({ id: id2, op, args });
+        });
+      };
+      if (op === "close") return post();
+      this.inFlightRequests += 1;
+      return this.waitUntilReady().then(post).finally(() => {
+        this.inFlightRequests = Math.max(0, this.inFlightRequests - 1);
+      });
+    }
+    close() {
+      if (this.closePromise) return this.closePromise;
+      this.closing = true;
+      this.lifecycle = "disabled";
+      emitKnowledgeWorkerLifecycle2("disabled", {
+        version: this.version,
+        previousVersion: this.version,
+        source: this.metadata.source,
+        integrity: this.metadata.integrity,
+        pendingRequests: this.pending.size
+      });
+      this.closePromise = (async () => {
+        let drainFailure = null;
+        const exited = new Promise((resolve14) => {
+          if (this.worker.threadId === -1) resolve14();
+          else this.worker.once("exit", resolve14);
+        });
+        try {
+          if (!this.closed) await this.waitUntilReady();
+          while (!this.closed && (this.pending.size || this.inFlightRequests))
+            await new Promise((resolve14) => setTimeout(resolve14, 10));
+          if (!this.closed) await this.request("close");
+        } catch (error) {
+          drainFailure = error;
+          await this.worker.terminate();
+        } finally {
+          this.closed = true;
+          for (const item of this.pending.values()) {
+            clearTimeout(item.timer);
+            item.reject(new Error("Knowledge service closed"));
+          }
+          this.pending.clear();
+          this.worker.ref();
+          const fallback = setTimeout(() => {
+            drainFailure = new Error("Knowledge worker required forced termination; drain did not complete");
+            void this.worker.terminate();
+          }, 5e3);
+          try {
+            await exited;
+          } finally {
+            clearTimeout(fallback);
+          }
+          if (this.leaseReleaseError) throw this.leaseReleaseError;
+          if (drainFailure) {
+            emitKnowledgeWorkerLifecycle2("disabled", {
+              version: this.version,
+              reason: String(drainFailure instanceof Error ? drainFailure.message : drainFailure).slice(
+                0,
+                400
+              )
+            });
+            throw drainFailure;
+          }
+          if (this.workerFailure) throw this.workerFailure;
+          emitKnowledgeWorkerLifecycle2("drained", {
+            version: this.version,
+            source: this.metadata.source,
+            integrity: this.metadata.integrity
+          });
+        }
+      })();
+      return this.closePromise;
+    }
+    prepareUnload() {
+      if (this.closing || this.closed) return { pendingRequests: this.pending.size, version: this.version };
+      this.closing = true;
+      return { pendingRequests: this.pending.size, version: this.version };
+    }
+    get pendingRequestCount() {
+      return this.pending.size;
+    }
+  }
+  function directory() {
+    const value = config.knowledgeDirectory();
+    if (!value) throw new Error("No application knowledge directory");
+    return value;
+  }
+  return {
+    metadata: knowledgeWorkerMetadata2,
+    resourceKey: (binding) => join6(directory(), binding.vaultId, "index.sqlite"),
+    create: ({ binding, workerVersion }) => new KnowledgeWorkerTransport(binding, directory(), { workerVersion })
+  };
+}
+
+// src/core/service.ts
 function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, transportFactory, emitLegacyPeerEvent) {
   const {
     emitKnowledgeWorkerLifecycle: emitKnowledgeWorkerLifecycle2,
@@ -5061,7 +4617,9 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
       return withKnowledgeBinding2(this.binding, async () => {
         const result2 = await this.request("search", { query: text4, wikiOnly: true, project, limit: 6 });
         const hits = (result2?.hits || []).filter((hit) => hit.kind === "wiki");
-        const titles = hits.map((hit) => hit.title || String(hit.path || "").split("/").pop());
+        const titles = hits.map(
+          (hit) => hit.title || String(hit.path || "").split("/").pop()
+        );
         const title = mentionedWikiTitle(text4, titles);
         return title ? hits[titles.indexOf(title)]?.path || null : null;
       });
@@ -5210,7 +4768,8 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
                 ...Number.isInteger(semanticResult.totalEligible) ? { totalEligible: semanticResult.totalEligible } : {}
               };
               if (semanticResult.partial) metrics.index.semanticPartial = true;
-              if (Number.isInteger(semanticResult.scanned)) metrics.index.semanticScanned = semanticResult.scanned;
+              if (Number.isInteger(semanticResult.scanned))
+                metrics.index.semanticScanned = semanticResult.scanned;
               if (Number.isInteger(semanticResult.totalEligible))
                 metrics.index.semanticTotalEligible = semanticResult.totalEligible;
             }
@@ -5263,7 +4822,11 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
       if (!wikiOnly && !explainerOnly && result2.hits?.length) {
         try {
           const seeds = result2.hits.slice(0, GRAPH_RETRIEVAL_DEFAULTS.seeds).map((hit) => hit.path);
-          const graph = await this.request("graphNeighbors", { paths: seeds, project: state.project, perSeed: 8 });
+          const graph = await this.request("graphNeighbors", {
+            paths: seeds,
+            project: state.project,
+            perSeed: 8
+          });
           const expanded = expandWithGraph(result2.hits, graph?.items || [], { limit: Number(limit) || 5 });
           metrics.graphCandidates = (graph?.items || []).length;
           metrics.graphAccepted = expanded.filter((hit) => hit.retrieval === "graph").length;
@@ -5541,10 +5104,11 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
       };
     }
     close() {
-      if (!this.closePromise) this.closePromise = this.transport.close().catch((error) => {
-        this.closePromise = null;
-        throw error;
-      }).finally(() => this.tickets.clear());
+      if (!this.closePromise)
+        this.closePromise = this.transport.close().catch((error) => {
+          this.closePromise = null;
+          throw error;
+        }).finally(() => this.tickets.clear());
       return this.closePromise;
     }
     prepareUnload() {
@@ -5597,7 +5161,12 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
           integrity: candidate.workerMetadata.integrity
         });
         pool.set(key, candidate);
-        emitLegacyPeerEvent?.(SERVICE_EVENT, { action: "register", key, service: candidate, origin: serviceModule });
+        emitLegacyPeerEvent?.(SERVICE_EVENT, {
+          action: "register",
+          key,
+          service: candidate,
+          origin: serviceModule
+        });
         if (service) {
           emitKnowledgeWorkerLifecycle2("reloaded", {
             version: candidate.workerVersion,
@@ -5657,7 +5226,11 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
         if (closed[index].status === "fulfilled" && pool.get(key) === service) pool.delete(key);
       }
       const failures = [...pending, ...closed].filter((result2) => result2.status === "rejected");
-      if (failures.length) throw new AggregateError(failures.map((result2) => result2.reason), "Knowledge service pool disposal failed");
+      if (failures.length)
+        throw new AggregateError(
+          failures.map((result2) => result2.reason),
+          "Knowledge service pool disposal failed"
+        );
     })();
     const closing = operation.finally(() => {
       if (pool.closing === closing) pool.closing = null;
@@ -5665,7 +5238,14 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
     pool.closing = closing;
     return closing;
   }
-  return { dispose: () => pool.dispose(), KnowledgeService: KnowledgeService2, getKnowledgeService: getKnowledgeService2, notifyKnowledgeChange: notifyKnowledgeChange2, closeKnowledgeServices: closeKnowledgeServices2, receiveCompatibilityEvent };
+  return {
+    dispose: () => pool.dispose(),
+    KnowledgeService: KnowledgeService2,
+    getKnowledgeService: getKnowledgeService2,
+    notifyKnowledgeChange: notifyKnowledgeChange2,
+    closeKnowledgeServices: closeKnowledgeServices2,
+    receiveCompatibilityEvent
+  };
 }
 function createKnowledgeServicePool(runtime, config, semantic, reviewPolicy, transportFactory) {
   return createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, transportFactory, null);
@@ -5676,886 +5256,99 @@ var compatibilityKnowledgeServices = createKnowledgeServicePoolApi(
   semantic_settings_exports,
   review_policy_exports,
   // Remove with the 0.2 compatibility facade after complete owner disposal is wired.
-  createKnowledgeWorkerTransportFactory(compatibilityKnowledgeRuntimeHost, config_exports, invalidateKnowledgeUi, null),
+  createKnowledgeWorkerTransportFactory(
+    compatibilityKnowledgeRuntimeHost,
+    config_exports,
+    invalidateKnowledgeUi,
+    null
+  ),
   compatibilityKnowledgeRuntimeHost.emitProcessEvent
 );
 process.on("drone:knowledge-service/v1", compatibilityKnowledgeServices.receiveCompatibilityEvent);
 var { KnowledgeService, getKnowledgeService, notifyKnowledgeChange, closeKnowledgeServices } = compatibilityKnowledgeServices;
 
-// src/desktop/runtime.ts
-init_review_policy();
-
-// src/desktop/state-policy.ts
-function createBrokerReviewPolicyStorage(capabilities, root) {
-  return {
-    async read() {
-      try {
-        return await capabilities.call("state.readJson", {
-          root,
-          path: "review-policy.json"
-        });
-      } catch (error) {
-        if (error.code !== "ESTATECORRUPTED")
-          throw error;
-        return { kind: "corrupt", version: null };
-      }
-    },
-    write: (value, expectedVersion) => capabilities.call("state.writeJson", {
-      root,
-      path: "review-policy.json",
-      value,
-      expectedVersion
-    })
-  };
+// src/core/specialist-delivery.ts
+var specialist_delivery_exports = {};
+__export(specialist_delivery_exports, {
+  createSpecialistDelivery: () => createSpecialistDelivery,
+  saveSpecialistExplainer: () => saveSpecialistExplainer,
+  validateSpecialistHtml: () => validateSpecialistHtml
+});
+init_config();
+init_runtime_host();
+import { randomUUID as randomUUID6 } from "node:crypto";
+import { lstat as lstat3, mkdir as mkdir4, realpath as realpath3, writeFile as writeFile4 } from "node:fs/promises";
+import { isAbsolute as isAbsolute3, join as join7, relative as relative3, resolve as resolve3, sep as sep3 } from "node:path";
+var contained = (root, path) => {
+  const rel = relative3(root, path);
+  return !isAbsolute3(rel) && rel !== ".." && !rel.startsWith(`..${sep3}`);
+};
+function validateSpecialistHtml(html) {
+  if (typeof html !== "string" || html.length > 64e3 || !/<html\b/i.test(html) || !/<body\b/i.test(html))
+    throw new Error("Explainer must be one bounded HTML document");
+  if (/<(?:script|iframe|frame|object|embed|base|form|link)\b|\bon[a-z]+\s*=|<meta\b[^>]*http-equiv\s*=|javascript\s*:|@import|url\s*\(/i.test(
+    html
+  ))
+    throw new Error("Explainer must be static and self-contained; active content was refused");
+  if (/\bsrc\s*=\s*["']?(?!data:image\/)[^\s>]/i.test(html))
+    throw new Error("Explainer external resources are not allowed");
+  return html;
 }
-
-// src/desktop/semantic-settings.ts
-function createBrokerSemanticSettings(capabilities, root) {
-  return createStoredSemanticSettingsApi({
-    read: async (vaultId) => await capabilities.call("state.readJson", { root, path: `${vaultId}/semantic.json` }),
-    async write(vaultId, value, expectedVersion) {
-      await capabilities.call("state.ensureDirectory", { root, path: vaultId });
-      await capabilities.call("state.writeJson", { root, path: `${vaultId}/semantic.json`, value, expectedVersion });
-    }
-  });
-}
-
-// src/desktop/service-transport.ts
-function createResourceServiceTransportFactory(context, state, lifecycle) {
-  const metadata = { version: "unknown" };
-  const transports = /* @__PURE__ */ new Set();
-  let shutdown = null;
-  class ResourceTransport {
-    closed = false;
-    closing = false;
-    lifecycle = "staged";
-    metadata = metadata;
-    version = metadata.version;
-    opening;
-    pending = /* @__PURE__ */ new Set();
-    closePromise = null;
-    constructor(binding) {
-      this.opening = (async () => {
-        const vault = await context.capabilities.call("roots.resolve", { path: binding.vault, kind: "files" });
-        return await context.capabilities.call("resource.create", { resource: "index", storage: { root: state, key: binding.vaultId }, parameters: { vaultRoot: vault.handle }, reservation: { namespace: "knowledge-writers", roots: [{ root: vault.handle, path: "", kind: "vault" }], storage: { path: "index.sqlite", kind: "index" } } });
-      })();
-    }
-    get pendingRequestCount() {
-      return this.pending.size;
-    }
-    async waitUntilReady() {
-      await this.opening;
-      return { version: this.version };
-    }
-    request(operation, input = {}) {
-      if (this.closed || this.closing || shutdown) return Promise.reject(new Error("Knowledge service is closed"));
-      const request = this.opening.then((resource) => context.capabilities.call("resource.invoke", { handle: resource.handle, operation, input }));
-      this.pending.add(request);
-      return request.finally(() => this.pending.delete(request));
-    }
-    prepareUnload() {
-      return { pendingRequests: this.pending.size, version: this.version };
-    }
-    close() {
-      if (this.closePromise) return this.closePromise;
-      this.closing = true;
-      this.lifecycle = "disabled";
-      const close = (async () => {
-        if (shutdown) {
-          await shutdown;
-        } else {
-          await Promise.allSettled([...this.pending]);
-          const resource = await this.opening;
-          await context.capabilities.call("resource.dispose", { handle: resource.handle });
-        }
-        this.closed = true;
-        this.lifecycle = "drained";
-      })();
-      this.closePromise = close.catch((error) => {
-        this.closePromise = null;
-        throw error;
+function createSpecialistDelivery(runtime, bindings) {
+  async function saveSpecialistExplainer2(c, ctx, { runDir, topicId, answer }) {
+    if (answer.status !== "completed") return answer;
+    const html = validateSpecialistHtml(answer.data.html), config = await runtime.loadWorkspaceConfig(ctx.cwd);
+    const root = await realpath3(config.resultsRoot), run = await realpath3(resolve3(ctx.cwd, runDir || ""));
+    if (!contained(root, run) || relative3(root, run).split(sep3).length !== 2 || !run.split(sep3).at(-1).startsWith("run-") || !(await lstat3(join7(run, "metadata.json"))).isFile())
+      throw new Error("Explainer destination must be an existing research run");
+    return bindings.withKnowledgeBinding(c.binding, async () => {
+      const artifactPath = join7(run, `show-me-${randomUUID6()}.html`);
+      const sources = await c.service.evidenceReceipts(c.ticket, ctx.cwd, answer.data.source_paths);
+      await mkdir4(run, { recursive: true });
+      await writeFile4(artifactPath, html, { flag: "wx", mode: 384 });
+      const archived = await runtime.publishExplainer({
+        cwd: ctx.cwd,
+        project: c.project,
+        topicId,
+        title: answer.data.title,
+        artifactPath,
+        summary: answer.data.summary,
+        sources: sources.sources
       });
-      return this.closePromise;
-    }
-  }
-  return {
-    metadata: () => metadata,
-    resourceKey: (binding) => JSON.stringify([state, "index", binding.vaultId]),
-    create({ binding }) {
-      if (shutdown) throw new Error("Knowledge resource owner is closing");
-      const transport = new ResourceTransport(binding);
-      transports.add(transport);
-      return transport;
-    },
-    dispose() {
-      if (!shutdown) shutdown = lifecycle.dispose().then(() => {
-        for (const transport of transports) {
-          transport.closed = true;
-          transport.closing = true;
-          transport.lifecycle = "drained";
-        }
-      });
-      return shutdown;
-    }
-  };
-}
-
-// src/desktop/runtime.ts
-init_wiki_model_review();
-
-// src/desktop/model-review.ts
-init_wiki_model_review();
-
-// src/desktop/reviews.ts
-function createKnowledgeReviewContext(owner, canWriteState, canWriteFiles) {
-  async function bound(revision, project, operation) {
-    return owner.run(async () => {
-      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-      if (!binding) throw new Error("No application knowledge Vault is bound");
-      if (binding.revision !== revision)
-        throw new Error("Knowledge binding changed; refresh before reviewing");
-      if (project === null) throw new Error("Select a project session to review Wiki proposals");
-      const service = {
-        binding,
-        async request(operation2, input) {
-          const index = await owner.services.getKnowledgeService(binding);
-          return index.request(operation2, input);
-        }
+      return {
+        ...archived,
+        result_file: artifactPath,
+        producer: "knowledge-explainer",
+        skill: answer.skillName || "show-me"
       };
-      return owner.config.withKnowledgeBinding(binding, () => operation(service));
     });
   }
-  function requireWrite(files = false) {
-    if (!canWriteState) throw new Error("Application-state write permission is required");
-    if (files && !canWriteFiles) throw new Error("Configured Vault write permission is required");
-  }
-  return { bound, requireWrite };
+  return { saveSpecialistExplainer: saveSpecialistExplainer2 };
 }
-function createKnowledgeReviewModel(owner, canWriteState, canWriteFiles) {
-  const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
-  return {
-    async reviews(input, project) {
-      if (project === null) {
-        return owner.run(async () => {
-          const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-          if (!binding || binding.revision !== input.revision)
-            throw new Error("Knowledge binding changed; refresh before reviewing");
-          return {
-            bindingRevision: binding.revision,
-            project,
-            items: [],
-            problems: [],
-            total: 0,
-            offset: 0,
-            nextOffset: null
-          };
-        });
-      }
-      return bound(input.revision, project, async (service) => {
-        const { items, problems } = await owner.wiki.listWikiProposals(service, project);
-        const offset = input.offset ?? 0, limit = input.limit ?? 12;
-        return {
-          bindingRevision: service.binding.revision,
-          project,
-          items: items.slice(offset, offset + limit),
-          problems,
-          total: items.length,
-          offset,
-          nextOffset: offset + limit < items.length ? offset + limit : null
-        };
-      });
-    },
-    previewReview(input, project) {
-      return bound(input.revision, project, async (service) => {
-        const preview = await owner.wiki.previewWikiProposal(service, input.id, project);
-        if (preview.proposalHash !== input.expectedProposalHash)
-          throw new Error("Wiki proposal changed; refresh before previewing");
-        return { ...preview, bindingRevision: service.binding.revision };
-      });
-    },
-    rejectReview(input, project) {
-      requireWrite();
-      return bound(input.revision, project, async (service) => {
-        const result2 = await owner.wiki.decideWikiProposal(
-          service,
-          input.id,
-          project,
-          input.expectedProposalHash,
-          "reject"
-        );
-        if (result2.alreadyReviewed)
-          throw new Error("Wiki proposal was already reviewed; refresh before reviewing");
-        return { id: result2.id, status: "rejected", vaultWritten: false, reviewRecorded: true };
-      });
-    },
-    applyReview(input, project) {
-      requireWrite(true);
-      return bound(input.revision, project, async (service) => {
-        const result2 = await owner.wiki.decideWikiProposal(
-          service,
-          input.id,
-          project,
-          input.expectedProposalHash,
-          "apply"
-        );
-        if (result2.alreadyReviewed)
-          throw new Error("Wiki proposal was already reviewed; refresh before reviewing");
-        const {
-          id: id2,
-          status,
-          path,
-          vaultWritten,
-          reviewRecorded,
-          indexed,
-          recovered,
-          recordError,
-          indexError
-        } = result2;
-        return {
-          id: id2,
-          status,
-          path,
-          vaultWritten,
-          reviewRecorded,
-          indexed,
-          recovered,
-          recordError,
-          indexError
-        };
-      });
-    },
-    history(input, project) {
-      return bound(input.revision, project, async (service) => ({
-        bindingRevision: service.binding.revision,
-        project,
-        items: await owner.wiki.wikiHistory(service, project)
-      }));
-    },
-    undoReview(input, project) {
-      requireWrite(true);
-      return bound(
-        input.revision,
-        project,
-        (service) => owner.wiki.undoWikiUpdate(service, project, input.id, input.expectedHash)
-      );
-    }
-  };
-}
-
-// src/desktop/model-review.ts
-function createKnowledgeModelReviewModel(owner, canWriteState, canWriteFiles) {
-  const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
-  async function selection(call, profile) {
-    if (call.scope.kind !== "session")
-      throw new Error("Choose the originating live session before model review");
-    return await call.capabilities.call(
-      "model.selection",
-      profile === void 0 ? {} : { profile }
-    );
-  }
-  return {
-    info(input, project, call) {
-      return bound(input.revision, project, async (service) => {
-        const preview = await owner.wiki.previewWikiProposal(service, input.id, project);
-        if (preview.proposalHash !== input.expectedProposalHash)
-          throw new Error("Wiki proposal changed; refresh before model review");
-        return {
-          selection: await selection(call, input.profile),
-          lastReview: await owner.modelReview.lastWikiModelReview(
-            service,
-            input.id,
-            input.expectedProposalHash
-          )
-        };
-      });
-    },
-    review(input, project, call) {
-      requireWrite(input.autoApply);
-      return bound(input.revision, project, async (service) => {
-        const initial = await selection(call, input.profile);
-        const check = async () => {
-          call.signal.throwIfAborted();
-          const state = await call.capabilities.call("session.inspect", null);
-          if (state.agentActive)
-            throw new Error("Wait for the current conversation to finish before model review");
-          const current = await selection(call, input.profile);
-          if (current.provider !== initial.provider || current.model !== initial.model || current.thinkingLevel !== initial.thinkingLevel || current.profile !== initial.profile)
-            throw new Error("Model selection changed; review again before applying");
-        };
-        return owner.modelReview.reviewWikiWithModel(
-          {
-            service,
-            project,
-            id: input.id,
-            hash: input.expectedProposalHash,
-            binding: service.binding
-          },
-          input,
-          {
-            signal: call.signal,
-            check,
-            evaluate: (request) => generateWikiModelReview(call.capabilities, initial, request)
-          }
-        );
-      });
-    }
-  };
-}
-function parseModelReviewCommandInput(args) {
-  let input;
-  try {
-    input = JSON.parse(args);
-  } catch {
-    throw new Error(
-      "Expected model-review command JSON; raw arguments are not included in diagnostics"
-    );
-  }
-  if (!input || typeof input !== "object" || Array.isArray(input))
-    throw new Error(
-      "Expected JSON with id, expectedProposalHash, acknowledged:true and autoApply:boolean"
-    );
-  const value = input;
-  if (Object.keys(value).some(
-    (key) => !["id", "expectedProposalHash", "acknowledged", "autoApply", "profile"].includes(key)
-  ) || typeof value.id !== "string" || !/^[0-9a-f-]{36}$/.test(value.id) || typeof value.expectedProposalHash !== "string" || !/^[0-9a-f]{64}$/.test(value.expectedProposalHash) || value.acknowledged !== true || typeof value.autoApply !== "boolean" || value.profile !== void 0 && value.profile !== "knowledge-wiki-reviewer")
-    throw new Error(
-      "Expected the exact proposal ID/hash, explicit cost/data acknowledgement and autoApply choice"
-    );
-  return {
-    id: value.id,
-    expectedProposalHash: value.expectedProposalHash,
-    acknowledged: true,
-    autoApply: value.autoApply,
-    ...value.profile === void 0 ? {} : { profile: "knowledge-wiki-reviewer" }
-  };
-}
+var { saveSpecialistExplainer } = createSpecialistDelivery(compatibilityKnowledgeRuntimeHost, {
+  withKnowledgeBinding
+});
 
 // src/desktop/runtime.ts
-init_wiki_review();
+init_specialist_host();
 
-// src/desktop/review-storage.ts
-init_files();
-function createBrokerWikiReviewPorts(capabilities, stateRoot) {
-  const state = {
-    async read(path) {
-      const result2 = await capabilities.call("state.readJson", { root: stateRoot, path });
-      if (result2.kind === "missing") return null;
-      if (Buffer.byteLength(JSON.stringify(result2.value)) > 256 * 1024)
-        throw new Error("Wiki proposal exceeds its storage budget");
-      return { value: result2.value, version: result2.version };
-    },
-    async list(path) {
-      const entries = await capabilities.call("state.list", { root: stateRoot, path });
-      return entries.filter((entry) => entry.kind === "file").map((entry) => entry.name);
-    },
-    async write(path, value, expectedVersion) {
-      const parent = path.slice(0, path.lastIndexOf("/"));
-      await capabilities.call("state.ensureDirectory", { root: stateRoot, path: parent });
-      const result2 = await capabilities.call("state.writeJson", {
-        root: stateRoot,
-        path,
-        value,
-        expectedVersion
-      });
-      if (JSON.stringify(result2.value) !== JSON.stringify(value))
-        throw new Error("Wiki review state write could not be read back");
-    },
-    async remove(path, expectedVersion) {
-      const result2 = await capabilities.call("state.removeJson", {
-        root: stateRoot,
-        path,
-        expectedVersion
-      });
-      if (result2.kind !== "missing") throw new Error("Wiki review state removal could not be read back");
-    }
-  };
-  async function rootFor(vault) {
-    return (await capabilities.call("roots.resolve", { path: vault, kind: "files" })).handle;
-  }
-  const files = {
-    async read(binding, path) {
-      validateNote(path);
-      const root = await rootFor(binding.vault);
-      try {
-        const result2 = await capabilities.call("files.readText", { root, path });
-        return {
-          path,
-          text: result2.text,
-          hash: result2.sha256,
-          bytes: result2.bytes,
-          signature: fileVersion(result2.version)
-        };
-      } catch (error) {
-        if (error.code === "ENOENT") return null;
-        throw error;
-      }
-    },
-    async write(binding, path, text4, expectedHash, check) {
-      validateNote(path);
-      const root = await rootFor(binding.vault);
-      await capabilities.call("files.ensureDirectory", { root, path: path.slice(0, path.lastIndexOf("/")) });
-      await check();
-      const result2 = await capabilities.call("files.writeText", { root, path, text: text4, expectedHash });
-      if (result2.text !== text4) throw new Error("Wiki write could not be read back");
-    },
-    async remove(binding, path, expectedHash, check) {
-      validateNote(path);
-      const root = await rootFor(binding.vault);
-      await check();
-      await capabilities.call("files.remove", { root, path, expectedHash });
-      if (await files.read(binding, path)) throw new Error("Wiki removal could not be read back");
-    }
-  };
-  return { state, files };
-}
-
-// src/desktop/runtime.ts
-init_config();
-
-// src/core/owner-lifecycle.ts
-function createKnowledgeOwnerLifecycle(resources) {
-  const operations = /* @__PURE__ */ new Set();
-  const sessions = /* @__PURE__ */ new Set();
-  let disposed = false;
-  let disposal = null;
-  function assertActive() {
-    if (disposed) throw new Error("Knowledge runtime has been disposed");
-  }
-  function run(work) {
-    assertActive();
-    const operation = Promise.resolve().then(work);
-    operations.add(operation);
-    return operation.finally(() => operations.delete(operation));
-  }
-  function attachSession(close) {
-    assertActive();
-    sessions.add(close);
-    return () => {
-      sessions.delete(close);
-    };
-  }
-  function dispose() {
-    if (disposal) return disposal;
-    disposed = true;
-    disposal = (async () => {
-      const sessionResults = await Promise.allSettled([...sessions].map((close) => close()));
-      sessions.clear();
-      resources.beforeDrain?.();
-      const operationResults = await Promise.allSettled([...operations]);
-      const resourceResults = await Promise.allSettled([resources.dispose()]);
-      const failures = [...sessionResults, ...operationResults, ...resourceResults].filter((result2) => result2.status === "rejected");
-      if (failures.length) throw new AggregateError(failures.map((result2) => result2.reason), "Knowledge runtime disposal failed");
-    })();
-    return disposal;
-  }
-  return { assertActive, run, attachSession, dispose };
-}
-
-// src/desktop/read-model.ts
-import { basename as basename5 } from "node:path";
-function createKnowledgeReadModel(owner) {
-  async function overview(project) {
-    return owner.run(async () => {
-      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-      if (!binding) return { state: "unconfigured", binding: null, project, index: null, recentNotes: [] };
-      const service = await owner.services.getKnowledgeService(binding);
-      await service.request("reconcile");
-      const recent = await service.request("recentNotes", { project, limit: 10 });
-      const index = await service.request("status", { flushPending: true });
-      return owner.config.withKnowledgeBinding(binding, () => ({
-        state: "bound",
-        binding: { vaultId: binding.vaultId, revision: binding.revision, label: basename5(binding.vault) },
-        project,
-        index: {
-          revision: index.revision,
-          coverage: index.coverage,
-          noteCount: index.noteCount,
-          pendingChanges: index.pendingChanges,
-          lastReconciledAt: index.lastReconciledAt
-        },
-        recentNotes: recent.items.map(({ path, title, kind, updatedAt }) => ({ path, title, kind, updatedAt }))
-      }));
-    });
-  }
-  async function search(input, project) {
-    return owner.run(async () => {
-      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-      if (!binding) throw new Error("No application knowledge Vault is bound");
-      if (input.revision !== binding.revision) throw new Error("Knowledge binding changed; refresh before searching");
-      const service = await owner.services.getKnowledgeService(binding);
-      await service.request("reconcile");
-      const found = await service.request("search", { query: input.query, project, limit: input.limit ?? 6 });
-      return owner.config.withKnowledgeBinding(binding, () => ({
-        query: found.query,
-        revision: found.revision,
-        bindingRevision: binding.revision,
-        coverage: found.coverage,
-        complete: found.complete,
-        hits: found.hits.map(({ path, title, kind, hash: hash3, text: text4, startLine, endLine }) => ({ path, title, kind, hash: hash3, text: text4, startLine, endLine }))
-      }));
-    });
-  }
-  async function boundRead(input, project, read) {
-    return owner.run(async () => {
-      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-      if (!binding) throw new Error("No application knowledge Vault is bound");
-      if (input.revision !== binding.revision) throw new Error("Knowledge binding changed; refresh before reading");
-      const service = await owner.services.getKnowledgeService(binding);
-      await service.request("reconcile");
-      const value = await read(service);
-      return owner.config.withKnowledgeBinding(binding, () => ({ ...value, bindingRevision: binding.revision, project }));
-    });
-  }
-  async function readNote(input, project) {
-    return boundRead(input, project, async (service) => {
-      const note = await service.request("read", { path: input.path, project, startLine: input.startLine ?? 1, maxChars: 6e3, reviewMaxChars: 1600 });
-      if (input.expectedHash !== void 0 && note.hash !== input.expectedHash) throw new Error("Note changed; refresh before continuing");
-      if (note.missing) return { path: note.path, missing: true, revision: note.revision };
-      const { path, title, kind, category, hash: hash3, text: text4, startLine, endLine, totalLines, truncated, humanReview, pending, revision } = note;
-      return { path, missing: false, title, kind, category, hash: hash3, text: text4, startLine, endLine, totalLines, truncated, humanReview, pending, revision };
-    });
-  }
-  const links = (input, project) => boundRead(input, project, (service) => service.request("noteLinks", { path: input.path, project }));
-  const graph = (input, project) => boundRead(input, project, (service) => service.request("graph", { project, limit: input.limit ?? 200, view: input.view ?? "semantic", mergeMirrors: input.mergeMirrors ?? true }));
-  const jobs = (input, project) => boundRead(input, project, (service) => service.request("uiJobs", { project, offset: input.offset ?? 0, limit: input.limit ?? 20 }));
-  const recentByCategory2 = (input, project) => boundRead(input, project, (service) => service.request("recentByCategory", { project, limit: input.limit ?? 10 }));
-  return { overview, search, readNote, links, graph, jobs, recentByCategory: recentByCategory2 };
-}
-
-// src/desktop/preferences.ts
-init_review_policy();
-import { basename as basename6 } from "node:path";
-function createKnowledgePreferences(owner, capabilities, state, canWriteState) {
-  const policy = createStoredKnowledgeReviewPolicy(
-    createBrokerReviewPolicyStorage(capabilities, state),
-    () => false
-  );
-  async function snapshot() {
-    const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-    return {
-      binding: binding ? {
-        vaultId: binding.vaultId,
-        revision: binding.revision,
-        label: basename6(binding.vault),
-        vault: binding.vault,
-        profile: binding.profile,
-        depositMode: binding.depositMode,
-        subagentPolicy: binding.subagentPolicy,
-        updatedAt: binding.updatedAt
-      } : null,
-      canWriteState,
-      reviewPolicy: await policy.readReviewPolicy()
-    };
-  }
-  return {
-    read: () => owner.run(snapshot),
-    write: (input) => owner.run(async () => {
-      if (!canWriteState)
-        throw new Error("Application-state write permission is required");
-      const binding = await owner.config.readKnowledgeBinding({
-        fresh: true
-      });
-      if (!binding || binding.revision !== input.bindingRevision)
-        throw new Error("Knowledge binding changed; refresh before saving");
-      await owner.config.withKnowledgeBinding(
-        binding,
-        () => policy.saveReviewMode(input.mode, input.expectedVersion)
-      );
-      return owner.config.withKnowledgeBinding(binding, snapshot);
-    })
-  };
-}
-
-// src/core/project-identity.ts
-init_config();
-import { readFile as readFile6 } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join as join10, resolve as resolve4 } from "node:path";
-var SESSION_PROJECT_ENTRY = "drone-session-project-v1";
-var SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-var RESERVED2 = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9]|shared)$/;
-function isProjectSlug(value) {
-  return typeof value === "string" && value.length <= 96 && SLUG.test(value) && !RESERVED2.test(value);
-}
-function normalizeProjectSlug(input) {
-  if (typeof input !== "string") return null;
-  const slug2 = input.normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 96).replace(/-+$/g, "");
-  return isProjectSlug(slug2) ? slug2 : null;
-}
-function workspaceProjectId(cwd, configured) {
-  return projectIdentity(cwd, isProjectSlug(configured) ? configured : void 0);
-}
-function dailyWorkspaceDir(home = homedir()) {
-  return join10(home, ".drone", "daily");
-}
-function samePath(a, b) {
-  const left = resolve4(a).replace(/[\\/]+$/, "");
-  const right = resolve4(b).replace(/[\\/]+$/, "");
-  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
-}
-function isDailyWorkspace(cwd, home) {
-  return samePath(cwd, dailyWorkspaceDir(home));
-}
-function sessionProjectFromEntries(entries) {
-  if (!Array.isArray(entries)) return null;
-  let project = null;
-  for (const entry of entries) {
-    if (!entry || typeof entry !== "object" || entry.customType !== SESSION_PROJECT_ENTRY) continue;
-    if (entry.type !== void 0 && entry.type !== "custom") continue;
-    const value = entry.data?.project;
-    if (value === null) project = null;
-    else if (isProjectSlug(value)) project = value;
-  }
-  return project;
-}
-function sessionEntriesOf(ctx) {
-  try {
-    const manager = ctx?.sessionManager;
-    const entries = manager?.getBranch?.() ?? manager?.getEntries?.();
-    return Array.isArray(entries) ? entries : [];
-  } catch {
-    return [];
-  }
-}
-function resolveProjectIdentity(input) {
-  const daily = isDailyWorkspace(input.cwd, input.home);
-  const requestedText = typeof input.requested === "string" ? input.requested.trim() : "";
-  const requested = requestedText || null;
-  let project;
-  let source;
-  const session = daily ? sessionProjectFromEntries(input.sessionEntries) : null;
-  if (session) {
-    project = session;
-    source = "session";
-  } else if (isProjectSlug(input.configured)) {
-    project = input.configured;
-    source = "workspace-config";
-  } else {
-    project = workspaceProjectId(input.cwd);
-    source = "workspace";
-  }
-  const ignoredRequest = requested !== null && normalizeProjectSlug(requested) !== project;
-  return { project, source, daily, requested, ignoredRequest };
-}
-async function readConfiguredProject(cwd) {
-  try {
-    const parsed = JSON.parse(await readFile6(join10(cwd, ".pi", "research-workspace.json"), "utf8"));
-    if (parsed && typeof parsed === "object" && "knowledgeProjectId" in parsed)
-      return parsed.knowledgeProjectId;
-  } catch {
-  }
-  return void 0;
-}
-async function resolveWorkspaceProject(input) {
-  return resolveProjectIdentity({ ...input, configured: await readConfiguredProject(input.cwd) });
-}
-
-// src/core/extension-helpers.ts
-function result(data) {
-  return {
-    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
-    details: data
-  };
-}
-async function currentProject(cwd, ctx) {
-  return (await resolveWorkspaceProject({ cwd, sessionEntries: sessionEntriesOf(ctx) })).project;
-}
-function explainerTopicId(value, title = "research-topic") {
-  const base = String(value || title).normalize("NFKC").toLowerCase().replace(/[-_]20\d{6,14}$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 96);
-  return base || "research-topic";
-}
-function sessionIdentity(ctx) {
-  return ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || null;
-}
-function continuationHint(value) {
-  return /(?:previous|prior|last|earlier|continue|resume|what about|how about|why|then|it|that|those|之前|上个|继续|刚才|它|那个|那它|为什么|怎么|如何|还有|然后)/i.test(
-    String(value || "")
-  );
-}
-function continuesTopic(prompt, topic) {
-  if (!topic) return false;
-  const text4 = String(prompt || "").trim();
-  if (!text4) return true;
-  if (/(?:switch|new topic|different topic|换个|另一个|新的主题|切换主题)/i.test(text4)) return false;
-  if (continuationHint(text4)) return true;
-  const lower = text4.toLowerCase();
-  return [topic.id, topic.title, ...topic.aliases || [], ...topic.entities || []].filter((value) => typeof value === "string" && value.trim().length >= 2).some((value) => lower.includes(value.toLowerCase()));
-}
-
-// src/core/native-session-lifecycle.ts
-function createKnowledgeNativeAdapter(owner, controller, register, cleanup) {
-  const operations = /* @__PURE__ */ new Set();
-  let registered = false;
-  let closed = false;
-  let disposal = null;
-  const eventUnsubscribers = /* @__PURE__ */ new Set();
-  const assertOpen = () => {
-    if (closed) throw new Error("Knowledge session has been disposed");
-    owner.assertActive();
-  };
-  function run(work, signal = controller.signal) {
-    if (closed) throw new Error("Knowledge session has been disposed");
-    const operation = owner.run(async () => {
-      signal.throwIfAborted();
-      const result2 = await work();
-      signal.throwIfAborted();
-      return result2;
-    });
-    operations.add(operation);
-    return operation.finally(() => operations.delete(operation));
-  }
-  function dispose() {
-    if (disposal) return disposal;
-    closed = true;
-    controller.abort(new Error("Knowledge session has been disposed"));
-    const sessionCleanup = cleanup?.();
-    disposal = (async () => {
-      const cleanupResult = await Promise.allSettled([sessionCleanup]);
-      await Promise.allSettled([...operations]);
-      for (const unsubscribe of eventUnsubscribers) unsubscribe();
-      eventUnsubscribers.clear();
-      detach();
-      if (cleanupResult[0].status === "rejected") throw cleanupResult[0].reason;
-    })();
-    return disposal;
-  }
-  const detach = owner.attachSession(dispose);
-  function extension(pi) {
-    assertOpen();
-    if (closed || registered) throw new Error("A native knowledge session can only be registered once");
-    registered = true;
-    const scopedContext = (context, signal) => new Proxy(context, {
-      get(target, property) {
-        if (property === "signal") return signal;
-        if (property === "sessionManager" && target.sessionManager) {
-          return new Proxy(target.sessionManager, {
-            get(manager, key) {
-              const value = Reflect.get(manager, key, manager);
-              if (typeof value !== "function") return value;
-              return (...args) => {
-                assertOpen();
-                return Reflect.apply(value, manager, args);
-              };
-            }
-          });
-        }
-        return Reflect.get(target, property, target);
-      }
-    });
-    const scopedEvents = {
-      on: (channel, handler) => {
-        assertOpen();
-        const unsubscribe = pi.events.on(channel, (data) => {
-          if (!closed) handler(data);
-        });
-        eventUnsubscribers.add(unsubscribe);
-        return () => {
-          eventUnsubscribers.delete(unsubscribe);
-          unsubscribe();
-        };
-      },
-      emit: (channel, data) => {
-        assertOpen();
-        return pi.events.emit(channel, data);
-      }
-    };
-    const scopedSignal = (signal) => signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
-    const ownedPi = new Proxy(pi, {
-      get(target, property) {
-        if (property === "appendEntry") return (...args) => {
-          assertOpen();
-          return target.appendEntry(...args);
-        };
-        if (property === "sendUserMessage") return (...args) => run(() => target.sendUserMessage(...args));
-        if (property === "events") {
-          const events = Reflect.get(target, property, target);
-          return events && typeof events === "object" ? scopedEvents : events;
-        }
-        if (property === "registerTool") return (definition) => target.registerTool({
-          ...definition,
-          execute: (id2, input, signal, update, context) => {
-            const combined = scopedSignal(signal);
-            return run(() => definition.execute(id2, input, combined, update, scopedContext(context, combined)), combined);
-          }
-        });
-        if (property === "registerCommand") return (name, definition) => target.registerCommand(name, {
-          ...definition,
-          handler: (args, context) => {
-            const signal = scopedSignal(context.signal);
-            return run(() => definition.handler(args, scopedContext(context, signal)), signal);
-          }
-        });
-        if (property === "on") return (event, handler) => target.on(
-          event,
-          event === "session_shutdown" ? handler : (value, context) => {
-            const signal = scopedSignal(context.signal);
-            return run(() => handler(value, scopedContext(context, signal)), signal);
-          }
-        );
-        return Reflect.get(target, property, target);
-      }
-    });
-    register(ownedPi);
-    pi.on("session_shutdown", dispose);
-  }
-  return { extension, signal: controller.signal, dispose };
-}
-
-// src/desktop/native.ts
-function registerDesktopKnowledgeNativeReadTools(pi, owner, projectFor2) {
-  const reads = createKnowledgeReadModel(owner);
-  pi.registerTool({
-    name: "knowledge_status",
-    label: "Knowledge status",
-    drone: { readOnly: true, capabilities: ["knowledge"] },
-    description: "Report the configured local knowledge index.",
-    parameters: { type: "object", properties: {}, additionalProperties: false },
-    async execute(_id, _input, _signal, _update, context) {
-      const overview = await reads.overview(await projectFor2(context));
-      return result({
-        status: overview.state === "bound" ? "configured" : "unconfigured",
-        ...overview
-      });
-    }
-  });
-  pi.registerTool({
-    name: "knowledge_search",
-    label: "Knowledge \xB7 local search",
-    drone: { readOnly: true, capabilities: ["knowledge"] },
-    description: "Search the configured local knowledge index. Results are excerpts, not publication proofs.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: { type: "string", minLength: 1, maxLength: 2e3 },
-        limit: { type: "integer", minimum: 1, maximum: 12 }
-      },
-      required: ["query"],
-      additionalProperties: false
-    },
-    async execute(_id, input, _signal, _update, context) {
-      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-      if (!binding) throw new Error("No application knowledge Vault is bound");
-      return result(
-        await reads.search({ ...input, revision: binding.revision }, await projectFor2(context))
-      );
-    }
-  });
-}
-
-// src/extension/knowledge-extension.ts
-import { Worker } from "node:worker_threads";
-
-// src/core/index.ts
-init_claim_conflicts();
+// src/core/specialists.ts
+var specialists_exports = {};
+__export(specialists_exports, {
+  createKnowledgeSpecialistTools: () => createKnowledgeSpecialistTools,
+  createKnowledgeSpecialists: () => createKnowledgeSpecialists,
+  knowledgeReadStart: () => knowledgeReadStart,
+  shouldOrientKnowledge: () => shouldOrientKnowledge
+});
 init_config();
 init_files();
-init_flow_cards();
-init_layout();
+import { randomUUID as randomUUID8 } from "node:crypto";
+import { lstat as lstat4, readFile as readFile5 } from "node:fs/promises";
 
 // src/core/orchestration-policy.ts
-import { createHash as createHash11 } from "node:crypto";
+import { createHash as createHash6 } from "node:crypto";
 var clean = (value, limit = 120) => [...String(value || "")].map((char) => char.charCodeAt(0) < 32 ? " " : char).join("").trim().slice(0, limit);
-var digest3 = (value) => createHash11("sha256").update(String(value || "")).digest("hex").slice(0, 24);
+var digest = (value) => createHash6("sha256").update(String(value || "")).digest("hex").slice(0, 24);
 function specialistRequestSignature({
   role,
   task = "",
@@ -6571,7 +5364,7 @@ function specialistRequestSignature({
       ...new Set((Array.isArray(sourcePaths) ? sourcePaths : []).map((p) => clean(p, 512)))
     ].sort(),
     sourceHashes: (Array.isArray(sourceHashes) ? sourceHashes : []).map((p) => clean(p, 128)).sort(),
-    summary: digest3(clean(summary, 12e3)),
+    summary: digest(clean(summary, 12e3)),
     targetPath: targetPath ? clean(targetPath, 512) : null
   });
 }
@@ -6754,1400 +5547,8 @@ function createSpecialistBudget({
   };
 }
 
-// src/core/publication-policy.ts
-var publicationNotices = {
-  "paper-citation-required": "\u8FD9\u6B21\u56DE\u7B54\u7F3A\u5C11\u5177\u4F53\u8BBA\u6587\u4F9D\u636E\uFF1BWiki \u6216\u62A5\u544A\u94FE\u63A5\u4E0D\u80FD\u66FF\u4EE3\u672C\u8F6E\u8BFB\u8FC7\u7684\u6587\u732E\u7B14\u8BB0\u3002\u8BF7\u6807\u660E\u8D44\u6599\u7F3A\u53E3\uFF0C\u4E0D\u8981\u53CD\u590D\u68C0\u7D22\u53EA\u4E3A\u6D88\u9664\u63D0\u9192\u3002",
-  "search-required": "\u672C\u8F6E\u5C1A\u672A\u5B8C\u6210\u77E5\u8BC6\u5E93\u68C0\u7D22\u3002\u8BF7\u5148\u68C0\u7D22\uFF0C\u518D\u9605\u8BFB\u9700\u8981\u5F15\u7528\u7684\u5185\u5BB9\u3002",
-  "coverage-incomplete": "\u77E5\u8BC6\u7D22\u5F15\u5C1A\u672A\u5B8C\u6574\u53EF\u7528\u3002\u8BF7\u68C0\u67E5\u7D22\u5F15\u72B6\u6001\u6216\u6545\u969C\uFF0C\u4E0D\u80FD\u5C06\u6B64\u60C5\u51B5\u5F53\u4F5C\u65E0\u547D\u4E2D\u3002",
-  "citation-required": "\u68C0\u7D22\u6709\u547D\u4E2D\uFF0C\u4F46\u56DE\u7B54\u6CA1\u6709\u5F15\u7528\u672C\u8F6E\u8BFB\u8FC7\u7684\u77E5\u8BC6\u6761\u76EE\u3002",
-  "citation-invalid": "\u56DE\u7B54\u4E2D\u7684\u77E5\u8BC6\u5E93\u5F15\u7528\u683C\u5F0F\u4E0D\u5408\u6CD5\u3002",
-  "citation-budget": "\u672C\u6B21\u56DE\u7B54\u7684\u5F15\u7528\u8D85\u8FC7\u68C0\u67E5\u4E0A\u9650\uFF0C\u8BF7\u62C6\u5206\u4E3A\u66F4\u5C0F\u7684\u56DE\u7B54\u3002",
-  "source-unread": "\u56DE\u7B54\u5F15\u7528\u4E86\u672C\u8F6E\u6CA1\u6709\u5B9E\u9645\u9605\u8BFB\u7684\u6761\u76EE\u3002",
-  "delivery-changed": "\u672C\u8F6E\u751F\u6210\u7684\u7ED3\u679C\u5728\u4FDD\u5B58\u540E\u53D1\u751F\u53D8\u5316\uFF0C\u65E7\u7248\u672C\u4E0D\u80FD\u7EE7\u7EED\u4F7F\u7528\u3002",
-  "source-changed": "\u5F15\u7528\u5185\u5BB9\u5728\u9605\u8BFB\u540E\u53D1\u751F\u4E86\u53D8\u5316\uFF0C\u8BF7\u8BFB\u53D6\u65B0\u7248\u672C\u5E76\u91CD\u65B0\u68C0\u7D22\u3002",
-  "wiki-changed": "\u76F8\u5173 Wiki \u5DF2\u53D8\u5316\uFF0C\u8BF7\u8BFB\u53D6\u5F53\u524D\u7248\u672C\u540E\u91CD\u65B0\u68C0\u7D22\u3002",
-  "search-stale": "\u68C0\u7D22\u540E\u7D22\u5F15\u7248\u672C\u53D1\u751F\u53D8\u5316\uFF0C\u8BF7\u91CD\u65B0\u68C0\u7D22\u5F53\u524D\u5185\u5BB9\u3002",
-  "binding-changed": "\u5F53\u524D\u77E5\u8BC6\u5E93\u7ED1\u5B9A\u5DF2\u53D8\u5316\uFF0C\u8BF7\u91CD\u65B0\u8BFB\u53D6\u5BFC\u822A\uFF0C\u4E0D\u6CBF\u7528\u65E7\u77E5\u8BC6\u5E93\u7684\u8BC1\u636E\u3002",
-  "navigation-changed": "\u672C\u8F6E\u5BFC\u822A\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u8BFB\u53D6\u5BFC\u822A\u5E76\u5B8C\u6210\u68C0\u7D22\u3002",
-  "not-prepared": "\u77E5\u8BC6\u5E93\u51C6\u5907\u6B65\u9AA4\u5C1A\u672A\u5B8C\u6210\uFF0C\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002",
-  interrupted: "\u672C\u6B21\u8BF7\u6C42\u5DF2\u4E2D\u65AD\uFF0C\u672A\u5B8C\u6210\u7684\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002",
-  "model-error": "\u6A21\u578B\u8BF7\u6C42\u5931\u8D25\uFF0C\u672A\u5B8C\u6210\u7684\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002",
-  "check-timeout": "\u56DE\u7B54\u524D\u68C0\u67E5\u8D85\u65F6\uFF0C\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002",
-  "check-failed": "\u56DE\u7B54\u524D\u68C0\u67E5\u53D1\u751F\u9519\u8BEF\uFF0C\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002",
-  "empty-answer": "\u4EFB\u52A1\u5DF2\u7ED3\u675F\uFF0C\u4F46\u6A21\u578B\u6CA1\u6709\u751F\u6210\u53EF\u663E\u793A\u7684\u56DE\u590D\u3002\u8BF7\u67E5\u770B\u672C\u8F6E\u4EA7\u7269\u6216\u8981\u6C42\u7EE7\u7EED\u4EA4\u4ED8\u8BF4\u660E\u3002",
-  "answer-too-large": "\u672C\u6B21\u56DE\u7B54\u8D85\u51FA\u5355\u6B21\u68C0\u67E5\u7684\u5927\u5C0F\u4E0A\u9650\uFF0C\u8BF7\u5206\u6BB5\u5B8C\u6210\u3002",
-  "protocol-budget": "\u672C\u8F6E\u5DE5\u5177\u4E0A\u4E0B\u6587\u8D85\u8FC7\u5B89\u5168\u7F13\u5B58\u4E0A\u9650\uFF0C\u8BF7\u5F00\u542F\u65B0\u4E00\u8F6E\u4EFB\u52A1\u3002",
-  "tool-loop-stopped": "\u3010\u4EFB\u52A1\u9636\u6BB5\u5DF2\u6682\u505C\u3011\u672C\u9636\u6BB5\u8FBE\u5230\u5DE5\u5177\u6216\u4E0A\u4E0B\u6587\u5B89\u5168\u9884\u7B97\u3002\u5DF2\u4FDD\u5B58\u7684\u7ED3\u679C\u4E0D\u4F1A\u56E0\u6B64\u5220\u9664\uFF1B\u67E5\u770B\u4EFB\u52A1\u6267\u884C\u8BB0\u5F55\u540E\u53EF\u7EE7\u7EED\uFF0C\u65E0\u9700\u65B0\u5EFA\u5BF9\u8BDD\u3002\u7EE7\u7EED\u524D\u5148\u6838\u5BF9\u7ED3\u679C\u672A\u77E5\u7684\u64CD\u4F5C\uFF0C\u4E0D\u8981\u91CD\u590D\u5B89\u88C5\u3001\u5BFC\u5165\u6216\u4E0A\u4F20\u3002",
-  "metacognitive-inconsistency": "\u62A5\u544A\u3001\u65B9\u6CD5\u3001\u8BC1\u636E\u6807\u7B7E\u6216\u8BCA\u65AD\u4E0E\u5B9E\u9645\u8FD0\u884C\u7ED3\u679C\u4E0D\u4E00\u81F4\uFF1B\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002\u8BF7\u6309\u4E0B\u9762\u7684\u5DEE\u5F02\u4FEE\u6B63\u62A5\u544A\u6216\u91CD\u65B0\u8FD0\u884C\u5F53\u524D\u6D41\u7A0B\u3002",
-  "artifact-pending-review": "\u5F15\u7528\u7684\u7ED3\u679C\u6B63\u5728\u7B49\u5F85\u786E\u8BA4\uFF1B\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002\u8BF7\u91CD\u65B0\u751F\u6210\u53D7\u5F71\u54CD\u7ED3\u679C\u6216\u5B8C\u6210\u73B0\u6709\u5BA1\u6838\u3002"
-};
-var advisoryNotices = {
-  "paper-citation-required": "\u8FD9\u4EFD\u56DE\u7B54\u6CA1\u6709\u5F15\u7528\u5177\u4F53\u7684\u539F\u59CB\u8BBA\u6587\uFF0C\u4E3B\u8981\u4F9D\u636E\u662F Wiki \u6216\u5DF2\u751F\u6210\u7684\u62A5\u544A\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\uFF0C\u4F46\u8BF7\u628A\u5B83\u5F53\u4F5C\u5F85\u67E5\u8BC1\u7684\u7EBF\u7D22\u3002",
-  "citation-budget": "\u8FD9\u4EFD\u56DE\u7B54\u5F15\u7528\u7684\u6765\u6E90\u8D85\u8FC7\u4E86\u5355\u6B21\u6838\u9A8C\u4E0A\u9650\u3002\u5185\u5BB9\u5DF2\u5B8C\u6574\u4FDD\u7559\u3002",
-  "citation-required": "\u8FD9\u4EFD\u56DE\u7B54\u6CA1\u6709\u5F15\u7528\u672C\u8F6E\u8BFB\u8FC7\u7684\u77E5\u8BC6\u6761\u76EE\uFF0C\u672A\u80FD\u5EFA\u7ACB\u6765\u6E90\u5BF9\u5E94\u5173\u7CFB\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
-  "citation-invalid": "\u8FD9\u4EFD\u56DE\u7B54\u91CC\u6709\u683C\u5F0F\u4E0D\u5408\u6CD5\u7684\u77E5\u8BC6\u5E93\u5F15\u7528\uFF0C\u8BE5\u5F15\u7528\u672A\u88AB\u6838\u9A8C\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
-  "source-unread": "\u8FD9\u4EFD\u56DE\u7B54\u5F15\u7528\u4E86\u672C\u8F6E\u6CA1\u6709\u5B9E\u9645\u6253\u5F00\u8FC7\u7684\u6761\u76EE\uFF0C\u8BE5\u5F15\u7528\u672A\u88AB\u6838\u9A8C\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
-  "source-changed": "\u5F15\u7528\u7684\u5185\u5BB9\u5728\u672C\u8F6E\u8BFB\u53D6\u540E\u53D1\u751F\u4E86\u53D8\u5316\uFF0C\u6838\u9A8C\u7ED3\u679C\u53EF\u80FD\u5DF2\u8FC7\u671F\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
-  "delivery-changed": "\u672C\u8F6E\u751F\u6210\u7684\u7ED3\u679C\u5728\u4FDD\u5B58\u540E\u53D1\u751F\u53D8\u5316\uFF0C\u65E7\u7248\u672C\u4E0D\u80FD\u7EE7\u7EED\u4F7F\u7528\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
-  "wiki-changed": "\u76F8\u5173 Wiki \u5728\u672C\u8F6E\u8BFB\u53D6\u540E\u53D1\u751F\u4E86\u53D8\u5316\uFF0C\u6838\u9A8C\u7ED3\u679C\u53EF\u80FD\u5DF2\u8FC7\u671F\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
-  "search-required": "\u672C\u8F6E\u6CA1\u6709\u5B8C\u6210\u77E5\u8BC6\u5E93\u68C0\u7D22\uFF0C\u68C0\u7D22\u8986\u76D6\u60C5\u51B5\u5C1A\u672A\u786E\u8BA4\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
-  "search-stale": "\u68C0\u7D22\u5B8C\u6210\u540E\u77E5\u8BC6\u5E93\u7D22\u5F15\u53D1\u751F\u4E86\u53D8\u5316\uFF0C\u6838\u9A8C\u7ED3\u679C\u53EF\u80FD\u5DF2\u8FC7\u671F\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
-  "coverage-incomplete": "\u77E5\u8BC6\u5E93\u7D22\u5F15\u672C\u8F6E\u672A\u5B8C\u6574\u5C31\u7EEA\uFF0C\u8FD9\u4E0D\u4EE3\u8868\u5E93\u4E2D\u6CA1\u6709\u76F8\u5173\u5185\u5BB9\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
-  "check-timeout": "\u56DE\u7B54\u524D\u7684\u6838\u9A8C\u8D85\u65F6\uFF0C\u672C\u6B21\u672A\u5B8C\u6210\u6838\u9A8C\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
-  "not-prepared": "\u77E5\u8BC6\u5E93\u51C6\u5907\u6B65\u9AA4\u672A\u5B8C\u6210\uFF0C\u672C\u6B21\u672A\u505A\u6838\u9A8C\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002"
-};
-function publicationNotice(code) {
-  return publicationNotices[code] || publicationNotices["check-failed"];
-}
-function advisoryNotice(code) {
-  const normalized = code;
-  return advisoryNotices[normalized] || publicationNotice(normalized);
-}
-function advisoryLine(code, error) {
-  const verified = error?.verified;
-  const sources = Array.isArray(verified?.sources) ? verified.sources.length : 0;
-  const deliveries = Array.isArray(verified?.deliveries) ? verified.deliveries.length : 0;
-  const cited = typeof verified?.unverifiedCitationCount === "number" && Number.isFinite(verified.unverifiedCitationCount) ? verified.unverifiedCitationCount : Array.isArray(verified?.unverifiedCitations) ? verified.unverifiedCitations.length : 0;
-  const notice = code === "citation-budget" && numberIsInteger(verified?.citationCount) && numberIsInteger(verified?.citationLimit) ? `\u8FD9\u4EFD\u56DE\u7B54\u5F15\u7528\u4E86 ${verified?.citationCount} \u5904\u6765\u6E90\uFF0C\u8D85\u8FC7\u5355\u6B21\u6838\u9A8C\u4E0A\u9650\uFF08${verified?.citationLimit} \u5904\uFF09\u3002\u5185\u5BB9\u5DF2\u5B8C\u6574\u4FDD\u7559\u3002` : advisoryNotice(code);
-  const parts = [];
-  if (sources) parts.push(`\u5DF2\u6838\u5BF9 ${sources} \u5904\u6765\u6E90\u7684\u8BFB\u53D6\u8BB0\u5F55\u4E0E\u5F53\u524D\u7248\u672C`);
-  if (deliveries) parts.push(`\u5DF2\u6838\u5BF9 ${deliveries} \u4EFD\u672C\u8F6E\u4EA7\u7269`);
-  if (cited) parts.push(`${sources ? "\u53E6\u6709" : "\u5171"} ${cited} \u5904\u5F15\u7528\u672A\u9010\u6761\u6838\u9A8C`);
-  const detail = parts.length ? `${parts.join("\u3001")}\u3002` : "";
-  return `${notice}${detail ? ` ${detail}` : ""}${sources || deliveries ? " \u6765\u6E90\u6838\u5BF9\u4E0D\u4EE3\u8868\u79D1\u5B66\u7ED3\u8BBA\u5DF2\u83B7\u9A8C\u8BC1\u3002" : ""}`;
-}
-function numberIsInteger(value) {
-  return typeof value === "number" && Number.isInteger(value);
-}
-function errorMessage(error) {
-  return error && typeof error === "object" && "message" in error ? String(error.message || "") : "";
-}
-function errorCode2(error) {
-  return error && typeof error === "object" && "code" in error ? String(error.code || "") : "";
-}
-function knowledgeFailure(error) {
-  const code = classifyFailureCode(error);
-  const paths = [];
-  const rawPaths = error && typeof error === "object" && "paths" in error ? error.paths : [];
-  for (const path of Array.isArray(rawPaths) ? rawPaths : []) {
-    if (typeof path === "string" && path.length <= 512 && !/[\r\n<>]/.test(path)) paths.push(path);
-    if (paths.length >= 6) break;
-  }
-  return { code, message: publicationNotice(code), paths };
-}
-function classifyFailureCode(error) {
-  const code = errorCode2(error);
-  if (code in publicationNotices) return code;
-  const text4 = errorMessage(error);
-  if (/binding changed/i.test(text4)) return "binding-changed";
-  if (/navigation changed/i.test(text4)) return "navigation-changed";
-  if (/navigation|prepare_knowledge/i.test(text4)) return "not-prepared";
-  return "check-failed";
-}
-
-// src/core/metacognitive-policy.ts
-var MAX_FAILURES = 16;
-var MAX_TEXT = 600;
-var SHA256 = /^[a-f0-9]{64}$/i;
-function bounded(value, max = MAX_TEXT) {
-  const text4 = typeof value === "string" ? value : JSON.stringify(value);
-  return String(text4 ?? "").replace(/[\r\n]+/g, " ").slice(0, max);
-}
-function sameValue(left, right) {
-  if (Object.is(left, right)) return true;
-  if (typeof left === "number" && typeof right === "number" && Number.isFinite(left) && Number.isFinite(right))
-    return left === right;
-  try {
-    return JSON.stringify(left) === JSON.stringify(right);
-  } catch {
-    return false;
-  }
-}
-function hasKey(value, key) {
-  return Object.hasOwn(value, key);
-}
-function subset(expected, observed) {
-  if (!expected) return [];
-  if (!observed) return Object.keys(expected);
-  return Object.keys(expected).filter((key) => !hasKey(observed, key) || !sameValue(expected[key], observed[key]));
-}
-function numberValue(value) {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && value.trim() !== "" ? parsed : null;
-}
-function numberMatches(expected, observed, tolerance = 0) {
-  const left = numberValue(expected);
-  const right = numberValue(observed);
-  if (left !== null && right !== null) return Math.abs(left - right) <= Math.max(0, tolerance);
-  return String(expected).trim() === String(observed).trim();
-}
-function artifactHasNumber(artifact, claim) {
-  const tolerance = claim.rounding?.tolerance ?? (typeof claim.rounding?.digits === "number" && claim.rounding.digits >= 0 ? 0.5 * 10 ** -claim.rounding.digits : 0);
-  if (artifact.numbers?.some((item) => numberMatches(claim.value, item.value, item.tolerance ?? tolerance))) return true;
-  if (typeof artifact.text !== "string") return false;
-  const rendered = claim.rendered ?? String(claim.value);
-  if (artifact.text.includes(rendered)) return true;
-  return artifact.text.includes(String(claim.value));
-}
-function citedPaths(answer) {
-  return new Set(
-    Array.from(answer.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g), (match) => {
-      const path = (match[1] || "").trim();
-      return path.endsWith(".md") ? path : `${path}.md`;
-    })
-  );
-}
-function addFailure(failures, failure) {
-  if (failures.length < MAX_FAILURES) failures.push(failure);
-}
-function addWarning(warnings, warning) {
-  if (warnings.length < 8) warnings.push(warning);
-}
-function evaluateMetacognitivePublication(answer, snapshot) {
-  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot))
-    return { ok: true, failures: [], warnings: [], findings: [] };
-  const input = snapshot;
-  if (input.enabled === false) return { ok: true, failures: [], warnings: [], findings: [] };
-  const failures = [];
-  const warnings = [];
-  const citations = citedPaths(answer);
-  const artifacts = /* @__PURE__ */ new Map();
-  for (const artifact of Array.isArray(input.artifacts) ? input.artifacts : []) {
-    if (artifact && typeof artifact.path === "string") {
-      artifacts.set(artifact.path, artifact);
-    }
-  }
-  const checkedPaths = /* @__PURE__ */ new Set();
-  const checkArtifact = (path, subject) => {
-    const artifact = artifacts.get(path);
-    if (!artifact) {
-      addFailure(failures, {
-        code: "artifact-checksum-stale",
-        subject,
-        detail: `No current checksum receipt for ${bounded(path, 240)}`,
-        path
-      });
-      return void 0;
-    }
-    if (artifact.status === "pending-review" && citations.has(path))
-      addFailure(failures, {
-        code: "artifact-pending-review",
-        subject: path,
-        detail: `Artifact ${bounded(path, 240)} is pending review after a revoked decision`,
-        path
-      });
-    if (artifact.reproducibility === "not-reproducible")
-      addWarning(warnings, {
-        code: "artifact-not-reproducible",
-        subject,
-        detail: `Cited artifact has no recorded code fingerprint or run provenance: ${bounded(path, 240)}`,
-        path
-      });
-    if (!SHA256.test(String(artifact.sha256 || "")) || !SHA256.test(String(artifact.currentSha256 || ""))) {
-      addFailure(failures, {
-        code: "artifact-checksum-stale",
-        subject,
-        detail: `Missing or malformed checksum receipt for ${bounded(path, 240)}`,
-        path
-      });
-    } else if (artifact.sha256?.toLowerCase() !== artifact.currentSha256?.toLowerCase()) {
-      addFailure(failures, {
-        code: "artifact-checksum-stale",
-        subject,
-        detail: `Cited artifact changed after observation (${bounded(artifact.sha256, 16)}\u2026 \u2192 ${bounded(artifact.currentSha256, 16)}\u2026)`,
-        path
-      });
-    }
-    checkedPaths.add(path);
-    return artifact;
-  };
-  for (const claim of Array.isArray(input.numbers) ? input.numbers : []) {
-    if (!claim || typeof claim.artifactPath !== "string") {
-      addFailure(failures, {
-        code: "metacognition-invalid",
-        subject: "report-number",
-        detail: "A report number has no cited artifact path"
-      });
-      continue;
-    }
-    const rendered = claim.rendered ?? String(claim.value);
-    if (!answer.includes(rendered)) {
-      addFailure(failures, {
-        code: "report-number-unbound",
-        subject: claim.id || rendered,
-        detail: `Reported number ${bounded(rendered, 80)} is not present in the final answer`,
-        path: claim.artifactPath
-      });
-    }
-    if (!citations.has(claim.artifactPath)) {
-      addFailure(failures, {
-        code: "report-number-unbound",
-        subject: claim.id || rendered,
-        detail: `Reported number ${bounded(rendered, 80)} is not tied to citation ${bounded(claim.artifactPath, 240)}`,
-        path: claim.artifactPath
-      });
-    }
-    const artifact = checkArtifact(claim.artifactPath, claim.id || rendered);
-    if (artifact && !artifactHasNumber(artifact, claim))
-      addFailure(failures, {
-        code: "report-number-unbound",
-        subject: claim.id || rendered,
-        detail: `Artifact does not contain ${bounded(String(claim.value), 80)} with the declared rounding`,
-        path: claim.artifactPath
-      });
-  }
-  for (const path of citations) {
-    if (artifacts.has(path) && !checkedPaths.has(path)) checkArtifact(path, "citation");
-  }
-  for (const method of Array.isArray(input.methods) ? input.methods : []) {
-    const executed = input.executed;
-    if (!method || typeof method.description !== "string" || !method.description.trim()) {
-      addFailure(failures, { code: "metacognition-invalid", subject: "method", detail: "Method description is empty" });
-      continue;
-    }
-    if (!answer.includes(method.description))
-      addFailure(failures, {
-        code: "method-mismatch",
-        subject: method.id || method.description,
-        detail: "Method description is not present in the final answer"
-      });
-    if (!executed) {
-      addFailure(failures, {
-        code: "method-mismatch",
-        subject: method.id || method.description,
-        detail: "No host-observed workflow execution was supplied"
-      });
-      continue;
-    }
-    if (method.workflow && !executed.workflows?.includes(method.workflow))
-      addFailure(failures, {
-        code: "method-mismatch",
-        subject: method.id || method.workflow,
-        detail: `Workflow ${bounded(method.workflow, 120)} was not observed`
-      });
-    for (const module of method.modules || [])
-      if (!executed.modules?.includes(module))
-        addFailure(failures, {
-          code: "method-mismatch",
-          subject: method.id || module,
-          detail: `Module ${bounded(module, 120)} was not observed`
-        });
-    for (const key of subset(method.params, executed.params))
-      addFailure(failures, {
-        code: "method-mismatch",
-        subject: method.id || key,
-        detail: `Parameter ${bounded(key, 120)} differs from the observed workflow`
-      });
-  }
-  const findingMap = /* @__PURE__ */ new Map();
-  const findingEvidence = [];
-  for (const rawFinding of Array.isArray(input.findings) ? input.findings : []) {
-    const finding = rawFinding;
-    if (!finding || typeof finding.id !== "string" || typeof finding.text !== "string") {
-      addFailure(failures, { code: "metacognition-invalid", subject: "finding", detail: "Finding is malformed" });
-      continue;
-    }
-    findingMap.set(finding.id, finding);
-    const paths = Array.from(
-      new Set(
-        (Array.isArray(finding.citationPaths) ? finding.citationPaths : []).filter(
-          (path) => typeof path === "string"
-        )
-      )
-    );
-    findingEvidence.push({ id: finding.id, text: bounded(finding.text), label: finding.label, citationPaths: paths });
-    for (const path of paths) {
-      if (!citations.has(path))
-        addFailure(failures, {
-          code: "finding-label-conflict",
-          subject: finding.id,
-          detail: `Finding is missing its cited artifact ${bounded(path, 240)}`,
-          path
-        });
-      else checkArtifact(path, finding.id);
-    }
-  }
-  for (const use of Array.isArray(input.uses) ? input.uses : []) {
-    const finding = findingMap.get(use?.findingId || "");
-    if (!finding) {
-      addFailure(failures, {
-        code: "finding-label-conflict",
-        subject: use?.findingId || "finding",
-        detail: "The final answer references an unknown finding"
-      });
-      continue;
-    }
-    if (["exploratory", "overturned", "unstable"].includes(finding.label)) {
-      const invalidRole = finding.label === "exploratory" ? ["conclusion", "validation"].includes(use.role) : use.role !== "exploratory";
-      if (invalidRole)
-        addFailure(failures, {
-          code: "finding-label-conflict",
-          subject: finding.id,
-          detail: `Finding labelled ${finding.label} cannot be used as ${use.role}`
-        });
-    }
-  }
-  for (const diagnostic of Array.isArray(input.diagnostics) ? input.diagnostics : []) {
-    if (!diagnostic || typeof diagnostic.id !== "string" || !sameValue(diagnostic.reported, diagnostic.observed))
-      addFailure(failures, {
-        code: "diagnostic-drift",
-        subject: diagnostic?.id || "diagnostic",
-        detail: `Reported diagnostic differs from the observed control/result (${bounded(diagnostic?.reported)} vs ${bounded(diagnostic?.observed)})`
-      });
-  }
-  return { ok: failures.length === 0, failures, warnings, findings: findingEvidence };
-}
-
-// src/core/deliverable-review.ts
-import { createHash as createHash12 } from "node:crypto";
-
-// src/core/index.ts
-init_review_policy();
-
-// src/core/source-links.ts
-import { realpath as realpath4, stat } from "node:fs/promises";
-import { isAbsolute as isAbsolute4, relative as relative4, resolve as resolve5, sep as sep4 } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-
-// src/core/task-feedback.ts
-import { lstat as lstat5, realpath as realpath5 } from "node:fs/promises";
-import { relative as relative5, resolve as resolve6, sep as sep5 } from "node:path";
-import { pathToFileURL as pathToFileURL2 } from "node:url";
-var replaceControl = (text4) => [...String(text4 || "")].map((char) => char.charCodeAt(0) < 32 ? " " : char).join("");
-var clean2 = (text4, limit = 300) => replaceControl(text4).replace(/(?:bearer\s+|api[_-]?key[=:]\s*)[^\s]+/gi, "[redacted]").trim().slice(0, limit);
-var feedbackReason = (reason) => {
-  const labels = {
-    "not-prepared": "\u77E5\u8BC6\u5E93\u51C6\u5907\u5C1A\u672A\u5B8C\u6210",
-    "model-error": "\u6A21\u578B\u8BF7\u6C42\u5931\u8D25",
-    "check-timeout": "\u56DE\u7B54\u68C0\u67E5\u8D85\u65F6",
-    "check-failed": "\u56DE\u7B54\u68C0\u67E5\u53D1\u751F\u9519\u8BEF",
-    "tool-loop-stopped": "\u5F53\u524D\u5904\u7406\u9636\u6BB5\u5DF2\u6682\u505C",
-    interrupted: "\u672C\u6B21\u8BF7\u6C42\u5DF2\u4E2D\u65AD"
-  };
-  return labels[String(reason)] || "\u9700\u8981\u5148\u5904\u7406\u76F8\u5173\u8D44\u6599";
-};
-function createTaskFeedback() {
-  let failures = [];
-  let files = /* @__PURE__ */ new Map();
-  let seen = /* @__PURE__ */ new Set();
-  let archiveCount = 0;
-  let summarySaved = false;
-  let explainerSaved = false;
-  let candidates = /* @__PURE__ */ new Set();
-  const begin = () => {
-    failures = [];
-    files = /* @__PURE__ */ new Map();
-    seen = /* @__PURE__ */ new Set();
-    archiveCount = 0;
-    summarySaved = false;
-    explainerSaved = false;
-    candidates = /* @__PURE__ */ new Set();
-  };
-  const observe = async (event, ctx) => {
-    if (seen.has(event.toolCallId)) return;
-    seen.add(event.toolCallId);
-    if (seen.size > 512) {
-      const oldest = seen.values().next().value;
-      seen.delete(oldest);
-    }
-    const details = event.details || {};
-    const content = event.content || [];
-    if (event.isError || details.status === "failed" || details.error && details.successful === 0) {
-      failures.push({
-        tool: clean2(event.toolName, 60),
-        reason: clean2(
-          details.reason || details.error || content.filter((block) => block.type === "text").map((block) => block.text).join(" ")
-        )
-      });
-      failures = failures.slice(-6);
-      return;
-    }
-    let path = null;
-    if (event.toolName === "research_propose_wiki_update" && details.id) candidates.add(details.id);
-    if (event.toolName === "research_archive_source" && details.status === "downloaded") archiveCount++;
-    if (event.toolName === "research_summarize_run" && details.summary_saved) {
-      summarySaved = true;
-      path = details.run;
-    }
-    if (event.toolName === "research_archive_explainer" && details.knowledge_status === "written") {
-      explainerSaved = true;
-      path = details.note;
-    }
-    if (["write", "edit"].includes(String(event.toolName))) path = event.input?.path;
-    if (typeof path !== "string") return;
-    try {
-      const full = await realpath5(resolve6(ctx.cwd, path));
-      const rel = relative5(await realpath5(ctx.cwd), full);
-      if (rel.startsWith(`results${sep5}`) && (await lstat5(full)).isFile()) {
-        files.delete(full);
-        files.set(full, { name: clean2(rel.split(sep5).at(-1), 100), path: full });
-        while (files.size > 8) files.delete(files.keys().next().value);
-      }
-    } catch {
-    }
-  };
-  const facts = () => ({
-    archivedSources: archiveCount,
-    summarySaved,
-    explainerSaved,
-    pendingWikiCandidates: candidates.size,
-    files: [...files.values()],
-    failures: [...failures]
-  });
-  const report = (reason, message, paths = []) => {
-    const interrupted = reason === "interrupted";
-    const current = facts();
-    const lines = [
-      interrupted ? "\u672C\u6B21\u8BF7\u6C42\u5DF2\u4E2D\u65AD\uFF0C\u672A\u5B8C\u6210\u7684\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002" : `\u3010\u56DE\u7B54\u68C0\u67E5\u672A\u5B8C\u6210\u3011\u672C\u8F6E\u56DE\u7B54\u6682\u672A\u5C55\u793A\uFF08${feedbackReason(reason)}\uFF09\u3002`,
-      ...interrupted ? [] : [clean2(message, 450)]
-    ];
-    if (paths.length)
-      lines.push(
-        "\u9700\u8981\u5904\u7406\u7684\u5185\u5BB9\uFF1A" + paths.slice(0, 6).map((path) => `\`${clean2(path, 512).replaceAll("`", "")}\``).join("\u3001")
-      );
-    if (current.archivedSources || current.summarySaved || current.files.length)
-      lines.push(
-        `\u5DF2\u5B8C\u6210\u7684\u5DE5\u4F5C\u4ECD\u7136\u4FDD\u7559\uFF1A\u5DF2\u4FDD\u5B58\u6765\u6E90 ${current.archivedSources} \u9879\uFF1B\u7814\u7A76\u6458\u8981${current.summarySaved ? "\u5DF2\u4FDD\u5B58" : "\u5C1A\u672A\u786E\u8BA4\u4FDD\u5B58"}\uFF1BShow Me ${current.explainerSaved ? "\u5DF2\u4FDD\u5B58" : "\u5C1A\u672A\u786E\u8BA4\u4FDD\u5B58"}\uFF1B\u7B49\u5F85\u5BA1\u6838\u7684 Wiki \u6761\u76EE ${current.pendingWikiCandidates} \u4E2A\u3002`
-      );
-    if (current.files.length)
-      lines.push(
-        "\u672C\u8F6E\u5B9E\u9645\u5199\u5165\u7684\u4EA7\u7269\uFF08\u5185\u5BB9\u4ECD\u9700\u6838\u9A8C\uFF09\uFF1A\n" + current.files.map((file) => `- [${file.name.replace(/[[\]]/g, "")}](${pathToFileURL2(file.path).href})`).join("\n")
-      );
-    if (current.failures.length)
-      lines.push(
-        "\u8FC7\u7A0B\u4E2D\u8FD8\u53D1\u751F\u8FC7\u4EE5\u4E0B\u5DE5\u5177\u95EE\u9898\uFF1B\u90E8\u5206\u53EF\u80FD\u5DF2\u6539\u7528\u5176\u4ED6\u8DEF\u5F84\u7EE7\u7EED\uFF1A\n" + current.failures.slice(-3).map((entry) => `- ${entry.tool}\uFF1A${entry.reason}`).join("\n")
-      );
-    lines.push(
-      interrupted ? "\u5DF2\u8BB0\u5F55\u7684\u5DE5\u5177\u7ED3\u679C\u4ECD\u53EF\u5728\u672C\u4F1A\u8BDD\u67E5\u770B\u3002\u53EF\u4EE5\u7EE7\u7EED\u5269\u4F59\u5DE5\u4F5C\uFF1B\u4E0D\u9700\u8981\u91CD\u65B0\u4E0B\u8F7D\u5DF2\u7ECF\u4FDD\u5B58\u7684\u8D44\u6599\u3002" : "\u63A5\u4E0B\u6765\u5E94\u6839\u636E\u5177\u4F53\u68C0\u67E5\u539F\u56E0\u8865\u8BFB\u6216\u4FEE\u6B63\u5F15\u7528\uFF0C\u518D\u68C0\u67E5\u56DE\u7B54\uFF1B\u4E0D\u9700\u8981\u91CD\u65B0\u4E0B\u8F7D\u5DF2\u7ECF\u4FDD\u5B58\u7684\u8D44\u6599\u3002\u8FD9\u91CC\u62A5\u544A\u7684\u662F\u5904\u7406\u72B6\u6001\uFF0C\u4E0D\u4EE3\u8868\u672A\u5C55\u793A\u7684\u7814\u7A76\u7ED3\u8BBA\u5DF2\u7ECF\u5F97\u5230\u786E\u8BA4\u3002"
-    );
-    return lines.join("\n\n");
-  };
-  return { begin, observe, facts, report };
-}
-function guardResearchToolResult(event) {
-  if (!["fetch_content", "webfetch", "research_archive_source"].includes(String(event.toolName))) return;
-  const text4 = (event.content || []).filter((block) => block.type === "text").map((block) => String(block.text || "")).join("\n");
-  if (/(?:^|\n)%PDF-\d\.\d/.test(text4.slice(0, 1800)) && (text4.includes("\0") || /(?:\uFFFD|\d+\s+\d+\s+obj|\nstream)/.test(text4.slice(0, 6e3))))
-    return {
-      content: [
-        {
-          type: "text",
-          text: "\u8BFB\u53D6\u672A\u5B8C\u6210\uFF1A\u5DE5\u5177\u8FD4\u56DE\u4E86 PDF \u4E8C\u8FDB\u5236\uFF0C\u4E0D\u662F\u53EF\u8BFB\u6B63\u6587\u3002\u8BF7\u5F52\u6863\u539F PDF \u540E\u4F7F\u7528\u5DF2\u6709\u7684\u6587\u672C\u63D0\u53D6\u5DE5\u5177\u8BFB\u53D6\u9700\u8981\u7684\u9875\u6216\u6BB5\u843D\uFF1B\u4E0D\u8981\u628A\u8FD9\u4E9B\u5B57\u8282\u5F53\u4F5C\u8BC1\u636E\uFF0C\u4E5F\u4E0D\u8981\u91CD\u590D\u628A\u4E8C\u8FDB\u5236\u9001\u5165\u4E0A\u4E0B\u6587\u3002"
-        }
-      ],
-      isError: true,
-      details: { ...event.details || {}, error: "binary-pdf-returned", contentGuard: "binary-pdf" }
-    };
-  const details = event.details;
-  if (!event.isError && (details?.status === "failed" || details?.error && details.successful === 0))
-    return { isError: true };
-}
-
-// src/core/tool-budget.ts
-function createToolBudget(options = {}) {
-  const maxReads = options.maxReads ?? 8;
-  const maxSearches = options.maxSearches ?? 4;
-  const maxRepeats = options.maxRepeats ?? 2;
-  let reads = 0;
-  let searches = 0;
-  let recoveries = 0;
-  const repeats = /* @__PURE__ */ new Map();
-  function reset() {
-    reads = 0;
-    searches = 0;
-    recoveries = 0;
-    repeats.clear();
-  }
-  function consume(kind, key, { recovery = false } = {}) {
-    const recoveryAllowed = recovery && kind === "read" && ++recoveries <= 2;
-    const normalized = String(key ?? "").trim();
-    const repeatKey = `${kind}:${normalized}`;
-    const seen = (repeats.get(repeatKey) ?? 0) + 1;
-    repeats.set(repeatKey, seen);
-    if (kind === "read") reads += 1;
-    else searches += 1;
-    const overReads = kind === "read" && reads > maxReads;
-    const overSearches = kind === "search" && searches > maxSearches;
-    const overRepeat = seen > maxRepeats && !recoveryAllowed;
-    if (!overReads && !overSearches && !overRepeat) return null;
-    return {
-      status: "budget-exhausted",
-      code: "tool-loop",
-      message: overRepeat ? `Repeated ${kind} (${normalized || "empty"}) ${seen} times; stop looping and answer from what you have.` : `Knowledge ${kind} budget exhausted (${kind === "read" ? reads : searches}/${kind === "read" ? maxReads : maxSearches}). Synthesize an answer now.`,
-      next: "Write the final answer from already-read evidence. Do not call research_read_knowledge or research_search_knowledge again this turn."
-    };
-  }
-  return { reset, consume, snapshot: () => ({ reads, searches }) };
-}
-
-// src/core/topic-candidate.ts
-function titleFromSummary(summary, query, resultSlug) {
-  const heading = summary.match(/^#\s+(.+)$/m)?.[1]?.trim();
-  const fallback = (String(query || "").split(/[\n。]/)[0] ?? "").trim();
-  const slug2 = String(resultSlug || "research-topic").replace(/[-_]20\d{6,14}$/, "").replace(/[-_]+/g, " ").trim();
-  return (heading || fallback || slug2 || "Research topic").slice(0, 180);
-}
-function fileStem(resultSlug, title) {
-  let value = String(resultSlug || "").replace(/[-_]20\d{6,14}$/, "").trim();
-  if (!value || value === "research-question") value = String(title || "research-topic");
-  value = [...value.normalize("NFKC")].map((char) => char.charCodeAt(0) < 32 || '\\/[]#|<>:"*?'.includes(char) ? "-" : char).join("").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^[.\- ]+|[.\- ]+$/g, "").slice(0, 120);
-  return value || "research-topic";
-}
-function autoTopicCandidate({
-  summary,
-  query,
-  resultSlug,
-  sourcePaths = []
-} = {}) {
-  const markdown = String(summary || "").trim();
-  if (markdown.length < 160) return { eligible: false, reason: "summary-too-short" };
-  if (markdown.length > 24e3) return { eligible: false, reason: "summary-too-large" };
-  if (!Array.isArray(sourcePaths) || sourcePaths.length < 1)
-    return { eligible: false, reason: "no-current-read-evidence" };
-  const title = titleFromSummary(markdown, query, resultSlug);
-  return {
-    eligible: true,
-    input: {
-      path: `Wiki/${fileStem(resultSlug, title)}.md`,
-      title,
-      markdown,
-      rationale: "Automatically staged from a completed, evidence-gated research run. Review scope, claims and applicability before publishing.",
-      source_paths: sourcePaths.slice(0, 12)
-    }
-  };
-}
-
-// src/core/index.ts
-init_wiki_policy();
-init_topic_memory();
-
-// src/core/maintenance.ts
-init_layout();
-init_files();
-import { createHash as createHash14, randomUUID as randomUUID12 } from "node:crypto";
-import { mkdir as mkdir8, rename as rename8, writeFile as writeFile8 } from "node:fs/promises";
-import { dirname as dirname6 } from "node:path";
-var START = "<!-- pi-agent:managed:start -->";
-var END = "<!-- pi-agent:managed:end -->";
-var hash = (text4) => createHash14("sha256").update(text4).digest("hex");
-async function updateNavigation(vault, path, heading, body) {
-  if (!["Home.md", "Wiki/Index.md", "Library/Index.md"].includes(path) && !/^Projects\/[a-z0-9-]+\/Index\.md$/.test(path))
-    throw new Error("Not an allowed navigation target");
-  const full = await containedVaultFile(vault, path);
-  let original = null;
-  try {
-    original = (await readNoteFile(vault, path)).text;
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-  const base = original ?? `${heading}
-
-## Human review
-`;
-  const start = base.indexOf(START), end = base.indexOf(END), block = `${START}
-${body.trim()}
-${END}`;
-  if (start < 0 !== end < 0 || end < start || start >= 0 && (base.indexOf(START, start + 1) >= 0 || base.indexOf(END, end + 1) >= 0))
-    throw new Error("Invalid navigation managed markers");
-  const updated = start >= 0 ? base.slice(0, start) + block + base.slice(end + END.length) : `${base.trimEnd()}
-
-${block}
-`;
-  if (updated === original) return { path, changed: false };
-  if (original !== null && (await readNoteFile(vault, path)).hash !== hash(original))
-    throw new Error("Human navigation changed; update was not applied");
-  await mkdir8(dirname6(full), { recursive: true });
-  if (original === null) {
-    await writeFile8(full, updated, { flag: "wx" });
-    return { path, changed: true };
-  }
-  const temporary = `${full}.${randomUUID12()}.tmp`;
-  await writeFile8(temporary, updated, { flag: "wx" });
-  await rename8(temporary, full);
-  return { path, changed: true };
-}
-async function runNavigationMaintenance(service, project, limit = 3) {
-  const jobs = await service.request("jobs", { project, kind: "navigation" }), out = [];
-  for (const item of jobs.items.filter((job) => job.kind === "navigation").slice(0, Math.min(10, limit))) {
-    const rows = await service.request("navigation", {
-      project: item.scope === "shared" ? null : item.scope,
-      targetPath: item.path
-    });
-    const links = rows.slice(0, 60).filter((row) => !/[[\]|#\r\n]/.test(row.path)).map((row) => `- [[${row.path.slice(0, -3)}]]`);
-    const body = [...links, rows.length > 60 ? "\n\u66F4\u591A\u6761\u76EE\u8BF7\u4F7F\u7528\u77E5\u8BC6\u68C0\u7D22\uFF1B\u672C\u9875\u53EA\u4FDD\u7559\u77ED\u5BFC\u822A\u3002" : ""].join(
-      "\n"
-    );
-    try {
-      const result2 = await updateNavigation(
-        service.binding.vault,
-        item.path,
-        `# ${item.scope === "shared" ? "Shared knowledge" : item.scope}`,
-        body
-      );
-      if (result2.changed) await service.request("changed", { paths: [item.path] });
-      await service.request("completeJob", { key: item.key, revision: item.revision });
-      out.push(result2);
-    } catch (error) {
-      out.push({ path: item.path, error: error.message });
-    }
-  }
-  return {
-    navigation: out,
-    semanticWikiRewritten: false,
-    remaining: await service.request("jobs", { project })
-  };
-}
-
-// src/core/ingest-identity.ts
-import { createHash as createHash15 } from "node:crypto";
-
-// src/core/ingest-frontmatter.ts
-var KNOWLEDGE_TYPES = [
-  "paper",
-  "method",
-  "software",
-  "dataset",
-  "concept",
-  "entity",
-  "idea",
-  "claim",
-  "evidence",
-  "decision",
-  "question",
-  "wiki"
-];
-var RUN_RESULT_TYPES = ["run", "artifact", "explainer"];
-var NOTE_TYPES = [...KNOWLEDGE_TYPES, ...RUN_RESULT_TYPES];
-var MAX_FRONTMATTER_CHARS = 64 * 1024;
-
-// src/core/daily-discovery.ts
-import { readdir as readdir2, readFile as readFile8, stat as stat2 } from "node:fs/promises";
-import { join as join12, relative as relative7, sep as sep7 } from "node:path";
-var DAILY_DISCOVERY_LIMITS = {
-  maxScannedFiles: 4e3,
-  maxNoteBytes: 256 * 1024,
-  maxNewNotes: 8,
-  maxRelatedNotes: 10,
-  maxNoteChars: 2400,
-  maxIdeas: 3
-};
-
-// src/core/daily-discovery-prompt.ts
-var DAILY_DISCOVERY_SYSTEM = [
-  "You are a research colleague looking for ideas the user has not considered.",
-  "You get notes that were added or changed recently (NEW) and older related notes (OLD) from the user's knowledge base.",
-  "Find connections between NEW and OLD: a contradiction between sources, a combination nobody has studied, a method that transfers from another field, a default assumption worth challenging, or the next implication of a conclusion.",
-  "Keep only ideas that are new (not already stated in the notes), grounded (rest on specific notes given here) and testable (an experiment, dataset or analysis could confirm or refute them).",
-  `Return ONLY a JSON array with at most ${DAILY_DISCOVERY_LIMITS.maxIdeas} objects: {"title": short title, "idea": one or two sentences, "basis": [note paths from the input], "test": how to test it, "whyOverlooked": why it may have been missed}.`,
-  "Write title, idea, test and whyOverlooked in the language of the notes. If nothing passes all three checks, return []. Never invent a note path, paper or number."
-].join("\n");
-
-// src/core/related-notes.ts
-init_config();
-
-// src/core/index.ts
-init_runtime_host();
-init_runtime_host();
-
-// src/core/semantic-model.ts
-var SECTOR_ANGLES = {
-  // SVG y grows downwards: 7 o'clock is 120° and 8 o'clock is 150°.
-  paper: 2 * Math.PI / 3,
-  software: 5 * Math.PI / 6,
-  method: Math.PI,
-  dataset: 7 * Math.PI / 6,
-  evidence: 4 * Math.PI / 3,
-  claim: 3 * Math.PI / 2,
-  concept: 11 * Math.PI / 6,
-  entity: 0,
-  idea: Math.PI / 6,
-  decision: Math.PI / 3,
-  question: Math.PI / 2,
-  wiki: 3 * Math.PI / 4,
-  other: 11 * Math.PI / 6
-};
-
-// src/core/index.ts
-init_ui_state();
-
-// src/core/publication.ts
-var publication_exports = {};
-__export(publication_exports, {
-  advisoryLine: () => advisoryLine,
-  advisoryNotice: () => advisoryNotice,
-  createKnowledgePublication: () => createKnowledgePublication,
-  createManagedKnowledgePublication: () => createManagedKnowledgePublication,
-  knowledgeFailure: () => knowledgeFailure,
-  projectKnowledgeEvent: () => projectKnowledgeEvent,
-  projectKnowledgeSnapshot: () => projectKnowledgeSnapshot,
-  registerAnswerPublication: () => registerAnswerPublication
-});
-init_config();
-init_runtime_host();
-init_runtime_host();
-import { createHash as createHash16, randomUUID as randomUUID13 } from "node:crypto";
-init_review_policy();
-init_review_policy();
-init_ui_state();
-function createPublicationApi(ui, reviewPolicy, ports, createState, signal = null) {
-  const { publicationKnowledgeFlow: publicationKnowledgeFlow2, updateKnowledgeFlow: updateKnowledgeFlow2 } = ui;
-  const { readReviewMode: readReviewMode2 } = reviewPolicy;
-  const state = createState(
-    /** @returns {any} */
-    () => ({
-      proofs: /* @__PURE__ */ new WeakSet(),
-      projectEvent: projectKnowledgeEvent2,
-      projectSnapshot: projectKnowledgeSnapshot2
-    })
-  );
-  const FIELD = "knowledgePublication";
-  const hash3 = (content) => createHash16("sha256").update(JSON.stringify(content ?? [])).digest("hex");
-  const protocolKey = (message) => hash3({
-    timestamp: message.timestamp,
-    api: message.api,
-    provider: message.provider,
-    model: message.model,
-    responseId: message.responseId,
-    calls: message.content.filter((block) => block.type === "toolCall")
-  });
-  function sanitizeError(text4) {
-    return diagnosticText(text4, 4096).trim();
-  }
-  function isUserAbortError(message) {
-    return /was aborted|request aborted/i.test(String(message?.errorMessage || ""));
-  }
-  function base(message, content) {
-    const { errorMessage: originalError, diagnostics, ...metadata } = message;
-    const errorMessage2 = message.stopReason === "error" && typeof originalError === "string" ? sanitizeError(originalError) : "";
-    return {
-      ...metadata,
-      content,
-      // Diagnostics do not control provider replay. Keep only safe error text;
-      // arbitrary details and stacks must not enter public/persisted history.
-      ...diagnostics ? { diagnostics: diagnostics.map(({ type: type2, timestamp, error }) => ({
-        type: sanitizeError(type2),
-        timestamp,
-        ...error ? { error: { message: sanitizeError(error.message) } } : {}
-      })) } : {},
-      ...errorMessage2 ? { errorMessage: errorMessage2 } : {}
-    };
-  }
-  function seal(message, content, detail) {
-    signal?.throwIfAborted();
-    const proof = { version: 1, id: randomUUID13(), ...detail, contentHash: hash3(content) };
-    state.proofs.add(proof);
-    return { ...base(message, content), [FIELD]: proof };
-  }
-  function blocked(message, code = "check-failed", turnId = null, operational = null, paths = [], extra = null) {
-    return seal(
-      message,
-      [
-        {
-          type: "text",
-          text: operational || (code === "interrupted" ? publicationNotices.interrupted : `\u3010\u77E5\u8BC6\u5E93\u68C0\u67E5\u672A\u901A\u8FC7\u3011${publicationNotices[code] || publicationNotices["check-failed"]}`)
-        }
-      ],
-      {
-        status: "blocked",
-        reason: code,
-        turnId,
-        ...paths.length ? { paths } : {},
-        ...extra && typeof extra === "object" ? extra : {},
-        scientificallyVerified: false
-      }
-    );
-  }
-  function verifiedEvidence(error) {
-    const verified = error?.verified;
-    if (!verified || typeof verified !== "object") return {};
-    const { sources, deliveries, ...rest } = verified;
-    return {
-      ...rest,
-      sources: Array.isArray(sources) ? sources : [],
-      deliveries: Array.isArray(deliveries) ? deliveries : []
-    };
-  }
-  function isSealed(message, restore = false) {
-    const proof = message?.[FIELD];
-    return proof?.version === 1 && (state.proofs.has(proof) || restore) && [
-      "released",
-      "no-hits",
-      "blocked",
-      "tool-only",
-      "unconfigured",
-      "evidence-only",
-      "setup-complete",
-      "operational"
-    ].includes(proof.status) && proof.contentHash === hash3(message.content);
-  }
-  function inplace(target, source) {
-    for (const name of Object.keys(target)) delete target[name];
-    Object.assign(target, source);
-    return target;
-  }
-  function projectUnsealed(message) {
-    if (message.stopReason === "error" && !isUserAbortError(message))
-      return seal(message, [], { status: "blocked", reason: "model-error", scientificallyVerified: false });
-    if (["aborted", "length", "pending"].includes(message.stopReason) || isUserAbortError(message))
-      return blocked(message, "interrupted");
-    return blocked(message);
-  }
-  function projectKnowledgeEvent2(event) {
-    signal?.throwIfAborted();
-    if (!ports.available()) return event;
-    if (event.type === "message_update") return null;
-    if (event.type === "message_start" && event.message?.role === "assistant")
-      return { ...event, message: base(event.message, []) };
-    if (event.type === "message_end" && event.message?.role === "assistant") {
-      if (!isSealed(event.message)) inplace(event.message, projectUnsealed(event.message));
-      return event;
-    }
-    if (event.type === "turn_end" && event.message?.role === "assistant")
-      return { ...event, message: isSealed(event.message) ? event.message : projectUnsealed(event.message) };
-    if (event.type === "agent_end")
-      return {
-        ...event,
-        messages: event.messages.map((m) => m.role === "assistant" && !isSealed(m) ? projectUnsealed(m) : m)
-      };
-    return event;
-  }
-  function projectKnowledgeSnapshot2(messages, persisted = []) {
-    signal?.throwIfAborted();
-    if (!ports.available()) return messages;
-    return messages.map((m) => {
-      if (m.role !== "assistant" || isSealed(m)) return m;
-      const saved = ports.persisted(m, persisted);
-      if (saved && (!m[FIELD] || isSealed(m, true))) return m;
-      return projectUnsealed(m);
-    });
-  }
-  function registerAnswerPublication2(pi, {
-    runtime = null,
-    getCurrent,
-    evidenceOnly = false,
-    getDeliveryFooter = null,
-    getTaskFeedback = null,
-    getTaskRuntime = null,
-    getMetacognition = null,
-    maxToolRounds = 24
-  }) {
-    const attachRuntime = (next) => {
-      if (!next || typeof next !== "object" || !next.scheduler || !next.knowledge) return false;
-      const slot = next.knowledge.publication || {};
-      slot.proofs ??= /* @__PURE__ */ new WeakSet();
-      slot.projectEvent = (event) => projectKnowledgeEvent2(event);
-      slot.projectSnapshot = (messages, persisted) => projectKnowledgeSnapshot2(messages, persisted);
-      next.knowledge.publication = slot;
-      attachReviewer(next.knowledge.reviewer);
-      return true;
-    };
-    let reviewer = null;
-    const attachReviewer = (next) => {
-      if (!next || typeof next !== "object" || typeof next.schedule !== "function") return false;
-      reviewer = next;
-      return true;
-    };
-    const sessionIdFor = (ctx) => ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || "";
-    const scheduleReview = (ctx, snapshot, trigger) => {
-      if (!reviewer || !sessionIdFor(ctx)) return;
-      try {
-        reviewer.schedule({ sessionId: sessionIdFor(ctx), snapshot, trigger });
-      } catch {
-      }
-    };
-    if (runtime) attachRuntime(runtime);
-    let turnId = null, required = true, started = false, protocolBytes = 0, toolRounds = 0, setupReceipt = null;
-    const protocol = /* @__PURE__ */ new Map(), deliveries = /* @__PURE__ */ new Map();
-    const advisoryFooter = (ctx) => {
-      const footer = typeof getDeliveryFooter === "function" ? getDeliveryFooter(ctx) : null;
-      return footer ? [{ type: "text", text: `
-
-${String(footer).slice(0, 2e3)}` }] : [];
-    };
-    const failure = (message, error) => {
-      const info = knowledgeFailure(error);
-      const metacognitive = error?.metacognition;
-      const metacognitiveReport = metacognitive && Array.isArray(metacognitive.failures) && metacognitive.failures.length ? metacognitive.failures.slice(0, 8).map((item) => `- ${String(item.detail || item.code).slice(0, 600)}`).join("\n") : "";
-      const task = getTaskRuntime?.();
-      if (task?.snapshot()) task.pause(info.code);
-      const report = task?.snapshot() ? `${task.render()}
-
-\u7814\u7A76\u8BF4\u660E\u6682\u672A\u5C55\u793A\uFF1A${info.message}` : getTaskFeedback?.()?.report(info.code, info.message, info.paths);
-      return blocked(
-        message,
-        info.code,
-        turnId,
-        [report, metacognitiveReport].filter(Boolean).join("\n\n") || null,
-        info.paths,
-        metacognitive ? { metacognition: metacognitive } : null
-      );
-    };
-    const evaluateMetacognition = async (ctx, current, text4) => {
-      if (typeof getMetacognition !== "function") return null;
-      let snapshot;
-      try {
-        snapshot = await getMetacognition(ctx, current);
-      } catch {
-        throw Object.assign(new Error("Metacognitive host snapshot unavailable"), {
-          code: "metacognitive-inconsistency",
-          metacognition: {
-            ok: false,
-            findings: [],
-            failures: [
-              {
-                code: "metacognition-invalid",
-                subject: "host-snapshot",
-                detail: "Host metacognitive snapshot could not be read"
-              }
-            ]
-          }
-        });
-      }
-      if (snapshot == null) return null;
-      const evaluation = evaluateMetacognitivePublication(text4, snapshot);
-      if (!evaluation.ok)
-        throw Object.assign(new Error("Metacognitive publication checks failed"), {
-          code: evaluation.failures.some((failure2) => failure2.code === "artifact-pending-review") ? "artifact-pending-review" : "metacognitive-inconsistency",
-          paths: evaluation.failures.map((item) => item.path).filter(Boolean).slice(0, 6),
-          metacognition: evaluation,
-          verified: { metacognition: evaluation }
-        });
-      return evaluation;
-    };
-    pi.on("context", async (event) => ({
-      messages: event.messages.map((message) => {
-        if (message.role !== "assistant") return message;
-        const original = protocol.get(protocolKey(message));
-        return original ? { ...message, content: original } : message;
-      })
-    }));
-    const handleMessageEnd = async (event, ctx) => {
-      const message = event.message;
-      if (message.role !== "assistant") return;
-      const sessionId = sessionIdFor(ctx);
-      const cwd = ctx?.cwd;
-      const signal2 = ctx?.signal;
-      const flowCtx = { sessionId };
-      const report = async (message2) => {
-        if (message2[FIELD]?.status !== "tool-only" && message2[FIELD]?.reason !== "model-error")
-          await publicationKnowledgeFlow2(flowCtx, message2[FIELD]);
-        return { message: message2 };
-      };
-      const blocks = Array.isArray(message.content) ? message.content : [];
-      const tools = blocks.filter((b) => b.type === "toolCall");
-      if (tools.length) {
-        toolRounds += 1;
-        if (toolRounds > maxToolRounds && await getTaskRuntime?.()?.advanceStage?.()) toolRounds = 1;
-        const bytes = Buffer.byteLength(JSON.stringify(blocks), "utf8");
-        if (toolRounds > maxToolRounds || protocolBytes + bytes > 4 * 1024 * 1024 || protocol.size >= 64) {
-          const limit = toolRounds > maxToolRounds ? "tool-round-limit" : protocolBytes + bytes > 4 * 1024 * 1024 ? "protocol-byte-limit" : "protocol-entry-limit";
-          const task = getTaskRuntime?.();
-          task?.pause(limit);
-          const reportText = [publicationNotices["tool-loop-stopped"], task?.snapshot() ? task.render() : null].filter(Boolean).join("\n\n");
-          const denied = blocked(message, "tool-loop-stopped", turnId, reportText);
-          denied[FIELD].limit = {
-            kind: limit,
-            toolRounds,
-            maxToolRounds,
-            protocolBytes,
-            entries: protocol.size
-          };
-          denied.stopReason = "stop";
-          return report(denied);
-        }
-        const safe = seal(message, tools, { status: "tool-only", turnId, scientificallyVerified: false });
-        protocol.set(protocolKey(message), structuredClone(blocks));
-        protocolBytes += bytes;
-        return report(safe);
-      }
-      if (message.stopReason === "error" && !isUserAbortError(message))
-        return report(
-          seal(message, [], {
-            status: "blocked",
-            reason: "model-error",
-            turnId,
-            scientificallyVerified: false
-          })
-        );
-      if (["aborted", "length", "pending"].includes(message.stopReason) || signal2?.aborted || isUserAbortError(message))
-        return report(failure(message, { code: "interrupted" }));
-      const content = blocks.filter((b) => b.type === "text");
-      if (!evidenceOnly) await getTaskRuntime?.()?.takeReport();
-      if (setupReceipt) {
-        const done = setupReceipt;
-        setupReceipt = null;
-        try {
-          await done.checkCurrent?.();
-        } catch {
-          return report(blocked(message, "binding-changed", turnId));
-        }
-        return report(
-          seal(
-            message,
-            [
-              {
-                type: "text",
-                text: [
-                  "\u77E5\u8BC6\u5E93\u521D\u59CB\u5316\u5DF2\u5B8C\u6210\u3002",
-                  `\u5F53\u524D\u77E5\u8BC6\u5E93\uFF1A${done.vault}`,
-                  `\u4F5C\u7528\u8303\u56F4\uFF1A\u6574\u4E2A Drone\uFF1B\u5F53\u524D\u9879\u76EE\uFF1A${done.project || "\u5C1A\u672A\u521B\u5EFA\u9879\u76EE\u5206\u533A"}\u3002`,
-                  "\u77E5\u8BC6\u5E93\u5DF2\u6309\u5F53\u524D\u8BBE\u7F6E\u542F\u7528\uFF1B\u534F\u4F5C\u8005\u53EA\u4F1A\u8BBF\u95EE\u672C\u6B21\u4EFB\u52A1\u5141\u8BB8\u7684\u8D44\u6599\u3002",
-                  "\u5DF2\u4FDD\u5B58\u7ED1\u5B9A\u5E76\u521B\u5EFA\u7F3A\u5931\u7684\u5BFC\u822A\u548C\u6A21\u677F\uFF0C\u672A\u642C\u8FC1\u6216\u5220\u9664\u5DF2\u6709\u7B14\u8BB0\u3002",
-                  "\u8FD9\u53EA\u662F\u521D\u59CB\u5316\u5B8C\u6210\uFF0C\u4E0D\u4EE3\u8868\u8BBA\u6587\u5DF2\u7ECF\u4E0B\u8F7D\u3001\u77E5\u8BC6\u5DF2\u7ECF\u6574\u7406\u6216\u539F\u59CB MCP \u5DF2\u8FDE\u63A5\u3002",
-                  "\u63A5\u4E0B\u6765\u53EF\u4EE5\u8981\u6C42\u68C0\u7D22\u6216\u4E0B\u8F7D\u8D44\u6599\uFF1B\u8BBA\u6587\u5E94\u4EA4\u4ED8\u4E3B\u8981\u89C2\u70B9\u4E0E\u65B9\u6CD5\uFF0C\u8F6F\u4EF6\u5E94\u4EA4\u4ED8\u7248\u672C\u5BF9\u5E94\u7684\u547D\u4EE4\u3001\u53C2\u6570\u4E0E\u793A\u4F8B\u3002"
-                ].join("\n\n")
-              }
-            ],
-            {
-              status: "setup-complete",
-              turnId,
-              vaultId: done.vaultId,
-              bindingRevision: done.bindingRevision,
-              scientificallyVerified: false
-            }
-          )
-        );
-      }
-      if (!content.some((block) => block.text?.trim()))
-        return report(failure(message, { code: "empty-answer" }));
-      if (evidenceOnly)
-        return {
-          message: seal(
-            message,
-            [{ type: "text", text: "\u3010\u5C1A\u672A\u6838\u5B9E\u7684\u8865\u5145\u6750\u6599\u3011\u4EE5\u4E0B\u5185\u5BB9\u4E0D\u662F\u4E3B\u4F1A\u8BDD\u5DF2\u786E\u8BA4\u7684\u6700\u7EC8\u7ED3\u8BBA\u3002\n\n" }, ...content],
-            { status: "evidence-only", turnId, scientificallyVerified: false }
-          )
-        };
-      if (!started) return report(blocked(message, "not-prepared", turnId));
-      if (!required)
-        return report(
-          seal(message, content, { status: "unconfigured", turnId, scientificallyVerified: false })
-        );
-      const text4 = content.map((b) => b.text).join("\n");
-      if (Buffer.byteLength(text4, "utf8") > 128 * 1024)
-        return report(blocked(message, "answer-too-large", turnId));
-      updateKnowledgeFlow2(flowCtx, { phase: "checking" });
-      let currentTurn;
-      try {
-        const c = getCurrent(ctx);
-        currentTurn = c;
-        if (!c) throw Object.assign(new Error("not prepared"), { code: "not-prepared" });
-        let publishText = text4;
-        let publishContent = content;
-        const attachMaterializedCitations = async (refresh = false) => {
-          if (typeof c.service.materializeCitations !== "function") return;
-          const paths = await c.service.materializeCitations(c.ticket, cwd, c.query, { refresh });
-          if (!paths.length || /\[\[[^\]]+\]\]/.test(publishText)) return;
-          const suffix = `
-
-\u4F9D\u636E\uFF1A${paths.map((path) => `[[${path.replace(/\.md$/i, "")}]]`).join(" ")}`;
-          publishText = `${publishText}${suffix}`;
-          publishContent = publishContent.map(
-            (block, index) => block.type === "text" && index === publishContent.length - 1 ? { ...block, text: `${block.text}${suffix}` } : block
-          );
-        };
-        const validateWithTimeout = async () => {
-          let timer;
-          try {
-            return await Promise.race([
-              c.service.validateAnswer(c.ticket, cwd, publishText, {
-                deliveries: [...deliveries.values()]
-              }),
-              new Promise((_, reject) => {
-                timer = setTimeout(
-                  () => reject(Object.assign(new Error("check timeout"), { code: "check-timeout" })),
-                  5e3
-                );
-              })
-            ]);
-          } finally {
-            if (timer) clearTimeout(timer);
-          }
-        };
-        const automatic = await readReviewMode2() === "automatic";
-        if (!automatic) await attachMaterializedCitations();
-        let proof;
-        try {
-          proof = await validateWithTimeout();
-        } catch (error) {
-          if (automatic || !["coverage-incomplete", "search-stale"].includes(error?.code)) throw error;
-          await attachMaterializedCitations(true);
-          proof = await validateWithTimeout();
-        }
-        if (signal2?.aborted) return report(failure(message, { code: "interrupted" }));
-        const metacognitive = await evaluateMetacognition(flowCtx, c, publishText);
-        const warnings = [
-          ...Array.isArray(proof.warnings) ? proof.warnings : [],
-          ...(metacognitive?.warnings || []).map((warning) => ({ code: warning.code, message: warning.detail }))
-        ];
-        let reviewerWarnings = [];
-        if (reviewer && typeof getMetacognition === "function") {
-          try {
-            const reviewSnapshot = await getMetacognition(flowCtx, c);
-            if (reviewSnapshot && typeof reviewSnapshot === "object") {
-              const snapshot = { ...reviewSnapshot, body: publishText };
-              const cached = reviewer.getCached?.(sessionId, snapshot);
-              const prior = reviewer.getFindings?.(sessionId);
-              reviewerWarnings = [
-                ...Array.isArray(cached?.findings) ? cached.findings : [],
-                ...Array.isArray(prior) ? prior : []
-              ].filter((finding, index, all) => finding.severity === "high" && !finding.handled && all.findIndex((item) => item.id === finding.id) === index);
-              scheduleReview(flowCtx, snapshot, "publication-projection");
-            }
-          } catch {
-          }
-        }
-        const published = proof.status === "no-hits" ? [
-          {
-            type: "text",
-            text: "\u3010\u77E5\u8BC6\u5E93\u6CA1\u6709\u627E\u5230\u5339\u914D\u5185\u5BB9\u3011\u672C\u8F6E\u67E5\u8BE2\u672A\u627E\u5230\u5339\u914D\u6761\u76EE\uFF1B\u4E0B\u6587\u4E0D\u662F\u57FA\u4E8E\u672C\u5E93\u8BC1\u636E\u7684\u7ED3\u8BBA\uFF0C\u4E5F\u4E0D\u8868\u793A\u5168\u5E93\u4E0D\u5B58\u5728\u76F8\u5173\u77E5\u8BC6\u3002\n\n"
-          },
-          ...publishContent
-        ] : publishContent;
-        const footer = typeof getDeliveryFooter === "function" ? getDeliveryFooter(flowCtx) : null;
-        const visible = footer ? [...published, { type: "text", text: `
-
-${String(footer).slice(0, 2e3)}` }] : published;
-        return report(
-          seal(message, visible, {
-            ...proof,
-            ...warnings.length ? { warnings } : {},
-            ...metacognitive ? { metacognition: metacognitive } : {},
-            ...reviewerWarnings.length ? { reviewerWarnings } : {},
-            status: proof.status === "ready" ? "released" : "no-hits",
-            turnId
-          })
-        );
-      } catch (error) {
-        const info = knowledgeFailure(error);
-        if (await readReviewMode2() === "automatic" && advisoryCodes.has(info.code) && !signal2?.aborted) {
-          if (info.code !== "not-prepared")
-            try {
-              const current = currentTurn;
-              if (!current) throw Object.assign(new Error("not prepared"), { code: "not-prepared" });
-              await current.service.check(current.ticket, cwd);
-            } catch (authorityError) {
-              return report(failure(message, authorityError));
-            }
-          const advisoryContent = info.code === "citation-required" ? [] : [{ type: "text", text: `
-
-\u3010\u6709\u63D0\u9192\u3011${advisoryLine(info.code, error)}` }];
-          return report(
-            seal(
-              message,
-              [
-                ...content,
-                ...advisoryContent,
-                ...advisoryFooter(flowCtx)
-              ],
-              {
-                status: "released",
-                reviewMode: "automatic",
-                ...verifiedEvidence(error),
-                warnings: [info],
-                turnId,
-                scientificallyVerified: false
-              }
-            )
-          );
-        }
-        return report(failure(message, error));
-      }
-    };
-    ports.registerFinalizer(pi, handleMessageEnd);
-    return {
-      attachRuntime,
-      attachReviewer,
-      async recordDelivery(ctx, path) {
-        const sessionId = sessionIdFor(ctx);
-        const cwd = ctx?.cwd;
-        const flowCtx = { sessionId };
-        const c = getCurrent(ctx);
-        if (!c) return;
-        const receipt = await c.service.deliveryReceipt(c.ticket, cwd, path);
-        deliveries.set(receipt.path, receipt);
-        scheduleReview(
-          flowCtx,
-          {
-            enabled: true,
-            deliverables: [{ id: receipt.path, path: receipt.path, sha256: receipt.hash }]
-          },
-          "deliverable-write"
-        );
-        while (deliveries.size > 12) deliveries.delete(deliveries.keys().next().value);
-      },
-      async preflight(ctx, text4) {
-        const sessionId = sessionIdFor(ctx);
-        const cwd = ctx?.cwd;
-        const flowCtx = { sessionId };
-        let timer;
-        try {
-          if (typeof text4 !== "string" || Buffer.byteLength(text4, "utf8") > 128 * 1024)
-            throw { code: "answer-too-large" };
-          const c = getCurrent(ctx), proof = await Promise.race([
-            c.service.validateAnswer(c.ticket, cwd, text4, { deliveries: [...deliveries.values()] }),
-            new Promise((_, reject) => {
-              timer = setTimeout(() => reject({ code: "check-timeout" }), 5e3);
-            })
-          ]);
-          const metacognition = await evaluateMetacognition(flowCtx, c, text4);
-          if (reviewer && typeof getMetacognition === "function") {
-            try {
-              const snapshot = await getMetacognition(flowCtx, c);
-              if (snapshot && typeof snapshot === "object")
-                scheduleReview(flowCtx, { ...snapshot, body: text4 }, "publication-projection");
-            } catch {
-            }
-          }
-          return { ok: true, proof, ...metacognition ? { metacognition } : {} };
-        } catch (error) {
-          const info = knowledgeFailure(error);
-          if (await readReviewMode2() === "automatic" && advisoryCodes.has(info.code)) {
-            if (info.code !== "not-prepared")
-              try {
-                const current = getCurrent(ctx);
-                await current.service.check(current.ticket, cwd);
-              } catch {
-                return {
-                  ok: false,
-                  code: "binding-changed",
-                  message: "Refresh the current knowledge binding before continuing."
-                };
-              }
-            return {
-              ok: true,
-              status: "warning",
-              ...verifiedEvidence(error),
-              warnings: [info],
-              scientificallyVerified: false,
-              next: "Deliver the answer with its limitations. Do not repeat read/search/check solely to clear this advisory."
-            };
-          }
-          return {
-            ok: false,
-            ...info,
-            next: "For operational progress, call task_status and deliver its host receipt without unrelated citations. For scientific claims, read the listed evidence or repair the reported stage, then check again. Never retry a write merely because output was lost.",
-            task: getTaskFeedback?.()?.facts()
-          };
-        } finally {
-          if (timer) clearTimeout(timer);
-        }
-      },
-      recordSetup(result2, checkCurrent) {
-        if (result2?.state === "ready" && result2.scope === "application")
-          setupReceipt = {
-            vault: result2.vault,
-            project: result2.project,
-            profile: result2.profile,
-            depositMode: result2.depositMode,
-            subagentMcpPolicy: result2.subagentMcpPolicy,
-            vaultId: result2.vaultId,
-            bindingRevision: result2.bindingRevision,
-            checkCurrent
-          };
-      },
-      begin(isRequired = true, newTurn = true) {
-        started = true;
-        required = isRequired;
-        if (newTurn) {
-          turnId = randomUUID13();
-          protocol.clear();
-          deliveries.clear();
-          protocolBytes = 0;
-          toolRounds = 0;
-          setupReceipt = null;
-        }
-      },
-      invalidate() {
-        started = false;
-        required = true;
-        turnId = null;
-        protocol.clear();
-        deliveries.clear();
-        protocolBytes = 0;
-        toolRounds = 0;
-        setupReceipt = null;
-      },
-      async guidance() {
-        return await readReviewMode2() === "automatic" ? "Answer the user's question directly. For a planning request, first provide a concise provisional framework with explicit assumptions, then deepen only the evidence needed. Cite scientific claims inline using exact [[path]] citations from research_read_knowledge results read this turn; a saved report link is a deliverable, not an evidence citation. Reuse successful read receipts instead of reading the same source through both generic read and research_read_knowledge. Do not invent citations or cite a source merely to clear a warning. Label suggested sample sizes as design heuristics, not universal statistical thresholds. Acknowledge uncertainty and save useful knowledge. Evidence quality reminders are nonblocking: do not run repeated read/search/check just to clear them. Never claim scientific verification. Host permission, binding, abort and spending limits still apply; human Wiki edits require confirmation." : "For execution progress in ANY task (analysis, code, environment, experiments, writing), use task_status; its host-generated report needs no research citations. Never add irrelevant sources to an operational report. Scientific host-checked answers need a current-turn search, reads of cited [[path]] sources, then research_check_answer. Public text must answer the user's question; do not lecture about Vault policy or evidence-gate stages. Use short set_status about the task, not product design. Show Me/run links are deliverables, not evidence.";
-      }
-    };
-  }
-  return { projectKnowledgeEvent: projectKnowledgeEvent2, projectKnowledgeSnapshot: projectKnowledgeSnapshot2, registerAnswerPublication: registerAnswerPublication2 };
-}
-function localPublicationPorts(config) {
-  return {
-    available: () => Boolean(config.knowledgeDirectory()),
-    registerFinalizer: (pi, handler) => pi.on("message_end", handler),
-    persisted: (message, saved) => saved.includes(message)
-  };
-}
-function createManagedKnowledgePublication(ui, reviewPolicy, signal) {
-  let finalizer;
-  const publication = createPublicationApi(ui, reviewPolicy, {
-    available: () => true,
-    registerFinalizer(_pi, handler) {
-      if (finalizer) throw new Error("Knowledge publication is already registered");
-      finalizer = handler;
-    },
-    // Only the host's private SDK-origin courier can preserve this identity across IPC.
-    // History display never enrolls a recovered proof in the live WeakSet.
-    persisted: (message, saved) => saved.includes(message)
-  }, (create) => create(), signal);
-  return {
-    ...publication,
-    projection: {
-      async finalize(event, context) {
-        if (!finalizer) throw new Error("Knowledge publication has not been registered");
-        if (context.scope.kind !== "session") throw new Error("Knowledge publication requires its live session");
-        context.signal.throwIfAborted();
-        const result2 = await finalizer(event, {
-          cwd: context.scope.workspaceDirectory,
-          sessionManager: { getSessionId: () => context.scope.sessionId },
-          signal: context.signal
-        });
-        context.signal.throwIfAborted();
-        return result2?.message ? { ...event, message: result2.message } : event;
-      },
-      event: (event, signal2) => {
-        signal2?.throwIfAborted();
-        return publication.projectKnowledgeEvent(event);
-      },
-      snapshot: (messages, persisted, signal2) => {
-        signal2?.throwIfAborted();
-        return publication.projectKnowledgeSnapshot(messages, persisted);
-      }
-    }
-  };
-}
-function createKnowledgePublication(ui, reviewPolicy, config, signal) {
-  return createPublicationApi(ui, reviewPolicy, localPublicationPorts(config), (create) => create(), signal);
-}
-var compatibility3 = createPublicationApi(ui_state_exports, review_policy_exports, localPublicationPorts(config_exports), (create) => runtimeSlot("knowledge", "publication", create));
-var { projectKnowledgeEvent, projectKnowledgeSnapshot, registerAnswerPublication } = compatibility3;
-
-// src/core/reuse.ts
-import { isAbsolute as isAbsolute6, resolve as resolve8 } from "node:path";
-init_config();
-
-// src/core/index.ts
-init_wiki_review();
-init_specialist_host();
-
 // src/core/specialists.ts
-var specialists_exports = {};
-__export(specialists_exports, {
-  createKnowledgeSpecialistTools: () => createKnowledgeSpecialistTools,
-  createKnowledgeSpecialists: () => createKnowledgeSpecialists,
-  knowledgeReadStart: () => knowledgeReadStart,
-  shouldOrientKnowledge: () => shouldOrientKnowledge
-});
 init_runtime_host();
-init_config();
-init_files();
-import { randomUUID as randomUUID14 } from "node:crypto";
-import { lstat as lstat7, readFile as readFile9 } from "node:fs/promises";
 init_specialist_host();
 init_ui_state();
 function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
@@ -8200,7 +5601,9 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
     if (!text4 || text4.startsWith("/") || /初始化|取消任务|停止任务/.test(text4)) return false;
     if (/只读|read[- ]only/i.test(text4) && /复用|既有|已有|reuse|existing/i.test(text4) && !/调用.{0,8}子代理|委派|delegate|specialist/i.test(text4))
       return false;
-    return !!deliveryContract2(text4) || /比较|对比|分析|综述|compare|analy[sz]|review/i.test(text4) && /论文|文献|研究|证据|方法|软件|papers?|evidence|software/i.test(text4) || /知识库|已有知识|主题.{0,8}(?:知识|进展)|根据.{0,10}(?:文献|笔记)|(?:介绍|解读|讲解).{0,12}(?:论文|文献)|下载.{0,12}(?:软件说明书|说明书|软件文档)|show\s*-?\s*me|\bwiki\b/i.test(text4);
+    return !!deliveryContract2(text4) || /比较|对比|分析|综述|compare|analy[sz]|review/i.test(text4) && /论文|文献|研究|证据|方法|软件|papers?|evidence|software/i.test(text4) || /知识库|已有知识|主题.{0,8}(?:知识|进展)|根据.{0,10}(?:文献|笔记)|(?:介绍|解读|讲解).{0,12}(?:论文|文献)|下载.{0,12}(?:软件说明书|说明书|软件文档)|show\s*-?\s*me|\bwiki\b/i.test(
+      text4
+    );
   }
   function createKnowledgeSpecialists2(pi, { getCurrent, readOnly = false }) {
     let epoch = 0, goal = "", oriented = false, handoffs = [], used = /* @__PURE__ */ new Set(), controllers = /* @__PURE__ */ new Set(), decisions = [], budget = createSpecialistBudget();
@@ -8219,10 +5622,10 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
       const commands = pi.getCommands?.() || [];
       const entry = commands.find((item) => item.source === "skill" && item.name === "skill:show-me") || commands.find((item) => item.source === "skill" && item.name === "skill:research-show-me");
       if (!entry?.sourceInfo?.path) return null;
-      const path = entry.sourceInfo.path, info = await lstat7(path);
+      const path = entry.sourceInfo.path, info = await lstat4(path);
       if (!info.isFile() || info.size > 18e3)
         throw new Error("Loaded show-me skill exceeds the specialist context budget");
-      return { text: await readFile9(path, "utf8"), name: entry.name.slice(6) };
+      return { text: await readFile5(path, "utf8"), name: entry.name.slice(6) };
     }
     async function run(ctx, role, {
       task = goal,
@@ -8289,7 +5692,7 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
       if (!host) return skip("host-unavailable");
       if (decision.decision !== "run") {
         remember({ decision: decision.decision, reasonCode: decision.reasonCode });
-        const id3 = randomUUID14();
+        const id3 = randomUUID8();
         noteKnowledgeSpecialist2(ctx, {
           id: id3,
           role,
@@ -8349,7 +5752,7 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
       if (parentSignal?.aborted) abort();
       else parentSignal?.addEventListener("abort", abort, { once: true });
       const deadline = setTimeout(abort, settings2.timeoutMs);
-      const [name, label] = profiles[role], id2 = randomUUID14();
+      const [name, label] = profiles[role], id2 = randomUUID8();
       let progress = {
         id: id2,
         role,
@@ -8681,117 +6084,91 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
   }
   return { knowledgeReadStart: knowledgeReadStart2, shouldOrientKnowledge: shouldOrientKnowledge2, createKnowledgeSpecialists: createKnowledgeSpecialists2 };
 }
-var compatibility4 = createKnowledgeSpecialistTools(compatibilityKnowledgeRuntimeHost, config_exports, specialist_host_exports, ui_state_exports);
-var { knowledgeReadStart, shouldOrientKnowledge, createKnowledgeSpecialists } = compatibility4;
-
-// src/core/specialist-delivery.ts
-var specialist_delivery_exports = {};
-__export(specialist_delivery_exports, {
-  createSpecialistDelivery: () => createSpecialistDelivery,
-  saveSpecialistExplainer: () => saveSpecialistExplainer,
-  validateSpecialistHtml: () => validateSpecialistHtml
-});
-init_runtime_host();
-init_config();
-import { randomUUID as randomUUID15 } from "node:crypto";
-import { lstat as lstat8, mkdir as mkdir9, realpath as realpath7, writeFile as writeFile9 } from "node:fs/promises";
-import { isAbsolute as isAbsolute7, join as join13, relative as relative8, resolve as resolve9, sep as sep8 } from "node:path";
-var contained = (root, path) => {
-  const rel = relative8(root, path);
-  return !isAbsolute7(rel) && rel !== ".." && !rel.startsWith(`..${sep8}`);
-};
-function validateSpecialistHtml(html) {
-  if (typeof html !== "string" || html.length > 64e3 || !/<html\b/i.test(html) || !/<body\b/i.test(html))
-    throw new Error("Explainer must be one bounded HTML document");
-  if (/<(?:script|iframe|frame|object|embed|base|form|link)\b|\bon[a-z]+\s*=|<meta\b[^>]*http-equiv\s*=|javascript\s*:|@import|url\s*\(/i.test(
-    html
-  ))
-    throw new Error("Explainer must be static and self-contained; active content was refused");
-  if (/\bsrc\s*=\s*["']?(?!data:image\/)[^\s>]/i.test(html))
-    throw new Error("Explainer external resources are not allowed");
-  return html;
-}
-function createSpecialistDelivery(runtime, bindings) {
-  async function saveSpecialistExplainer2(c, ctx, { runDir, topicId, answer }) {
-    if (answer.status !== "completed") return answer;
-    const html = validateSpecialistHtml(answer.data.html), config = await runtime.loadWorkspaceConfig(ctx.cwd);
-    const root = await realpath7(config.resultsRoot), run = await realpath7(resolve9(ctx.cwd, runDir || ""));
-    if (!contained(root, run) || relative8(root, run).split(sep8).length !== 2 || !run.split(sep8).at(-1).startsWith("run-") || !(await lstat8(join13(run, "metadata.json"))).isFile())
-      throw new Error("Explainer destination must be an existing research run");
-    return bindings.withKnowledgeBinding(c.binding, async () => {
-      const artifactPath = join13(run, `show-me-${randomUUID15()}.html`);
-      const sources = await c.service.evidenceReceipts(c.ticket, ctx.cwd, answer.data.source_paths);
-      await mkdir9(run, { recursive: true });
-      await writeFile9(artifactPath, html, { flag: "wx", mode: 384 });
-      const archived = await runtime.publishExplainer({
-        cwd: ctx.cwd,
-        project: c.project,
-        topicId,
-        title: answer.data.title,
-        artifactPath,
-        summary: answer.data.summary,
-        sources: sources.sources
-      });
-      return {
-        ...archived,
-        result_file: artifactPath,
-        producer: "knowledge-explainer",
-        skill: answer.skillName || "show-me"
-      };
-    });
-  }
-  return { saveSpecialistExplainer: saveSpecialistExplainer2 };
-}
-var { saveSpecialistExplainer } = createSpecialistDelivery(
+var compatibility = createKnowledgeSpecialistTools(
   compatibilityKnowledgeRuntimeHost,
-  { withKnowledgeBinding }
+  config_exports,
+  specialist_host_exports,
+  ui_state_exports
 );
+var { knowledgeReadStart, shouldOrientKnowledge, createKnowledgeSpecialists } = compatibility;
 
-// src/core/index.ts
-init_wiki_model_review();
-
-// src/core/ui-service.ts
-init_runtime_host();
-init_runtime_host();
-init_runtime_host();
-init_runtime_host();
-init_runtime_host();
-init_config();
-import { createHash as createHash17, randomUUID as randomUUID16 } from "node:crypto";
-import { lstat as lstat9, mkdir as mkdir10, readFile as readFile10, realpath as realpath8, stat as stat3, writeFile as writeFile10 } from "node:fs/promises";
-import { dirname as dirname7, isAbsolute as isAbsolute8, join as join14, relative as relative9, resolve as resolve10 } from "node:path";
-import { pathToFileURL as pathToFileURL3 } from "node:url";
-init_files();
-init_review_policy();
-init_specialist_host();
+// src/desktop/runtime.ts
+init_topic_memory();
 init_ui_state();
+init_wiki_model_review();
 init_wiki_review();
 
-// src/core/maintenance-topic.ts
-init_config();
-init_files();
-init_layout();
-import { readdir as readdir3 } from "node:fs/promises";
-init_ui_state();
+// src/extension/knowledge-extension.ts
+import { Worker } from "node:worker_threads";
 
-// src/core/ui-service.ts
-var runtimeState = runtimeSlot("knowledge", "uiService", () => ({
-  previews: /* @__PURE__ */ new Map(),
-  maintenance: /* @__PURE__ */ new Set(),
-  semanticJobs: /* @__PURE__ */ new Map(),
-  dispose() {
-    this.previews.clear();
-    this.maintenance.clear();
-    this.semanticJobs.clear();
+// src/core/index.ts
+init_claim_conflicts();
+init_config();
+
+// src/core/daily-discovery.ts
+import { readdir as readdir2, readFile as readFile8, stat } from "node:fs/promises";
+import { join as join12, relative as relative6, sep as sep6 } from "node:path";
+var DAILY_DISCOVERY_LIMITS = {
+  maxScannedFiles: 4e3,
+  maxNoteBytes: 256 * 1024,
+  maxNewNotes: 8,
+  maxRelatedNotes: 10,
+  maxNoteChars: 2400,
+  maxIdeas: 3
+};
+
+// src/core/daily-discovery-prompt.ts
+var DAILY_DISCOVERY_SYSTEM = [
+  "You are a research colleague looking for ideas the user has not considered.",
+  "You get notes that were added or changed recently (NEW) and older related notes (OLD) from the user's knowledge base.",
+  "Find connections between NEW and OLD: a contradiction between sources, a combination nobody has studied, a method that transfers from another field, a default assumption worth challenging, or the next implication of a conclusion.",
+  "Keep only ideas that are new (not already stated in the notes), grounded (rest on specific notes given here) and testable (an experiment, dataset or analysis could confirm or refute them).",
+  `Return ONLY a JSON array with at most ${DAILY_DISCOVERY_LIMITS.maxIdeas} objects: {"title": short title, "idea": one or two sentences, "basis": [note paths from the input], "test": how to test it, "whyOverlooked": why it may have been missed}.`,
+  "Write title, idea, test and whyOverlooked in the language of the notes. If nothing passes all three checks, return []. Never invent a note path, paper or number."
+].join("\n");
+
+// src/core/deliverable-review.ts
+import { createHash as createHash13 } from "node:crypto";
+
+// src/core/delivery-claims.ts
+import { createHash as createHash14 } from "node:crypto";
+var digest5 = (text4) => createHash14("sha256").update(text4).digest("hex");
+function summaryDeliveryClaims(details, markdown) {
+  const receipt = details.delivery_receipt;
+  if (!receipt || receipt.version !== 1 || receipt.semanticAssessment?.status !== "model-assessed" || receipt.bodySha256 !== digest5(`${markdown.trim()}
+`))
+    throw new Error("Topic memory requires a current, reviewed summary delivery receipt");
+  if (!Array.isArray(details.claims) || receipt.memoryClaimsSha256 !== digest5(JSON.stringify(details.claims)))
+    throw new Error("Topic memory claims differ from the reviewed delivery packet");
+  const reviewed = receipt.semanticAssessment.memoryClaims;
+  if (!Array.isArray(reviewed) || reviewed.length !== details.claims.length)
+    throw new Error("Topic memory requires a separate assessment for every delivered memory claim");
+  const seen = /* @__PURE__ */ new Set();
+  for (const claim of details.claims) {
+    if (claim.deliveryBodySha256 !== receipt.bodySha256 || !receipt.sources.some(
+      (source) => source.path === claim.sourcePath && source.sha256 === claim.sourceHash
+    ))
+      throw new Error("Topic memory claim does not reference the delivered evidence version");
+    const assessment = reviewed.find((item) => item.bindingId === claim.bindingId);
+    if (!assessment || seen.has(claim.bindingId) || assessment.assessment !== "supported" || assessment.memoryClaimSha256 !== digest5(JSON.stringify(claim)))
+      throw new Error("Topic memory claim lacks its exact supported scope assessment");
+    seen.add(claim.bindingId);
+    if (!Array.isArray(assessment.evidence) || !assessment.evidence.some(
+      (ref) => ref.path === claim.sourcePath && ref.sha256 === claim.sourceHash && receipt.sources.some(
+        (source) => source.path === ref.path && source.sha256 === ref.sha256 && source.readReceiptIds.includes(ref.readReceiptId)
+      )
+    ))
+      throw new Error("Topic memory scope assessment lacks a delivered read reference");
   }
-}));
+  return details.claims;
+}
 
 // src/core/experience-store.ts
 init_config();
 init_runtime_host();
-import { createHash as createHash18, randomUUID as randomUUID17 } from "node:crypto";
-import { lstat as lstat10, mkdir as mkdir11, readFile as readFile11, rename as rename9, unlink as unlink7, writeFile as writeFile11 } from "node:fs/promises";
-import { isAbsolute as isAbsolute9, join as join15, relative as relative10, resolve as resolve11, sep as sep9 } from "node:path";
+import { createHash as createHash15, randomUUID as randomUUID14 } from "node:crypto";
+import { lstat as lstat8, mkdir as mkdir9, readFile as readFile9, rename as rename8, unlink as unlink7, writeFile as writeFile9 } from "node:fs/promises";
+import { isAbsolute as isAbsolute6, join as join13, relative as relative7, resolve as resolve6, sep as sep7 } from "node:path";
 var EXPERIENCE_VERSION = 1;
 var EXPERIENCE_LIMITS = Object.freeze({
   maxRecords: 128,
@@ -8816,11 +6193,14 @@ var EXPERIENCE_LIMITS = Object.freeze({
   maxSchedulerJobIdChars: 180,
   maxQueryChars: 200
 });
-var HASH = (value) => createHash18("sha256").update(value).digest("hex");
+var HASH = (value) => createHash15("sha256").update(value).digest("hex");
 var now = () => (/* @__PURE__ */ new Date()).toISOString();
 function text2(value, limit) {
   if (typeof value !== "string" && typeof value !== "number") return "";
-  return String(value).normalize("NFKC").replace(/[\u0000-\u001f\u007f<>]/g, " ").replace(/(?:bearer\s+)[^\s,;"']+/gi, "Bearer [redacted]").replace(/(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|authorization|cookie)["']?\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, "$1[redacted]").replace(/https?:\/\/[^\s<>"]+/gi, (raw) => {
+  return String(value).normalize("NFKC").replace(/[\u0000-\u001f\u007f<>]/g, " ").replace(/(?:bearer\s+)[^\s,;"']+/gi, "Bearer [redacted]").replace(
+    /(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|authorization|cookie)["']?\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
+    "$1[redacted]"
+  ).replace(/https?:\/\/[^\s<>"]+/gi, (raw) => {
     try {
       const url = new URL(raw);
       url.username = "";
@@ -8854,7 +6234,7 @@ function vaultKey(value) {
   if (!/^[a-f0-9]{24}$/.test(vault)) throw new Error("Invalid experience binding");
   return vault;
 }
-function hash2(value) {
+function hash(value) {
   const result2 = text2(value, 128).toLowerCase();
   return /^[a-f0-9]{64}$/.test(result2) ? result2 : null;
 }
@@ -8914,7 +6294,11 @@ function normalizeWorkflowSpecDiff(value) {
     const before = normalizeDiffValue(item.before);
     const after = normalizeDiffValue(item.after ?? item.value);
     if (before === void 0 && after === void 0) continue;
-    result2.push({ path, ...before === void 0 ? {} : { before }, ...after === void 0 ? {} : { after } });
+    result2.push({
+      path,
+      ...before === void 0 ? {} : { before },
+      ...after === void 0 ? {} : { after }
+    });
   }
   return result2;
 }
@@ -8923,7 +6307,8 @@ function normalizeResourceUse(value) {
   const result2 = {};
   for (const [key, raw] of Object.entries(value).slice(0, 32)) {
     const name = text2(key, 64);
-    if (!/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(name) || /(token|secret|password|credential|command|output|path|url)/i.test(name)) continue;
+    if (!/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(name) || /(token|secret|password|credential|command|output|path|url)/i.test(name))
+      continue;
     const number = finiteNonNegative(raw);
     if (number !== null) result2[name] = number;
     if (Object.keys(result2).length >= 16) break;
@@ -8950,14 +6335,16 @@ function normalizeQcMetrics(value) {
     const distribution = {};
     for (const [rawKey, rawValue] of Object.entries(distributionInput).slice(0, 16)) {
       const key = text2(rawKey, 32);
-      if (!/^[A-Za-z][A-Za-z0-9_.-]{0,31}$/.test(key) || ["count", "name", "unit", "value", "values"].includes(key)) continue;
+      if (!/^[A-Za-z][A-Za-z0-9_.-]{0,31}$/.test(key) || ["count", "name", "unit", "value", "values"].includes(key))
+        continue;
       const number = finiteNumber(rawValue, 1e12);
       if (number !== null) distribution[key] = number;
     }
     const distributionCount = finiteNonNegative(distributionInput.count, 1e9);
     if (distributionCount !== null) distribution.count = distributionCount;
     const values = Array.isArray(item.values) ? item.values.map((entry) => finiteNumber(entry, 1e12)).filter((entry) => entry !== null).slice(0, EXPERIENCE_LIMITS.maxQcValues) : [];
-    if (valueNumber === null && count === null && Object.keys(distribution).length === 0 && values.length === 0) continue;
+    if (valueNumber === null && count === null && Object.keys(distribution).length === 0 && values.length === 0)
+      continue;
     result2.push({
       name,
       ...unit ? { unit } : {},
@@ -8972,11 +6359,11 @@ function normalizeQcMetrics(value) {
 function normalizeArtifact(value) {
   if (!value || typeof value !== "object") return null;
   const item = value;
-  const sha256 = hash2(item.sha256);
+  const sha256 = hash(item.sha256);
   if (!sha256) return null;
   const bytes = typeof item.bytes === "number" && Number.isSafeInteger(item.bytes) && item.bytes >= 0 ? item.bytes : void 0;
   const pathValue = text2(item.path, 240).replaceAll("\\", "/");
-  const safePath = pathValue && !isAbsolute9(pathValue) && !pathValue.split("/").includes("..") && !/(?:^|\/)(?:\.env(?:\.[^/]*)?|auth\.json|credentials(?:\.json)?|\.ssh|\.git)(?:\/|$)/i.test(pathValue) ? pathValue : "";
+  const safePath = pathValue && !isAbsolute6(pathValue) && !pathValue.split("/").includes("..") && !/(?:^|\/)(?:\.env(?:\.[^/]*)?|auth\.json|credentials(?:\.json)?|\.ssh|\.git)(?:\/|$)/i.test(pathValue) ? pathValue : "";
   return {
     ...safePath ? { path: safePath } : {},
     sha256,
@@ -9005,7 +6392,7 @@ function normalizeSchedulerJobId(value) {
 function normalizeProvenance(input) {
   if (!input || typeof input !== "object") throw new Error("Experience provenance is required");
   const item = input;
-  const manifestSha256 = hash2(item.manifestSha256 ?? item.manifestHash);
+  const manifestSha256 = hash(item.manifestSha256 ?? item.manifestHash);
   const artifactHashes = Array.isArray(item.artifactHashes) ? item.artifactHashes.map(normalizeArtifact).filter((value) => Boolean(value)).slice(0, EXPERIENCE_LIMITS.maxArtifacts) : [];
   const runId = opaqueRef(item.runId);
   const observationId = opaqueRef(item.observationId);
@@ -9022,10 +6409,19 @@ function normalizeProvenance(input) {
   return result2;
 }
 function blank2(vaultId, project, hostId) {
-  return { version: EXPERIENCE_VERSION, vaultId, project, hostId, revision: 0, updatedAt: now(), records: [] };
+  return {
+    version: EXPERIENCE_VERSION,
+    vaultId,
+    project,
+    hostId,
+    revision: 0,
+    updatedAt: now(),
+    records: []
+  };
 }
 function validateDocument2(value, vaultId, project, hostId) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Corrupt experience document");
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Corrupt experience document");
   const item = value;
   if (item.version !== EXPERIENCE_VERSION || item.vaultId !== vaultId || item.project !== project || item.hostId !== hostId)
     throw new Error("Experience binding mismatch");
@@ -9079,7 +6475,7 @@ function normalizeRecord(value, vaultId, project, hostId) {
     qcMetrics: normalizeQcMetrics(item.qcMetrics ?? item.qc ?? item.qcMetricDistribution),
     modelSummary: text2(item.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars) || null,
     modelGenerated: item.modelGenerated === true && Boolean(text2(item.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars)),
-    contractHash: hash2(item.contractHash),
+    contractHash: hash(item.contractHash),
     workflow: normalizeWorkflow(item.workflow),
     workflowRevision: normalizeWorkflowRevision(item.workflowRevision ?? item.workflowRevisionId),
     scheduler: normalizeScheduler(item.scheduler),
@@ -9098,32 +6494,33 @@ function normalizeRecord(value, vaultId, project, hostId) {
   return result2;
 }
 function pathFor2(directory, vaultId, project, hostId) {
-  if (!isAbsolute9(directory)) throw new Error("Experience directory must be absolute");
-  return join15(resolve11(directory), vaultId, "experience", project, `${hostId}.json`);
+  if (!isAbsolute6(directory)) throw new Error("Experience directory must be absolute");
+  return join13(resolve6(directory), vaultId, "experience", project, `${hostId}.json`);
 }
 async function ensureSafePath(directory, path) {
-  const root = resolve11(directory);
-  const relativePath = relative10(root, resolve11(path));
-  if (isAbsolute9(relativePath) || relativePath === ".." || relativePath.startsWith(`..${sep9}`)) throw new Error("Experience path escapes knowledge directory");
+  const root = resolve6(directory);
+  const relativePath = relative7(root, resolve6(path));
+  if (isAbsolute6(relativePath) || relativePath === ".." || relativePath.startsWith(`..${sep7}`))
+    throw new Error("Experience path escapes knowledge directory");
   let current = root;
-  for (const segment of relativePath.split(sep9).slice(0, -1)) {
-    current = join15(current, segment);
+  for (const segment of relativePath.split(sep7).slice(0, -1)) {
+    current = join13(current, segment);
     try {
-      const stat4 = await lstat10(current);
+      const stat4 = await lstat8(current);
       if (stat4.isSymbolicLink()) throw new Error("Experience path cannot traverse symlinks");
       if (!stat4.isDirectory()) throw new Error("Experience path parent must be a directory");
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
-      await mkdir11(current, { mode: 448 });
+      await mkdir9(current, { mode: 448 });
     }
   }
 }
 async function readDocument2(path, vaultId, project, hostId) {
   try {
-    const stat4 = await lstat10(path);
+    const stat4 = await lstat8(path);
     if (stat4.isSymbolicLink() || !stat4.isFile()) throw new Error("Experience file must be a regular file");
     if (stat4.size > EXPERIENCE_LIMITS.maxFileBytes) throw new Error("Experience file exceeds size limit");
-    return validateDocument2(JSON.parse(await readFile11(path, "utf8")), vaultId, project, hostId);
+    return validateDocument2(JSON.parse(await readFile9(path, "utf8")), vaultId, project, hostId);
   } catch (error) {
     if (error.code === "ENOENT") return blank2(vaultId, project, hostId);
     if (error instanceof SyntaxError) throw new Error("Corrupt experience document");
@@ -9131,11 +6528,11 @@ async function readDocument2(path, vaultId, project, hostId) {
   }
 }
 async function atomicWrite2(path, value) {
-  const temporary = `${path}.${randomUUID17()}.tmp`;
+  const temporary = `${path}.${randomUUID14()}.tmp`;
   try {
-    await writeFile11(temporary, `${JSON.stringify(value, null, 2)}
+    await writeFile9(temporary, `${JSON.stringify(value, null, 2)}
 `, { flag: "wx", mode: 384 });
-    await rename9(temporary, path);
+    await rename8(temporary, path);
   } finally {
     await unlink7(temporary).catch((error) => {
       if (error.code !== "ENOENT") throw error;
@@ -9143,7 +6540,9 @@ async function atomicWrite2(path, value) {
   }
 }
 function tokenSet(value) {
-  return new Set(value.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((token) => token.length > 1));
+  return new Set(
+    value.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((token) => token.length > 1)
+  );
 }
 function scoreRecord(record3, query) {
   if (!query) return 0;
@@ -9183,10 +6582,20 @@ function createExperienceStore(options) {
   const mutate = async (expectedRevision, updater) => runRuntimeExclusive("experience-store", path, async () => {
     await ensureSafePath(directory, path);
     const current = await readDocument2(path, vaultId, project, hostId);
-    if (expectedRevision !== void 0 && current.revision !== expectedRevision) throw new Error("Experience revision changed");
+    if (expectedRevision !== void 0 && current.revision !== expectedRevision)
+      throw new Error("Experience revision changed");
     const next = updater(structuredClone(current));
     if (next.noop) return { document: current, result: next.result };
-    const candidate = { ...next.document, version: EXPERIENCE_VERSION, vaultId, project, hostId, revision: current.revision + 1, updatedAt: now(), records: next.document.records.slice(-EXPERIENCE_LIMITS.maxRecords) };
+    const candidate = {
+      ...next.document,
+      version: EXPERIENCE_VERSION,
+      vaultId,
+      project,
+      hostId,
+      revision: current.revision + 1,
+      updatedAt: now(),
+      records: next.document.records.slice(-EXPERIENCE_LIMITS.maxRecords)
+    };
     const document = validateDocument2(candidate, vaultId, project, hostId);
     await atomicWrite2(path, document);
     return { document, result: next.result };
@@ -9205,25 +6614,35 @@ function createExperienceStore(options) {
         "featureKey",
         240
       );
-      if (!observation || typeof observation !== "object") throw new Error("Terminal host observation is required");
+      if (!observation || typeof observation !== "object")
+        throw new Error("Terminal host observation is required");
       const observationId = id(observation.id, "observation id");
       const outcome = observation.outcome;
-      if (!["success", "failure", "blocked", "unknown"].includes(outcome)) throw new Error("Invalid experience outcome");
+      if (!["success", "failure", "blocked", "unknown"].includes(outcome))
+        throw new Error("Invalid experience outcome");
       const provenance = normalizeProvenance(input.provenance || observation.provenance || {});
       const summary = text2(input.summary, EXPERIENCE_LIMITS.maxSummaryChars);
       if (!summary) throw new Error("Experience summary is required");
       const failureSignature = text2(input.failureSignature ?? observation.failureSignature, 240) || null;
       const exitCode = normalizeExitCode(input.exitCode ?? observation.exitCode);
       const failedStep = text2(input.failedStep ?? input.step ?? observation.failedStep ?? observation.step, 240) || null;
-      const repair = normalizeRepair(input.repair ?? observation.repair ?? (input.repairSucceeded === true || observation.repairSucceeded === true ? { succeeded: true } : null));
+      const repair = normalizeRepair(
+        input.repair ?? observation.repair ?? (input.repairSucceeded === true || observation.repairSucceeded === true ? { succeeded: true } : null)
+      );
       const repairSucceeded = input.repairSucceeded === true || observation.repairSucceeded === true || repair?.succeeded === true;
-      const workflowSpecDiff = normalizeWorkflowSpecDiff(input.workflowSpecDiff ?? observation.workflowSpecDiff);
+      const workflowSpecDiff = normalizeWorkflowSpecDiff(
+        input.workflowSpecDiff ?? observation.workflowSpecDiff
+      );
       const resourceUse = normalizeResourceUse(input.resourceUse ?? observation.resourceUse);
-      const qcMetrics = normalizeQcMetrics(input.qcMetrics ?? input.qc ?? observation.qcMetrics ?? observation.qc);
+      const qcMetrics = normalizeQcMetrics(
+        input.qcMetrics ?? input.qc ?? observation.qcMetrics ?? observation.qc
+      );
       const modelSummary = text2(input.modelSummary ?? observation.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars) || null;
-      const contractHash = hash2(input.contractHash ?? observation.contractHash);
+      const contractHash = hash(input.contractHash ?? observation.contractHash);
       const workflow = normalizeWorkflow(input.workflow ?? observation.workflow);
-      const workflowRevision = normalizeWorkflowRevision(input.workflowRevision ?? observation.workflowRevision);
+      const workflowRevision = normalizeWorkflowRevision(
+        input.workflowRevision ?? observation.workflowRevision
+      );
       const scheduler = normalizeScheduler(input.scheduler ?? observation.scheduler);
       const schedulerJobId = normalizeSchedulerJobId(input.schedulerJobId ?? observation.schedulerJobId);
       const artifactRefs = normalizeArtifactRefs(input.artifactRefs ?? observation.artifactRefs);
@@ -9234,10 +6653,13 @@ function createExperienceStore(options) {
       const out = await mutate(expectedRevision, (document) => {
         const matching = document.records.filter((record4) => record4.featureKey === featureKey);
         const existing = document.records.find((record4) => record4.id === HASH(key).slice(0, 32));
-        if (existing?.observationIds.includes(observationId)) return { document, result: { classification: "duplicate", record: existing }, noop: true };
+        if (existing?.observationIds.includes(observationId))
+          return { document, result: { classification: "duplicate", record: existing }, noop: true };
         const observations = new Set(matching.flatMap((record4) => record4.observationIds));
         observations.add(observationId);
-        const jobs = new Set(matching.flatMap((record4) => record4.jobIds.length ? record4.jobIds : [record4.jobId]));
+        const jobs = new Set(
+          matching.flatMap((record4) => record4.jobIds.length ? record4.jobIds : [record4.jobId])
+        );
         jobs.add(jobId);
         const status = repairSucceeded || jobs.size >= 2 ? "verified" : "observed";
         const record3 = existing || {
@@ -9299,9 +6721,12 @@ function createExperienceStore(options) {
         if (input.exitCode !== void 0 || observation.exitCode !== void 0) record3.exitCode = exitCode;
         if (failedStep) record3.failedStep = failedStep;
         if (repair) record3.repair = repair;
-        if (input.workflowSpecDiff !== void 0 || observation.workflowSpecDiff !== void 0) record3.workflowSpecDiff = workflowSpecDiff;
-        if (input.resourceUse !== void 0 || observation.resourceUse !== void 0) record3.resourceUse = resourceUse;
-        if (input.qcMetrics !== void 0 || input.qc !== void 0 || observation.qcMetrics !== void 0 || observation.qc !== void 0) record3.qcMetrics = qcMetrics;
+        if (input.workflowSpecDiff !== void 0 || observation.workflowSpecDiff !== void 0)
+          record3.workflowSpecDiff = workflowSpecDiff;
+        if (input.resourceUse !== void 0 || observation.resourceUse !== void 0)
+          record3.resourceUse = resourceUse;
+        if (input.qcMetrics !== void 0 || input.qc !== void 0 || observation.qcMetrics !== void 0 || observation.qc !== void 0)
+          record3.qcMetrics = qcMetrics;
         if (modelSummary) {
           record3.modelSummary = modelSummary;
           record3.modelGenerated = true;
@@ -9313,39 +6738,184 @@ function createExperienceStore(options) {
         if (schedulerJobId) record3.schedulerJobId = schedulerJobId;
         if (artifactRefs.length) record3.artifactRefs = artifactRefs;
         if (!existing) document.records.unshift(record3);
-        return { document, result: { classification: existing ? "updated" : "new", record: record3 } };
+        return {
+          document,
+          result: { classification: existing ? "updated" : "new", record: record3 }
+        };
       });
       return { ...out.result, revision: out.document.revision, record: out.result.record };
     },
     search: async (query = "", options2 = {}) => {
       const document = await read();
       const q = text2(query, EXPERIENCE_LIMITS.maxQueryChars);
-      const limit = Math.min(EXPERIENCE_LIMITS.maxSearchResults, Math.max(1, Math.floor(options2.limit || EXPERIENCE_LIMITS.maxSearchResults)));
+      const limit = Math.min(
+        EXPERIENCE_LIMITS.maxSearchResults,
+        Math.max(1, Math.floor(options2.limit || EXPERIENCE_LIMITS.maxSearchResults))
+      );
       const workflowFilter = normalizeWorkflow(options2.workflow);
       const hostFilter = options2.hostId === void 0 ? null : hostKey(options2.hostId);
       const failureFilter = text2(options2.failureSignature, 240).toLowerCase() || null;
-      const records = document.records.filter((record3) => !workflowFilter || record3.workflow?.toLowerCase() === workflowFilter.toLowerCase()).filter((record3) => !hostFilter || record3.hostId === hostFilter).filter((record3) => !failureFilter || record3.failureSignature?.toLowerCase() === failureFilter).filter((record3) => options2.includeObserved !== false || record3.status === "verified").map((record3) => ({ record: record3, score: scoreRecord(record3, q) })).filter((hit) => !q || hit.score > 0).sort((left, right) => right.score - left.score || right.record.updatedAt.localeCompare(left.record.updatedAt) || left.record.id.localeCompare(right.record.id)).slice(0, limit);
-      return { revision: document.revision, query: q, records, navigationOnly: true, evidenceEligible: false, instructionEligible: false };
+      const records = document.records.filter(
+        (record3) => !workflowFilter || record3.workflow?.toLowerCase() === workflowFilter.toLowerCase()
+      ).filter((record3) => !hostFilter || record3.hostId === hostFilter).filter((record3) => !failureFilter || record3.failureSignature?.toLowerCase() === failureFilter).filter((record3) => options2.includeObserved !== false || record3.status === "verified").map((record3) => ({ record: record3, score: scoreRecord(record3, q) })).filter((hit) => !q || hit.score > 0).sort(
+        (left, right) => right.score - left.score || right.record.updatedAt.localeCompare(left.record.updatedAt) || left.record.id.localeCompare(right.record.id)
+      ).slice(0, limit);
+      return {
+        revision: document.revision,
+        query: q,
+        records,
+        navigationOnly: true,
+        evidenceEligible: false,
+        instructionEligible: false
+      };
     }
   };
 }
 async function searchExperiences(options) {
-  const { query = "", limit, includeObserved, workflow, failureSignature, hostFilter, ...storeOptions } = options;
+  const {
+    query = "",
+    limit,
+    includeObserved,
+    workflow,
+    failureSignature,
+    hostFilter,
+    ...storeOptions
+  } = options;
   const store = createExperienceStore(storeOptions);
   return store.search(query, { limit, includeObserved, workflow, hostId: hostFilter, failureSignature });
 }
 
+// src/core/project-identity.ts
+init_config();
+import { readFile as readFile10 } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join as join14, resolve as resolve7 } from "node:path";
+var SESSION_PROJECT_ENTRY = "drone-session-project-v1";
+var SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+var RESERVED2 = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9]|shared)$/;
+function isProjectSlug(value) {
+  return typeof value === "string" && value.length <= 96 && SLUG.test(value) && !RESERVED2.test(value);
+}
+function normalizeProjectSlug(input) {
+  if (typeof input !== "string") return null;
+  const slug2 = input.normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 96).replace(/-+$/g, "");
+  return isProjectSlug(slug2) ? slug2 : null;
+}
+function workspaceProjectId(cwd, configured) {
+  return projectIdentity(cwd, isProjectSlug(configured) ? configured : void 0);
+}
+function dailyWorkspaceDir(home = homedir()) {
+  return join14(home, ".drone", "daily");
+}
+function samePath(a, b) {
+  const left = resolve7(a).replace(/[\\/]+$/, "");
+  const right = resolve7(b).replace(/[\\/]+$/, "");
+  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+function isDailyWorkspace(cwd, home) {
+  return samePath(cwd, dailyWorkspaceDir(home));
+}
+function sessionProjectFromEntries(entries) {
+  if (!Array.isArray(entries)) return null;
+  let project = null;
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object" || entry.customType !== SESSION_PROJECT_ENTRY) continue;
+    if (entry.type !== void 0 && entry.type !== "custom") continue;
+    const value = entry.data?.project;
+    if (value === null) project = null;
+    else if (isProjectSlug(value)) project = value;
+  }
+  return project;
+}
+function sessionEntriesOf(ctx) {
+  try {
+    const manager = ctx?.sessionManager;
+    const entries = manager?.getBranch?.() ?? manager?.getEntries?.();
+    return Array.isArray(entries) ? entries : [];
+  } catch {
+    return [];
+  }
+}
+function resolveProjectIdentity(input) {
+  const daily = isDailyWorkspace(input.cwd, input.home);
+  const requestedText = typeof input.requested === "string" ? input.requested.trim() : "";
+  const requested = requestedText || null;
+  let project;
+  let source;
+  const session = daily ? sessionProjectFromEntries(input.sessionEntries) : null;
+  if (session) {
+    project = session;
+    source = "session";
+  } else if (isProjectSlug(input.configured)) {
+    project = input.configured;
+    source = "workspace-config";
+  } else {
+    project = workspaceProjectId(input.cwd);
+    source = "workspace";
+  }
+  const ignoredRequest = requested !== null && normalizeProjectSlug(requested) !== project;
+  return { project, source, daily, requested, ignoredRequest };
+}
+async function readConfiguredProject(cwd) {
+  try {
+    const parsed = JSON.parse(await readFile10(join14(cwd, ".pi", "research-workspace.json"), "utf8"));
+    if (parsed && typeof parsed === "object" && "knowledgeProjectId" in parsed)
+      return parsed.knowledgeProjectId;
+  } catch {
+  }
+  return void 0;
+}
+async function resolveWorkspaceProject(input) {
+  return resolveProjectIdentity({ ...input, configured: await readConfiguredProject(input.cwd) });
+}
+
+// src/core/extension-helpers.ts
+function result(data) {
+  return {
+    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    details: data
+  };
+}
+async function currentProject(cwd, ctx) {
+  return (await resolveWorkspaceProject({ cwd, sessionEntries: sessionEntriesOf(ctx) })).project;
+}
+function explainerTopicId(value, title = "research-topic") {
+  const base = String(value || title).normalize("NFKC").toLowerCase().replace(/[-_]20\d{6,14}$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 96);
+  return base || "research-topic";
+}
+function sessionIdentity(ctx) {
+  return ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || null;
+}
+function continuationHint(value) {
+  return /(?:previous|prior|last|earlier|continue|resume|what about|how about|why|then|it|that|those|之前|上个|继续|刚才|它|那个|那它|为什么|怎么|如何|还有|然后)/i.test(
+    String(value || "")
+  );
+}
+function continuesTopic(prompt, topic) {
+  if (!topic) return false;
+  const text4 = String(prompt || "").trim();
+  if (!text4) return true;
+  if (/(?:switch|new topic|different topic|换个|另一个|新的主题|切换主题)/i.test(text4)) return false;
+  if (continuationHint(text4)) return true;
+  const lower = text4.toLowerCase();
+  return [topic.id, topic.title, ...topic.aliases || [], ...topic.entities || []].filter((value) => typeof value === "string" && value.trim().length >= 2).some((value) => lower.includes(value.toLowerCase()));
+}
+
+// src/core/index.ts
+init_files();
+init_flow_cards();
+
 // src/core/knowledge-runtime.ts
-init_ui_state();
 init_review_policy();
 init_specialist_host();
+init_topic_memory();
+init_ui_state();
 init_wiki_model_review();
 init_wiki_review();
 init_wiki_review_node();
-init_topic_memory();
 
 // src/core/writer-lease.ts
-import { createHash as createHash19, randomUUID as randomUUID18 } from "node:crypto";
+import { createHash as createHash16, randomUUID as randomUUID15 } from "node:crypto";
 import {
   closeSync,
   fstatSync,
@@ -9358,39 +6928,1555 @@ import {
   writeFileSync as writeFileSync2
 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { basename as basename7, dirname as dirname9, join as join16 } from "node:path";
+import { basename as basename4, dirname as dirname7, join as join15 } from "node:path";
 
-// src/core/delivery-claims.ts
-import { createHash as createHash20 } from "node:crypto";
-var digest5 = (text4) => createHash20("sha256").update(text4).digest("hex");
-function summaryDeliveryClaims(details, markdown) {
-  const receipt = details.delivery_receipt;
-  if (!receipt || receipt.version !== 1 || receipt.semanticAssessment?.status !== "model-assessed" || receipt.bodySha256 !== digest5(`${markdown.trim()}
-`))
-    throw new Error("Topic memory requires a current, reviewed summary delivery receipt");
-  if (!Array.isArray(details.claims) || receipt.memoryClaimsSha256 !== digest5(JSON.stringify(details.claims)))
-    throw new Error("Topic memory claims differ from the reviewed delivery packet");
-  const reviewed = receipt.semanticAssessment.memoryClaims;
-  if (!Array.isArray(reviewed) || reviewed.length !== details.claims.length)
-    throw new Error("Topic memory requires a separate assessment for every delivered memory claim");
-  const seen = /* @__PURE__ */ new Set();
-  for (const claim of details.claims) {
-    if (claim.deliveryBodySha256 !== receipt.bodySha256 || !receipt.sources.some(
-      (source) => source.path === claim.sourcePath && source.sha256 === claim.sourceHash
-    ))
-      throw new Error("Topic memory claim does not reference the delivered evidence version");
-    const assessment = reviewed.find((item) => item.bindingId === claim.bindingId);
-    if (!assessment || seen.has(claim.bindingId) || assessment.assessment !== "supported" || assessment.memoryClaimSha256 !== digest5(JSON.stringify(claim)))
-      throw new Error("Topic memory claim lacks its exact supported scope assessment");
-    seen.add(claim.bindingId);
-    if (!Array.isArray(assessment.evidence) || !assessment.evidence.some(
-      (ref) => ref.path === claim.sourcePath && ref.sha256 === claim.sourceHash && receipt.sources.some(
-        (source) => source.path === ref.path && source.sha256 === ref.sha256 && source.readReceiptIds.includes(ref.readReceiptId)
-      )
-    ))
-      throw new Error("Topic memory scope assessment lacks a delivered read reference");
+// src/core/index.ts
+init_layout();
+
+// src/core/maintenance.ts
+init_files();
+init_layout();
+import { createHash as createHash17, randomUUID as randomUUID16 } from "node:crypto";
+import { mkdir as mkdir10, rename as rename9, writeFile as writeFile10 } from "node:fs/promises";
+import { dirname as dirname8 } from "node:path";
+var START = "<!-- pi-agent:managed:start -->";
+var END = "<!-- pi-agent:managed:end -->";
+var hash2 = (text4) => createHash17("sha256").update(text4).digest("hex");
+async function updateNavigation(vault, path, heading, body) {
+  if (!["Home.md", "Wiki/Index.md", "Library/Index.md"].includes(path) && !/^Projects\/[a-z0-9-]+\/Index\.md$/.test(path))
+    throw new Error("Not an allowed navigation target");
+  const full = await containedVaultFile(vault, path);
+  let original = null;
+  try {
+    original = (await readNoteFile(vault, path)).text;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
   }
-  return details.claims;
+  const base = original ?? `${heading}
+
+## Human review
+`;
+  const start = base.indexOf(START), end = base.indexOf(END), block = `${START}
+${body.trim()}
+${END}`;
+  if (start < 0 !== end < 0 || end < start || start >= 0 && (base.indexOf(START, start + 1) >= 0 || base.indexOf(END, end + 1) >= 0))
+    throw new Error("Invalid navigation managed markers");
+  const updated = start >= 0 ? base.slice(0, start) + block + base.slice(end + END.length) : `${base.trimEnd()}
+
+${block}
+`;
+  if (updated === original) return { path, changed: false };
+  if (original !== null && (await readNoteFile(vault, path)).hash !== hash2(original))
+    throw new Error("Human navigation changed; update was not applied");
+  await mkdir10(dirname8(full), { recursive: true });
+  if (original === null) {
+    await writeFile10(full, updated, { flag: "wx" });
+    return { path, changed: true };
+  }
+  const temporary = `${full}.${randomUUID16()}.tmp`;
+  await writeFile10(temporary, updated, { flag: "wx" });
+  await rename9(temporary, full);
+  return { path, changed: true };
+}
+async function runNavigationMaintenance(service, project, limit = 3) {
+  const jobs = await service.request("jobs", { project, kind: "navigation" }), out = [];
+  for (const item of jobs.items.filter((job) => job.kind === "navigation").slice(0, Math.min(10, limit))) {
+    const rows = await service.request("navigation", {
+      project: item.scope === "shared" ? null : item.scope,
+      targetPath: item.path
+    });
+    const links = rows.slice(0, 60).filter((row) => !/[[\]|#\r\n]/.test(row.path)).map((row) => `- [[${row.path.slice(0, -3)}]]`);
+    const body = [...links, rows.length > 60 ? "\n\u66F4\u591A\u6761\u76EE\u8BF7\u4F7F\u7528\u77E5\u8BC6\u68C0\u7D22\uFF1B\u672C\u9875\u53EA\u4FDD\u7559\u77ED\u5BFC\u822A\u3002" : ""].join(
+      "\n"
+    );
+    try {
+      const result2 = await updateNavigation(
+        service.binding.vault,
+        item.path,
+        `# ${item.scope === "shared" ? "Shared knowledge" : item.scope}`,
+        body
+      );
+      if (result2.changed) await service.request("changed", { paths: [item.path] });
+      await service.request("completeJob", { key: item.key, revision: item.revision });
+      out.push(result2);
+    } catch (error) {
+      out.push({ path: item.path, error: error.message });
+    }
+  }
+  return {
+    navigation: out,
+    semanticWikiRewritten: false,
+    remaining: await service.request("jobs", { project })
+  };
+}
+
+// src/core/metacognitive-policy.ts
+var MAX_FAILURES = 16;
+var MAX_TEXT = 600;
+var SHA256 = /^[a-f0-9]{64}$/i;
+function bounded(value, max = MAX_TEXT) {
+  const text4 = typeof value === "string" ? value : JSON.stringify(value);
+  return String(text4 ?? "").replace(/[\r\n]+/g, " ").slice(0, max);
+}
+function sameValue(left, right) {
+  if (Object.is(left, right)) return true;
+  if (typeof left === "number" && typeof right === "number" && Number.isFinite(left) && Number.isFinite(right))
+    return left === right;
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return false;
+  }
+}
+function hasKey(value, key) {
+  return Object.hasOwn(value, key);
+}
+function subset(expected, observed) {
+  if (!expected) return [];
+  if (!observed) return Object.keys(expected);
+  return Object.keys(expected).filter(
+    (key) => !hasKey(observed, key) || !sameValue(expected[key], observed[key])
+  );
+}
+function numberValue(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && value.trim() !== "" ? parsed : null;
+}
+function numberMatches(expected, observed, tolerance = 0) {
+  const left = numberValue(expected);
+  const right = numberValue(observed);
+  if (left !== null && right !== null) return Math.abs(left - right) <= Math.max(0, tolerance);
+  return String(expected).trim() === String(observed).trim();
+}
+function artifactHasNumber(artifact, claim) {
+  const tolerance = claim.rounding?.tolerance ?? (typeof claim.rounding?.digits === "number" && claim.rounding.digits >= 0 ? 0.5 * 10 ** -claim.rounding.digits : 0);
+  if (artifact.numbers?.some((item) => numberMatches(claim.value, item.value, item.tolerance ?? tolerance)))
+    return true;
+  if (typeof artifact.text !== "string") return false;
+  const rendered = claim.rendered ?? String(claim.value);
+  if (artifact.text.includes(rendered)) return true;
+  return artifact.text.includes(String(claim.value));
+}
+function citedPaths(answer) {
+  return new Set(
+    Array.from(answer.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g), (match) => {
+      const path = (match[1] || "").trim();
+      return path.endsWith(".md") ? path : `${path}.md`;
+    })
+  );
+}
+function addFailure(failures, failure) {
+  if (failures.length < MAX_FAILURES) failures.push(failure);
+}
+function addWarning(warnings, warning) {
+  if (warnings.length < 8) warnings.push(warning);
+}
+function evaluateMetacognitivePublication(answer, snapshot) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot))
+    return { ok: true, failures: [], warnings: [], findings: [] };
+  const input = snapshot;
+  if (input.enabled === false) return { ok: true, failures: [], warnings: [], findings: [] };
+  const failures = [];
+  const warnings = [];
+  const citations = citedPaths(answer);
+  const artifacts = /* @__PURE__ */ new Map();
+  for (const artifact of Array.isArray(input.artifacts) ? input.artifacts : []) {
+    if (artifact && typeof artifact.path === "string") {
+      artifacts.set(artifact.path, artifact);
+    }
+  }
+  const checkedPaths = /* @__PURE__ */ new Set();
+  const checkArtifact = (path, subject) => {
+    const artifact = artifacts.get(path);
+    if (!artifact) {
+      addFailure(failures, {
+        code: "artifact-checksum-stale",
+        subject,
+        detail: `No current checksum receipt for ${bounded(path, 240)}`,
+        path
+      });
+      return void 0;
+    }
+    if (artifact.status === "pending-review" && citations.has(path))
+      addFailure(failures, {
+        code: "artifact-pending-review",
+        subject: path,
+        detail: `Artifact ${bounded(path, 240)} is pending review after a revoked decision`,
+        path
+      });
+    if (artifact.reproducibility === "not-reproducible")
+      addWarning(warnings, {
+        code: "artifact-not-reproducible",
+        subject,
+        detail: `Cited artifact has no recorded code fingerprint or run provenance: ${bounded(path, 240)}`,
+        path
+      });
+    if (!SHA256.test(String(artifact.sha256 || "")) || !SHA256.test(String(artifact.currentSha256 || ""))) {
+      addFailure(failures, {
+        code: "artifact-checksum-stale",
+        subject,
+        detail: `Missing or malformed checksum receipt for ${bounded(path, 240)}`,
+        path
+      });
+    } else if (artifact.sha256?.toLowerCase() !== artifact.currentSha256?.toLowerCase()) {
+      addFailure(failures, {
+        code: "artifact-checksum-stale",
+        subject,
+        detail: `Cited artifact changed after observation (${bounded(artifact.sha256, 16)}\u2026 \u2192 ${bounded(artifact.currentSha256, 16)}\u2026)`,
+        path
+      });
+    }
+    checkedPaths.add(path);
+    return artifact;
+  };
+  for (const claim of Array.isArray(input.numbers) ? input.numbers : []) {
+    if (!claim || typeof claim.artifactPath !== "string") {
+      addFailure(failures, {
+        code: "metacognition-invalid",
+        subject: "report-number",
+        detail: "A report number has no cited artifact path"
+      });
+      continue;
+    }
+    const rendered = claim.rendered ?? String(claim.value);
+    if (!answer.includes(rendered)) {
+      addFailure(failures, {
+        code: "report-number-unbound",
+        subject: claim.id || rendered,
+        detail: `Reported number ${bounded(rendered, 80)} is not present in the final answer`,
+        path: claim.artifactPath
+      });
+    }
+    if (!citations.has(claim.artifactPath)) {
+      addFailure(failures, {
+        code: "report-number-unbound",
+        subject: claim.id || rendered,
+        detail: `Reported number ${bounded(rendered, 80)} is not tied to citation ${bounded(claim.artifactPath, 240)}`,
+        path: claim.artifactPath
+      });
+    }
+    const artifact = checkArtifact(claim.artifactPath, claim.id || rendered);
+    if (artifact && !artifactHasNumber(artifact, claim))
+      addFailure(failures, {
+        code: "report-number-unbound",
+        subject: claim.id || rendered,
+        detail: `Artifact does not contain ${bounded(String(claim.value), 80)} with the declared rounding`,
+        path: claim.artifactPath
+      });
+  }
+  for (const path of citations) {
+    if (artifacts.has(path) && !checkedPaths.has(path)) checkArtifact(path, "citation");
+  }
+  for (const method of Array.isArray(input.methods) ? input.methods : []) {
+    const executed = input.executed;
+    if (!method || typeof method.description !== "string" || !method.description.trim()) {
+      addFailure(failures, {
+        code: "metacognition-invalid",
+        subject: "method",
+        detail: "Method description is empty"
+      });
+      continue;
+    }
+    if (!answer.includes(method.description))
+      addFailure(failures, {
+        code: "method-mismatch",
+        subject: method.id || method.description,
+        detail: "Method description is not present in the final answer"
+      });
+    if (!executed) {
+      addFailure(failures, {
+        code: "method-mismatch",
+        subject: method.id || method.description,
+        detail: "No host-observed workflow execution was supplied"
+      });
+      continue;
+    }
+    if (method.workflow && !executed.workflows?.includes(method.workflow))
+      addFailure(failures, {
+        code: "method-mismatch",
+        subject: method.id || method.workflow,
+        detail: `Workflow ${bounded(method.workflow, 120)} was not observed`
+      });
+    for (const module of method.modules || [])
+      if (!executed.modules?.includes(module))
+        addFailure(failures, {
+          code: "method-mismatch",
+          subject: method.id || module,
+          detail: `Module ${bounded(module, 120)} was not observed`
+        });
+    for (const key of subset(method.params, executed.params))
+      addFailure(failures, {
+        code: "method-mismatch",
+        subject: method.id || key,
+        detail: `Parameter ${bounded(key, 120)} differs from the observed workflow`
+      });
+  }
+  const findingMap = /* @__PURE__ */ new Map();
+  const findingEvidence = [];
+  for (const rawFinding of Array.isArray(input.findings) ? input.findings : []) {
+    const finding = rawFinding;
+    if (!finding || typeof finding.id !== "string" || typeof finding.text !== "string") {
+      addFailure(failures, {
+        code: "metacognition-invalid",
+        subject: "finding",
+        detail: "Finding is malformed"
+      });
+      continue;
+    }
+    findingMap.set(finding.id, finding);
+    const paths = Array.from(
+      new Set(
+        (Array.isArray(finding.citationPaths) ? finding.citationPaths : []).filter(
+          (path) => typeof path === "string"
+        )
+      )
+    );
+    findingEvidence.push({
+      id: finding.id,
+      text: bounded(finding.text),
+      label: finding.label,
+      citationPaths: paths
+    });
+    for (const path of paths) {
+      if (!citations.has(path))
+        addFailure(failures, {
+          code: "finding-label-conflict",
+          subject: finding.id,
+          detail: `Finding is missing its cited artifact ${bounded(path, 240)}`,
+          path
+        });
+      else checkArtifact(path, finding.id);
+    }
+  }
+  for (const use of Array.isArray(input.uses) ? input.uses : []) {
+    const finding = findingMap.get(use?.findingId || "");
+    if (!finding) {
+      addFailure(failures, {
+        code: "finding-label-conflict",
+        subject: use?.findingId || "finding",
+        detail: "The final answer references an unknown finding"
+      });
+      continue;
+    }
+    if (["exploratory", "overturned", "unstable"].includes(finding.label)) {
+      const invalidRole = finding.label === "exploratory" ? ["conclusion", "validation"].includes(use.role) : use.role !== "exploratory";
+      if (invalidRole)
+        addFailure(failures, {
+          code: "finding-label-conflict",
+          subject: finding.id,
+          detail: `Finding labelled ${finding.label} cannot be used as ${use.role}`
+        });
+    }
+  }
+  for (const diagnostic of Array.isArray(input.diagnostics) ? input.diagnostics : []) {
+    if (!diagnostic || typeof diagnostic.id !== "string" || !sameValue(diagnostic.reported, diagnostic.observed))
+      addFailure(failures, {
+        code: "diagnostic-drift",
+        subject: diagnostic?.id || "diagnostic",
+        detail: `Reported diagnostic differs from the observed control/result (${bounded(diagnostic?.reported)} vs ${bounded(diagnostic?.observed)})`
+      });
+  }
+  return { ok: failures.length === 0, failures, warnings, findings: findingEvidence };
+}
+
+// src/core/ingest-identity.ts
+import { createHash as createHash18 } from "node:crypto";
+
+// src/core/ingest-frontmatter.ts
+var KNOWLEDGE_TYPES = [
+  "paper",
+  "method",
+  "software",
+  "dataset",
+  "concept",
+  "entity",
+  "idea",
+  "claim",
+  "evidence",
+  "decision",
+  "question",
+  "wiki"
+];
+var RUN_RESULT_TYPES = ["run", "artifact", "explainer"];
+var NOTE_TYPES = [...KNOWLEDGE_TYPES, ...RUN_RESULT_TYPES];
+var MAX_FRONTMATTER_CHARS = 64 * 1024;
+
+// src/core/publication.ts
+var publication_exports = {};
+__export(publication_exports, {
+  advisoryLine: () => advisoryLine,
+  advisoryNotice: () => advisoryNotice,
+  createKnowledgePublication: () => createKnowledgePublication,
+  createManagedKnowledgePublication: () => createManagedKnowledgePublication,
+  knowledgeFailure: () => knowledgeFailure,
+  projectKnowledgeEvent: () => projectKnowledgeEvent,
+  projectKnowledgeSnapshot: () => projectKnowledgeSnapshot,
+  registerAnswerPublication: () => registerAnswerPublication
+});
+init_config();
+import { createHash as createHash19, randomUUID as randomUUID17 } from "node:crypto";
+
+// src/core/publication-policy.ts
+var publicationNotices = {
+  "paper-citation-required": "\u8FD9\u6B21\u56DE\u7B54\u7F3A\u5C11\u5177\u4F53\u8BBA\u6587\u4F9D\u636E\uFF1BWiki \u6216\u62A5\u544A\u94FE\u63A5\u4E0D\u80FD\u66FF\u4EE3\u672C\u8F6E\u8BFB\u8FC7\u7684\u6587\u732E\u7B14\u8BB0\u3002\u8BF7\u6807\u660E\u8D44\u6599\u7F3A\u53E3\uFF0C\u4E0D\u8981\u53CD\u590D\u68C0\u7D22\u53EA\u4E3A\u6D88\u9664\u63D0\u9192\u3002",
+  "search-required": "\u672C\u8F6E\u5C1A\u672A\u5B8C\u6210\u77E5\u8BC6\u5E93\u68C0\u7D22\u3002\u8BF7\u5148\u68C0\u7D22\uFF0C\u518D\u9605\u8BFB\u9700\u8981\u5F15\u7528\u7684\u5185\u5BB9\u3002",
+  "coverage-incomplete": "\u77E5\u8BC6\u7D22\u5F15\u5C1A\u672A\u5B8C\u6574\u53EF\u7528\u3002\u8BF7\u68C0\u67E5\u7D22\u5F15\u72B6\u6001\u6216\u6545\u969C\uFF0C\u4E0D\u80FD\u5C06\u6B64\u60C5\u51B5\u5F53\u4F5C\u65E0\u547D\u4E2D\u3002",
+  "citation-required": "\u68C0\u7D22\u6709\u547D\u4E2D\uFF0C\u4F46\u56DE\u7B54\u6CA1\u6709\u5F15\u7528\u672C\u8F6E\u8BFB\u8FC7\u7684\u77E5\u8BC6\u6761\u76EE\u3002",
+  "citation-invalid": "\u56DE\u7B54\u4E2D\u7684\u77E5\u8BC6\u5E93\u5F15\u7528\u683C\u5F0F\u4E0D\u5408\u6CD5\u3002",
+  "citation-budget": "\u672C\u6B21\u56DE\u7B54\u7684\u5F15\u7528\u8D85\u8FC7\u68C0\u67E5\u4E0A\u9650\uFF0C\u8BF7\u62C6\u5206\u4E3A\u66F4\u5C0F\u7684\u56DE\u7B54\u3002",
+  "source-unread": "\u56DE\u7B54\u5F15\u7528\u4E86\u672C\u8F6E\u6CA1\u6709\u5B9E\u9645\u9605\u8BFB\u7684\u6761\u76EE\u3002",
+  "delivery-changed": "\u672C\u8F6E\u751F\u6210\u7684\u7ED3\u679C\u5728\u4FDD\u5B58\u540E\u53D1\u751F\u53D8\u5316\uFF0C\u65E7\u7248\u672C\u4E0D\u80FD\u7EE7\u7EED\u4F7F\u7528\u3002",
+  "source-changed": "\u5F15\u7528\u5185\u5BB9\u5728\u9605\u8BFB\u540E\u53D1\u751F\u4E86\u53D8\u5316\uFF0C\u8BF7\u8BFB\u53D6\u65B0\u7248\u672C\u5E76\u91CD\u65B0\u68C0\u7D22\u3002",
+  "wiki-changed": "\u76F8\u5173 Wiki \u5DF2\u53D8\u5316\uFF0C\u8BF7\u8BFB\u53D6\u5F53\u524D\u7248\u672C\u540E\u91CD\u65B0\u68C0\u7D22\u3002",
+  "search-stale": "\u68C0\u7D22\u540E\u7D22\u5F15\u7248\u672C\u53D1\u751F\u53D8\u5316\uFF0C\u8BF7\u91CD\u65B0\u68C0\u7D22\u5F53\u524D\u5185\u5BB9\u3002",
+  "binding-changed": "\u5F53\u524D\u77E5\u8BC6\u5E93\u7ED1\u5B9A\u5DF2\u53D8\u5316\uFF0C\u8BF7\u91CD\u65B0\u8BFB\u53D6\u5BFC\u822A\uFF0C\u4E0D\u6CBF\u7528\u65E7\u77E5\u8BC6\u5E93\u7684\u8BC1\u636E\u3002",
+  "navigation-changed": "\u672C\u8F6E\u5BFC\u822A\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u8BFB\u53D6\u5BFC\u822A\u5E76\u5B8C\u6210\u68C0\u7D22\u3002",
+  "not-prepared": "\u77E5\u8BC6\u5E93\u51C6\u5907\u6B65\u9AA4\u5C1A\u672A\u5B8C\u6210\uFF0C\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002",
+  interrupted: "\u672C\u6B21\u8BF7\u6C42\u5DF2\u4E2D\u65AD\uFF0C\u672A\u5B8C\u6210\u7684\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002",
+  "model-error": "\u6A21\u578B\u8BF7\u6C42\u5931\u8D25\uFF0C\u672A\u5B8C\u6210\u7684\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002",
+  "check-timeout": "\u56DE\u7B54\u524D\u68C0\u67E5\u8D85\u65F6\uFF0C\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002",
+  "check-failed": "\u56DE\u7B54\u524D\u68C0\u67E5\u53D1\u751F\u9519\u8BEF\uFF0C\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002",
+  "empty-answer": "\u4EFB\u52A1\u5DF2\u7ED3\u675F\uFF0C\u4F46\u6A21\u578B\u6CA1\u6709\u751F\u6210\u53EF\u663E\u793A\u7684\u56DE\u590D\u3002\u8BF7\u67E5\u770B\u672C\u8F6E\u4EA7\u7269\u6216\u8981\u6C42\u7EE7\u7EED\u4EA4\u4ED8\u8BF4\u660E\u3002",
+  "answer-too-large": "\u672C\u6B21\u56DE\u7B54\u8D85\u51FA\u5355\u6B21\u68C0\u67E5\u7684\u5927\u5C0F\u4E0A\u9650\uFF0C\u8BF7\u5206\u6BB5\u5B8C\u6210\u3002",
+  "protocol-budget": "\u672C\u8F6E\u5DE5\u5177\u4E0A\u4E0B\u6587\u8D85\u8FC7\u5B89\u5168\u7F13\u5B58\u4E0A\u9650\uFF0C\u8BF7\u5F00\u542F\u65B0\u4E00\u8F6E\u4EFB\u52A1\u3002",
+  "tool-loop-stopped": "\u3010\u4EFB\u52A1\u9636\u6BB5\u5DF2\u6682\u505C\u3011\u672C\u9636\u6BB5\u8FBE\u5230\u5DE5\u5177\u6216\u4E0A\u4E0B\u6587\u5B89\u5168\u9884\u7B97\u3002\u5DF2\u4FDD\u5B58\u7684\u7ED3\u679C\u4E0D\u4F1A\u56E0\u6B64\u5220\u9664\uFF1B\u67E5\u770B\u4EFB\u52A1\u6267\u884C\u8BB0\u5F55\u540E\u53EF\u7EE7\u7EED\uFF0C\u65E0\u9700\u65B0\u5EFA\u5BF9\u8BDD\u3002\u7EE7\u7EED\u524D\u5148\u6838\u5BF9\u7ED3\u679C\u672A\u77E5\u7684\u64CD\u4F5C\uFF0C\u4E0D\u8981\u91CD\u590D\u5B89\u88C5\u3001\u5BFC\u5165\u6216\u4E0A\u4F20\u3002",
+  "metacognitive-inconsistency": "\u62A5\u544A\u3001\u65B9\u6CD5\u3001\u8BC1\u636E\u6807\u7B7E\u6216\u8BCA\u65AD\u4E0E\u5B9E\u9645\u8FD0\u884C\u7ED3\u679C\u4E0D\u4E00\u81F4\uFF1B\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002\u8BF7\u6309\u4E0B\u9762\u7684\u5DEE\u5F02\u4FEE\u6B63\u62A5\u544A\u6216\u91CD\u65B0\u8FD0\u884C\u5F53\u524D\u6D41\u7A0B\u3002",
+  "artifact-pending-review": "\u5F15\u7528\u7684\u7ED3\u679C\u6B63\u5728\u7B49\u5F85\u786E\u8BA4\uFF1B\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002\u8BF7\u91CD\u65B0\u751F\u6210\u53D7\u5F71\u54CD\u7ED3\u679C\u6216\u5B8C\u6210\u73B0\u6709\u5BA1\u6838\u3002"
+};
+var advisoryNotices = {
+  "paper-citation-required": "\u8FD9\u4EFD\u56DE\u7B54\u6CA1\u6709\u5F15\u7528\u5177\u4F53\u7684\u539F\u59CB\u8BBA\u6587\uFF0C\u4E3B\u8981\u4F9D\u636E\u662F Wiki \u6216\u5DF2\u751F\u6210\u7684\u62A5\u544A\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\uFF0C\u4F46\u8BF7\u628A\u5B83\u5F53\u4F5C\u5F85\u67E5\u8BC1\u7684\u7EBF\u7D22\u3002",
+  "citation-budget": "\u8FD9\u4EFD\u56DE\u7B54\u5F15\u7528\u7684\u6765\u6E90\u8D85\u8FC7\u4E86\u5355\u6B21\u6838\u9A8C\u4E0A\u9650\u3002\u5185\u5BB9\u5DF2\u5B8C\u6574\u4FDD\u7559\u3002",
+  "citation-required": "\u8FD9\u4EFD\u56DE\u7B54\u6CA1\u6709\u5F15\u7528\u672C\u8F6E\u8BFB\u8FC7\u7684\u77E5\u8BC6\u6761\u76EE\uFF0C\u672A\u80FD\u5EFA\u7ACB\u6765\u6E90\u5BF9\u5E94\u5173\u7CFB\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
+  "citation-invalid": "\u8FD9\u4EFD\u56DE\u7B54\u91CC\u6709\u683C\u5F0F\u4E0D\u5408\u6CD5\u7684\u77E5\u8BC6\u5E93\u5F15\u7528\uFF0C\u8BE5\u5F15\u7528\u672A\u88AB\u6838\u9A8C\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
+  "source-unread": "\u8FD9\u4EFD\u56DE\u7B54\u5F15\u7528\u4E86\u672C\u8F6E\u6CA1\u6709\u5B9E\u9645\u6253\u5F00\u8FC7\u7684\u6761\u76EE\uFF0C\u8BE5\u5F15\u7528\u672A\u88AB\u6838\u9A8C\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
+  "source-changed": "\u5F15\u7528\u7684\u5185\u5BB9\u5728\u672C\u8F6E\u8BFB\u53D6\u540E\u53D1\u751F\u4E86\u53D8\u5316\uFF0C\u6838\u9A8C\u7ED3\u679C\u53EF\u80FD\u5DF2\u8FC7\u671F\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
+  "delivery-changed": "\u672C\u8F6E\u751F\u6210\u7684\u7ED3\u679C\u5728\u4FDD\u5B58\u540E\u53D1\u751F\u53D8\u5316\uFF0C\u65E7\u7248\u672C\u4E0D\u80FD\u7EE7\u7EED\u4F7F\u7528\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
+  "wiki-changed": "\u76F8\u5173 Wiki \u5728\u672C\u8F6E\u8BFB\u53D6\u540E\u53D1\u751F\u4E86\u53D8\u5316\uFF0C\u6838\u9A8C\u7ED3\u679C\u53EF\u80FD\u5DF2\u8FC7\u671F\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
+  "search-required": "\u672C\u8F6E\u6CA1\u6709\u5B8C\u6210\u77E5\u8BC6\u5E93\u68C0\u7D22\uFF0C\u68C0\u7D22\u8986\u76D6\u60C5\u51B5\u5C1A\u672A\u786E\u8BA4\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
+  "search-stale": "\u68C0\u7D22\u5B8C\u6210\u540E\u77E5\u8BC6\u5E93\u7D22\u5F15\u53D1\u751F\u4E86\u53D8\u5316\uFF0C\u6838\u9A8C\u7ED3\u679C\u53EF\u80FD\u5DF2\u8FC7\u671F\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
+  "coverage-incomplete": "\u77E5\u8BC6\u5E93\u7D22\u5F15\u672C\u8F6E\u672A\u5B8C\u6574\u5C31\u7EEA\uFF0C\u8FD9\u4E0D\u4EE3\u8868\u5E93\u4E2D\u6CA1\u6709\u76F8\u5173\u5185\u5BB9\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
+  "check-timeout": "\u56DE\u7B54\u524D\u7684\u6838\u9A8C\u8D85\u65F6\uFF0C\u672C\u6B21\u672A\u5B8C\u6210\u6838\u9A8C\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002",
+  "not-prepared": "\u77E5\u8BC6\u5E93\u51C6\u5907\u6B65\u9AA4\u672A\u5B8C\u6210\uFF0C\u672C\u6B21\u672A\u505A\u6838\u9A8C\u3002\u5185\u5BB9\u5DF2\u4FDD\u7559\u3002"
+};
+function publicationNotice(code) {
+  return publicationNotices[code] || publicationNotices["check-failed"];
+}
+function advisoryNotice(code) {
+  const normalized = code;
+  return advisoryNotices[normalized] || publicationNotice(normalized);
+}
+function advisoryLine(code, error) {
+  const verified = error?.verified;
+  const sources = Array.isArray(verified?.sources) ? verified.sources.length : 0;
+  const deliveries = Array.isArray(verified?.deliveries) ? verified.deliveries.length : 0;
+  const cited = typeof verified?.unverifiedCitationCount === "number" && Number.isFinite(verified.unverifiedCitationCount) ? verified.unverifiedCitationCount : Array.isArray(verified?.unverifiedCitations) ? verified.unverifiedCitations.length : 0;
+  const notice = code === "citation-budget" && numberIsInteger(verified?.citationCount) && numberIsInteger(verified?.citationLimit) ? `\u8FD9\u4EFD\u56DE\u7B54\u5F15\u7528\u4E86 ${verified?.citationCount} \u5904\u6765\u6E90\uFF0C\u8D85\u8FC7\u5355\u6B21\u6838\u9A8C\u4E0A\u9650\uFF08${verified?.citationLimit} \u5904\uFF09\u3002\u5185\u5BB9\u5DF2\u5B8C\u6574\u4FDD\u7559\u3002` : advisoryNotice(code);
+  const parts = [];
+  if (sources) parts.push(`\u5DF2\u6838\u5BF9 ${sources} \u5904\u6765\u6E90\u7684\u8BFB\u53D6\u8BB0\u5F55\u4E0E\u5F53\u524D\u7248\u672C`);
+  if (deliveries) parts.push(`\u5DF2\u6838\u5BF9 ${deliveries} \u4EFD\u672C\u8F6E\u4EA7\u7269`);
+  if (cited) parts.push(`${sources ? "\u53E6\u6709" : "\u5171"} ${cited} \u5904\u5F15\u7528\u672A\u9010\u6761\u6838\u9A8C`);
+  const detail = parts.length ? `${parts.join("\u3001")}\u3002` : "";
+  return `${notice}${detail ? ` ${detail}` : ""}${sources || deliveries ? " \u6765\u6E90\u6838\u5BF9\u4E0D\u4EE3\u8868\u79D1\u5B66\u7ED3\u8BBA\u5DF2\u83B7\u9A8C\u8BC1\u3002" : ""}`;
+}
+function numberIsInteger(value) {
+  return typeof value === "number" && Number.isInteger(value);
+}
+function errorMessage(error) {
+  return error && typeof error === "object" && "message" in error ? String(error.message || "") : "";
+}
+function errorCode2(error) {
+  return error && typeof error === "object" && "code" in error ? String(error.code || "") : "";
+}
+function knowledgeFailure(error) {
+  const code = classifyFailureCode(error);
+  const paths = [];
+  const rawPaths = error && typeof error === "object" && "paths" in error ? error.paths : [];
+  for (const path of Array.isArray(rawPaths) ? rawPaths : []) {
+    if (typeof path === "string" && path.length <= 512 && !/[\r\n<>]/.test(path)) paths.push(path);
+    if (paths.length >= 6) break;
+  }
+  return { code, message: publicationNotice(code), paths };
+}
+function classifyFailureCode(error) {
+  const code = errorCode2(error);
+  if (code in publicationNotices) return code;
+  const text4 = errorMessage(error);
+  if (/binding changed/i.test(text4)) return "binding-changed";
+  if (/navigation changed/i.test(text4)) return "navigation-changed";
+  if (/navigation|prepare_knowledge/i.test(text4)) return "not-prepared";
+  return "check-failed";
+}
+
+// src/core/publication.ts
+init_review_policy();
+init_review_policy();
+init_runtime_host();
+init_ui_state();
+function createPublicationApi(ui, reviewPolicy, ports, createState, signal = null) {
+  const { publicationKnowledgeFlow: publicationKnowledgeFlow2, updateKnowledgeFlow: updateKnowledgeFlow2 } = ui;
+  const { readReviewMode: readReviewMode2 } = reviewPolicy;
+  const state = createState(
+    /** @returns {any} */
+    () => ({
+      proofs: /* @__PURE__ */ new WeakSet(),
+      projectEvent: projectKnowledgeEvent2,
+      projectSnapshot: projectKnowledgeSnapshot2
+    })
+  );
+  const FIELD = "knowledgePublication";
+  const hash3 = (content) => createHash19("sha256").update(JSON.stringify(content ?? [])).digest("hex");
+  const protocolKey = (message) => hash3({
+    timestamp: message.timestamp,
+    api: message.api,
+    provider: message.provider,
+    model: message.model,
+    responseId: message.responseId,
+    calls: message.content.filter((block) => block.type === "toolCall")
+  });
+  function sanitizeError(text4) {
+    return diagnosticText(text4, 4096).trim();
+  }
+  function isUserAbortError(message) {
+    return /was aborted|request aborted/i.test(String(message?.errorMessage || ""));
+  }
+  function base(message, content) {
+    const { errorMessage: originalError, diagnostics, ...metadata } = message;
+    const errorMessage2 = message.stopReason === "error" && typeof originalError === "string" ? sanitizeError(originalError) : "";
+    return {
+      ...metadata,
+      content,
+      // Diagnostics do not control provider replay. Keep only safe error text;
+      // arbitrary details and stacks must not enter public/persisted history.
+      ...diagnostics ? {
+        diagnostics: diagnostics.map(({ type: type2, timestamp, error }) => ({
+          type: sanitizeError(type2),
+          timestamp,
+          ...error ? { error: { message: sanitizeError(error.message) } } : {}
+        }))
+      } : {},
+      ...errorMessage2 ? { errorMessage: errorMessage2 } : {}
+    };
+  }
+  function seal(message, content, detail) {
+    signal?.throwIfAborted();
+    const proof = { version: 1, id: randomUUID17(), ...detail, contentHash: hash3(content) };
+    state.proofs.add(proof);
+    return { ...base(message, content), [FIELD]: proof };
+  }
+  function blocked(message, code = "check-failed", turnId = null, operational = null, paths = [], extra = null) {
+    return seal(
+      message,
+      [
+        {
+          type: "text",
+          text: operational || (code === "interrupted" ? publicationNotices.interrupted : `\u3010\u77E5\u8BC6\u5E93\u68C0\u67E5\u672A\u901A\u8FC7\u3011${publicationNotices[code] || publicationNotices["check-failed"]}`)
+        }
+      ],
+      {
+        status: "blocked",
+        reason: code,
+        turnId,
+        ...paths.length ? { paths } : {},
+        ...extra && typeof extra === "object" ? extra : {},
+        scientificallyVerified: false
+      }
+    );
+  }
+  function verifiedEvidence(error) {
+    const verified = error?.verified;
+    if (!verified || typeof verified !== "object") return {};
+    const { sources, deliveries, ...rest } = verified;
+    return {
+      ...rest,
+      sources: Array.isArray(sources) ? sources : [],
+      deliveries: Array.isArray(deliveries) ? deliveries : []
+    };
+  }
+  function isSealed(message, restore = false) {
+    const proof = message?.[FIELD];
+    return proof?.version === 1 && (state.proofs.has(proof) || restore) && [
+      "released",
+      "no-hits",
+      "blocked",
+      "tool-only",
+      "unconfigured",
+      "evidence-only",
+      "setup-complete",
+      "operational"
+    ].includes(proof.status) && proof.contentHash === hash3(message.content);
+  }
+  function inplace(target, source) {
+    for (const name of Object.keys(target)) delete target[name];
+    Object.assign(target, source);
+    return target;
+  }
+  function projectUnsealed(message) {
+    if (message.stopReason === "error" && !isUserAbortError(message))
+      return seal(message, [], { status: "blocked", reason: "model-error", scientificallyVerified: false });
+    if (["aborted", "length", "pending"].includes(message.stopReason) || isUserAbortError(message))
+      return blocked(message, "interrupted");
+    return blocked(message);
+  }
+  function projectKnowledgeEvent2(event) {
+    signal?.throwIfAborted();
+    if (!ports.available()) return event;
+    if (event.type === "message_update") return null;
+    if (event.type === "message_start" && event.message?.role === "assistant")
+      return { ...event, message: base(event.message, []) };
+    if (event.type === "message_end" && event.message?.role === "assistant") {
+      if (!isSealed(event.message)) inplace(event.message, projectUnsealed(event.message));
+      return event;
+    }
+    if (event.type === "turn_end" && event.message?.role === "assistant")
+      return { ...event, message: isSealed(event.message) ? event.message : projectUnsealed(event.message) };
+    if (event.type === "agent_end")
+      return {
+        ...event,
+        messages: event.messages.map(
+          (m) => m.role === "assistant" && !isSealed(m) ? projectUnsealed(m) : m
+        )
+      };
+    return event;
+  }
+  function projectKnowledgeSnapshot2(messages, persisted = []) {
+    signal?.throwIfAborted();
+    if (!ports.available()) return messages;
+    return messages.map((m) => {
+      if (m.role !== "assistant" || isSealed(m)) return m;
+      const saved = ports.persisted(m, persisted);
+      if (saved && (!m[FIELD] || isSealed(m, true))) return m;
+      return projectUnsealed(m);
+    });
+  }
+  function registerAnswerPublication2(pi, {
+    runtime = null,
+    getCurrent,
+    evidenceOnly = false,
+    getDeliveryFooter = null,
+    getTaskFeedback = null,
+    getTaskRuntime = null,
+    getMetacognition = null,
+    maxToolRounds = 24
+  }) {
+    const attachRuntime = (next) => {
+      if (!next || typeof next !== "object" || !next.scheduler || !next.knowledge) return false;
+      const slot = next.knowledge.publication || {};
+      slot.proofs ??= /* @__PURE__ */ new WeakSet();
+      slot.projectEvent = (event) => projectKnowledgeEvent2(event);
+      slot.projectSnapshot = (messages, persisted) => projectKnowledgeSnapshot2(messages, persisted);
+      next.knowledge.publication = slot;
+      attachReviewer(next.knowledge.reviewer);
+      return true;
+    };
+    let reviewer = null;
+    const attachReviewer = (next) => {
+      if (!next || typeof next !== "object" || typeof next.schedule !== "function") return false;
+      reviewer = next;
+      return true;
+    };
+    const sessionIdFor = (ctx) => ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || "";
+    const scheduleReview = (ctx, snapshot, trigger) => {
+      if (!reviewer || !sessionIdFor(ctx)) return;
+      try {
+        reviewer.schedule({ sessionId: sessionIdFor(ctx), snapshot, trigger });
+      } catch {
+      }
+    };
+    if (runtime) attachRuntime(runtime);
+    let turnId = null, required = true, started = false, protocolBytes = 0, toolRounds = 0, setupReceipt = null;
+    const protocol = /* @__PURE__ */ new Map(), deliveries = /* @__PURE__ */ new Map();
+    const advisoryFooter = (ctx) => {
+      const footer = typeof getDeliveryFooter === "function" ? getDeliveryFooter(ctx) : null;
+      return footer ? [{ type: "text", text: `
+
+${String(footer).slice(0, 2e3)}` }] : [];
+    };
+    const failure = (message, error) => {
+      const info = knowledgeFailure(error);
+      const metacognitive = error?.metacognition;
+      const metacognitiveReport = metacognitive && Array.isArray(metacognitive.failures) && metacognitive.failures.length ? metacognitive.failures.slice(0, 8).map((item) => `- ${String(item.detail || item.code).slice(0, 600)}`).join("\n") : "";
+      const task = getTaskRuntime?.();
+      if (task?.snapshot()) task.pause(info.code);
+      const report = task?.snapshot() ? `${task.render()}
+
+\u7814\u7A76\u8BF4\u660E\u6682\u672A\u5C55\u793A\uFF1A${info.message}` : getTaskFeedback?.()?.report(info.code, info.message, info.paths);
+      return blocked(
+        message,
+        info.code,
+        turnId,
+        [report, metacognitiveReport].filter(Boolean).join("\n\n") || null,
+        info.paths,
+        metacognitive ? { metacognition: metacognitive } : null
+      );
+    };
+    const evaluateMetacognition = async (ctx, current, text4) => {
+      if (typeof getMetacognition !== "function") return null;
+      let snapshot;
+      try {
+        snapshot = await getMetacognition(ctx, current);
+      } catch {
+        throw Object.assign(new Error("Metacognitive host snapshot unavailable"), {
+          code: "metacognitive-inconsistency",
+          metacognition: {
+            ok: false,
+            findings: [],
+            failures: [
+              {
+                code: "metacognition-invalid",
+                subject: "host-snapshot",
+                detail: "Host metacognitive snapshot could not be read"
+              }
+            ]
+          }
+        });
+      }
+      if (snapshot == null) return null;
+      const evaluation = evaluateMetacognitivePublication(text4, snapshot);
+      if (!evaluation.ok)
+        throw Object.assign(new Error("Metacognitive publication checks failed"), {
+          code: evaluation.failures.some((failure2) => failure2.code === "artifact-pending-review") ? "artifact-pending-review" : "metacognitive-inconsistency",
+          paths: evaluation.failures.map((item) => item.path).filter(Boolean).slice(0, 6),
+          metacognition: evaluation,
+          verified: { metacognition: evaluation }
+        });
+      return evaluation;
+    };
+    pi.on("context", async (event) => ({
+      messages: event.messages.map((message) => {
+        if (message.role !== "assistant") return message;
+        const original = protocol.get(protocolKey(message));
+        return original ? { ...message, content: original } : message;
+      })
+    }));
+    const handleMessageEnd = async (event, ctx) => {
+      const message = event.message;
+      if (message.role !== "assistant") return;
+      const sessionId = sessionIdFor(ctx);
+      const cwd = ctx?.cwd;
+      const signal2 = ctx?.signal;
+      const flowCtx = { sessionId };
+      const report = async (message2) => {
+        if (message2[FIELD]?.status !== "tool-only" && message2[FIELD]?.reason !== "model-error")
+          await publicationKnowledgeFlow2(flowCtx, message2[FIELD]);
+        return { message: message2 };
+      };
+      const blocks = Array.isArray(message.content) ? message.content : [];
+      const tools = blocks.filter((b) => b.type === "toolCall");
+      if (tools.length) {
+        toolRounds += 1;
+        if (toolRounds > maxToolRounds && await getTaskRuntime?.()?.advanceStage?.()) toolRounds = 1;
+        const bytes = Buffer.byteLength(JSON.stringify(blocks), "utf8");
+        if (toolRounds > maxToolRounds || protocolBytes + bytes > 4 * 1024 * 1024 || protocol.size >= 64) {
+          const limit = toolRounds > maxToolRounds ? "tool-round-limit" : protocolBytes + bytes > 4 * 1024 * 1024 ? "protocol-byte-limit" : "protocol-entry-limit";
+          const task = getTaskRuntime?.();
+          task?.pause(limit);
+          const reportText = [publicationNotices["tool-loop-stopped"], task?.snapshot() ? task.render() : null].filter(Boolean).join("\n\n");
+          const denied = blocked(message, "tool-loop-stopped", turnId, reportText);
+          denied[FIELD].limit = {
+            kind: limit,
+            toolRounds,
+            maxToolRounds,
+            protocolBytes,
+            entries: protocol.size
+          };
+          denied.stopReason = "stop";
+          return report(denied);
+        }
+        const safe = seal(message, tools, { status: "tool-only", turnId, scientificallyVerified: false });
+        protocol.set(protocolKey(message), structuredClone(blocks));
+        protocolBytes += bytes;
+        return report(safe);
+      }
+      if (message.stopReason === "error" && !isUserAbortError(message))
+        return report(
+          seal(message, [], {
+            status: "blocked",
+            reason: "model-error",
+            turnId,
+            scientificallyVerified: false
+          })
+        );
+      if (["aborted", "length", "pending"].includes(message.stopReason) || signal2?.aborted || isUserAbortError(message))
+        return report(failure(message, { code: "interrupted" }));
+      const content = blocks.filter((b) => b.type === "text");
+      if (!evidenceOnly) await getTaskRuntime?.()?.takeReport();
+      if (setupReceipt) {
+        const done = setupReceipt;
+        setupReceipt = null;
+        try {
+          await done.checkCurrent?.();
+        } catch {
+          return report(blocked(message, "binding-changed", turnId));
+        }
+        return report(
+          seal(
+            message,
+            [
+              {
+                type: "text",
+                text: [
+                  "\u77E5\u8BC6\u5E93\u521D\u59CB\u5316\u5DF2\u5B8C\u6210\u3002",
+                  `\u5F53\u524D\u77E5\u8BC6\u5E93\uFF1A${done.vault}`,
+                  `\u4F5C\u7528\u8303\u56F4\uFF1A\u6574\u4E2A Drone\uFF1B\u5F53\u524D\u9879\u76EE\uFF1A${done.project || "\u5C1A\u672A\u521B\u5EFA\u9879\u76EE\u5206\u533A"}\u3002`,
+                  "\u77E5\u8BC6\u5E93\u5DF2\u6309\u5F53\u524D\u8BBE\u7F6E\u542F\u7528\uFF1B\u534F\u4F5C\u8005\u53EA\u4F1A\u8BBF\u95EE\u672C\u6B21\u4EFB\u52A1\u5141\u8BB8\u7684\u8D44\u6599\u3002",
+                  "\u5DF2\u4FDD\u5B58\u7ED1\u5B9A\u5E76\u521B\u5EFA\u7F3A\u5931\u7684\u5BFC\u822A\u548C\u6A21\u677F\uFF0C\u672A\u642C\u8FC1\u6216\u5220\u9664\u5DF2\u6709\u7B14\u8BB0\u3002",
+                  "\u8FD9\u53EA\u662F\u521D\u59CB\u5316\u5B8C\u6210\uFF0C\u4E0D\u4EE3\u8868\u8BBA\u6587\u5DF2\u7ECF\u4E0B\u8F7D\u3001\u77E5\u8BC6\u5DF2\u7ECF\u6574\u7406\u6216\u539F\u59CB MCP \u5DF2\u8FDE\u63A5\u3002",
+                  "\u63A5\u4E0B\u6765\u53EF\u4EE5\u8981\u6C42\u68C0\u7D22\u6216\u4E0B\u8F7D\u8D44\u6599\uFF1B\u8BBA\u6587\u5E94\u4EA4\u4ED8\u4E3B\u8981\u89C2\u70B9\u4E0E\u65B9\u6CD5\uFF0C\u8F6F\u4EF6\u5E94\u4EA4\u4ED8\u7248\u672C\u5BF9\u5E94\u7684\u547D\u4EE4\u3001\u53C2\u6570\u4E0E\u793A\u4F8B\u3002"
+                ].join("\n\n")
+              }
+            ],
+            {
+              status: "setup-complete",
+              turnId,
+              vaultId: done.vaultId,
+              bindingRevision: done.bindingRevision,
+              scientificallyVerified: false
+            }
+          )
+        );
+      }
+      if (!content.some((block) => block.text?.trim()))
+        return report(failure(message, { code: "empty-answer" }));
+      if (evidenceOnly)
+        return {
+          message: seal(
+            message,
+            [
+              { type: "text", text: "\u3010\u5C1A\u672A\u6838\u5B9E\u7684\u8865\u5145\u6750\u6599\u3011\u4EE5\u4E0B\u5185\u5BB9\u4E0D\u662F\u4E3B\u4F1A\u8BDD\u5DF2\u786E\u8BA4\u7684\u6700\u7EC8\u7ED3\u8BBA\u3002\n\n" },
+              ...content
+            ],
+            { status: "evidence-only", turnId, scientificallyVerified: false }
+          )
+        };
+      if (!started) return report(blocked(message, "not-prepared", turnId));
+      if (!required)
+        return report(
+          seal(message, content, { status: "unconfigured", turnId, scientificallyVerified: false })
+        );
+      const text4 = content.map((b) => b.text).join("\n");
+      if (Buffer.byteLength(text4, "utf8") > 128 * 1024)
+        return report(blocked(message, "answer-too-large", turnId));
+      updateKnowledgeFlow2(flowCtx, { phase: "checking" });
+      let currentTurn;
+      try {
+        const c = getCurrent(ctx);
+        currentTurn = c;
+        if (!c) throw Object.assign(new Error("not prepared"), { code: "not-prepared" });
+        let publishText = text4;
+        let publishContent = content;
+        const attachMaterializedCitations = async (refresh = false) => {
+          if (typeof c.service.materializeCitations !== "function") return;
+          const paths = await c.service.materializeCitations(c.ticket, cwd, c.query, { refresh });
+          if (!paths.length || /\[\[[^\]]+\]\]/.test(publishText)) return;
+          const suffix = `
+
+\u4F9D\u636E\uFF1A${paths.map((path) => `[[${path.replace(/\.md$/i, "")}]]`).join(" ")}`;
+          publishText = `${publishText}${suffix}`;
+          publishContent = publishContent.map(
+            (block, index) => block.type === "text" && index === publishContent.length - 1 ? { ...block, text: `${block.text}${suffix}` } : block
+          );
+        };
+        const validateWithTimeout = async () => {
+          let timer;
+          try {
+            return await Promise.race([
+              c.service.validateAnswer(c.ticket, cwd, publishText, {
+                deliveries: [...deliveries.values()]
+              }),
+              new Promise((_, reject) => {
+                timer = setTimeout(
+                  () => reject(Object.assign(new Error("check timeout"), { code: "check-timeout" })),
+                  5e3
+                );
+              })
+            ]);
+          } finally {
+            if (timer) clearTimeout(timer);
+          }
+        };
+        const automatic = await readReviewMode2() === "automatic";
+        if (!automatic) await attachMaterializedCitations();
+        let proof;
+        try {
+          proof = await validateWithTimeout();
+        } catch (error) {
+          if (automatic || !["coverage-incomplete", "search-stale"].includes(error?.code)) throw error;
+          await attachMaterializedCitations(true);
+          proof = await validateWithTimeout();
+        }
+        if (signal2?.aborted) return report(failure(message, { code: "interrupted" }));
+        const metacognitive = await evaluateMetacognition(flowCtx, c, publishText);
+        const warnings = [
+          ...Array.isArray(proof.warnings) ? proof.warnings : [],
+          ...(metacognitive?.warnings || []).map((warning) => ({
+            code: warning.code,
+            message: warning.detail
+          }))
+        ];
+        let reviewerWarnings = [];
+        if (reviewer && typeof getMetacognition === "function") {
+          try {
+            const reviewSnapshot = await getMetacognition(flowCtx, c);
+            if (reviewSnapshot && typeof reviewSnapshot === "object") {
+              const snapshot = { ...reviewSnapshot, body: publishText };
+              const cached = reviewer.getCached?.(sessionId, snapshot);
+              const prior = reviewer.getFindings?.(sessionId);
+              reviewerWarnings = [
+                ...Array.isArray(cached?.findings) ? cached.findings : [],
+                ...Array.isArray(prior) ? prior : []
+              ].filter(
+                (finding, index, all) => finding.severity === "high" && !finding.handled && all.findIndex((item) => item.id === finding.id) === index
+              );
+              scheduleReview(flowCtx, snapshot, "publication-projection");
+            }
+          } catch {
+          }
+        }
+        const published = proof.status === "no-hits" ? [
+          {
+            type: "text",
+            text: "\u3010\u77E5\u8BC6\u5E93\u6CA1\u6709\u627E\u5230\u5339\u914D\u5185\u5BB9\u3011\u672C\u8F6E\u67E5\u8BE2\u672A\u627E\u5230\u5339\u914D\u6761\u76EE\uFF1B\u4E0B\u6587\u4E0D\u662F\u57FA\u4E8E\u672C\u5E93\u8BC1\u636E\u7684\u7ED3\u8BBA\uFF0C\u4E5F\u4E0D\u8868\u793A\u5168\u5E93\u4E0D\u5B58\u5728\u76F8\u5173\u77E5\u8BC6\u3002\n\n"
+          },
+          ...publishContent
+        ] : publishContent;
+        const footer = typeof getDeliveryFooter === "function" ? getDeliveryFooter(flowCtx) : null;
+        const visible = footer ? [...published, { type: "text", text: `
+
+${String(footer).slice(0, 2e3)}` }] : published;
+        return report(
+          seal(message, visible, {
+            ...proof,
+            ...warnings.length ? { warnings } : {},
+            ...metacognitive ? { metacognition: metacognitive } : {},
+            ...reviewerWarnings.length ? { reviewerWarnings } : {},
+            status: proof.status === "ready" ? "released" : "no-hits",
+            turnId
+          })
+        );
+      } catch (error) {
+        const info = knowledgeFailure(error);
+        if (await readReviewMode2() === "automatic" && advisoryCodes.has(info.code) && !signal2?.aborted) {
+          if (info.code !== "not-prepared")
+            try {
+              const current = currentTurn;
+              if (!current) throw Object.assign(new Error("not prepared"), { code: "not-prepared" });
+              await current.service.check(current.ticket, cwd);
+            } catch (authorityError) {
+              return report(failure(message, authorityError));
+            }
+          const advisoryContent = info.code === "citation-required" ? [] : [{ type: "text", text: `
+
+\u3010\u6709\u63D0\u9192\u3011${advisoryLine(info.code, error)}` }];
+          return report(
+            seal(message, [...content, ...advisoryContent, ...advisoryFooter(flowCtx)], {
+              status: "released",
+              reviewMode: "automatic",
+              ...verifiedEvidence(error),
+              warnings: [info],
+              turnId,
+              scientificallyVerified: false
+            })
+          );
+        }
+        return report(failure(message, error));
+      }
+    };
+    ports.registerFinalizer(pi, handleMessageEnd);
+    return {
+      attachRuntime,
+      attachReviewer,
+      async recordDelivery(ctx, path) {
+        const sessionId = sessionIdFor(ctx);
+        const cwd = ctx?.cwd;
+        const flowCtx = { sessionId };
+        const c = getCurrent(ctx);
+        if (!c) return;
+        const receipt = await c.service.deliveryReceipt(c.ticket, cwd, path);
+        deliveries.set(receipt.path, receipt);
+        scheduleReview(
+          flowCtx,
+          {
+            enabled: true,
+            deliverables: [{ id: receipt.path, path: receipt.path, sha256: receipt.hash }]
+          },
+          "deliverable-write"
+        );
+        while (deliveries.size > 12) deliveries.delete(deliveries.keys().next().value);
+      },
+      async preflight(ctx, text4) {
+        const sessionId = sessionIdFor(ctx);
+        const cwd = ctx?.cwd;
+        const flowCtx = { sessionId };
+        let timer;
+        try {
+          if (typeof text4 !== "string" || Buffer.byteLength(text4, "utf8") > 128 * 1024)
+            throw { code: "answer-too-large" };
+          const c = getCurrent(ctx), proof = await Promise.race([
+            c.service.validateAnswer(c.ticket, cwd, text4, { deliveries: [...deliveries.values()] }),
+            new Promise((_, reject) => {
+              timer = setTimeout(() => reject({ code: "check-timeout" }), 5e3);
+            })
+          ]);
+          const metacognition = await evaluateMetacognition(flowCtx, c, text4);
+          if (reviewer && typeof getMetacognition === "function") {
+            try {
+              const snapshot = await getMetacognition(flowCtx, c);
+              if (snapshot && typeof snapshot === "object")
+                scheduleReview(flowCtx, { ...snapshot, body: text4 }, "publication-projection");
+            } catch {
+            }
+          }
+          return { ok: true, proof, ...metacognition ? { metacognition } : {} };
+        } catch (error) {
+          const info = knowledgeFailure(error);
+          if (await readReviewMode2() === "automatic" && advisoryCodes.has(info.code)) {
+            if (info.code !== "not-prepared")
+              try {
+                const current = getCurrent(ctx);
+                await current.service.check(current.ticket, cwd);
+              } catch {
+                return {
+                  ok: false,
+                  code: "binding-changed",
+                  message: "Refresh the current knowledge binding before continuing."
+                };
+              }
+            return {
+              ok: true,
+              status: "warning",
+              ...verifiedEvidence(error),
+              warnings: [info],
+              scientificallyVerified: false,
+              next: "Deliver the answer with its limitations. Do not repeat read/search/check solely to clear this advisory."
+            };
+          }
+          return {
+            ok: false,
+            ...info,
+            next: "For operational progress, call task_status and deliver its host receipt without unrelated citations. For scientific claims, read the listed evidence or repair the reported stage, then check again. Never retry a write merely because output was lost.",
+            task: getTaskFeedback?.()?.facts()
+          };
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      },
+      recordSetup(result2, checkCurrent) {
+        if (result2?.state === "ready" && result2.scope === "application")
+          setupReceipt = {
+            vault: result2.vault,
+            project: result2.project,
+            profile: result2.profile,
+            depositMode: result2.depositMode,
+            subagentMcpPolicy: result2.subagentMcpPolicy,
+            vaultId: result2.vaultId,
+            bindingRevision: result2.bindingRevision,
+            checkCurrent
+          };
+      },
+      begin(isRequired = true, newTurn = true) {
+        started = true;
+        required = isRequired;
+        if (newTurn) {
+          turnId = randomUUID17();
+          protocol.clear();
+          deliveries.clear();
+          protocolBytes = 0;
+          toolRounds = 0;
+          setupReceipt = null;
+        }
+      },
+      invalidate() {
+        started = false;
+        required = true;
+        turnId = null;
+        protocol.clear();
+        deliveries.clear();
+        protocolBytes = 0;
+        toolRounds = 0;
+        setupReceipt = null;
+      },
+      async guidance() {
+        return await readReviewMode2() === "automatic" ? "Answer the user's question directly. For a planning request, first provide a concise provisional framework with explicit assumptions, then deepen only the evidence needed. Cite scientific claims inline using exact [[path]] citations from research_read_knowledge results read this turn; a saved report link is a deliverable, not an evidence citation. Reuse successful read receipts instead of reading the same source through both generic read and research_read_knowledge. Do not invent citations or cite a source merely to clear a warning. Label suggested sample sizes as design heuristics, not universal statistical thresholds. Acknowledge uncertainty and save useful knowledge. Evidence quality reminders are nonblocking: do not run repeated read/search/check just to clear them. Never claim scientific verification. Host permission, binding, abort and spending limits still apply; human Wiki edits require confirmation." : "For execution progress in ANY task (analysis, code, environment, experiments, writing), use task_status; its host-generated report needs no research citations. Never add irrelevant sources to an operational report. Scientific host-checked answers need a current-turn search, reads of cited [[path]] sources, then research_check_answer. Public text must answer the user's question; do not lecture about Vault policy or evidence-gate stages. Use short set_status about the task, not product design. Show Me/run links are deliverables, not evidence.";
+      }
+    };
+  }
+  return { projectKnowledgeEvent: projectKnowledgeEvent2, projectKnowledgeSnapshot: projectKnowledgeSnapshot2, registerAnswerPublication: registerAnswerPublication2 };
+}
+function localPublicationPorts(config) {
+  return {
+    available: () => Boolean(config.knowledgeDirectory()),
+    registerFinalizer: (pi, handler) => pi.on("message_end", handler),
+    persisted: (message, saved) => saved.includes(message)
+  };
+}
+function createManagedKnowledgePublication(ui, reviewPolicy, signal) {
+  let finalizer;
+  const publication = createPublicationApi(
+    ui,
+    reviewPolicy,
+    {
+      available: () => true,
+      registerFinalizer(_pi, handler) {
+        if (finalizer) throw new Error("Knowledge publication is already registered");
+        finalizer = handler;
+      },
+      // Only the host's private SDK-origin courier can preserve this identity across IPC.
+      // History display never enrolls a recovered proof in the live WeakSet.
+      persisted: (message, saved) => saved.includes(message)
+    },
+    (create) => create(),
+    signal
+  );
+  return {
+    ...publication,
+    projection: {
+      async finalize(event, context) {
+        if (!finalizer) throw new Error("Knowledge publication has not been registered");
+        if (context.scope.kind !== "session")
+          throw new Error("Knowledge publication requires its live session");
+        context.signal.throwIfAborted();
+        const result2 = await finalizer(event, {
+          cwd: context.scope.workspaceDirectory,
+          sessionManager: { getSessionId: () => context.scope.sessionId },
+          signal: context.signal
+        });
+        context.signal.throwIfAborted();
+        return result2?.message ? { ...event, message: result2.message } : event;
+      },
+      event: (event, signal2) => {
+        signal2?.throwIfAborted();
+        return publication.projectKnowledgeEvent(event);
+      },
+      snapshot: (messages, persisted, signal2) => {
+        signal2?.throwIfAborted();
+        return publication.projectKnowledgeSnapshot(messages, persisted);
+      }
+    }
+  };
+}
+function createKnowledgePublication(ui, reviewPolicy, config, signal) {
+  return createPublicationApi(ui, reviewPolicy, localPublicationPorts(config), (create) => create(), signal);
+}
+var compatibility4 = createPublicationApi(
+  ui_state_exports,
+  review_policy_exports,
+  localPublicationPorts(config_exports),
+  (create) => runtimeSlot("knowledge", "publication", create)
+);
+var { projectKnowledgeEvent, projectKnowledgeSnapshot, registerAnswerPublication } = compatibility4;
+
+// src/core/related-notes.ts
+init_config();
+
+// src/core/reuse.ts
+import { isAbsolute as isAbsolute7, resolve as resolve8 } from "node:path";
+init_config();
+
+// src/core/index.ts
+init_review_policy();
+init_runtime_host();
+
+// src/core/semantic-model.ts
+var SECTOR_ANGLES = {
+  // SVG y grows downwards: 7 o'clock is 120° and 8 o'clock is 150°.
+  paper: 2 * Math.PI / 3,
+  software: 5 * Math.PI / 6,
+  method: Math.PI,
+  dataset: 7 * Math.PI / 6,
+  evidence: 4 * Math.PI / 3,
+  claim: 3 * Math.PI / 2,
+  concept: 11 * Math.PI / 6,
+  entity: 0,
+  idea: Math.PI / 6,
+  decision: Math.PI / 3,
+  question: Math.PI / 2,
+  wiki: 3 * Math.PI / 4,
+  other: 11 * Math.PI / 6
+};
+
+// src/core/source-links.ts
+import { realpath as realpath6, stat as stat2 } from "node:fs/promises";
+import { isAbsolute as isAbsolute8, relative as relative8, resolve as resolve9, sep as sep8 } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+// src/core/index.ts
+init_specialist_host();
+
+// src/core/task-feedback.ts
+import { lstat as lstat9, realpath as realpath7 } from "node:fs/promises";
+import { relative as relative9, resolve as resolve10, sep as sep9 } from "node:path";
+import { pathToFileURL as pathToFileURL2 } from "node:url";
+var replaceControl = (text4) => [...String(text4 || "")].map((char) => char.charCodeAt(0) < 32 ? " " : char).join("");
+var clean2 = (text4, limit = 300) => replaceControl(text4).replace(/(?:bearer\s+|api[_-]?key[=:]\s*)[^\s]+/gi, "[redacted]").trim().slice(0, limit);
+var feedbackReason = (reason) => {
+  const labels = {
+    "not-prepared": "\u77E5\u8BC6\u5E93\u51C6\u5907\u5C1A\u672A\u5B8C\u6210",
+    "model-error": "\u6A21\u578B\u8BF7\u6C42\u5931\u8D25",
+    "check-timeout": "\u56DE\u7B54\u68C0\u67E5\u8D85\u65F6",
+    "check-failed": "\u56DE\u7B54\u68C0\u67E5\u53D1\u751F\u9519\u8BEF",
+    "tool-loop-stopped": "\u5F53\u524D\u5904\u7406\u9636\u6BB5\u5DF2\u6682\u505C",
+    interrupted: "\u672C\u6B21\u8BF7\u6C42\u5DF2\u4E2D\u65AD"
+  };
+  return labels[String(reason)] || "\u9700\u8981\u5148\u5904\u7406\u76F8\u5173\u8D44\u6599";
+};
+function createTaskFeedback() {
+  let failures = [];
+  let files = /* @__PURE__ */ new Map();
+  let seen = /* @__PURE__ */ new Set();
+  let archiveCount = 0;
+  let summarySaved = false;
+  let explainerSaved = false;
+  let candidates = /* @__PURE__ */ new Set();
+  const begin = () => {
+    failures = [];
+    files = /* @__PURE__ */ new Map();
+    seen = /* @__PURE__ */ new Set();
+    archiveCount = 0;
+    summarySaved = false;
+    explainerSaved = false;
+    candidates = /* @__PURE__ */ new Set();
+  };
+  const observe = async (event, ctx) => {
+    if (seen.has(event.toolCallId)) return;
+    seen.add(event.toolCallId);
+    if (seen.size > 512) {
+      const oldest = seen.values().next().value;
+      seen.delete(oldest);
+    }
+    const details = event.details || {};
+    const content = event.content || [];
+    if (event.isError || details.status === "failed" || details.error && details.successful === 0) {
+      failures.push({
+        tool: clean2(event.toolName, 60),
+        reason: clean2(
+          details.reason || details.error || content.filter((block) => block.type === "text").map((block) => block.text).join(" ")
+        )
+      });
+      failures = failures.slice(-6);
+      return;
+    }
+    let path = null;
+    if (event.toolName === "research_propose_wiki_update" && details.id) candidates.add(details.id);
+    if (event.toolName === "research_archive_source" && details.status === "downloaded") archiveCount++;
+    if (event.toolName === "research_summarize_run" && details.summary_saved) {
+      summarySaved = true;
+      path = details.run;
+    }
+    if (event.toolName === "research_archive_explainer" && details.knowledge_status === "written") {
+      explainerSaved = true;
+      path = details.note;
+    }
+    if (["write", "edit"].includes(String(event.toolName))) path = event.input?.path;
+    if (typeof path !== "string") return;
+    try {
+      const full = await realpath7(resolve10(ctx.cwd, path));
+      const rel = relative9(await realpath7(ctx.cwd), full);
+      if (rel.startsWith(`results${sep9}`) && (await lstat9(full)).isFile()) {
+        files.delete(full);
+        files.set(full, { name: clean2(rel.split(sep9).at(-1), 100), path: full });
+        while (files.size > 8) files.delete(files.keys().next().value);
+      }
+    } catch {
+    }
+  };
+  const facts = () => ({
+    archivedSources: archiveCount,
+    summarySaved,
+    explainerSaved,
+    pendingWikiCandidates: candidates.size,
+    files: [...files.values()],
+    failures: [...failures]
+  });
+  const report = (reason, message, paths = []) => {
+    const interrupted = reason === "interrupted";
+    const current = facts();
+    const lines = [
+      interrupted ? "\u672C\u6B21\u8BF7\u6C42\u5DF2\u4E2D\u65AD\uFF0C\u672A\u5B8C\u6210\u7684\u56DE\u7B54\u6682\u672A\u5C55\u793A\u3002" : `\u3010\u56DE\u7B54\u68C0\u67E5\u672A\u5B8C\u6210\u3011\u672C\u8F6E\u56DE\u7B54\u6682\u672A\u5C55\u793A\uFF08${feedbackReason(reason)}\uFF09\u3002`,
+      ...interrupted ? [] : [clean2(message, 450)]
+    ];
+    if (paths.length)
+      lines.push(
+        "\u9700\u8981\u5904\u7406\u7684\u5185\u5BB9\uFF1A" + paths.slice(0, 6).map((path) => `\`${clean2(path, 512).replaceAll("`", "")}\``).join("\u3001")
+      );
+    if (current.archivedSources || current.summarySaved || current.files.length)
+      lines.push(
+        `\u5DF2\u5B8C\u6210\u7684\u5DE5\u4F5C\u4ECD\u7136\u4FDD\u7559\uFF1A\u5DF2\u4FDD\u5B58\u6765\u6E90 ${current.archivedSources} \u9879\uFF1B\u7814\u7A76\u6458\u8981${current.summarySaved ? "\u5DF2\u4FDD\u5B58" : "\u5C1A\u672A\u786E\u8BA4\u4FDD\u5B58"}\uFF1BShow Me ${current.explainerSaved ? "\u5DF2\u4FDD\u5B58" : "\u5C1A\u672A\u786E\u8BA4\u4FDD\u5B58"}\uFF1B\u7B49\u5F85\u5BA1\u6838\u7684 Wiki \u6761\u76EE ${current.pendingWikiCandidates} \u4E2A\u3002`
+      );
+    if (current.files.length)
+      lines.push(
+        "\u672C\u8F6E\u5B9E\u9645\u5199\u5165\u7684\u4EA7\u7269\uFF08\u5185\u5BB9\u4ECD\u9700\u6838\u9A8C\uFF09\uFF1A\n" + current.files.map((file) => `- [${file.name.replace(/[[\]]/g, "")}](${pathToFileURL2(file.path).href})`).join("\n")
+      );
+    if (current.failures.length)
+      lines.push(
+        "\u8FC7\u7A0B\u4E2D\u8FD8\u53D1\u751F\u8FC7\u4EE5\u4E0B\u5DE5\u5177\u95EE\u9898\uFF1B\u90E8\u5206\u53EF\u80FD\u5DF2\u6539\u7528\u5176\u4ED6\u8DEF\u5F84\u7EE7\u7EED\uFF1A\n" + current.failures.slice(-3).map((entry) => `- ${entry.tool}\uFF1A${entry.reason}`).join("\n")
+      );
+    lines.push(
+      interrupted ? "\u5DF2\u8BB0\u5F55\u7684\u5DE5\u5177\u7ED3\u679C\u4ECD\u53EF\u5728\u672C\u4F1A\u8BDD\u67E5\u770B\u3002\u53EF\u4EE5\u7EE7\u7EED\u5269\u4F59\u5DE5\u4F5C\uFF1B\u4E0D\u9700\u8981\u91CD\u65B0\u4E0B\u8F7D\u5DF2\u7ECF\u4FDD\u5B58\u7684\u8D44\u6599\u3002" : "\u63A5\u4E0B\u6765\u5E94\u6839\u636E\u5177\u4F53\u68C0\u67E5\u539F\u56E0\u8865\u8BFB\u6216\u4FEE\u6B63\u5F15\u7528\uFF0C\u518D\u68C0\u67E5\u56DE\u7B54\uFF1B\u4E0D\u9700\u8981\u91CD\u65B0\u4E0B\u8F7D\u5DF2\u7ECF\u4FDD\u5B58\u7684\u8D44\u6599\u3002\u8FD9\u91CC\u62A5\u544A\u7684\u662F\u5904\u7406\u72B6\u6001\uFF0C\u4E0D\u4EE3\u8868\u672A\u5C55\u793A\u7684\u7814\u7A76\u7ED3\u8BBA\u5DF2\u7ECF\u5F97\u5230\u786E\u8BA4\u3002"
+    );
+    return lines.join("\n\n");
+  };
+  return { begin, observe, facts, report };
+}
+function guardResearchToolResult(event) {
+  if (!["fetch_content", "webfetch", "research_archive_source"].includes(String(event.toolName))) return;
+  const text4 = (event.content || []).filter((block) => block.type === "text").map((block) => String(block.text || "")).join("\n");
+  if (/(?:^|\n)%PDF-\d\.\d/.test(text4.slice(0, 1800)) && (text4.includes("\0") || /(?:\uFFFD|\d+\s+\d+\s+obj|\nstream)/.test(text4.slice(0, 6e3))))
+    return {
+      content: [
+        {
+          type: "text",
+          text: "\u8BFB\u53D6\u672A\u5B8C\u6210\uFF1A\u5DE5\u5177\u8FD4\u56DE\u4E86 PDF \u4E8C\u8FDB\u5236\uFF0C\u4E0D\u662F\u53EF\u8BFB\u6B63\u6587\u3002\u8BF7\u5F52\u6863\u539F PDF \u540E\u4F7F\u7528\u5DF2\u6709\u7684\u6587\u672C\u63D0\u53D6\u5DE5\u5177\u8BFB\u53D6\u9700\u8981\u7684\u9875\u6216\u6BB5\u843D\uFF1B\u4E0D\u8981\u628A\u8FD9\u4E9B\u5B57\u8282\u5F53\u4F5C\u8BC1\u636E\uFF0C\u4E5F\u4E0D\u8981\u91CD\u590D\u628A\u4E8C\u8FDB\u5236\u9001\u5165\u4E0A\u4E0B\u6587\u3002"
+        }
+      ],
+      isError: true,
+      details: { ...event.details || {}, error: "binary-pdf-returned", contentGuard: "binary-pdf" }
+    };
+  const details = event.details;
+  if (!event.isError && (details?.status === "failed" || details?.error && details.successful === 0))
+    return { isError: true };
+}
+
+// src/core/tool-budget.ts
+function createToolBudget(options = {}) {
+  const maxReads = options.maxReads ?? 8;
+  const maxSearches = options.maxSearches ?? 4;
+  const maxRepeats = options.maxRepeats ?? 2;
+  let reads = 0;
+  let searches = 0;
+  let recoveries = 0;
+  const repeats = /* @__PURE__ */ new Map();
+  function reset() {
+    reads = 0;
+    searches = 0;
+    recoveries = 0;
+    repeats.clear();
+  }
+  function consume(kind, key, { recovery = false } = {}) {
+    const recoveryAllowed = recovery && kind === "read" && ++recoveries <= 2;
+    const normalized = String(key ?? "").trim();
+    const repeatKey = `${kind}:${normalized}`;
+    const seen = (repeats.get(repeatKey) ?? 0) + 1;
+    repeats.set(repeatKey, seen);
+    if (kind === "read") reads += 1;
+    else searches += 1;
+    const overReads = kind === "read" && reads > maxReads;
+    const overSearches = kind === "search" && searches > maxSearches;
+    const overRepeat = seen > maxRepeats && !recoveryAllowed;
+    if (!overReads && !overSearches && !overRepeat) return null;
+    return {
+      status: "budget-exhausted",
+      code: "tool-loop",
+      message: overRepeat ? `Repeated ${kind} (${normalized || "empty"}) ${seen} times; stop looping and answer from what you have.` : `Knowledge ${kind} budget exhausted (${kind === "read" ? reads : searches}/${kind === "read" ? maxReads : maxSearches}). Synthesize an answer now.`,
+      next: "Write the final answer from already-read evidence. Do not call research_read_knowledge or research_search_knowledge again this turn."
+    };
+  }
+  return { reset, consume, snapshot: () => ({ reads, searches }) };
+}
+
+// src/core/topic-candidate.ts
+function titleFromSummary(summary, query, resultSlug) {
+  const heading = summary.match(/^#\s+(.+)$/m)?.[1]?.trim();
+  const fallback = (String(query || "").split(/[\n。]/)[0] ?? "").trim();
+  const slug2 = String(resultSlug || "research-topic").replace(/[-_]20\d{6,14}$/, "").replace(/[-_]+/g, " ").trim();
+  return (heading || fallback || slug2 || "Research topic").slice(0, 180);
+}
+function fileStem(resultSlug, title) {
+  let value = String(resultSlug || "").replace(/[-_]20\d{6,14}$/, "").trim();
+  if (!value || value === "research-question") value = String(title || "research-topic");
+  value = [...value.normalize("NFKC")].map((char) => char.charCodeAt(0) < 32 || '\\/[]#|<>:"*?'.includes(char) ? "-" : char).join("").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^[.\- ]+|[.\- ]+$/g, "").slice(0, 120);
+  return value || "research-topic";
+}
+function autoTopicCandidate({
+  summary,
+  query,
+  resultSlug,
+  sourcePaths = []
+} = {}) {
+  const markdown = String(summary || "").trim();
+  if (markdown.length < 160) return { eligible: false, reason: "summary-too-short" };
+  if (markdown.length > 24e3) return { eligible: false, reason: "summary-too-large" };
+  if (!Array.isArray(sourcePaths) || sourcePaths.length < 1)
+    return { eligible: false, reason: "no-current-read-evidence" };
+  const title = titleFromSummary(markdown, query, resultSlug);
+  return {
+    eligible: true,
+    input: {
+      path: `Wiki/${fileStem(resultSlug, title)}.md`,
+      title,
+      markdown,
+      rationale: "Automatically staged from a completed, evidence-gated research run. Review scope, claims and applicability before publishing.",
+      source_paths: sourcePaths.slice(0, 12)
+    }
+  };
+}
+
+// src/core/index.ts
+init_topic_memory();
+
+// src/core/ui-service.ts
+init_config();
+import { createHash as createHash20, randomUUID as randomUUID18 } from "node:crypto";
+import { lstat as lstat10, mkdir as mkdir11, readFile as readFile11, realpath as realpath8, stat as stat3, writeFile as writeFile11 } from "node:fs/promises";
+import { dirname as dirname9, isAbsolute as isAbsolute9, join as join16, relative as relative10, resolve as resolve11 } from "node:path";
+import { pathToFileURL as pathToFileURL3 } from "node:url";
+init_files();
+init_review_policy();
+init_runtime_host();
+init_specialist_host();
+init_ui_state();
+init_wiki_review();
+
+// src/core/maintenance-topic.ts
+init_config();
+init_files();
+init_layout();
+import { readdir as readdir3 } from "node:fs/promises";
+init_ui_state();
+
+// src/core/ui-service.ts
+var runtimeState = runtimeSlot("knowledge", "uiService", () => ({
+  previews: /* @__PURE__ */ new Map(),
+  maintenance: /* @__PURE__ */ new Set(),
+  semanticJobs: /* @__PURE__ */ new Map(),
+  dispose() {
+    this.previews.clear();
+    this.maintenance.clear();
+    this.semanticJobs.clear();
+  }
+}));
+
+// src/core/index.ts
+init_ui_state();
+init_wiki_model_review();
+init_wiki_policy();
+init_wiki_review();
+
+// src/core/native-session-lifecycle.ts
+function createKnowledgeNativeAdapter(owner, controller, register, cleanup) {
+  const operations = /* @__PURE__ */ new Set();
+  let registered = false;
+  let closed = false;
+  let disposal = null;
+  const eventUnsubscribers = /* @__PURE__ */ new Set();
+  const assertOpen = () => {
+    if (closed) throw new Error("Knowledge session has been disposed");
+    owner.assertActive();
+  };
+  function run(work, signal = controller.signal) {
+    if (closed) throw new Error("Knowledge session has been disposed");
+    const operation = owner.run(async () => {
+      signal.throwIfAborted();
+      const result2 = await work();
+      signal.throwIfAborted();
+      return result2;
+    });
+    operations.add(operation);
+    return operation.finally(() => operations.delete(operation));
+  }
+  function dispose() {
+    if (disposal) return disposal;
+    closed = true;
+    controller.abort(new Error("Knowledge session has been disposed"));
+    const sessionCleanup = cleanup?.();
+    disposal = (async () => {
+      const cleanupResult = await Promise.allSettled([sessionCleanup]);
+      await Promise.allSettled([...operations]);
+      for (const unsubscribe of eventUnsubscribers) unsubscribe();
+      eventUnsubscribers.clear();
+      detach();
+      if (cleanupResult[0].status === "rejected") throw cleanupResult[0].reason;
+    })();
+    return disposal;
+  }
+  const detach = owner.attachSession(dispose);
+  function extension(pi) {
+    assertOpen();
+    if (closed || registered) throw new Error("A native knowledge session can only be registered once");
+    registered = true;
+    const scopedContext = (context, signal) => new Proxy(context, {
+      get(target, property) {
+        if (property === "signal") return signal;
+        if (property === "sessionManager" && target.sessionManager) {
+          return new Proxy(target.sessionManager, {
+            get(manager, key) {
+              const value = Reflect.get(manager, key, manager);
+              if (typeof value !== "function") return value;
+              return (...args) => {
+                assertOpen();
+                return Reflect.apply(value, manager, args);
+              };
+            }
+          });
+        }
+        return Reflect.get(target, property, target);
+      }
+    });
+    const scopedEvents = {
+      on: (channel, handler) => {
+        assertOpen();
+        const unsubscribe = pi.events.on(channel, (data) => {
+          if (!closed) handler(data);
+        });
+        eventUnsubscribers.add(unsubscribe);
+        return () => {
+          eventUnsubscribers.delete(unsubscribe);
+          unsubscribe();
+        };
+      },
+      emit: (channel, data) => {
+        assertOpen();
+        return pi.events.emit(channel, data);
+      }
+    };
+    const scopedSignal = (signal) => signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
+    const ownedPi = new Proxy(pi, {
+      get(target, property) {
+        if (property === "appendEntry")
+          return (...args) => {
+            assertOpen();
+            return target.appendEntry(...args);
+          };
+        if (property === "sendUserMessage")
+          return (...args) => run(() => target.sendUserMessage(...args));
+        if (property === "events") {
+          const events = Reflect.get(target, property, target);
+          return events && typeof events === "object" ? scopedEvents : events;
+        }
+        if (property === "registerTool")
+          return (definition) => target.registerTool({
+            ...definition,
+            execute: (id2, input, signal, update, context) => {
+              const combined = scopedSignal(signal);
+              return run(
+                () => definition.execute(id2, input, combined, update, scopedContext(context, combined)),
+                combined
+              );
+            }
+          });
+        if (property === "registerCommand")
+          return (name, definition) => target.registerCommand(name, {
+            ...definition,
+            handler: (args, context) => {
+              const signal = scopedSignal(context.signal);
+              return run(() => definition.handler(args, scopedContext(context, signal)), signal);
+            }
+          });
+        if (property === "on")
+          return (event, handler) => target.on(
+            event,
+            event === "session_shutdown" ? handler : (value, context) => {
+              const signal = scopedSignal(context.signal);
+              return run(() => handler(value, scopedContext(context, signal)), signal);
+            }
+          );
+        return Reflect.get(target, property, target);
+      }
+    });
+    register(ownedPi);
+    pi.on("session_shutdown", dispose);
+  }
+  return { extension, signal: controller.signal, dispose };
 }
 
 // src/core/session-services.ts
@@ -9450,7 +8536,9 @@ function createKnowledgeSessionServices(pool, signal) {
 }
 
 // src/extension/internal-knowledge-extension.ts
+init_config();
 import { join as join17, resolve as resolve12 } from "node:path";
+init_flow_cards();
 
 // src/core/recovery-checkpoint.ts
 import { posix } from "node:path";
@@ -17190,7 +16278,7 @@ var Edit = Union([Insert2, Update2, Delete2]);
 
 // src/core/recovery-checkpoint.ts
 var text3 = typebox_exports.String({ minLength: 1, maxLength: 512 });
-var record2 = typebox_exports.Object({
+var record = typebox_exports.Object({
   id: text3,
   sessionId: text3,
   taskId: typebox_exports.Union([text3, typebox_exports.Null()]),
@@ -17203,7 +16291,10 @@ var record2 = typebox_exports.Object({
   evicted: typebox_exports.Boolean(),
   used: typebox_exports.Boolean()
 });
-var checkpoint = typebox_exports.Object({ scope: typebox_exports.String({ minLength: 1 }), records: typebox_exports.Array(record2, { maxItems: 8 }) });
+var checkpoint = typebox_exports.Object({
+  scope: typebox_exports.String({ minLength: 1 }),
+  records: typebox_exports.Array(record, { maxItems: 8 })
+});
 function parseKnowledgeRecoveryCheckpoint(value) {
   if (!Check2(checkpoint, value)) throw new Error("Invalid knowledge recovery checkpoint");
   const records = value.records.map((item) => {
@@ -17224,12 +16315,22 @@ function parseKnowledgeRecoveryCheckpoint(value) {
       used: item.used
     };
   });
-  if (new Set(records.map((record3) => record3.id)).size !== records.length) throw new Error("Knowledge recovery checkpoint has duplicate receipt identities");
+  if (new Set(records.map((record3) => record3.id)).size !== records.length)
+    throw new Error("Knowledge recovery checkpoint has duplicate receipt identities");
   return { scope: value.scope, records };
 }
 
+// src/extension/internal-knowledge-extension.ts
+init_runtime_host();
+init_topic_memory();
+init_topic_memory();
+init_ui_state();
+init_wiki_review();
+
 // src/extension/read-tools.ts
-function createKnowledgePrepareTool({ prepare }) {
+function createKnowledgePrepareTool({
+  prepare
+}) {
   return {
     name: "research_prepare_knowledge",
     drone: {
@@ -17244,7 +16345,11 @@ function createKnowledgePrepareTool({ prepare }) {
     execute: async (_id, _params, _signal, _update, ctx) => result(await prepare(ctx))
   };
 }
-function createKnowledgeReadTool({ ensureTurn, toolBudget, observer }) {
+function createKnowledgeReadTool({
+  ensureTurn,
+  toolBudget,
+  observer
+}) {
   return {
     name: "research_read_knowledge",
     drone: {
@@ -17301,13 +16406,22 @@ function createKnowledgeReadTool({ ensureTurn, toolBudget, observer }) {
           } : {}
         });
       } catch (error) {
-        observer?.updateFlow?.(ctx, { phase: "blocked", error: String(error.message).slice(0, 400) });
+        observer?.updateFlow?.(ctx, {
+          phase: "blocked",
+          error: String(error.message).slice(0, 400)
+        });
         throw error;
       }
     }
   };
 }
-function createKnowledgeSearchTool({ ensureTurn, toolBudget, observer, searchContext, searchExperiences: searchExperiences2 }) {
+function createKnowledgeSearchTool({
+  ensureTurn,
+  toolBudget,
+  observer,
+  searchContext,
+  searchExperiences: searchExperiences2
+}) {
   return {
     name: "research_search_knowledge",
     drone: {
@@ -17333,7 +16447,10 @@ function createKnowledgeSearchTool({ ensureTurn, toolBudget, observer, searchCon
     },
     execute: async (_id, p, _s, _u, ctx) => {
       const c = await ensureTurn(ctx, p.query);
-      const blocked = toolBudget.consume("search", p.kind === "experiences" ? JSON.stringify([p.kind, p.workflow, p.host_id, p.query]) : p.query);
+      const blocked = toolBudget.consume(
+        "search",
+        p.kind === "experiences" ? JSON.stringify([p.kind, p.workflow, p.host_id, p.query]) : p.query
+      );
       if (blocked) return result(blocked);
       if (p.kind === "experiences") {
         if (!p.workflow?.trim() || !p.host_id?.trim())
@@ -17354,13 +16471,19 @@ function createKnowledgeSearchTool({ ensureTurn, toolBudget, observer, searchCon
         ) : found?.hits;
         return result(slimHits ? { ...found, hits: slimHits } : found);
       } catch (error) {
-        observer?.updateFlow?.(ctx, { phase: "blocked", error: String(error.message).slice(0, 400) });
+        observer?.updateFlow?.(ctx, {
+          phase: "blocked",
+          error: String(error.message).slice(0, 400)
+        });
         throw error;
       }
     }
   };
 }
-function createKnowledgeAnswerCheckTool({ ensureTurn, preflight }) {
+function createKnowledgeAnswerCheckTool({
+  ensureTurn,
+  preflight
+}) {
   return {
     name: "research_check_answer",
     drone: { readOnly: true, recoverySafe: true, capabilities: ["research", "knowledge"] },
@@ -17379,13 +16502,6 @@ function createKnowledgeAnswerCheckTool({ ensureTurn, preflight }) {
 }
 
 // src/extension/internal-knowledge-extension.ts
-init_runtime_host();
-init_config();
-init_flow_cards();
-init_topic_memory();
-init_topic_memory();
-init_ui_state();
-init_wiki_review();
 function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHandshake) {
   const { publishExplainer: publishExplainer2, deliveryContract: deliveryContract2 } = dependencies.host;
   const { readKnowledgeBinding: readKnowledgeBinding2, withKnowledgeBinding: withKnowledgeBinding2 } = dependencies.config;
@@ -17442,7 +16558,11 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
       resolve: async (review, { cwd }) => {
         try {
           const service = await getKnowledgeService2();
-          const p = await previewWikiProposal2(service, review.id, review.project || await currentProject2(cwd));
+          const p = await previewWikiProposal2(
+            service,
+            review.id,
+            review.project || await currentProject2(cwd)
+          );
           const stale = p.sources.some((s) => s.changed);
           return {
             status: p.status,
@@ -17490,7 +16610,8 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
     let removeAcceptance;
     if (!readOnly) {
       const declaration = { version: 1, kind: "wiki_review", definition: registerWikiReviewAcceptance2() };
-      if (dependencies.session) removeAcceptance = dependencies.session.registerAcceptance(declaration.definition);
+      if (dependencies.session)
+        removeAcceptance = dependencies.session.registerAcceptance(declaration.definition);
       else {
         const publishAcceptance = () => pi.events.emit("drone:acceptance-verifier/v1", declaration);
         removeAcceptance = pi.events.on("drone:acceptance-verifier/request/v1", (payload) => {
@@ -17528,14 +16649,16 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
       const data = { scope: recoveryScope, records: [...recovery.values()].slice(-8) };
       if (dependencies.session) {
         const receipt = await dependencies.session.appendRecord("drone-knowledge-recovery-v1", data, ctx);
-        if (receipt.durability !== "durable") throw new Error("Knowledge recovery checkpoint is deferred; no durable recovery was recorded");
+        if (receipt.durability !== "durable")
+          throw new Error("Knowledge recovery checkpoint is deferred; no durable recovery was recorded");
       } else pi.appendEntry("drone-knowledge-recovery-v1", data);
     };
     const attachRecovery = async (ctx) => {
       const scope = `${sessionIdentity(ctx)}:${resolve12(ctx.cwd)}`;
       if (scope === recoveryScope) return;
       const result2 = dependencies.session ? await dependencies.session.readRecords(ctx) : null;
-      if (result2?.state === "needs-reopen") throw new Error("Session records need reopening before knowledge recovery");
+      if (result2?.state === "needs-reopen")
+        throw new Error("Session records need reopening before knowledge recovery");
       const entries = result2 ? result2.records.map((record3) => ({ customType: record3.type, data: record3.data })) : ctx.sessionManager.getBranch();
       const next = /* @__PURE__ */ new Map();
       for (const entry of entries) {
@@ -17544,7 +16667,8 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
         if (checkpoint2.scope !== scope) continue;
         next.clear();
         for (const record3 of checkpoint2.records) {
-          if (record3.sessionId !== sessionIdentity(ctx)) throw new Error("Knowledge recovery record has a foreign session identity");
+          if (record3.sessionId !== sessionIdentity(ctx))
+            throw new Error("Knowledge recovery record has a foreign session identity");
           next.set(record3.id, record3);
         }
       }
@@ -17552,15 +16676,16 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
       for (const [id2, record3] of next) recovery.set(id2, record3);
       recoveryScope = scope;
     };
-    if (!dependencies.session) pi.events.on("drone:context-evicted", async (e) => {
-      let changed = false;
-      for (const r of recovery.values())
-        if (r.sessionId === e.sessionId && e.toolCallIds?.includes(r.id)) {
-          r.evicted = true;
-          changed = true;
-        }
-      if (changed) await saveRecovery();
-    });
+    if (!dependencies.session)
+      pi.events.on("drone:context-evicted", async (e) => {
+        let changed = false;
+        for (const r of recovery.values())
+          if (r.sessionId === e.sessionId && e.toolCallIds?.includes(r.id)) {
+            r.evicted = true;
+            changed = true;
+          }
+        if (changed) await saveRecovery();
+      });
     pi.on("session_tree", async (_e, ctx) => {
       recoveryScope = null;
       await attachRecovery(ctx);
@@ -17604,7 +16729,9 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
           service.probeTopic({ query: prompt, project }),
           new Promise((resolveProbe) => {
             timer = setTimeout(() => {
-              console.warn("[knowledge] Optional topic probe exceeded its deadline; continuing ordinary chat.");
+              console.warn(
+                "[knowledge] Optional topic probe exceeded its deadline; continuing ordinary chat."
+              );
               resolveProbe(null);
             }, 600);
           })
@@ -17693,7 +16820,9 @@ function createKnowledgeInterfaceApi(dependencies, initialHost, legacyRuntimeHan
           event.result.details,
           String(args.summary_markdown || "")
         );
-        const readEvidence = await current.service.currentReadEvidence(current.ticket, ctx.cwd, { limit: 12 });
+        const readEvidence = await current.service.currentReadEvidence(current.ticket, ctx.cwd, {
+          limit: 12
+        });
         const deliveredSources = event.result.details.delivery_receipt.sources.map((source) => ({
           path: source.path,
           hash: source.sha256
@@ -17756,7 +16885,9 @@ Topic memory receipt: ${JSON.stringify({ classification: memoryReceipt.classific
               };
           }
         } catch (error) {
-          appendFooter(`\u4E3B\u9898\u8BB0\u5FC6\u672A\u66F4\u65B0\uFF1A${String(error.message).slice(0, 300)}\uFF1B\u6B63\u5F0F\u77E5\u8BC6\u4E0E\u8BC1\u636E\u95E8\u7981\u4E0D\u53D7\u5F71\u54CD\u3002`);
+          appendFooter(
+            `\u4E3B\u9898\u8BB0\u5FC6\u672A\u66F4\u65B0\uFF1A${String(error.message).slice(0, 300)}\uFF1B\u6B63\u5F0F\u77E5\u8BC6\u4E0E\u8BC1\u636E\u95E8\u7981\u4E0D\u53D7\u5F71\u54CD\u3002`
+          );
         }
         const paths = evidence.sources.map((source) => source.path);
         if (paths.length && !explainerArchived && deliveryContract2(specialists.goal(), { showMeAvailable: true })) {
@@ -18057,34 +17188,37 @@ ${JSON.stringify(visible)}`
         });
       }
     });
-    registerTool(pi, createKnowledgeReadTool({
-      ensureTurn,
-      toolBudget,
-      observer: {
-        updateFlow: updateKnowledgeFlow2,
-        noteRead: noteKnowledgeRead2,
-        recordRead: async (_id, ctx, c, page, p) => {
-          await attachRecovery(ctx);
-          if (page.hash && page.text) {
-            recovery.set(_id, {
-              id: _id,
-              sessionId: sessionIdentity(ctx),
-              taskId: getTaskRuntime()?.snapshot()?.id || null,
-              path: p.path,
-              hash: page.hash,
-              startLine: p.start_line || 1,
-              maxChars: p.max_chars || 5e3,
-              vaultId: c.binding.vaultId,
-              bindingRevision: c.binding.revision,
-              evicted: false,
-              used: false
-            });
-            while (recovery.size > 8) recovery.delete(recovery.keys().next().value);
-            await saveRecovery(ctx);
+    registerTool(
+      pi,
+      createKnowledgeReadTool({
+        ensureTurn,
+        toolBudget,
+        observer: {
+          updateFlow: updateKnowledgeFlow2,
+          noteRead: noteKnowledgeRead2,
+          recordRead: async (_id, ctx, c, page, p) => {
+            await attachRecovery(ctx);
+            if (page.hash && page.text) {
+              recovery.set(_id, {
+                id: _id,
+                sessionId: sessionIdentity(ctx),
+                taskId: getTaskRuntime()?.snapshot()?.id || null,
+                path: p.path,
+                hash: page.hash,
+                startLine: p.start_line || 1,
+                maxChars: p.max_chars || 5e3,
+                vaultId: c.binding.vaultId,
+                bindingRevision: c.binding.revision,
+                evicted: false,
+                used: false
+              });
+              while (recovery.size > 8) recovery.delete(recovery.keys().next().value);
+              await saveRecovery(ctx);
+            }
           }
         }
-      }
-    }));
+      })
+    );
     registerTool(pi, {
       name: "research_restore_evidence",
       drone: { readOnly: true, capabilities: ["research"] },
@@ -18120,29 +17254,39 @@ ${JSON.stringify(visible)}`
         return result(page);
       }
     });
-    registerTool(pi, createKnowledgeSearchTool({
-      ensureTurn,
-      toolBudget,
-      searchExperiences: async (ctx, input) => {
-        const scope = await requireTopicTurn(ctx);
-        return searchExperiences({
-          binding: scope.binding,
-          project: scope.project,
-          hostId: input.host_id,
-          query: input.query,
-          workflow: input.workflow,
-          hostFilter: input.host_id,
-          limit: input.limit,
-          includeObserved: true
-        });
-      },
-      observer: { updateFlow: updateKnowledgeFlow2, noteSearch: noteKnowledgeSearch2 },
-      searchContext: async (_ctx, c) => activeTopic ? JSON.parse(await (topicMemory || createTopicMemory2({ binding: c.binding, project: c.project })).context(activeTopic.id)) : void 0
-    }));
-    registerTool(pi, createKnowledgeAnswerCheckTool({
-      ensureTurn,
-      preflight: (ctx, draft) => publication.preflight(ctx, draft)
-    }));
+    registerTool(
+      pi,
+      createKnowledgeSearchTool({
+        ensureTurn,
+        toolBudget,
+        searchExperiences: async (ctx, input) => {
+          const scope = await requireTopicTurn(ctx);
+          return searchExperiences({
+            binding: scope.binding,
+            project: scope.project,
+            hostId: input.host_id,
+            query: input.query,
+            workflow: input.workflow,
+            hostFilter: input.host_id,
+            limit: input.limit,
+            includeObserved: true
+          });
+        },
+        observer: { updateFlow: updateKnowledgeFlow2, noteSearch: noteKnowledgeSearch2 },
+        searchContext: async (_ctx, c) => activeTopic ? JSON.parse(
+          await (topicMemory || createTopicMemory2({ binding: c.binding, project: c.project })).context(
+            activeTopic.id
+          )
+        ) : void 0
+      })
+    );
+    registerTool(
+      pi,
+      createKnowledgeAnswerCheckTool({
+        ensureTurn,
+        preflight: (ctx, draft) => publication.preflight(ctx, draft)
+      })
+    );
     registerTool(pi, {
       name: "research_task_status",
       drone: { readOnly: true, recoverySafe: true, capabilities: ["research", "knowledge"] },
@@ -18225,7 +17369,10 @@ ${JSON.stringify(visible)}`
                   tissue: { type: "string", maxLength: 180 },
                   stage: { type: "string", maxLength: 180 },
                   method: { type: "string", maxLength: 180 },
-                  direction: { type: "string", enum: ["increase", "decrease", "affirmed", "negated", "unknown"] },
+                  direction: {
+                    type: "string",
+                    enum: ["increase", "decrease", "affirmed", "negated", "unknown"]
+                  },
                   endpoint: { type: "string", maxLength: 180 },
                   unit: { type: "string", maxLength: 180 },
                   effect: { type: "number" },
@@ -18503,11 +17650,12 @@ ${JSON.stringify(visible)}`
             const pending = await listWikiProposals2(service, project);
             if (!pending.items.length) {
               if (dependencies.session) await dependencies.session.notify(JSON.stringify(pending), ctx);
-              else pi.sendMessage({
-                customType: "obsidian-review",
-                display: true,
-                content: JSON.stringify(pending)
-              });
+              else
+                pi.sendMessage({
+                  customType: "obsidian-review",
+                  display: true,
+                  content: JSON.stringify(pending)
+                });
               return;
             }
             const options2 = pending.items.map((item) => `${item.id} \xB7 ${item.title}`);
@@ -18542,11 +17690,12 @@ ${text4}`, options);
             choice === "\u786E\u8BA4\u5E94\u7528\u6B64\u5019\u9009" ? "apply" : "reject"
           );
           if (dependencies.session) await dependencies.session.notify(JSON.stringify(output, null, 2), ctx);
-          else pi.sendMessage({
-            customType: "obsidian-review",
-            display: true,
-            content: JSON.stringify(output, null, 2)
-          });
+          else
+            pi.sendMessage({
+              customType: "obsidian-review",
+              display: true,
+              content: JSON.stringify(output, null, 2)
+            });
         }
       });
     }
@@ -18680,7 +17829,8 @@ ${text4}`, options);
         sessionScopeId = nextSessionId;
         current = null;
         bootstrap = null;
-        if (newSession || activeTopic && !continuesTopic(event.prompt || "", activeTopic)) activeTopic = null;
+        if (newSession || activeTopic && !continuesTopic(event.prompt || "", activeTopic))
+          activeTopic = null;
         topicMemory = null;
         explicitTopicProposal = false;
         deliveryFooter = null;
@@ -18759,23 +17909,37 @@ ${text4}`, options);
       }
     };
   }
-  return { configureKnowledgeExtensionHost: configureKnowledgeExtensionHost2, LOCAL_FIRST_GUIDANCE: LOCAL_FIRST_GUIDANCE2, registerWikiReviewAcceptance: registerWikiReviewAcceptance2, registerKnowledgeInterface: registerKnowledgeInterface2 };
+  return {
+    configureKnowledgeExtensionHost: configureKnowledgeExtensionHost2,
+    LOCAL_FIRST_GUIDANCE: LOCAL_FIRST_GUIDANCE2,
+    registerWikiReviewAcceptance: registerWikiReviewAcceptance2,
+    registerKnowledgeInterface: registerKnowledgeInterface2
+  };
 }
 function createKnowledgeInterface(dependencies, initialHost = {}) {
   return createKnowledgeInterfaceApi(dependencies, initialHost, false);
 }
-var compatibility5 = createKnowledgeInterfaceApi({
-  host: runtime_host_exports,
-  config: config_exports,
-  services: service_exports,
-  publication: publication_exports,
-  delivery: specialist_delivery_exports,
-  specialists: specialists_exports,
-  topics: topic_memory_exports,
-  ui: ui_state_exports,
-  wiki: wiki_review_exports
-}, {}, true);
-var { configureKnowledgeExtensionHost, LOCAL_FIRST_GUIDANCE, registerWikiReviewAcceptance, registerKnowledgeInterface } = compatibility5;
+var compatibility5 = createKnowledgeInterfaceApi(
+  {
+    host: runtime_host_exports,
+    config: config_exports,
+    services: service_exports,
+    publication: publication_exports,
+    delivery: specialist_delivery_exports,
+    specialists: specialists_exports,
+    topics: topic_memory_exports,
+    ui: ui_state_exports,
+    wiki: wiki_review_exports
+  },
+  {},
+  true
+);
+var {
+  configureKnowledgeExtensionHost,
+  LOCAL_FIRST_GUIDANCE,
+  registerWikiReviewAcceptance,
+  registerKnowledgeInterface
+} = compatibility5;
 
 // src/extension/knowledge-extension.ts
 async function localService(owner, ctx, query = "", projectFor2 = currentProject) {
@@ -18802,7 +17966,13 @@ function registerNativeStatusTools(pi, owner, projectFor2 = currentProject, sess
       const local = await localService(owner, ctx, "", projectFor2);
       if (!local) return result({ status: "unconfigured", next: "/drone-init", revision: binding.revision });
       const index = await local.service.request("status");
-      return result({ status: "configured", vault: binding.vault, project: local.project, revision: Number(index?.revision ?? binding.revision ?? 0), index });
+      return result({
+        status: "configured",
+        vault: binding.vault,
+        project: local.project,
+        revision: Number(index?.revision ?? binding.revision ?? 0),
+        index
+      });
     }
   });
   pi.registerTool({
@@ -18812,50 +17982,78 @@ function registerNativeStatusTools(pi, owner, projectFor2 = currentProject, sess
     description: "Search the bound local knowledge Vault.",
     parameters: {
       type: "object",
-      properties: { query: { type: "string", minLength: 1 }, limit: { type: "integer", minimum: 1, maximum: 12 } },
+      properties: {
+        query: { type: "string", minLength: 1 },
+        limit: { type: "integer", minimum: 1, maximum: 12 }
+      },
       required: ["query"]
     },
     async execute(_id, params, _signal, _update, ctx) {
       const query = String(params?.query || "").trim().slice(0, 2e3);
       if (!query) throw new Error("query is required");
       const local = await localService(owner, ctx, query, projectFor2);
-      if (!local) return result({ query, hits: [], local: { status: "unconfigured", hitCount: 0 }, remoteFallback: { status: "blocked" } });
+      if (!local)
+        return result({
+          query,
+          hits: [],
+          local: { status: "unconfigured", hitCount: 0 },
+          remoteFallback: { status: "blocked" }
+        });
       const limit = Math.max(1, Math.min(12, Number(params?.limit) || 6));
       const found = await local.service.request("search", { query, project: local.project, limit });
-      return result({ query, hits: (found?.hits || []).slice(0, limit), local: { status: "searched", hitCount: found?.hits?.length || 0, revision: found?.revision ?? null, coverage: found?.coverage ?? null }, remoteFallback: { status: (found?.hits?.length || 0) < limit ? "prompt" : "not-needed" } });
+      return result({
+        query,
+        hits: (found?.hits || []).slice(0, limit),
+        local: {
+          status: "searched",
+          hitCount: found?.hits?.length || 0,
+          revision: found?.revision ?? null,
+          coverage: found?.coverage ?? null
+        },
+        remoteFallback: { status: (found?.hits?.length || 0) < limit ? "prompt" : "not-needed" }
+      });
     }
   });
   pi.registerCommand?.("drone-init", {
     description: "Initialize the Drone knowledge Vault",
     handler: async (_args, ctx) => {
       if (session) {
-        await session.notify("Open knowledge settings or run /obsidian-setup to initialize the application knowledge Vault.", ctx);
+        await session.notify(
+          "Open knowledge settings or run /obsidian-setup to initialize the application knowledge Vault.",
+          ctx
+        );
         return;
       }
-      if (typeof pi.sendUserMessage === "function") await pi.sendUserMessage("/obsidian-setup", { deliverAs: "followUp" });
+      if (typeof pi.sendUserMessage === "function")
+        await pi.sendUserMessage("/obsidian-setup", { deliverAs: "followUp" });
       else ctx?.ui?.notify?.("Run /obsidian-setup to initialize the knowledge Vault", "info");
     }
   });
 }
 var CHILD_READ_REFUSED = "This knowledge Vault does not allow subagent reads (its subagent policy is not read-local)";
 function childPolicyPi(pi, allowed) {
-  return new Proxy(pi, { get(target, property) {
-    if (property === "registerTool") return (definition) => target.registerTool({
-      ...definition,
-      execute: async (...args) => {
-        if (!await allowed()) throw new Error(CHILD_READ_REFUSED);
-        return definition.execute(...args);
-      }
-    });
-    if (property === "on") return (name, handler) => target.on(
-      name,
-      name === "session_shutdown" ? handler : async (...args) => await allowed() ? handler(...args) : void 0
-    );
-    if (property === "registerCommand") return (name) => {
-      throw new Error(`A read-only child session cannot register the ${name} command`);
-    };
-    return Reflect.get(target, property, target);
-  } });
+  return new Proxy(pi, {
+    get(target, property) {
+      if (property === "registerTool")
+        return (definition) => target.registerTool({
+          ...definition,
+          execute: async (...args) => {
+            if (!await allowed()) throw new Error(CHILD_READ_REFUSED);
+            return definition.execute(...args);
+          }
+        });
+      if (property === "on")
+        return (name, handler) => target.on(
+          name,
+          name === "session_shutdown" ? handler : async (...args) => await allowed() ? handler(...args) : void 0
+        );
+      if (property === "registerCommand")
+        return (name) => {
+          throw new Error(`A read-only child session cannot register the ${name} command`);
+        };
+      return Reflect.get(target, property, target);
+    }
+  });
 }
 function managedDomainPi(pi, session) {
   const contextFor = async (context) => {
@@ -18868,59 +18066,84 @@ function managedDomainPi(pi, session) {
       isProjectTrusted: () => facts.projectTrusted
     };
   };
-  return new Proxy(pi, { get(target, property) {
-    if (property === "registerTool") return (definition) => target.registerTool({
-      ...definition,
-      execute: async (id2, input, signal, update, context) => definition.execute(id2, input, signal, update, await contextFor(context))
-    });
-    if (property === "registerCommand") return (name, definition) => target.registerCommand(name, {
-      ...definition,
-      handler: async (args, context) => definition.handler(args, await contextFor(context))
-    });
-    if (property === "on") return (name, handler) => target.on(
-      name,
-      name === "session_shutdown" ? handler : async (event, context) => handler(event, await contextFor(context))
-    );
-    return Reflect.get(target, property, target);
-  } });
+  return new Proxy(pi, {
+    get(target, property) {
+      if (property === "registerTool")
+        return (definition) => target.registerTool({
+          ...definition,
+          execute: async (id2, input, signal, update, context) => definition.execute(id2, input, signal, update, await contextFor(context))
+        });
+      if (property === "registerCommand")
+        return (name, definition) => target.registerCommand(name, {
+          ...definition,
+          handler: async (args, context) => definition.handler(args, await contextFor(context))
+        });
+      if (property === "on")
+        return (name, handler) => target.on(
+          name,
+          name === "session_shutdown" ? handler : async (event, context) => handler(event, await contextFor(context))
+        );
+      return Reflect.get(target, property, target);
+    }
+  });
 }
 function composeNativeSession(owner, managed) {
   owner.assertActive();
   const controller = new AbortController();
   const managedPublication = managed ? createManagedKnowledgePublication(owner.ui, owner.reviewPolicy, controller.signal) : void 0;
-  const publication = managedPublication ?? createKnowledgePublication(owner.ui, owner.reviewPolicy, owner.config, controller.signal);
+  const publication = managedPublication ?? createKnowledgePublication(
+    owner.ui,
+    owner.reviewPolicy,
+    owner.config,
+    controller.signal
+  );
   const services = createKnowledgeSessionServices(owner.services, controller.signal);
-  const knowledge = createKnowledgeInterface({
-    host: owner.host,
-    config: owner.config,
-    services,
-    publication,
-    delivery: owner.delivery,
-    specialists: owner.specialistTools,
-    topics: owner.topics,
-    ui: owner.ui,
-    wiki: owner.wiki,
-    ...managed ? { available: () => true, project: managed.project, session: managed.session } : {}
-  }, owner.extensionHost);
+  const knowledge = createKnowledgeInterface(
+    {
+      host: owner.host,
+      config: owner.config,
+      services,
+      publication,
+      delivery: owner.delivery,
+      specialists: owner.specialistTools,
+      topics: owner.topics,
+      ui: owner.ui,
+      wiki: owner.wiki,
+      ...managed ? { available: () => true, project: managed.project, session: managed.session } : {}
+    },
+    owner.extensionHost
+  );
   let cleanup = null;
-  if (managed?.child === "read" && !managed.childReadAllowed) throw new Error("A read child session requires the package read policy");
-  const adapter = createKnowledgeNativeAdapter(owner, controller, (sessionPi) => {
-    const nativePi = managed?.child === "read" && managed.childReadAllowed ? childPolicyPi(sessionPi, managed.childReadAllowed) : sessionPi;
-    const pi = managed ? managedDomainPi(nativePi, managed.session) : nativePi;
-    if (managed?.child === "evidence") {
-      publication.registerAnswerPublication(pi, { getCurrent: () => null, evidenceOnly: true }).begin(false);
-      return;
+  if (managed?.child === "read" && !managed.childReadAllowed)
+    throw new Error("A read child session requires the package read policy");
+  const adapter = createKnowledgeNativeAdapter(
+    owner,
+    controller,
+    (sessionPi) => {
+      const nativePi = managed?.child === "read" && managed.childReadAllowed ? childPolicyPi(sessionPi, managed.childReadAllowed) : sessionPi;
+      const pi = managed ? managedDomainPi(nativePi, managed.session) : nativePi;
+      if (managed?.child === "evidence") {
+        publication.registerAnswerPublication(pi, { getCurrent: () => null, evidenceOnly: true }).begin(false);
+        return;
+      }
+      if (managed) managed.registerReadTools(nativePi);
+      else registerNativeStatusTools(nativePi, { ...owner, services });
+      const session = knowledge.registerKnowledgeInterface(pi, { readOnly: managed?.child === "read" });
+      cleanup = session.dispose;
+      pi.on("before_agent_start", (event, context) => session.beforeStart(event, context));
+    },
+    async () => {
+      const results = await Promise.allSettled([services.dispose(), cleanup?.()]);
+      const failures = results.filter(
+        (result2) => result2.status === "rejected"
+      );
+      if (failures.length)
+        throw new AggregateError(
+          failures.map((result2) => result2.reason),
+          "Knowledge session cleanup failed"
+        );
     }
-    if (managed) managed.registerReadTools(nativePi);
-    else registerNativeStatusTools(nativePi, { ...owner, services });
-    const session = knowledge.registerKnowledgeInterface(pi, { readOnly: managed?.child === "read" });
-    cleanup = session.dispose;
-    pi.on("before_agent_start", (event, context) => session.beforeStart(event, context));
-  }, async () => {
-    const results = await Promise.allSettled([services.dispose(), cleanup?.()]);
-    const failures = results.filter((result2) => result2.status === "rejected");
-    if (failures.length) throw new AggregateError(failures.map((result2) => result2.reason), "Knowledge session cleanup failed");
-  });
+  );
   return {
     ...adapter,
     publication,
@@ -18932,10 +18155,917 @@ function createManagedNativeSession(owner, composition) {
   return composeNativeSession(owner, composition);
 }
 
-// src/desktop/runtime.ts
-init_ui_state();
-init_specialist_host();
-init_topic_memory();
+// src/desktop/contract.ts
+var string = { type: "string" };
+var integer = { type: "integer", minimum: 0 };
+var coverage = { enum: ["uninitialized", "indexing", "partial", "ready"] };
+var nullable = (schema) => ({ anyOf: [schema, { type: "null" }] });
+var object = (properties, required = Object.keys(properties)) => ({
+  type: "object",
+  properties,
+  required,
+  additionalProperties: false
+});
+var overviewInputSchema = { type: "null" };
+var overviewResultSchema = object({
+  state: { enum: ["unconfigured", "bound"] },
+  binding: nullable(
+    object({
+      vaultId: string,
+      revision: { type: "integer", minimum: 1 },
+      label: string
+    })
+  ),
+  project: nullable(string),
+  index: nullable(
+    object({
+      revision: integer,
+      coverage,
+      noteCount: integer,
+      pendingChanges: integer,
+      lastReconciledAt: nullable(string)
+    })
+  ),
+  recentNotes: {
+    type: "array",
+    items: object({
+      path: string,
+      title: string,
+      kind: string,
+      updatedAt: { type: "number" }
+    })
+  }
+});
+var searchInputSchema = object(
+  {
+    query: { type: "string", minLength: 1, maxLength: 2e3 },
+    revision: { type: "integer", minimum: 1 },
+    limit: { type: "integer", minimum: 1, maximum: 12 }
+  },
+  ["query", "revision"]
+);
+var searchResultSchema = object({
+  query: string,
+  revision: integer,
+  bindingRevision: { type: "integer", minimum: 1 },
+  coverage,
+  complete: { type: "boolean" },
+  hits: {
+    type: "array",
+    items: object({
+      path: string,
+      title: string,
+      kind: string,
+      hash: string,
+      text: string,
+      startLine: { type: "integer", minimum: 1 },
+      endLine: integer
+    })
+  }
+});
+var boolean = { type: "boolean" };
+var array = (items) => ({ type: "array", items });
+var record2 = (additionalProperties) => ({
+  type: "object",
+  additionalProperties
+});
+var bindingRevision = { type: "integer", minimum: 1 };
+var readScope = {
+  revision: integer,
+  bindingRevision,
+  project: nullable(string)
+};
+var notePath = { type: "string", minLength: 1, maxLength: 1e3 };
+var snippetProperties = {
+  text: string,
+  startLine: bindingRevision,
+  endLine: integer,
+  totalLines: integer,
+  truncated: boolean
+};
+var snippetSchema = object(snippetProperties);
+var recentNoteSchema = object({
+  path: string,
+  title: string,
+  kind: string,
+  updatedAt: { type: "number" }
+});
+var readNoteInputSchema = object(
+  {
+    path: notePath,
+    revision: bindingRevision,
+    startLine: bindingRevision,
+    expectedHash: { type: "string", pattern: "^[a-f0-9]{64}$" }
+  },
+  ["path", "revision"]
+);
+var readNoteResultSchema = {
+  anyOf: [
+    object({ ...readScope, path: string, missing: { const: true } }),
+    object({
+      ...readScope,
+      path: string,
+      missing: { const: false },
+      title: string,
+      kind: string,
+      category: { enum: ["paper", "software", "method", "idea", "other"] },
+      hash: string,
+      ...snippetProperties,
+      humanReview: nullable(snippetSchema),
+      pending: array(object({ kind: string, revision: integer }))
+    })
+  ]
+};
+var linksInputSchema = object({
+  path: notePath,
+  revision: bindingRevision
+});
+var linksResultSchema = object({
+  ...readScope,
+  path: string,
+  title: string,
+  outgoing: array(object({ path: string, title: string, exists: boolean })),
+  incoming: array(object({ path: string, title: string, exists: boolean }))
+});
+var graphInputSchema = object(
+  {
+    revision: bindingRevision,
+    limit: { type: "integer", minimum: 10, maximum: 500 },
+    view: { enum: ["semantic", "all"] },
+    mergeMirrors: boolean
+  },
+  ["revision"]
+);
+var edgeSchema = object({ source: string, target: string });
+var graphNodeProperties = {
+  path: string,
+  title: string,
+  kind: string,
+  degree: integer,
+  warnings: array(string)
+};
+var semanticNodeSchema = object(
+  {
+    ...graphNodeProperties,
+    nodeType: {
+      enum: ["note", "wiki", "navigation", "mirror", "infrastructure", "memory"]
+    },
+    isInfrastructure: boolean,
+    community: { type: "integer", minimum: -1 },
+    x: { type: "number" },
+    y: { type: "number" },
+    mirrors: array(string),
+    contentType: string,
+    isMain: boolean,
+    sharedWith: array(string)
+  },
+  ["path", "title", "kind", "degree", "nodeType", "isInfrastructure", "community", "x", "y"]
+);
+var graphResultSchema = object({
+  ...readScope,
+  nodes: array(object(graphNodeProperties, ["path", "title", "kind", "degree"])),
+  edges: array(edgeSchema),
+  totalNotes: integer,
+  semantic: object({
+    nodes: array(semanticNodeSchema),
+    edges: array(edgeSchema),
+    totalNotes: integer,
+    view: { enum: ["semantic", "all"] },
+    mergeMirrors: boolean,
+    relations: array(
+      object({
+        source: string,
+        target: string,
+        type: { enum: ["link", "directory", "duplicate"] }
+      })
+    ),
+    duplicates: array(object({ canonical: string, duplicate: string })),
+    communities: record2({ type: "integer", minimum: -1 }),
+    layout: record2(object({ x: { type: "number" }, y: { type: "number" } })),
+    health: object({
+      isolated: integer,
+      duplicates: integer,
+      infrastructure: integer,
+      truncated: boolean,
+      candidateNodes: integer,
+      candidateLimit: integer
+    })
+  })
+});
+var jobsInputSchema = object(
+  {
+    revision: bindingRevision,
+    offset: { type: "integer", minimum: 0, maximum: 1e5 },
+    limit: { type: "integer", minimum: 1, maximum: 50 }
+  },
+  ["revision"]
+);
+var jobsResultSchema = object({
+  ...readScope,
+  items: array(
+    object({
+      key: string,
+      kind: string,
+      path: string,
+      scope: string,
+      revision: integer,
+      updated: string
+    })
+  ),
+  total: integer,
+  offset: integer,
+  nextOffset: nullable(integer)
+});
+var recentByCategoryInputSchema = object(
+  {
+    revision: bindingRevision,
+    limit: { type: "integer", minimum: 1, maximum: 24 }
+  },
+  ["revision"]
+);
+var recentByCategoryResultSchema = object({
+  ...readScope,
+  groups: object({
+    paper: array(recentNoteSchema),
+    software: array(recentNoteSchema),
+    method: array(recentNoteSchema),
+    idea: array(recentNoteSchema)
+  }),
+  counts: object({
+    paper: integer,
+    software: integer,
+    method: integer,
+    idea: integer,
+    other: integer
+  })
+});
+var reviewModeSchema = { enum: ["automatic", "strict"] };
+var preferencesInputSchema = { type: "null" };
+var preferencesResultSchema = object({
+  binding: nullable(
+    object({
+      vaultId: string,
+      revision: bindingRevision,
+      label: string,
+      vault: string,
+      profile: { enum: ["project", "literature", "hybrid"] },
+      depositMode: { enum: ["run-only", "verified", "rich"] },
+      subagentPolicy: { enum: ["none", "read-local"] },
+      updatedAt: string
+    })
+  ),
+  canWriteState: boolean,
+  reviewPolicy: object({
+    mode: reviewModeSchema,
+    persistedMode: nullable(reviewModeSchema),
+    version: nullable(string),
+    override: nullable({ const: "environment" }),
+    diagnostic: nullable({ enum: ["invalid-json", "invalid-policy"] })
+  })
+});
+var setReviewPolicyInputSchema = object({
+  bindingRevision,
+  expectedVersion: nullable(string),
+  mode: reviewModeSchema
+});
+var proposalId = { type: "string", pattern: "^[0-9a-f-]{36}$" };
+var proposalHash = { type: "string", pattern: "^[a-f0-9]{64}$" };
+var reviewsInputSchema = object(
+  {
+    revision: bindingRevision,
+    offset: { type: "integer", minimum: 0, maximum: 100 },
+    limit: { type: "integer", minimum: 1, maximum: 25 }
+  },
+  ["revision"]
+);
+var reviewsResultSchema = object({
+  bindingRevision,
+  project: nullable(string),
+  items: array(
+    object({
+      id: proposalId,
+      path: string,
+      title: string,
+      status: string,
+      proposalHash,
+      expiresAt: integer,
+      expired: boolean,
+      bindingChanged: boolean
+    })
+  ),
+  problems: array(object({ id: string, error: string })),
+  total: integer,
+  offset: integer,
+  nextOffset: nullable(integer)
+});
+var previewReviewInputSchema = object({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedProposalHash: proposalHash
+});
+var previewReviewResultSchema = object({
+  bindingRevision,
+  id: proposalId,
+  path: string,
+  project: string,
+  status: string,
+  proposalHash,
+  title: string,
+  rationale: string,
+  before: string,
+  after: string,
+  protectedText: string,
+  sources: array(
+    object(
+      {
+        path: string,
+        hash: nullable(string),
+        startLine: bindingRevision,
+        endLine: bindingRevision,
+        excerptHash: string,
+        paperDois: array(string),
+        currentHash: nullable(string),
+        changed: boolean,
+        error: nullable(string)
+      },
+      ["path", "hash", "startLine", "endLine", "excerptHash", "currentHash", "changed", "error"]
+    )
+  ),
+  expired: boolean,
+  targetChanged: boolean,
+  canApply: boolean,
+  expiresAt: integer,
+  scientificallyVerified: { const: false }
+});
+var rejectReviewInputSchema = object({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedProposalHash: proposalHash
+});
+var rejectReviewResultSchema = object({
+  id: proposalId,
+  status: { const: "rejected" },
+  vaultWritten: { const: false },
+  reviewRecorded: boolean
+});
+var applyReviewInputSchema = object({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedProposalHash: proposalHash
+});
+var applyReviewResultSchema = object({
+  id: proposalId,
+  status: { const: "applied" },
+  path: { type: "string", minLength: 1 },
+  vaultWritten: { const: true },
+  reviewRecorded: boolean,
+  indexed: boolean,
+  recovered: boolean,
+  recordError: nullable(string),
+  indexError: nullable(string)
+});
+var semanticConfigProperties = {
+  enabled: boolean,
+  provider: { enum: ["none", "ollama", "openai-compatible"] },
+  baseUrl: string,
+  model: string,
+  credentialEnv: string,
+  remoteConsent: boolean,
+  timeoutMs: { type: "integer", minimum: 500, maximum: 3e4 },
+  chunkChars: { type: "integer", minimum: 256, maximum: 8e3 },
+  minSimilarity: { type: "number", minimum: 0, maximum: 1 }
+};
+var semanticPreferencesInputSchema = { type: "null" };
+var semanticPreferencesResultSchema = object({
+  binding: nullable(object({ vaultId: string, revision: bindingRevision, label: string })),
+  settings: nullable(
+    object({ ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string }, [
+      "enabled",
+      "provider",
+      "baseUrl",
+      "model",
+      "credentialEnv",
+      "remoteConsent",
+      "version",
+      "revision",
+      "updatedAt"
+    ])
+  ),
+  canWriteState: boolean,
+  providerExecution: { const: "unavailable" }
+});
+var setSemanticSettingsInputSchema = object({
+  bindingRevision,
+  expectedSettingsRevision: integer,
+  settings: object(semanticConfigProperties, [])
+});
+var reviewHistoryInputSchema = object({ revision: bindingRevision });
+var reviewHistoryResultSchema = object({
+  bindingRevision,
+  project: string,
+  items: array(
+    object({
+      id: proposalId,
+      path: string,
+      afterHash: proposalHash,
+      reviewedAt: integer,
+      reviewMethod: string
+    })
+  )
+});
+var undoReviewInputSchema = object({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedHash: proposalHash
+});
+var undoReviewResultSchema = object({ status: { const: "reverted" }, path: string });
+var modelReviewProfile = { const: "knowledge-wiki-reviewer" };
+var modelReviewInputSchema = object(
+  {
+    revision: bindingRevision,
+    id: proposalId,
+    expectedProposalHash: proposalHash,
+    acknowledged: { const: true },
+    autoApply: boolean,
+    profile: modelReviewProfile
+  },
+  ["revision", "id", "expectedProposalHash", "acknowledged", "autoApply"]
+);
+var modelReviewInfoInputSchema = object(
+  {
+    revision: bindingRevision,
+    id: proposalId,
+    expectedProposalHash: proposalHash,
+    profile: modelReviewProfile
+  },
+  ["revision", "id", "expectedProposalHash"]
+);
+var modelReviewUsageSchema = object({
+  inputTokens: nullable({ type: "number", minimum: 0 }),
+  outputTokens: nullable({ type: "number", minimum: 0 }),
+  cost: nullable({ type: "number", minimum: 0 })
+});
+var modelReviewResultSchema = {
+  type: "object",
+  properties: {
+    auditId: proposalId,
+    proposalId,
+    proposalHash,
+    path: string,
+    model: string,
+    startedAt: integer,
+    completedAt: integer,
+    verdict: { enum: ["approve", "needs-human", "reject"] },
+    summary: string,
+    cautions: array(string),
+    checks: { type: "object", additionalProperties: boolean },
+    source_paths: array(string),
+    canAutoApply: boolean,
+    autoApplyAuthorized: boolean,
+    applied: boolean,
+    humanReviewed: { const: false },
+    scientificallyVerified: { const: false },
+    usage: modelReviewUsageSchema,
+    partial: boolean,
+    applyError: string,
+    auditSaveError: string,
+    writeResult: { type: "object" }
+  },
+  required: [
+    "auditId",
+    "proposalId",
+    "proposalHash",
+    "path",
+    "model",
+    "startedAt",
+    "completedAt",
+    "verdict",
+    "summary",
+    "cautions",
+    "checks",
+    "source_paths",
+    "canAutoApply",
+    "autoApplyAuthorized",
+    "applied",
+    "humanReviewed",
+    "scientificallyVerified",
+    "usage"
+  ],
+  additionalProperties: true
+};
+var modelReviewInfoResultSchema = object({
+  selection: object({ provider: string, model: string, thinkingLevel: string, profile: string }, [
+    "provider",
+    "model",
+    "thinkingLevel"
+  ]),
+  lastReview: nullable(modelReviewResultSchema)
+});
+
+// src/desktop/model-review.ts
+init_wiki_model_review();
+
+// src/desktop/reviews.ts
+function createKnowledgeReviewContext(owner, canWriteState, canWriteFiles) {
+  async function bound(revision, project, operation) {
+    return owner.run(async () => {
+      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+      if (!binding) throw new Error("No application knowledge Vault is bound");
+      if (binding.revision !== revision)
+        throw new Error("Knowledge binding changed; refresh before reviewing");
+      if (project === null) throw new Error("Select a project session to review Wiki proposals");
+      const service = {
+        binding,
+        async request(operation2, input) {
+          const index = await owner.services.getKnowledgeService(binding);
+          return index.request(operation2, input);
+        }
+      };
+      return owner.config.withKnowledgeBinding(binding, () => operation(service));
+    });
+  }
+  function requireWrite(files = false) {
+    if (!canWriteState) throw new Error("Application-state write permission is required");
+    if (files && !canWriteFiles) throw new Error("Configured Vault write permission is required");
+  }
+  return { bound, requireWrite };
+}
+function createKnowledgeReviewModel(owner, canWriteState, canWriteFiles) {
+  const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
+  return {
+    async reviews(input, project) {
+      if (project === null) {
+        return owner.run(async () => {
+          const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+          if (!binding || binding.revision !== input.revision)
+            throw new Error("Knowledge binding changed; refresh before reviewing");
+          return {
+            bindingRevision: binding.revision,
+            project,
+            items: [],
+            problems: [],
+            total: 0,
+            offset: 0,
+            nextOffset: null
+          };
+        });
+      }
+      return bound(input.revision, project, async (service) => {
+        const { items, problems } = await owner.wiki.listWikiProposals(service, project);
+        const offset = input.offset ?? 0, limit = input.limit ?? 12;
+        return {
+          bindingRevision: service.binding.revision,
+          project,
+          items: items.slice(offset, offset + limit),
+          problems,
+          total: items.length,
+          offset,
+          nextOffset: offset + limit < items.length ? offset + limit : null
+        };
+      });
+    },
+    previewReview(input, project) {
+      return bound(input.revision, project, async (service) => {
+        const preview = await owner.wiki.previewWikiProposal(service, input.id, project);
+        if (preview.proposalHash !== input.expectedProposalHash)
+          throw new Error("Wiki proposal changed; refresh before previewing");
+        return { ...preview, bindingRevision: service.binding.revision };
+      });
+    },
+    rejectReview(input, project) {
+      requireWrite();
+      return bound(input.revision, project, async (service) => {
+        const result2 = await owner.wiki.decideWikiProposal(
+          service,
+          input.id,
+          project,
+          input.expectedProposalHash,
+          "reject"
+        );
+        if (result2.alreadyReviewed)
+          throw new Error("Wiki proposal was already reviewed; refresh before reviewing");
+        return { id: result2.id, status: "rejected", vaultWritten: false, reviewRecorded: true };
+      });
+    },
+    applyReview(input, project) {
+      requireWrite(true);
+      return bound(input.revision, project, async (service) => {
+        const result2 = await owner.wiki.decideWikiProposal(
+          service,
+          input.id,
+          project,
+          input.expectedProposalHash,
+          "apply"
+        );
+        if (result2.alreadyReviewed)
+          throw new Error("Wiki proposal was already reviewed; refresh before reviewing");
+        const {
+          id: id2,
+          status,
+          path,
+          vaultWritten,
+          reviewRecorded,
+          indexed,
+          recovered,
+          recordError,
+          indexError
+        } = result2;
+        return {
+          id: id2,
+          status,
+          path,
+          vaultWritten,
+          reviewRecorded,
+          indexed,
+          recovered,
+          recordError,
+          indexError
+        };
+      });
+    },
+    history(input, project) {
+      return bound(input.revision, project, async (service) => ({
+        bindingRevision: service.binding.revision,
+        project,
+        items: await owner.wiki.wikiHistory(service, project)
+      }));
+    },
+    undoReview(input, project) {
+      requireWrite(true);
+      return bound(
+        input.revision,
+        project,
+        (service) => owner.wiki.undoWikiUpdate(service, project, input.id, input.expectedHash)
+      );
+    }
+  };
+}
+
+// src/desktop/model-review.ts
+function createKnowledgeModelReviewModel(owner, canWriteState, canWriteFiles) {
+  const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
+  async function selection(call, profile) {
+    if (call.scope.kind !== "session")
+      throw new Error("Choose the originating live session before model review");
+    return await call.capabilities.call(
+      "model.selection",
+      profile === void 0 ? {} : { profile }
+    );
+  }
+  return {
+    info(input, project, call) {
+      return bound(input.revision, project, async (service) => {
+        const preview = await owner.wiki.previewWikiProposal(service, input.id, project);
+        if (preview.proposalHash !== input.expectedProposalHash)
+          throw new Error("Wiki proposal changed; refresh before model review");
+        return {
+          selection: await selection(call, input.profile),
+          lastReview: await owner.modelReview.lastWikiModelReview(
+            service,
+            input.id,
+            input.expectedProposalHash
+          )
+        };
+      });
+    },
+    review(input, project, call) {
+      requireWrite(input.autoApply);
+      return bound(input.revision, project, async (service) => {
+        const initial = await selection(call, input.profile);
+        const check = async () => {
+          call.signal.throwIfAborted();
+          const state = await call.capabilities.call("session.inspect", null);
+          if (state.agentActive)
+            throw new Error("Wait for the current conversation to finish before model review");
+          const current = await selection(call, input.profile);
+          if (current.provider !== initial.provider || current.model !== initial.model || current.thinkingLevel !== initial.thinkingLevel || current.profile !== initial.profile)
+            throw new Error("Model selection changed; review again before applying");
+        };
+        return owner.modelReview.reviewWikiWithModel(
+          {
+            service,
+            project,
+            id: input.id,
+            hash: input.expectedProposalHash,
+            binding: service.binding
+          },
+          input,
+          {
+            signal: call.signal,
+            check,
+            evaluate: (request) => generateWikiModelReview(call.capabilities, initial, request)
+          }
+        );
+      });
+    }
+  };
+}
+function parseModelReviewCommandInput(args) {
+  let input;
+  try {
+    input = JSON.parse(args);
+  } catch {
+    throw new Error("Expected model-review command JSON; raw arguments are not included in diagnostics");
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new Error("Expected JSON with id, expectedProposalHash, acknowledged:true and autoApply:boolean");
+  const value = input;
+  if (Object.keys(value).some(
+    (key) => !["id", "expectedProposalHash", "acknowledged", "autoApply", "profile"].includes(key)
+  ) || typeof value.id !== "string" || !/^[0-9a-f-]{36}$/.test(value.id) || typeof value.expectedProposalHash !== "string" || !/^[0-9a-f]{64}$/.test(value.expectedProposalHash) || value.acknowledged !== true || typeof value.autoApply !== "boolean" || value.profile !== void 0 && value.profile !== "knowledge-wiki-reviewer")
+    throw new Error(
+      "Expected the exact proposal ID/hash, explicit cost/data acknowledgement and autoApply choice"
+    );
+  return {
+    id: value.id,
+    expectedProposalHash: value.expectedProposalHash,
+    acknowledged: true,
+    autoApply: value.autoApply,
+    ...value.profile === void 0 ? {} : { profile: "knowledge-wiki-reviewer" }
+  };
+}
+
+// src/desktop/read-model.ts
+import { basename as basename5 } from "node:path";
+function createKnowledgeReadModel(owner) {
+  async function overview(project) {
+    return owner.run(async () => {
+      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+      if (!binding) return { state: "unconfigured", binding: null, project, index: null, recentNotes: [] };
+      const service = await owner.services.getKnowledgeService(binding);
+      await service.request("reconcile");
+      const recent = await service.request("recentNotes", { project, limit: 10 });
+      const index = await service.request("status", { flushPending: true });
+      return owner.config.withKnowledgeBinding(binding, () => ({
+        state: "bound",
+        binding: { vaultId: binding.vaultId, revision: binding.revision, label: basename5(binding.vault) },
+        project,
+        index: {
+          revision: index.revision,
+          coverage: index.coverage,
+          noteCount: index.noteCount,
+          pendingChanges: index.pendingChanges,
+          lastReconciledAt: index.lastReconciledAt
+        },
+        recentNotes: recent.items.map(({ path, title, kind, updatedAt }) => ({
+          path,
+          title,
+          kind,
+          updatedAt
+        }))
+      }));
+    });
+  }
+  async function search(input, project) {
+    return owner.run(async () => {
+      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+      if (!binding) throw new Error("No application knowledge Vault is bound");
+      if (input.revision !== binding.revision)
+        throw new Error("Knowledge binding changed; refresh before searching");
+      const service = await owner.services.getKnowledgeService(binding);
+      await service.request("reconcile");
+      const found = await service.request("search", { query: input.query, project, limit: input.limit ?? 6 });
+      return owner.config.withKnowledgeBinding(binding, () => ({
+        query: found.query,
+        revision: found.revision,
+        bindingRevision: binding.revision,
+        coverage: found.coverage,
+        complete: found.complete,
+        hits: found.hits.map(({ path, title, kind, hash: hash3, text: text4, startLine, endLine }) => ({
+          path,
+          title,
+          kind,
+          hash: hash3,
+          text: text4,
+          startLine,
+          endLine
+        }))
+      }));
+    });
+  }
+  async function boundRead(input, project, read) {
+    return owner.run(async () => {
+      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+      if (!binding) throw new Error("No application knowledge Vault is bound");
+      if (input.revision !== binding.revision)
+        throw new Error("Knowledge binding changed; refresh before reading");
+      const service = await owner.services.getKnowledgeService(binding);
+      await service.request("reconcile");
+      const value = await read(service);
+      return owner.config.withKnowledgeBinding(binding, () => ({
+        ...value,
+        bindingRevision: binding.revision,
+        project
+      }));
+    });
+  }
+  async function readNote(input, project) {
+    return boundRead(input, project, async (service) => {
+      const note = await service.request("read", {
+        path: input.path,
+        project,
+        startLine: input.startLine ?? 1,
+        maxChars: 6e3,
+        reviewMaxChars: 1600
+      });
+      if (input.expectedHash !== void 0 && note.hash !== input.expectedHash)
+        throw new Error("Note changed; refresh before continuing");
+      if (note.missing) return { path: note.path, missing: true, revision: note.revision };
+      const {
+        path,
+        title,
+        kind,
+        category,
+        hash: hash3,
+        text: text4,
+        startLine,
+        endLine,
+        totalLines,
+        truncated,
+        humanReview,
+        pending,
+        revision
+      } = note;
+      return {
+        path,
+        missing: false,
+        title,
+        kind,
+        category,
+        hash: hash3,
+        text: text4,
+        startLine,
+        endLine,
+        totalLines,
+        truncated,
+        humanReview,
+        pending,
+        revision
+      };
+    });
+  }
+  const links = (input, project) => boundRead(input, project, (service) => service.request("noteLinks", { path: input.path, project }));
+  const graph = (input, project) => boundRead(
+    input,
+    project,
+    (service) => service.request("graph", {
+      project,
+      limit: input.limit ?? 200,
+      view: input.view ?? "semantic",
+      mergeMirrors: input.mergeMirrors ?? true
+    })
+  );
+  const jobs = (input, project) => boundRead(
+    input,
+    project,
+    (service) => service.request("uiJobs", { project, offset: input.offset ?? 0, limit: input.limit ?? 20 })
+  );
+  const recentByCategory2 = (input, project) => boundRead(
+    input,
+    project,
+    (service) => service.request("recentByCategory", { project, limit: input.limit ?? 10 })
+  );
+  return { overview, search, readNote, links, graph, jobs, recentByCategory: recentByCategory2 };
+}
+
+// src/desktop/native.ts
+function registerDesktopKnowledgeNativeReadTools(pi, owner, projectFor2) {
+  const reads = createKnowledgeReadModel(owner);
+  pi.registerTool({
+    name: "knowledge_status",
+    label: "Knowledge status",
+    drone: { readOnly: true, capabilities: ["knowledge"] },
+    description: "Report the configured local knowledge index.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+    async execute(_id, _input, _signal, _update, context) {
+      const overview = await reads.overview(await projectFor2(context));
+      return result({
+        status: overview.state === "bound" ? "configured" : "unconfigured",
+        ...overview
+      });
+    }
+  });
+  pi.registerTool({
+    name: "knowledge_search",
+    label: "Knowledge \xB7 local search",
+    drone: { readOnly: true, capabilities: ["knowledge"] },
+    description: "Search the configured local knowledge index. Results are excerpts, not publication proofs.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", minLength: 1, maxLength: 2e3 },
+        limit: { type: "integer", minimum: 1, maximum: 12 }
+      },
+      required: ["query"],
+      additionalProperties: false
+    },
+    async execute(_id, input, _signal, _update, context) {
+      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+      if (!binding) throw new Error("No application knowledge Vault is bound");
+      return result(await reads.search({ ...input, revision: binding.revision }, await projectFor2(context)));
+    }
+  });
+}
 
 // src/desktop/native-state.ts
 function createBrokerKnowledgeState(capabilities, root) {
@@ -18953,7 +19083,8 @@ function createBrokerKnowledgeState(capabilities, root) {
       for (let length = 1; length <= parents.length; length++)
         await capabilities.call("state.ensureDirectory", { root, path: parents.slice(0, length).join("/") });
       const result2 = await capabilities.call("state.writeJson", { root, path, value, expectedVersion });
-      if (JSON.stringify(result2.value) !== JSON.stringify(value)) throw new Error("Knowledge state write could not be read back");
+      if (JSON.stringify(result2.value) !== JSON.stringify(value))
+        throw new Error("Knowledge state write could not be read back");
     },
     async remove(path, expectedVersion) {
       const result2 = await capabilities.call("state.removeJson", { root, path, expectedVersion });
@@ -18962,43 +19093,370 @@ function createBrokerKnowledgeState(capabilities, root) {
   };
 }
 
-// src/desktop/topic-storage.ts
-function createBrokerTopicMemoryStorage(io) {
-  return (binding, project) => {
-    const key = `${binding.vaultId}/topic-memory/${project}.json`;
-    return {
-      key,
-      async read() {
-        return (await io.state.read(key))?.value ?? null;
-      },
-      async write(value, expectedRevision) {
-        const current = await io.state.read(key);
-        if (current !== null && current.value.revision !== expectedRevision)
-          throw new Error("Topic memory revision changed");
-        if (current === null && expectedRevision !== 0) throw new Error("Topic memory was removed");
-        await io.state.write(key, value, current?.version ?? null);
-      },
-      async readSource(path) {
-        const source = await io.files.read(binding, path);
-        if (source === null) throw new Error("Topic source is missing");
-        return source;
+// src/desktop/preferences.ts
+init_review_policy();
+import { basename as basename6 } from "node:path";
+
+// src/desktop/state-policy.ts
+function createBrokerReviewPolicyStorage(capabilities, root) {
+  return {
+    async read() {
+      try {
+        return await capabilities.call("state.readJson", {
+          root,
+          path: "review-policy.json"
+        });
+      } catch (error) {
+        if (error.code !== "ESTATECORRUPTED") throw error;
+        return { kind: "corrupt", version: null };
       }
+    },
+    write: (value, expectedVersion) => capabilities.call("state.writeJson", {
+      root,
+      path: "review-policy.json",
+      value,
+      expectedVersion
+    })
+  };
+}
+
+// src/desktop/preferences.ts
+function createKnowledgePreferences(owner, capabilities, state, canWriteState) {
+  const policy = createStoredKnowledgeReviewPolicy(
+    createBrokerReviewPolicyStorage(capabilities, state),
+    () => false
+  );
+  async function snapshot() {
+    const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+    return {
+      binding: binding ? {
+        vaultId: binding.vaultId,
+        revision: binding.revision,
+        label: basename6(binding.vault),
+        vault: binding.vault,
+        profile: binding.profile,
+        depositMode: binding.depositMode,
+        subagentPolicy: binding.subagentPolicy,
+        updatedAt: binding.updatedAt
+      } : null,
+      canWriteState,
+      reviewPolicy: await policy.readReviewPolicy()
+    };
+  }
+  return {
+    read: () => owner.run(snapshot),
+    write: (input) => owner.run(async () => {
+      if (!canWriteState) throw new Error("Application-state write permission is required");
+      const binding = await owner.config.readKnowledgeBinding({
+        fresh: true
+      });
+      if (!binding || binding.revision !== input.bindingRevision)
+        throw new Error("Knowledge binding changed; refresh before saving");
+      await owner.config.withKnowledgeBinding(
+        binding,
+        () => policy.saveReviewMode(input.mode, input.expectedVersion)
+      );
+      return owner.config.withKnowledgeBinding(binding, snapshot);
+    })
+  };
+}
+
+// src/desktop/recovery-migration.ts
+import { resolve as resolve13 } from "node:path";
+var type = "drone-knowledge-recovery-v1";
+function createKnowledgeRecoveryMigration(capabilities, config) {
+  return async (context) => {
+    const call = (name, input) => capabilities.call(name, input, context.signal);
+    const facts = await call("session.inspect", null);
+    if (facts.agentActive) throw new Error("Checkpoint migration requires an idle session");
+    const scope = await call("caller.scope", null);
+    const sessionId = context.sessionManager.getSessionId();
+    if (scope.kind !== "session" || scope.sessionId !== sessionId || resolve13(scope.workspaceDirectory) !== resolve13(context.cwd))
+      throw new Error("Checkpoint migration requires its actual originating session and workspace");
+    const own = await call("session.records.read", null);
+    if (own.state !== "durable") throw new Error("Checkpoint migration requires durable session storage");
+    const existing = own.records.find((record3) => record3.type === type);
+    if (existing) {
+      parseKnowledgeRecoveryCheckpoint(existing.data);
+      return {
+        state: "already-present",
+        creator: "unknown",
+        packageVersion: "unknown",
+        currentReadProof: false
+      };
+    }
+    const inspection = await call("session.records.adoption.inspect", {
+      type
+    });
+    if (inspection.state !== "candidate") {
+      if (inspection.state === "deferred")
+        throw new Error("Checkpoint migration is deferred; no import was committed");
+      return {
+        state: inspection.state,
+        creator: inspection.creator,
+        packageVersion: inspection.packageVersion,
+        currentReadProof: false
+      };
+    }
+    if (!inspection.candidate) throw new Error("Checkpoint adoption did not return its declared candidate");
+    const data = parseKnowledgeRecoveryCheckpoint(inspection.candidate.data);
+    const binding = await config.readKnowledgeBinding({ fresh: true });
+    if (!binding) throw new Error("Checkpoint migration requires the currently bound Vault");
+    if (data.scope !== `${sessionId}:${resolve13(context.cwd)}` || data.records.some(
+      (record3) => record3.sessionId !== sessionId || record3.vaultId !== binding.vaultId || record3.bindingRevision !== binding.revision
+    ))
+      throw new Error(
+        "Legacy checkpoint does not match the actual session, workspace and current Vault binding"
+      );
+    const imported = {
+      scope: data.scope,
+      records: data.records.map((record3) => ({ ...record3, evicted: false }))
+    };
+    const committed = await call("session.records.adoption.commit", {
+      type,
+      legacyId: inspection.candidate.id,
+      legacyHash: inspection.candidate.hash,
+      data: imported
+    });
+    if (committed.state !== "adopted" || committed.durability !== "durable")
+      throw new Error("No durable knowledge checkpoint adoption was confirmed");
+    const after = await call("session.records.read", null);
+    const saved = after.records.find((record3) => record3.type === type && record3.id === committed.id);
+    if (after.state !== "durable" || !saved || JSON.stringify(saved.data) !== JSON.stringify(imported))
+      throw new Error("Adopted checkpoint could not be read back durably");
+    const current = await config.readKnowledgeBinding({ fresh: true });
+    if (!current || current.vaultId !== binding.vaultId || current.revision !== binding.revision)
+      throw new Error(
+        "Vault binding changed during checkpoint migration; no current recovery proof was restored"
+      );
+    return {
+      state: "adopted",
+      records: imported.records.length,
+      creator: inspection.creator,
+      packageVersion: inspection.packageVersion,
+      currentReadProof: false
     };
   };
 }
 
-// src/desktop/specialist-settings-storage.ts
-function createBrokerSpecialistSettingsStorage(state) {
-  return {
-    async read() {
-      return (await state.read("specialists.json"))?.value ?? null;
+// src/desktop/review-storage.ts
+init_files();
+function createBrokerWikiReviewPorts(capabilities, stateRoot) {
+  const state = {
+    async read(path) {
+      const result2 = await capabilities.call("state.readJson", { root: stateRoot, path });
+      if (result2.kind === "missing") return null;
+      if (Buffer.byteLength(JSON.stringify(result2.value)) > 256 * 1024)
+        throw new Error("Wiki proposal exceeds its storage budget");
+      return { value: result2.value, version: result2.version };
     },
-    async write(value, expectedRevision) {
-      const current = await state.read("specialists.json");
-      if (current !== null && current.value.revision !== expectedRevision)
-        throw new Error("Specialist settings changed; refresh first");
-      if (current === null && expectedRevision !== 0) throw new Error("Specialist settings were removed");
-      await state.write("specialists.json", value, current?.version ?? null);
+    async list(path) {
+      const entries = await capabilities.call("state.list", { root: stateRoot, path });
+      return entries.filter((entry) => entry.kind === "file").map((entry) => entry.name);
+    },
+    async write(path, value, expectedVersion) {
+      const parent = path.slice(0, path.lastIndexOf("/"));
+      await capabilities.call("state.ensureDirectory", { root: stateRoot, path: parent });
+      const result2 = await capabilities.call("state.writeJson", {
+        root: stateRoot,
+        path,
+        value,
+        expectedVersion
+      });
+      if (JSON.stringify(result2.value) !== JSON.stringify(value))
+        throw new Error("Wiki review state write could not be read back");
+    },
+    async remove(path, expectedVersion) {
+      const result2 = await capabilities.call("state.removeJson", {
+        root: stateRoot,
+        path,
+        expectedVersion
+      });
+      if (result2.kind !== "missing") throw new Error("Wiki review state removal could not be read back");
+    }
+  };
+  async function rootFor(vault) {
+    return (await capabilities.call("roots.resolve", { path: vault, kind: "files" })).handle;
+  }
+  const files = {
+    async read(binding, path) {
+      validateNote(path);
+      const root = await rootFor(binding.vault);
+      try {
+        const result2 = await capabilities.call("files.readText", { root, path });
+        return {
+          path,
+          text: result2.text,
+          hash: result2.sha256,
+          bytes: result2.bytes,
+          signature: fileVersion(result2.version)
+        };
+      } catch (error) {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      }
+    },
+    async write(binding, path, text4, expectedHash, check) {
+      validateNote(path);
+      const root = await rootFor(binding.vault);
+      await capabilities.call("files.ensureDirectory", { root, path: path.slice(0, path.lastIndexOf("/")) });
+      await check();
+      const result2 = await capabilities.call("files.writeText", { root, path, text: text4, expectedHash });
+      if (result2.text !== text4) throw new Error("Wiki write could not be read back");
+    },
+    async remove(binding, path, expectedHash, check) {
+      validateNote(path);
+      const root = await rootFor(binding.vault);
+      await check();
+      await capabilities.call("files.remove", { root, path, expectedHash });
+      if (await files.read(binding, path)) throw new Error("Wiki removal could not be read back");
+    }
+  };
+  return { state, files };
+}
+
+// src/desktop/semantic-preferences.ts
+import { basename as basename7 } from "node:path";
+function createKnowledgeSemanticPreferences(owner, semantic, canWriteState) {
+  async function snapshot() {
+    const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+    if (!binding) return { binding: null, settings: null, canWriteState, providerExecution: "unavailable" };
+    const settings2 = await semantic.readSemanticSettings(binding.vaultId);
+    return owner.config.withKnowledgeBinding(binding, () => ({
+      binding: { vaultId: binding.vaultId, revision: binding.revision, label: basename7(binding.vault) },
+      settings: settings2,
+      canWriteState,
+      providerExecution: "unavailable"
+    }));
+  }
+  return {
+    read: () => owner.run(snapshot),
+    write: (input) => owner.run(async () => {
+      if (!canWriteState) throw new Error("Semantic settings require an application-state write grant");
+      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+      if (!binding || binding.revision !== input.bindingRevision)
+        throw new Error("Knowledge binding changed; refresh before saving semantic settings");
+      await owner.config.withKnowledgeBinding(
+        binding,
+        () => semantic.saveSemanticSettings(binding.vaultId, input.settings, input.expectedSettingsRevision)
+      );
+      await owner.config.withKnowledgeBinding(binding, () => void 0);
+      return snapshot();
+    })
+  };
+}
+
+// src/desktop/semantic-settings.ts
+function createBrokerSemanticSettings(capabilities, root) {
+  return createStoredSemanticSettingsApi({
+    read: async (vaultId) => await capabilities.call("state.readJson", {
+      root,
+      path: `${vaultId}/semantic.json`
+    }),
+    async write(vaultId, value, expectedVersion) {
+      await capabilities.call("state.ensureDirectory", { root, path: vaultId });
+      await capabilities.call("state.writeJson", {
+        root,
+        path: `${vaultId}/semantic.json`,
+        value,
+        expectedVersion
+      });
+    }
+  });
+}
+
+// src/desktop/service-transport.ts
+function createResourceServiceTransportFactory(context, state, lifecycle) {
+  const metadata = { version: "unknown" };
+  const transports = /* @__PURE__ */ new Set();
+  let shutdown = null;
+  class ResourceTransport {
+    closed = false;
+    closing = false;
+    lifecycle = "staged";
+    metadata = metadata;
+    version = metadata.version;
+    opening;
+    pending = /* @__PURE__ */ new Set();
+    closePromise = null;
+    constructor(binding) {
+      this.opening = (async () => {
+        const vault = await context.capabilities.call("roots.resolve", {
+          path: binding.vault,
+          kind: "files"
+        });
+        return await context.capabilities.call("resource.create", {
+          resource: "index",
+          storage: { root: state, key: binding.vaultId },
+          parameters: { vaultRoot: vault.handle },
+          reservation: {
+            namespace: "knowledge-writers",
+            roots: [{ root: vault.handle, path: "", kind: "vault" }],
+            storage: { path: "index.sqlite", kind: "index" }
+          }
+        });
+      })();
+    }
+    get pendingRequestCount() {
+      return this.pending.size;
+    }
+    async waitUntilReady() {
+      await this.opening;
+      return { version: this.version };
+    }
+    request(operation, input = {}) {
+      if (this.closed || this.closing || shutdown)
+        return Promise.reject(new Error("Knowledge service is closed"));
+      const request = this.opening.then(
+        (resource) => context.capabilities.call("resource.invoke", { handle: resource.handle, operation, input })
+      );
+      this.pending.add(request);
+      return request.finally(() => this.pending.delete(request));
+    }
+    prepareUnload() {
+      return { pendingRequests: this.pending.size, version: this.version };
+    }
+    close() {
+      if (this.closePromise) return this.closePromise;
+      this.closing = true;
+      this.lifecycle = "disabled";
+      const close = (async () => {
+        if (shutdown) {
+          await shutdown;
+        } else {
+          await Promise.allSettled([...this.pending]);
+          const resource = await this.opening;
+          await context.capabilities.call("resource.dispose", { handle: resource.handle });
+        }
+        this.closed = true;
+        this.lifecycle = "drained";
+      })();
+      this.closePromise = close.catch((error) => {
+        this.closePromise = null;
+        throw error;
+      });
+      return this.closePromise;
+    }
+  }
+  return {
+    metadata: () => metadata,
+    resourceKey: (binding) => JSON.stringify([state, "index", binding.vaultId]),
+    create({ binding }) {
+      if (shutdown) throw new Error("Knowledge resource owner is closing");
+      const transport = new ResourceTransport(binding);
+      transports.add(transport);
+      return transport;
+    },
+    dispose() {
+      if (!shutdown)
+        shutdown = lifecycle.dispose().then(() => {
+          for (const transport of transports) {
+            transport.closed = true;
+            transport.closing = true;
+            transport.lifecycle = "drained";
+          }
+        });
+      return shutdown;
     }
   };
 }
@@ -19010,10 +19468,14 @@ function createManagedKnowledgeSessionPorts(capabilities) {
   const ports = {
     async initialize(context) {
       context.signal?.throwIfAborted();
-      provider = await capabilities.call("provider.inspect", { alias: "tasks" });
+      provider = await capabilities.call("provider.inspect", {
+        alias: "tasks"
+      });
       context.signal?.throwIfAborted();
       if (provider.state !== "absent" && provider.state !== "disabled")
-        throw new Error(`Task runtime service is ${provider.state}; the function-rich task publication consumer is not yet connected`);
+        throw new Error(
+          `Task runtime service is ${provider.state}; the function-rich task publication consumer is not yet connected`
+        );
     },
     async inspect(context) {
       context.signal?.throwIfAborted();
@@ -19051,52 +19513,52 @@ function createManagedKnowledgeSessionPorts(capabilities) {
     async notify(content, context) {
       context.signal?.throwIfAborted();
       const result2 = await capabilities.call("session.notify", { content });
-      if (result2.durability !== "durable") throw new Error("Knowledge command receipt is deferred; reopen before relying on saved history");
+      if (result2.durability !== "durable")
+        throw new Error("Knowledge command receipt is deferred; reopen before relying on saved history");
     }
   };
   return { ports, acceptance: () => acceptance, provider: () => provider };
 }
 
-// src/desktop/recovery-migration.ts
-import { resolve as resolve13 } from "node:path";
-var type = "drone-knowledge-recovery-v1";
-function createKnowledgeRecoveryMigration(capabilities, config) {
-  return async (context) => {
-    const call = (name, input) => capabilities.call(name, input, context.signal);
-    const facts = await call("session.inspect", null);
-    if (facts.agentActive) throw new Error("Checkpoint migration requires an idle session");
-    const scope = await call("caller.scope", null);
-    const sessionId = context.sessionManager.getSessionId();
-    if (scope.kind !== "session" || scope.sessionId !== sessionId || resolve13(scope.workspaceDirectory) !== resolve13(context.cwd))
-      throw new Error("Checkpoint migration requires its actual originating session and workspace");
-    const own = await call("session.records.read", null);
-    if (own.state !== "durable") throw new Error("Checkpoint migration requires durable session storage");
-    const existing = own.records.find((record3) => record3.type === type);
-    if (existing) {
-      parseKnowledgeRecoveryCheckpoint(existing.data);
-      return { state: "already-present", creator: "unknown", packageVersion: "unknown", currentReadProof: false };
-    }
-    const inspection = await call("session.records.adoption.inspect", { type });
-    if (inspection.state !== "candidate") {
-      if (inspection.state === "deferred") throw new Error("Checkpoint migration is deferred; no import was committed");
-      return { state: inspection.state, creator: inspection.creator, packageVersion: inspection.packageVersion, currentReadProof: false };
-    }
-    if (!inspection.candidate) throw new Error("Checkpoint adoption did not return its declared candidate");
-    const data = parseKnowledgeRecoveryCheckpoint(inspection.candidate.data);
-    const binding = await config.readKnowledgeBinding({ fresh: true });
-    if (!binding) throw new Error("Checkpoint migration requires the currently bound Vault");
-    if (data.scope !== `${sessionId}:${resolve13(context.cwd)}` || data.records.some((record3) => record3.sessionId !== sessionId || record3.vaultId !== binding.vaultId || record3.bindingRevision !== binding.revision))
-      throw new Error("Legacy checkpoint does not match the actual session, workspace and current Vault binding");
-    const imported = { scope: data.scope, records: data.records.map((record3) => ({ ...record3, evicted: false })) };
-    const committed = await call("session.records.adoption.commit", { type, legacyId: inspection.candidate.id, legacyHash: inspection.candidate.hash, data: imported });
-    if (committed.state !== "adopted" || committed.durability !== "durable") throw new Error("No durable knowledge checkpoint adoption was confirmed");
-    const after = await call("session.records.read", null);
-    const saved = after.records.find((record3) => record3.type === type && record3.id === committed.id);
-    if (after.state !== "durable" || !saved || JSON.stringify(saved.data) !== JSON.stringify(imported)) throw new Error("Adopted checkpoint could not be read back durably");
-    const current = await config.readKnowledgeBinding({ fresh: true });
-    if (!current || current.vaultId !== binding.vaultId || current.revision !== binding.revision) throw new Error("Vault binding changed during checkpoint migration; no current recovery proof was restored");
-    return { state: "adopted", records: imported.records.length, creator: inspection.creator, packageVersion: inspection.packageVersion, currentReadProof: false };
-  };
+// src/core/specialist-contract.ts
+var SCIENCE_CONTRACT = [
+  "Scientific contract:",
+  "- Inspect relevant files, data, and source records before assuming or fitting.",
+  "- Keep observations, interpretations, hypotheses, and unknowns separate.",
+  "- Check numbers and generated outputs against the current source or a fresh run.",
+  "- Preserve source data and write new results beside existing work; do not silently overwrite or delete.",
+  "- Treat simulated data, teacher outputs, pseudo-labels, and self-generated validators as assumptions, not real-world error checks.",
+  "- State missing evidence, failed checks, and remaining limitations in the final answer."
+].join("\n");
+var RESPONSE_CONTRACT = [
+  "Response contract:",
+  "- Progress narration between tools is short and only reports a new observation, choice, result, or blocker.",
+  "- The final answer is the user-facing answer; its length and structure follow the answer mode.",
+  "- Never claim a file was saved, a source was read, or a check passed unless the host returned that evidence.",
+  "- Keep private reasoning private; expose observable actions, evidence, decisions, and conclusions."
+].join("\n");
+function resolveHarnessModelFamily(provider, model) {
+  const value = `${provider}/${model}`.toLowerCase();
+  if (value.includes("astra") || value.includes("gpt-6")) return "gpt-astra";
+  if (value.includes("codex")) return "codex";
+  if (value.includes("claude") || value.includes("anthropic")) return "anthropic";
+  if (value.includes("gemini") || value.includes("google")) return "gemini";
+  if (value.includes("gpt") || value.includes("openai") || value.includes("o1") || value.includes("o3"))
+    return "gpt";
+  return "default";
+}
+function specialistContract(provider, model, role) {
+  return [
+    `Specialist contract (${role}; model family ${resolveHarnessModelFamily(provider, model)}): return only the requested structured handoff and do not delegate or ask the user.`,
+    SCIENCE_CONTRACT,
+    RESPONSE_CONTRACT,
+    [
+      "Harness posture: effort NORMAL. Stay focused and add branches only when they materially help.",
+      "Delegation: off. Keep the work in the lead conversation.",
+      "Independence: autonomous. Choose routine and consequential paths; ask only when authority or input is missing.",
+      "Execute only within the active permissions. The permission mode remains authoritative."
+    ].join("\n")
+  ].join("\n\n");
 }
 
 // src/core/specialist-profiles.ts
@@ -19148,47 +19610,6 @@ var KNOWLEDGE_REVIEWER = {
   maxTokens: 2800
 };
 var PROTECTED_KNOWLEDGE_AGENTS = [...KNOWLEDGE_SPECIALISTS, KNOWLEDGE_REVIEWER];
-
-// src/core/specialist-contract.ts
-var SCIENCE_CONTRACT = [
-  "Scientific contract:",
-  "- Inspect relevant files, data, and source records before assuming or fitting.",
-  "- Keep observations, interpretations, hypotheses, and unknowns separate.",
-  "- Check numbers and generated outputs against the current source or a fresh run.",
-  "- Preserve source data and write new results beside existing work; do not silently overwrite or delete.",
-  "- Treat simulated data, teacher outputs, pseudo-labels, and self-generated validators as assumptions, not real-world error checks.",
-  "- State missing evidence, failed checks, and remaining limitations in the final answer."
-].join("\n");
-var RESPONSE_CONTRACT = [
-  "Response contract:",
-  "- Progress narration between tools is short and only reports a new observation, choice, result, or blocker.",
-  "- The final answer is the user-facing answer; its length and structure follow the answer mode.",
-  "- Never claim a file was saved, a source was read, or a check passed unless the host returned that evidence.",
-  "- Keep private reasoning private; expose observable actions, evidence, decisions, and conclusions."
-].join("\n");
-function resolveHarnessModelFamily(provider, model) {
-  const value = `${provider}/${model}`.toLowerCase();
-  if (value.includes("astra") || value.includes("gpt-6")) return "gpt-astra";
-  if (value.includes("codex")) return "codex";
-  if (value.includes("claude") || value.includes("anthropic")) return "anthropic";
-  if (value.includes("gemini") || value.includes("google")) return "gemini";
-  if (value.includes("gpt") || value.includes("openai") || value.includes("o1") || value.includes("o3"))
-    return "gpt";
-  return "default";
-}
-function specialistContract(provider, model, role) {
-  return [
-    `Specialist contract (${role}; model family ${resolveHarnessModelFamily(provider, model)}): return only the requested structured handoff and do not delegate or ask the user.`,
-    SCIENCE_CONTRACT,
-    RESPONSE_CONTRACT,
-    [
-      "Harness posture: effort NORMAL. Stay focused and add branches only when they materially help.",
-      "Delegation: off. Keep the work in the lead conversation.",
-      "Independence: autonomous. Choose routine and consequential paths; ask only when authority or input is missing.",
-      "Execute only within the active permissions. The permission mode remains authoritative."
-    ].join("\n")
-  ].join("\n\n");
-}
 
 // src/core/specialist-model-loop.ts
 var ROLES = {
@@ -19312,13 +19733,16 @@ ${request.skillText}` : "",
       if (Buffer.byteLength(JSON.stringify(messages)) > 8e4)
         throw new Error("Specialist private context budget exhausted");
       request.progress({ action: "model" });
-      const result2 = await deps.step({
-        selection,
-        systemPrompt: context.systemPrompt,
-        messages,
-        tools,
-        maxTokens: profile.maxTokens
-      }, controller.signal);
+      const result2 = await deps.step(
+        {
+          selection,
+          systemPrompt: context.systemPrompt,
+          messages,
+          tools,
+          maxTokens: profile.maxTokens
+        },
+        controller.signal
+      );
       const reply = result2.reply;
       const observed = result2.usage;
       const reportedFields = [...observed.reportedFields];
@@ -19338,7 +19762,15 @@ ${request.skillText}` : "",
         reported: reportedUsage,
         reportedFields
       };
-      for (const key of ["inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "reasoningTokens", "totalTokens", "cost"])
+      for (const key of [
+        "inputTokens",
+        "outputTokens",
+        "cacheReadTokens",
+        "cacheWriteTokens",
+        "reasoningTokens",
+        "totalTokens",
+        "cost"
+      ])
         usage[key] += delta[key];
       if (reportedUsage) await request.onUsage?.(delta);
       if (["error", "aborted", "length"].includes(reply.stopReason))
@@ -19390,10 +19822,54 @@ ${request.skillText}` : "",
 
 // src/desktop/specialist-model.ts
 function createBrokerKnowledgeSpecialist(capabilities) {
-  return (request) => runKnowledgeSpecialist({
-    select: async (profile) => await capabilities.call("model.selection", { optionalProfile: profile }),
-    step: async (input, signal) => await capabilities.call("model.toolStep", input, signal)
-  }, request);
+  return (request) => runKnowledgeSpecialist(
+    {
+      select: async (profile) => await capabilities.call("model.selection", { optionalProfile: profile }),
+      step: async (input, signal) => await capabilities.call("model.toolStep", input, signal)
+    },
+    request
+  );
+}
+
+// src/desktop/specialist-settings-storage.ts
+function createBrokerSpecialistSettingsStorage(state) {
+  return {
+    async read() {
+      return (await state.read("specialists.json"))?.value ?? null;
+    },
+    async write(value, expectedRevision) {
+      const current = await state.read("specialists.json");
+      if (current !== null && current.value.revision !== expectedRevision)
+        throw new Error("Specialist settings changed; refresh first");
+      if (current === null && expectedRevision !== 0) throw new Error("Specialist settings were removed");
+      await state.write("specialists.json", value, current?.version ?? null);
+    }
+  };
+}
+
+// src/desktop/topic-storage.ts
+function createBrokerTopicMemoryStorage(io) {
+  return (binding, project) => {
+    const key = `${binding.vaultId}/topic-memory/${project}.json`;
+    return {
+      key,
+      async read() {
+        return (await io.state.read(key))?.value ?? null;
+      },
+      async write(value, expectedRevision) {
+        const current = await io.state.read(key);
+        if (current !== null && current.value.revision !== expectedRevision)
+          throw new Error("Topic memory revision changed");
+        if (current === null && expectedRevision !== 0) throw new Error("Topic memory was removed");
+        await io.state.write(key, value, current?.version ?? null);
+      },
+      async readSource(path) {
+        const source = await io.files.read(binding, path);
+        if (source === null) throw new Error("Topic source is missing");
+        return source;
+      }
+    };
+  };
 }
 
 // src/desktop/runtime.ts
@@ -19418,16 +19894,37 @@ async function projectFor(capabilities, workspace) {
     throw new Error("Invalid research workspace configuration");
   return projectIdentity(workspace, document.knowledgeProjectId);
 }
-var CHILD_READ_TOOLS = ["knowledge_status", "knowledge_search", "research_check_answer", "research_knowledge_status", "research_prepare_knowledge", "research_read_knowledge", "research_restore_evidence", "research_resume_topic", "research_search_explainers", "research_search_knowledge", "research_task_status", "research_topics"];
-var CHILD_SESSION_EVENTS = ["session_start", "session_tree", "before_agent_start", "context", "message_start", "tool_execution_start", "tool_execution_end", "tool_result"];
+var CHILD_READ_TOOLS = [
+  "knowledge_status",
+  "knowledge_search",
+  "research_check_answer",
+  "research_knowledge_status",
+  "research_prepare_knowledge",
+  "research_read_knowledge",
+  "research_restore_evidence",
+  "research_resume_topic",
+  "research_search_explainers",
+  "research_search_knowledge",
+  "research_task_status",
+  "research_topics"
+];
+var CHILD_SESSION_EVENTS = [
+  "session_start",
+  "session_tree",
+  "before_agent_start",
+  "context",
+  "message_start",
+  "tool_execution_start",
+  "tool_execution_end",
+  "tool_result"
+];
 var createDesktopRuntime = async (context) => {
   const states = context.resources.filter((resource) => resource.kind === "state");
   if (states.length !== 1)
     throw new Error("Knowledge runtime requires exactly one authorized application-state root");
   const state = states[0].handle;
   const fileRoots = context.resources.filter((resource) => resource.kind === "files");
-  if (fileRoots.length > 1)
-    throw new Error("Knowledge runtime requires at most one selected file root");
+  if (fileRoots.length > 1) throw new Error("Knowledge runtime requires at most one selected file root");
   if (!context.resourcesLifecycle)
     throw new Error("Knowledge services require the host resource shutdown barrier");
   async function readKnowledgeBinding2() {
@@ -19453,18 +19950,19 @@ var createDesktopRuntime = async (context) => {
     write: (value, version) => storage.write("answer-metrics.json", value, version)
   });
   const unsubscribeUi = ui.subscribeKnowledgeUi(() => context.events.changed());
-  const specialists = createKnowledgeSpecialistHost(host, config, ui, createBrokerSpecialistSettingsStorage(storage));
+  const specialists = createKnowledgeSpecialistHost(
+    host,
+    config,
+    ui,
+    createBrokerSpecialistSettingsStorage(storage)
+  );
   const specialistTools = createKnowledgeSpecialistTools(host, config, specialists, ui);
   const semantic = createBrokerSemanticSettings(context.capabilities, state);
   const policy = createStoredKnowledgeReviewPolicy(
     createBrokerReviewPolicyStorage(context.capabilities, state),
     () => false
   );
-  const transports = createResourceServiceTransportFactory(
-    context,
-    state,
-    context.resourcesLifecycle
-  );
+  const transports = createResourceServiceTransportFactory(context, state, context.resourcesLifecycle);
   const services = createKnowledgeServicePool(host, config, semantic, policy, transports);
   const lifecycle = createKnowledgeOwnerLifecycle({
     beforeDrain: () => specialists.dispose(),
@@ -19490,9 +19988,26 @@ var createDesktopRuntime = async (context) => {
       throw new Error("Invalid knowledge specialist settings");
     return document;
   });
-  const topics = createTopicMemoryApi(host, void 0, createBrokerTopicMemoryStorage({ state: storage, files: reviewIo.files }));
+  const topics = createTopicMemoryApi(
+    host,
+    void 0,
+    createBrokerTopicMemoryStorage({ state: storage, files: reviewIo.files })
+  );
   const delivery = createSpecialistDelivery(host, config);
-  const owner = { config, services, wiki, modelReview, host, reviewPolicy: policy, ui, topics, delivery, specialistTools, extensionHost: {}, ...lifecycle };
+  const owner = {
+    config,
+    services,
+    wiki,
+    modelReview,
+    host,
+    reviewPolicy: policy,
+    ui,
+    topics,
+    delivery,
+    specialistTools,
+    extensionHost: {},
+    ...lifecycle
+  };
   const modelReviews = createKnowledgeModelReviewModel(
     owner,
     states[0].access === "read-write",
@@ -19747,7 +20262,11 @@ var createDesktopRuntime = async (context) => {
       const sessionPorts = createManagedKnowledgeSessionPorts(context.capabilities);
       const composition = {
         session: sessionPorts.ports,
-        registerReadTools: (pi) => registerDesktopKnowledgeNativeReadTools(pi, owner, (native2) => projectFor(context.capabilities, native2.cwd)),
+        registerReadTools: (pi) => registerDesktopKnowledgeNativeReadTools(
+          pi,
+          owner,
+          (native2) => projectFor(context.capabilities, native2.cwd)
+        ),
         project: async (cwd) => {
           const project = await projectFor(context.capabilities, cwd);
           if (project === null) throw new Error("Knowledge native session has no workspace project");
@@ -19780,12 +20299,24 @@ var createDesktopRuntime = async (context) => {
       return {
         ...native,
         toolEffects: { knowledge_status: "read", knowledge_search: "read" },
-        eventEffects: { session_start: "read", session_tree: "read", tool_execution_start: "read", tool_result: "read" },
-        commandEffects: { "knowledge-review-model": "write", "obsidian-review": "write", "knowledge-migrate-recovery": "write" },
+        eventEffects: {
+          session_start: "read",
+          session_tree: "read",
+          tool_execution_start: "read",
+          tool_result: "read"
+        },
+        commandEffects: {
+          "knowledge-review-model": "write",
+          "obsidian-review": "write",
+          "knowledge-migrate-recovery": "write"
+        },
         async extension(pi) {
           await native.extension(pi);
           pi.on("session_start", (_event, caller) => {
-            unregister = specialists.registerKnowledgeSpecialistHost(caller.sessionManager.getSessionId(), createBrokerKnowledgeSpecialist(context.capabilities));
+            unregister = specialists.registerKnowledgeSpecialistHost(
+              caller.sessionManager.getSessionId(),
+              createBrokerKnowledgeSpecialist(context.capabilities)
+            );
           });
           pi.registerCommand("knowledge-migrate-recovery", {
             description: "Explicitly import an authorized 0.2.0/0.2.1 historical read-window checkpoint; no current proof is restored",
@@ -19799,12 +20330,20 @@ var createDesktopRuntime = async (context) => {
             description: "Review one exact Wiki proposal with explicit JSON cost/data acknowledgement; read the audit in the knowledge review UI",
             async handler(args, caller) {
               const input = parseModelReviewCommandInput(args);
-              const scope = await context.capabilities.call("caller.scope", null);
-              if (scope.kind !== "session" || scope.sessionId !== caller.sessionManager.getSessionId()) throw new Error("Model review command requires its originating live session");
+              const scope = await context.capabilities.call(
+                "caller.scope",
+                null
+              );
+              if (scope.kind !== "session" || scope.sessionId !== caller.sessionManager.getSessionId())
+                throw new Error("Model review command requires its originating live session");
               const binding = await owner.config.readKnowledgeBinding({ fresh: true });
               if (!binding) throw new Error("No application knowledge Vault is bound");
               const signal = caller.signal ? AbortSignal.any([native.signal, caller.signal]) : native.signal;
-              await modelReviews.review({ ...input, revision: binding.revision }, await projectFor(context.capabilities, scope.workspaceDirectory), { scope, signal, capabilities: context.capabilities });
+              await modelReviews.review(
+                { ...input, revision: binding.revision },
+                await projectFor(context.capabilities, scope.workspaceDirectory),
+                { scope, signal, capabilities: context.capabilities }
+              );
               context.events.changed();
             }
           });

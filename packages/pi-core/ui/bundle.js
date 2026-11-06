@@ -6,10 +6,8 @@ var { useSessionsStore, useUiStore } = host.stores;
 var { openExternal, openResourceExternal } = host.helpers;
 function uiCompatibility() {
   const missing = [];
-  if (typeof host.sessions?.command !== "function")
-    missing.push("sessions.command");
-  if (typeof host.hooks.useSessionMessages !== "function")
-    missing.push("hooks.useSessionMessages");
+  if (typeof host.sessions?.command !== "function") missing.push("sessions.command");
+  if (typeof host.hooks.useSessionMessages !== "function") missing.push("hooks.useSessionMessages");
   return missing.length ? { status: "incompatible", missing } : { status: "compatible", missing };
 }
 
@@ -74,7 +72,40 @@ function useTaskText() {
 }
 
 // generated-style:./styles/generated
-var taskStyles = '/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */\n@layer drone-task-properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){:where(.drone-task-ui) *,:where(.drone-task-ui) :before,:where(.drone-task-ui) :after,:where(.drone-task-ui) ::backdrop{--drone-task-tw-space-y-reverse:0;--drone-task-tw-border-style:solid;--drone-task-tw-leading:initial;--drone-task-tw-font-weight:initial;--drone-task-tw-duration:initial;--drone-task-tw-ease:initial}}}@layer drone-task-theme{:where(.drone-task-ui),:where(.drone-task-ui){--spacing:.25rem;--text-xs:.75rem;--text-xs--line-height:calc(1 / .75);--font-weight-medium:500;--ease-out:cubic-bezier(0, 0, .2, 1);--default-transition-duration:.15s;--default-transition-timing-function:cubic-bezier(.4, 0, .2, 1)}}@layer drone-task-utilities{:where(.drone-task-ui) .mt-0\\.5{margin-top:calc(var(--spacing) * .5)}:where(.drone-task-ui) .mt-1{margin-top:var(--spacing)}:where(.drone-task-ui) .mt-2{margin-top:calc(var(--spacing) * 2)}:where(.drone-task-ui) .mt-3{margin-top:calc(var(--spacing) * 3)}:where(.drone-task-ui) .ml-5{margin-left:calc(var(--spacing) * 5)}:where(.drone-task-ui) .flex{display:flex}:where(.drone-task-ui) .h-0\\.5{height:calc(var(--spacing) * .5)}:where(.drone-task-ui) .h-full{height:100%}:where(.drone-task-ui) .min-h-0{min-height:0}:where(.drone-task-ui) .w-full{width:100%}:where(.drone-task-ui) .max-w-full{max-width:100%}:where(.drone-task-ui) .min-w-0{min-width:0}:where(.drone-task-ui) .shrink-0{flex-shrink:0}:where(.drone-task-ui) .cursor-pointer{cursor:pointer}:where(.drone-task-ui) .list-disc{list-style-type:disc}:where(.drone-task-ui) .flex-wrap{flex-wrap:wrap}:where(.drone-task-ui) .items-center{align-items:center}:where(.drone-task-ui) .items-start{align-items:flex-start}:where(.drone-task-ui) .justify-between{justify-content:space-between}:where(.drone-task-ui) .gap-2{gap:calc(var(--spacing) * 2)}:where(.drone-task-ui) :where(.space-y-0\\.5>:not(:last-child)){--drone-task-tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * .5) * var(--drone-task-tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * .5) * calc(1 - var(--drone-task-tw-space-y-reverse)))}:where(.drone-task-ui) .gap-x-2{column-gap:calc(var(--spacing) * 2)}:where(.drone-task-ui) .truncate{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}:where(.drone-task-ui) .overflow-auto{overflow:auto}:where(.drone-task-ui) .overflow-hidden{overflow:hidden}:where(.drone-task-ui) .rounded{border-radius:.25rem}:where(.drone-task-ui) .rounded-full{border-radius:3.40282e38px}:where(.drone-task-ui) .rounded-md{border-radius:8px}:where(.drone-task-ui) .rounded-xl{border-radius:14px}:where(.drone-task-ui) .border{border-style:var(--drone-task-tw-border-style);border-width:1px}:where(.drone-task-ui) .border-t{border-top-style:var(--drone-task-tw-border-style);border-top-width:1px}:where(.drone-task-ui) .border-b{border-bottom-style:var(--drone-task-tw-border-style);border-bottom-width:1px}:where(.drone-task-ui) .border-border,:where(.drone-task-ui) .border-border\\/70{border-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){:where(.drone-task-ui) .border-border\\/70{border-color:color-mix(in oklab, var(--color-border) 70%, transparent)}}:where(.drone-task-ui) .border-warn\\/35{border-color:var(--color-warn)}@supports (color:color-mix(in lab, red, red)){:where(.drone-task-ui) .border-warn\\/35{border-color:color-mix(in oklab, var(--color-warn) 35%, transparent)}}:where(.drone-task-ui) .bg-hover{background-color:var(--color-hover)}:where(.drone-task-ui) .bg-ok{background-color:var(--color-ok)}:where(.drone-task-ui) .bg-surface{background-color:var(--color-surface)}:where(.drone-task-ui) .bg-warn,:where(.drone-task-ui) .bg-warn\\/10{background-color:var(--color-warn)}@supports (color:color-mix(in lab, red, red)){:where(.drone-task-ui) .bg-warn\\/10{background-color:color-mix(in oklab, var(--color-warn) 10%, transparent)}}:where(.drone-task-ui) .p-3{padding:calc(var(--spacing) * 3)}:where(.drone-task-ui) .px-2{padding-inline:calc(var(--spacing) * 2)}:where(.drone-task-ui) .px-3{padding-inline:calc(var(--spacing) * 3)}:where(.drone-task-ui) .py-0\\.5{padding-block:calc(var(--spacing) * .5)}:where(.drone-task-ui) .py-1{padding-block:var(--spacing)}:where(.drone-task-ui) .py-2{padding-block:calc(var(--spacing) * 2)}:where(.drone-task-ui) .pt-3{padding-top:calc(var(--spacing) * 3)}:where(.drone-task-ui) .pl-4{padding-left:calc(var(--spacing) * 4)}:where(.drone-task-ui) .text-left{text-align:left}:where(.drone-task-ui) .text-xs{font-size:var(--text-xs);line-height:var(--drone-task-tw-leading,var(--text-xs--line-height))}:where(.drone-task-ui) .text-\\[12px\\]{font-size:12px}:where(.drone-task-ui) .text-\\[13px\\]{font-size:13px}:where(.drone-task-ui) .leading-4{--drone-task-tw-leading:calc(var(--spacing) * 4);line-height:calc(var(--spacing) * 4)}:where(.drone-task-ui) .leading-5{--drone-task-tw-leading:calc(var(--spacing) * 5);line-height:calc(var(--spacing) * 5)}:where(.drone-task-ui) .font-medium{--drone-task-tw-font-weight:var(--font-weight-medium);font-weight:var(--font-weight-medium)}:where(.drone-task-ui) .break-words{overflow-wrap:break-word}:where(.drone-task-ui) .break-all{word-break:break-all}:where(.drone-task-ui) .whitespace-pre-wrap{white-space:pre-wrap}:where(.drone-task-ui) .text-err{color:var(--color-err)}:where(.drone-task-ui) .text-ink{color:var(--color-ink)}:where(.drone-task-ui) .text-ink-2{color:var(--color-ink-2)}:where(.drone-task-ui) .text-ink-dim{color:var(--color-ink-dim)}:where(.drone-task-ui) .text-ink-faint{color:var(--color-ink-faint)}:where(.drone-task-ui) .text-link{color:var(--link)}:where(.drone-task-ui) .text-ok{color:var(--color-ok)}:where(.drone-task-ui) .text-warn{color:var(--color-warn)}:where(.drone-task-ui) .line-through{text-decoration-line:line-through}:where(.drone-task-ui) .underline{text-decoration-line:underline}:where(.drone-task-ui) .underline-offset-2{text-underline-offset:2px}:where(.drone-task-ui) .transition-\\[width\\]{transition-property:width;transition-timing-function:var(--drone-task-tw-ease,var(--default-transition-timing-function));transition-duration:var(--drone-task-tw-duration,var(--default-transition-duration))}:where(.drone-task-ui) .duration-200{--drone-task-tw-duration:.2s;transition-duration:.2s}:where(.drone-task-ui) .ease-out{--drone-task-tw-ease:var(--ease-out);transition-timing-function:var(--ease-out)}:where(.drone-task-ui) .last\\:border-0:last-child{border-style:var(--drone-task-tw-border-style);border-width:0}@media (hover:hover){:where(.drone-task-ui) .hover\\:bg-hover:hover{background-color:var(--color-hover)}:where(.drone-task-ui) .hover\\:underline:hover{text-decoration-line:underline}}:where(.drone-task-ui) .disabled\\:opacity-40:disabled{opacity:.4}@media (prefers-reduced-motion:reduce){:where(.drone-task-ui) .motion-reduce\\:transition-none{transition-property:none}}}@property --drone-task-tw-space-y-reverse{syntax:"*";inherits:false;initial-value:0}@property --drone-task-tw-border-style{syntax:"*";inherits:false;initial-value:solid}@property --drone-task-tw-leading{syntax:"*";inherits:false}@property --drone-task-tw-font-weight{syntax:"*";inherits:false}@property --drone-task-tw-duration{syntax:"*";inherits:false}@property --drone-task-tw-ease{syntax:"*";inherits:false}\n\n.drone-task-ui { min-width: 0; }\n';
+var taskStyles = '/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */\n@layer drone-task-properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){:where(.drone-task-ui) *,:where(.drone-task-ui) :before,:where(.drone-task-ui) :after,:where(.drone-task-ui) ::backdrop{--drone-task-tw-space-y-reverse:0;--drone-task-tw-border-style:solid;--drone-task-tw-leading:initial;--drone-task-tw-font-weight:initial;--drone-task-tw-duration:initial;--drone-task-tw-ease:initial}}}@layer drone-task-theme{:where(.drone-task-ui),:where(.drone-task-ui){--spacing:.25rem;--text-xs:.75rem;--text-xs--line-height:calc(1 / .75);--font-weight-medium:500;--ease-out:cubic-bezier(0, 0, .2, 1);--default-transition-duration:.15s;--default-transition-timing-function:cubic-bezier(.4, 0, .2, 1)}}@layer drone-task-utilities{:where(.drone-task-ui) .mt-0\\.5{margin-top:calc(var(--spacing) * .5)}:where(.drone-task-ui) .mt-1{margin-top:var(--spacing)}:where(.drone-task-ui) .mt-2{margin-top:calc(var(--spacing) * 2)}:where(.drone-task-ui) .mt-3{margin-top:calc(var(--spacing) * 3)}:where(.drone-task-ui) .ml-5{margin-left:calc(var(--spacing) * 5)}:where(.drone-task-ui) .flex{display:flex}:where(.drone-task-ui) .h-0\\.5{height:calc(var(--spacing) * .5)}:where(.drone-task-ui) .h-full{height:100%}:where(.drone-task-ui) .min-h-0{min-height:0}:where(.drone-task-ui) .w-full{width:100%}:where(.drone-task-ui) .max-w-full{max-width:100%}:where(.drone-task-ui) .min-w-0{min-width:0}:where(.drone-task-ui) .shrink-0{flex-shrink:0}:where(.drone-task-ui) .cursor-pointer{cursor:pointer}:where(.drone-task-ui) .list-disc{list-style-type:disc}:where(.drone-task-ui) .flex-wrap{flex-wrap:wrap}:where(.drone-task-ui) .items-center{align-items:center}:where(.drone-task-ui) .items-start{align-items:flex-start}:where(.drone-task-ui) .justify-between{justify-content:space-between}:where(.drone-task-ui) .gap-2{gap:calc(var(--spacing) * 2)}:where(.drone-task-ui) :where(.space-y-0\\.5>:not(:last-child)){--drone-task-tw-space-y-reverse:0;margin-block-start:calc(calc(var(--spacing) * .5) * var(--drone-task-tw-space-y-reverse));margin-block-end:calc(calc(var(--spacing) * .5) * calc(1 - var(--drone-task-tw-space-y-reverse)))}:where(.drone-task-ui) .gap-x-2{column-gap:calc(var(--spacing) * 2)}:where(.drone-task-ui) .truncate{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}:where(.drone-task-ui) .overflow-auto{overflow:auto}:where(.drone-task-ui) .overflow-hidden{overflow:hidden}:where(.drone-task-ui) .rounded{border-radius:.25rem}:where(.drone-task-ui) .rounded-full{border-radius:3.40282e38px}:where(.drone-task-ui) .rounded-md{border-radius:8px}:where(.drone-task-ui) .rounded-xl{border-radius:14px}:where(.drone-task-ui) .border{border-style:var(--drone-task-tw-border-style);border-width:1px}:where(.drone-task-ui) .border-t{border-top-style:var(--drone-task-tw-border-style);border-top-width:1px}:where(.drone-task-ui) .border-b{border-bottom-style:var(--drone-task-tw-border-style);border-bottom-width:1px}:where(.drone-task-ui) .border-border,:where(.drone-task-ui) .border-border\\/70{border-color:var(--color-border)}@supports (color:color-mix(in lab, red, red)){:where(.drone-task-ui) .border-border\\/70{border-color:color-mix(in oklab, var(--color-border) 70%, transparent)}}:where(.drone-task-ui) .border-warn\\/35{border-color:var(--color-warn)}@supports (color:color-mix(in lab, red, red)){:where(.drone-task-ui) .border-warn\\/35{border-color:color-mix(in oklab, var(--color-warn) 35%, transparent)}}:where(.drone-task-ui) .bg-hover{background-color:var(--color-hover)}:where(.drone-task-ui) .bg-ok{background-color:var(--color-ok)}:where(.drone-task-ui) .bg-surface{background-color:var(--color-surface)}:where(.drone-task-ui) .bg-warn,:where(.drone-task-ui) .bg-warn\\/10{background-color:var(--color-warn)}@supports (color:color-mix(in lab, red, red)){:where(.drone-task-ui) .bg-warn\\/10{background-color:color-mix(in oklab, var(--color-warn) 10%, transparent)}}:where(.drone-task-ui) .p-3{padding:calc(var(--spacing) * 3)}:where(.drone-task-ui) .px-2{padding-inline:calc(var(--spacing) * 2)}:where(.drone-task-ui) .px-3{padding-inline:calc(var(--spacing) * 3)}:where(.drone-task-ui) .py-0\\.5{padding-block:calc(var(--spacing) * .5)}:where(.drone-task-ui) .py-1{padding-block:var(--spacing)}:where(.drone-task-ui) .py-2{padding-block:calc(var(--spacing) * 2)}:where(.drone-task-ui) .pt-3{padding-top:calc(var(--spacing) * 3)}:where(.drone-task-ui) .pl-4{padding-left:calc(var(--spacing) * 4)}:where(.drone-task-ui) .text-left{text-align:left}:where(.drone-task-ui) .text-xs{font-size:var(--text-xs);line-height:var(--drone-task-tw-leading,var(--text-xs--line-height))}:where(.drone-task-ui) .text-\\[12px\\]{font-size:12px}:where(.drone-task-ui) .text-\\[13px\\]{font-size:13px}:where(.drone-task-ui) .leading-4{--drone-task-tw-leading:calc(var(--spacing) * 4);line-height:calc(var(--spacing) * 4)}:where(.drone-task-ui) .leading-5{--drone-task-tw-leading:calc(var(--spacing) * 5);line-height:calc(var(--spacing) * 5)}:where(.drone-task-ui) .font-medium{--drone-task-tw-font-weight:var(--font-weight-medium);font-weight:var(--font-weight-medium)}:where(.drone-task-ui) .break-words{overflow-wrap:break-word}:where(.drone-task-ui) .break-all{word-break:break-all}:where(.drone-task-ui) .whitespace-pre-wrap{white-space:pre-wrap}:where(.drone-task-ui) .text-err{color:var(--color-err)}:where(.drone-task-ui) .text-ink{color:var(--color-ink)}:where(.drone-task-ui) .text-ink-2{color:var(--color-ink-2)}:where(.drone-task-ui) .text-ink-dim{color:var(--color-ink-dim)}:where(.drone-task-ui) .text-ink-faint{color:var(--color-ink-faint)}:where(.drone-task-ui) .text-link{color:var(--link)}:where(.drone-task-ui) .text-ok{color:var(--color-ok)}:where(.drone-task-ui) .text-warn{color:var(--color-warn)}:where(.drone-task-ui) .line-through{text-decoration-line:line-through}:where(.drone-task-ui) .underline{text-decoration-line:underline}:where(.drone-task-ui) .underline-offset-2{text-underline-offset:2px}:where(.drone-task-ui) .transition-\\[width\\]{transition-property:width;transition-timing-function:var(--drone-task-tw-ease,var(--default-transition-timing-function));transition-duration:var(--drone-task-tw-duration,var(--default-transition-duration))}:where(.drone-task-ui) .duration-200{--drone-task-tw-duration:.2s;transition-duration:.2s}:where(.drone-task-ui) .ease-out{--drone-task-tw-ease:var(--ease-out);transition-timing-function:var(--ease-out)}:where(.drone-task-ui) .last\\:border-0:last-child{border-style:var(--drone-task-tw-border-style);border-width:0}@media (hover:hover){:where(.drone-task-ui) .hover\\:bg-hover:hover{background-color:var(--color-hover)}:where(.drone-task-ui) .hover\\:underline:hover{text-decoration-line:underline}}:where(.drone-task-ui) .disabled\\:opacity-40:disabled{opacity:.4}@media (prefers-reduced-motion:reduce){:where(.drone-task-ui) .motion-reduce\\:transition-none{transition-property:none}}}@property --drone-task-tw-space-y-reverse{syntax:"*";inherits:false;initial-value:0}@property --drone-task-tw-border-style{syntax:"*";inherits:false;initial-value:solid}@property --drone-task-tw-leading{syntax:"*";inherits:false}@property --drone-task-tw-font-weight{syntax:"*";inherits:false}@property --drone-task-tw-duration{syntax:"*";inherits:false}@property --drone-task-tw-ease{syntax:"*";inherits:false}\n\n.drone-task-ui {\n	min-width: 0;\n}\n';
+
+// ui/components/TaskDecisionCard.tsx
+import { useState } from "react";
+
+// ui/format-card-text.ts
+var MARKERS = [
+  { pattern: /[-*•][ \t]+/ },
+  { pattern: /\d+[.)、][ \t]+/ },
+  { pattern: /[一二三四五六七八九十]+[、.][ \t]+/ }
+];
+function countMatches(value, pattern) {
+  return value.match(new RegExp(pattern.source, "g"))?.length ?? 0;
+}
+function markerAfterColon(value) {
+  const match = value.match(/[:：][ \t]*(?:[-*•][ \t]+|\d+[.)、][ \t]+|[一二三四五六七八九十]+[、.][ \t]+)/);
+  if (!match) return void 0;
+  return MARKERS.find(
+    (marker) => new RegExp(`^${marker.pattern.source}`).test(match[0].replace(/^[:：][ \t]*/, ""))
+  );
+}
+function formatLine(line) {
+  const normalized = line.replace(/[ \t]+/g, " ").trim();
+  if (!normalized) return "";
+  const colonMarker = markerAfterColon(normalized);
+  const repeatedMarker = MARKERS.find((marker2) => countMatches(normalized, marker2.pattern) >= 2);
+  const marker = colonMarker ?? repeatedMarker;
+  if (!marker) return normalized;
+  const withColonBreak = colonMarker ? normalized.replace(new RegExp(`([:\uFF1A])[ 	]*(?=${marker.pattern.source})`), "$1\n") : normalized;
+  return withColonBreak.replace(new RegExp(`[ 	]+(?=${marker.pattern.source})`, "g"), "\n");
+}
+function formatCardText(value) {
+  return value.replace(/\r\n?/g, "\n").split("\n").map(formatLine).join("\n").trim();
+}
 
 // ui/presentation.ts
 function taskActionArguments(view, taskId, action, extra = {}) {
@@ -91,9 +122,7 @@ function taskActionArguments(view, taskId, action, extra = {}) {
 function taskDeliveryPresentation(task, agentActive, language = "zh") {
   const terminal = TERMINAL_TASK_STATES.has(task.state);
   const allAccepted = task.milestones.length > 0 && task.milestones.every((m) => m.state === "completed");
-  const unsettled = task.operations.some(
-    (o) => o.state === "started" || o.state === "unknown"
-  ) || task.actions.some((a) => a.state === "pending");
+  const unsettled = task.operations.some((o) => o.state === "started" || o.state === "unknown") || task.actions.some((a) => a.state === "pending");
   const deliveryComplete = allAccepted && !unsettled;
   const warnings = !!task.reason || task.operations.some((o) => o.state === "failed");
   const closed = task.state === "cancelled" || task.state === "archived";
@@ -168,16 +197,10 @@ var TASK_REASON_TEXT_EN = {
 function explainTaskReason(code, language = "zh") {
   return code ? (language === "en" ? TASK_REASON_TEXT_EN : TASK_REASON_TEXT)[code] || code : null;
 }
-var TERMINAL_TASK_STATES = /* @__PURE__ */ new Set([
-  "completed",
-  "cancelled",
-  "archived"
-]);
+var TERMINAL_TASK_STATES = /* @__PURE__ */ new Set(["completed", "cancelled", "archived"]);
 function tasksForTranscript(view) {
   return view.tasks.filter(
-    (task) => task.actions.some(
-      (action) => action.kind === "review" && action.state === "pending"
-    )
+    (task) => task.actions.some((action) => action.kind === "review" && action.state === "pending")
   );
 }
 function clip(text, max) {
@@ -185,9 +208,7 @@ function clip(text, max) {
   return flat.length > max ? `${flat.slice(0, max - 1)}\u2026` : flat;
 }
 function pendingReview(task) {
-  return task.actions.find(
-    (action) => action.kind === "review" && action.state === "pending"
-  );
+  return task.actions.find((action) => action.kind === "review" && action.state === "pending");
 }
 function tasksForDecision(view) {
   const pending = tasksForTranscript(view);
@@ -241,97 +262,11 @@ function taskDecision(task, lang = "zh") {
 function taskNeedsUser(task) {
   if (task.authorizationRequired && !task.executionConsent) return true;
   if (task.state === "waiting_user" || task.state === "blocked") return true;
-  return task.actions.some(
-    (a) => a.kind === "authorization" && a.state === "pending"
-  );
-}
-
-// ui/storage.ts
-function taskStorage(view) {
-  const value = view.storage;
-  if (!value || typeof value !== "object" || !("mode" in value) || !("state" in value))
-    return null;
-  if (value.mode !== "persistent" && value.mode !== "memory" || value.state !== "durable" && value.state !== "deferred" && value.state !== "needs-reopen")
-    return null;
-  return { mode: value.mode, state: value.state };
-}
-var savedReasons = /* @__PURE__ */ new Set([
-  "automatic-recovery",
-  "automatic-stage-checkpoint",
-  "automatic-handoff",
-  "session-restored"
-]);
-function storageTaskReason(view, reason, language) {
-  if (reason && savedReasons.has(reason) && taskStorage(view)?.state !== "durable")
-    return language === "zh" ? "\u5F53\u524D\u662F\u5B9E\u65F6\u4EFB\u52A1\u8BB0\u5F55\uFF0C\u5C1A\u65E0\u5DF2\u843D\u76D8\u56DE\u6267\u3002" : "This is live task progress without a confirmed disk receipt.";
-  return explainTaskReason(reason, language);
-}
-
-// ui/components/TaskStorageNotice.tsx
-import { jsx } from "react/jsx-runtime";
-function TaskStorageNotice({ view }) {
-  const t = useTaskText();
-  const storage = taskStorage(view);
-  if (storage?.state === "durable") return null;
-  const key = !storage ? "storage.unknown" : storage.state === "needs-reopen" ? "storage.failed" : storage.mode === "memory" ? "storage.memory" : "storage.deferred";
-  return /* @__PURE__ */ jsx(
-    "p",
-    {
-      className: "mt-2 text-xs text-warn",
-      role: "status",
-      "data-task-storage": storage?.state || "unknown",
-      children: t(key)
-    }
-  );
+  return task.actions.some((a) => a.kind === "authorization" && a.state === "pending");
 }
 
 // ui/components/TaskDecisionCard.tsx
-import { useState } from "react";
-
-// ui/format-card-text.ts
-var MARKERS = [
-  { pattern: /[-*•][ \t]+/ },
-  { pattern: /\d+[.)、][ \t]+/ },
-  { pattern: /[一二三四五六七八九十]+[、.][ \t]+/ }
-];
-function countMatches(value, pattern) {
-  return value.match(new RegExp(pattern.source, "g"))?.length ?? 0;
-}
-function markerAfterColon(value) {
-  const match = value.match(
-    /[:：][ \t]*(?:[-*•][ \t]+|\d+[.)、][ \t]+|[一二三四五六七八九十]+[、.][ \t]+)/
-  );
-  if (!match) return void 0;
-  return MARKERS.find(
-    (marker) => new RegExp(`^${marker.pattern.source}`).test(
-      match[0].replace(/^[:：][ \t]*/, "")
-    )
-  );
-}
-function formatLine(line) {
-  const normalized = line.replace(/[ \t]+/g, " ").trim();
-  if (!normalized) return "";
-  const colonMarker = markerAfterColon(normalized);
-  const repeatedMarker = MARKERS.find(
-    (marker2) => countMatches(normalized, marker2.pattern) >= 2
-  );
-  const marker = colonMarker ?? repeatedMarker;
-  if (!marker) return normalized;
-  const withColonBreak = colonMarker ? normalized.replace(
-    new RegExp(`([:\uFF1A])[ 	]*(?=${marker.pattern.source})`),
-    "$1\n"
-  ) : normalized;
-  return withColonBreak.replace(
-    new RegExp(`[ 	]+(?=${marker.pattern.source})`, "g"),
-    "\n"
-  );
-}
-function formatCardText(value) {
-  return value.replace(/\r\n?/g, "\n").split("\n").map(formatLine).join("\n").trim();
-}
-
-// ui/components/TaskDecisionCard.tsx
-import { Fragment, jsx as jsx2, jsxs } from "react/jsx-runtime";
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 function TaskDecisionCard({
   task,
   view,
@@ -357,13 +292,13 @@ function TaskDecisionCard({
     }
   };
   const content = /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx2("h4", { className: "text-[13px] font-medium leading-5 text-ink", children: formatCardText(decision.title) }),
-    /* @__PURE__ */ jsx2("p", { className: "mt-1 whitespace-pre-wrap text-[12px] leading-5 text-ink", children: formatCardText(decision.stop) }),
-    /* @__PURE__ */ jsx2("p", { className: "whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.done) }),
-    /* @__PURE__ */ jsx2("p", { className: "whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.remaining) }),
-    decision.cannotComplete && /* @__PURE__ */ jsx2("p", { className: "mt-1 whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.cannotComplete) }),
+    /* @__PURE__ */ jsx("h4", { className: "text-[13px] font-medium leading-5 text-ink", children: formatCardText(decision.title) }),
+    /* @__PURE__ */ jsx("p", { className: "mt-1 whitespace-pre-wrap text-[12px] leading-5 text-ink", children: formatCardText(decision.stop) }),
+    /* @__PURE__ */ jsx("p", { className: "whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.done) }),
+    /* @__PURE__ */ jsx("p", { className: "whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.remaining) }),
+    decision.cannotComplete && /* @__PURE__ */ jsx("p", { className: "mt-1 whitespace-pre-wrap text-[12px] leading-5 text-ink-dim", children: formatCardText(decision.cannotComplete) }),
     /* @__PURE__ */ jsxs("div", { className: "mt-2 flex flex-wrap gap-2", children: [
-      decision.canComplete && decision.completeActionId && /* @__PURE__ */ jsx2(
+      decision.canComplete && decision.completeActionId && /* @__PURE__ */ jsx(
         "button",
         {
           type: "button",
@@ -372,14 +307,12 @@ function TaskDecisionCard({
           onClick: () => {
             const actionId = decision.completeActionId;
             if (!actionId) return;
-            void send(
-              taskActionArguments(view, task.id, "acknowledge", { actionId })
-            );
+            void send(taskActionArguments(view, task.id, "acknowledge", { actionId }));
           },
           children: decision.completeLabel
         }
       ),
-      decision.canDefer && /* @__PURE__ */ jsx2(
+      decision.canDefer && /* @__PURE__ */ jsx(
         "button",
         {
           type: "button",
@@ -389,7 +322,7 @@ function TaskDecisionCard({
           children: decision.deferLabel
         }
       ),
-      decision.canEnd && /* @__PURE__ */ jsx2(
+      decision.canEnd && /* @__PURE__ */ jsx(
         "button",
         {
           type: "button",
@@ -401,20 +334,13 @@ function TaskDecisionCard({
       )
     ] }),
     /* @__PURE__ */ jsxs("details", { className: "mt-2", children: [
-      /* @__PURE__ */ jsx2("summary", { className: "cursor-pointer text-xs text-ink-dim", children: decision.detailsLabel }),
-      /* @__PURE__ */ jsx2("ul", { className: "mt-1 list-disc space-y-0.5 pl-4", children: decision.details.map((line) => /* @__PURE__ */ jsx2(
-        "li",
-        {
-          className: "whitespace-pre-wrap text-xs leading-4 text-ink-dim",
-          children: formatCardText(line)
-        },
-        line
-      )) })
+      /* @__PURE__ */ jsx("summary", { className: "cursor-pointer text-xs text-ink-dim", children: decision.detailsLabel }),
+      /* @__PURE__ */ jsx("ul", { className: "mt-1 list-disc space-y-0.5 pl-4", children: decision.details.map((line) => /* @__PURE__ */ jsx("li", { className: "whitespace-pre-wrap text-xs leading-4 text-ink-dim", children: formatCardText(line) }, line)) })
     ] }),
-    error && /* @__PURE__ */ jsx2("p", { role: "alert", className: "mt-1 whitespace-pre-wrap text-xs text-err", children: formatCardText(error) })
+    error && /* @__PURE__ */ jsx("p", { role: "alert", className: "mt-1 whitespace-pre-wrap text-xs text-err", children: formatCardText(error) })
   ] });
   if (decision.mode === "line") {
-    return /* @__PURE__ */ jsx2(
+    return /* @__PURE__ */ jsx(
       "p",
       {
         className: embedded ? "mt-2 whitespace-pre-wrap text-[12px] text-ink-dim" : "mt-2 text-[12px] text-ink-dim",
@@ -423,14 +349,7 @@ function TaskDecisionCard({
       }
     );
   }
-  return embedded ? /* @__PURE__ */ jsx2(
-    "div",
-    {
-      className: "mt-3 border-t border-border/70 pt-3",
-      "data-testid": "task-decision",
-      children: content
-    }
-  ) : /* @__PURE__ */ jsx2(
+  return embedded ? /* @__PURE__ */ jsx("div", { className: "mt-3 border-t border-border/70 pt-3", "data-testid": "task-decision", children: content }) : /* @__PURE__ */ jsx(
     "section",
     {
       className: "mt-2 rounded-xl border border-warn/35 bg-surface px-3 py-2",
@@ -438,6 +357,36 @@ function TaskDecisionCard({
       children: content
     }
   );
+}
+
+// ui/storage.ts
+function taskStorage(view) {
+  const value = view.storage;
+  if (!value || typeof value !== "object" || !("mode" in value) || !("state" in value)) return null;
+  if (value.mode !== "persistent" && value.mode !== "memory" || value.state !== "durable" && value.state !== "deferred" && value.state !== "needs-reopen")
+    return null;
+  return { mode: value.mode, state: value.state };
+}
+var savedReasons = /* @__PURE__ */ new Set([
+  "automatic-recovery",
+  "automatic-stage-checkpoint",
+  "automatic-handoff",
+  "session-restored"
+]);
+function storageTaskReason(view, reason, language) {
+  if (reason && savedReasons.has(reason) && taskStorage(view)?.state !== "durable")
+    return language === "zh" ? "\u5F53\u524D\u662F\u5B9E\u65F6\u4EFB\u52A1\u8BB0\u5F55\uFF0C\u5C1A\u65E0\u5DF2\u843D\u76D8\u56DE\u6267\u3002" : "This is live task progress without a confirmed disk receipt.";
+  return explainTaskReason(reason, language);
+}
+
+// ui/components/TaskStorageNotice.tsx
+import { jsx as jsx2 } from "react/jsx-runtime";
+function TaskStorageNotice({ view }) {
+  const t = useTaskText();
+  const storage = taskStorage(view);
+  if (storage?.state === "durable") return null;
+  const key = !storage ? "storage.unknown" : storage.state === "needs-reopen" ? "storage.failed" : storage.mode === "memory" ? "storage.memory" : "storage.deferred";
+  return /* @__PURE__ */ jsx2("p", { className: "mt-2 text-xs text-warn", role: "status", "data-task-storage": storage?.state || "unknown", children: t(key) });
 }
 
 // ui/TaskMessage.tsx
@@ -452,9 +401,7 @@ function TaskMessageContent({
   const messages = useSessionMessages(sessionId);
   if (message.kind !== "assistant" || !message.taskView) return renderDefault();
   const view = message.taskView;
-  const latest = messages.findLast(
-    (value) => value.kind === "assistant" && value.taskView
-  );
+  const latest = messages.findLast((value) => value.kind === "assistant" && value.taskView);
   const ordinaryText = Boolean(message.text && !message.hostStatus);
   if (latest?.id !== message.id) return ordinaryText ? renderDefault() : null;
   return /* @__PURE__ */ jsxs2(Fragment2, { children: [
@@ -486,8 +433,7 @@ function MilestoneEvidence({
   const cwd = useSessionsStore(
     (state2) => state2.sessions.find((session) => session.sessionId === sessionId)?.cwd
   );
-  if (milestone.acceptance.kind === "file" || milestone.acceptance.kind === "human_review")
-    return null;
+  if (milestone.acceptance.kind === "file" || milestone.acceptance.kind === "human_review") return null;
   const { acceptance, evidence } = milestone;
   const state = milestone.state === "completed" ? "found" : evidence?.state || "pending";
   const fields = Object.entries(acceptance).filter(
@@ -516,14 +462,8 @@ function localHref(path) {
   const normalized = path.replaceAll("\\", "/");
   if (!normalized || [...normalized].some((character) => character.charCodeAt(0) < 32) || /^(?:file:|\/\/)/i.test(normalized) || /^[a-z][a-z0-9+.-]*:/i.test(normalized) && !/^[a-z]:\//i.test(normalized))
     return;
-  const encoded = normalized.split("/").map(
-    (part) => encodeURIComponent(part).replace(
-      /[!'()*]/g,
-      (c) => `%${c.charCodeAt(0).toString(16)}`
-    )
-  ).join("/");
-  if (/^[a-z]:\//i.test(normalized))
-    return `file:///${normalized.slice(0, 2)}${encoded.slice(4)}`;
+  const encoded = normalized.split("/").map((part) => encodeURIComponent(part).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)).join("/");
+  if (/^[a-z]:\//i.test(normalized)) return `file:///${normalized.slice(0, 2)}${encoded.slice(4)}`;
   return normalized.startsWith("/") ? `file://${encoded}` : `./${encoded}`;
 }
 function taskArtifactLinks(task) {
@@ -533,10 +473,7 @@ function taskArtifactLinks(task) {
     const href = localHref(path);
     if (!href) return;
     const normalized = path.replaceAll("\\", "/");
-    byPath.set(
-      /^[a-z]:/i.test(normalized) ? normalized.toLowerCase() : normalized,
-      { path, href, state }
-    );
+    byPath.set(/^[a-z]:/i.test(normalized) ? normalized.toLowerCase() : normalized, { path, href, state });
   };
   for (const milestone of task.milestones)
     if (milestone.state === "completed" && milestone.evidence?.kind === "file-observed")
@@ -549,10 +486,7 @@ function taskArtifactLinks(task) {
 
 // ui/components/TaskArtifactLinks.tsx
 import { jsx as jsx5, jsxs as jsxs4 } from "react/jsx-runtime";
-function TaskArtifactLinks({
-  task,
-  sessionId
-}) {
+function TaskArtifactLinks({ task, sessionId }) {
   const t = useTaskText();
   const cwd = useSessionsStore(
     (state) => state.sessions.find((session) => session.sessionId === sessionId)?.cwd
@@ -560,41 +494,34 @@ function TaskArtifactLinks({
   const open = useUiStore((state) => state.openResourcePreview);
   const files = taskArtifactLinks(task);
   if (!files.length) return null;
-  return /* @__PURE__ */ jsxs4(
-    "div",
-    {
-      className: "mt-2 flex flex-wrap gap-2 text-xs",
-      "data-testid": "task-artifacts",
-      children: [
-        files.slice(0, 6).map((file) => /* @__PURE__ */ jsxs4(
-          "a",
-          {
+  return /* @__PURE__ */ jsxs4("div", { className: "mt-2 flex flex-wrap gap-2 text-xs", "data-testid": "task-artifacts", children: [
+    files.slice(0, 6).map((file) => /* @__PURE__ */ jsxs4(
+      "a",
+      {
+        href: file.href,
+        className: "max-w-full break-all rounded border border-border px-2 py-1 underline underline-offset-2 hover:bg-hover",
+        "aria-disabled": !cwd && file.href.startsWith("./"),
+        title: !cwd && file.href.startsWith("./") ? t("taskArtifacts.openSessionFirst") : file.path,
+        onClick: (event) => {
+          event.preventDefault();
+          if (!cwd && file.href.startsWith("./")) return;
+          open({
             href: file.href,
-            className: "max-w-full break-all rounded border border-border px-2 py-1 underline underline-offset-2 hover:bg-hover",
-            "aria-disabled": !cwd && file.href.startsWith("./"),
-            title: !cwd && file.href.startsWith("./") ? t("taskArtifacts.openSessionFirst") : file.path,
-            onClick: (event) => {
-              event.preventDefault();
-              if (!cwd && file.href.startsWith("./")) return;
-              open({
-                href: file.href,
-                label: file.path.split(/[\\/]/).pop(),
-                cwd
-              });
-            },
-            children: [
-              file.path.split(/[\\/]/).pop(),
-              " \xB7",
-              " ",
-              file.state === "changed" ? t("taskArtifacts.changed") : file.state === "not-found" ? t("taskArtifacts.notFound") : t("taskArtifacts.preview")
-            ]
-          },
-          file.href
-        )),
-        files.length > 6 && /* @__PURE__ */ jsx5("span", { children: t("taskArtifacts.more", { count: files.length - 6 }) })
-      ]
-    }
-  );
+            label: file.path.split(/[\\/]/).pop(),
+            cwd
+          });
+        },
+        children: [
+          file.path.split(/[\\/]/).pop(),
+          " \xB7",
+          " ",
+          file.state === "changed" ? t("taskArtifacts.changed") : file.state === "not-found" ? t("taskArtifacts.notFound") : t("taskArtifacts.preview")
+        ]
+      },
+      file.href
+    )),
+    files.length > 6 && /* @__PURE__ */ jsx5("span", { children: t("taskArtifacts.more", { count: files.length - 6 }) })
+  ] });
 }
 
 // ui/components/TaskRow.tsx
@@ -627,9 +554,7 @@ function TaskRow({
   const pct = task.milestones.length ? Math.round(done / task.milestones.length * 100) : 0;
   const reason = storageTaskReason(view, task.reason, language);
   const presentation = taskDeliveryPresentation(task, agentActive, language);
-  const pendingReview2 = task.actions.some(
-    (action) => action.kind === "review" && action.state === "pending"
-  );
+  const pendingReview2 = task.actions.some((action) => action.kind === "review" && action.state === "pending");
   const remainingSummary = (agentActive ? t("taskRow.running") : task.remainingSummary) || (task.milestones.length ? t("taskRow.unconfirmed") : t("taskRow.noDeliverables"));
   return /* @__PURE__ */ jsxs5("article", { className: "border-b border-border px-2 py-2 last:border-0", children: [
     /* @__PURE__ */ jsxs5("div", { className: "flex items-start justify-between gap-2", children: [
@@ -703,20 +628,8 @@ function TaskRow({
       /* @__PURE__ */ jsx6("summary", { className: "cursor-pointer text-xs text-ink-dim", children: t("taskRow.milestones", { done, total: task.milestones.length }) }),
       /* @__PURE__ */ jsx6("ul", { className: "mt-1 space-y-0.5", children: task.milestones.map((m) => /* @__PURE__ */ jsxs5("li", { className: "text-xs leading-4", children: [
         /* @__PURE__ */ jsxs5("div", { className: "flex items-start gap-2", children: [
-          /* @__PURE__ */ jsx6(
-            "span",
-            {
-              className: m.state === "completed" ? "text-ok" : "text-ink-dim",
-              children: m.state === "completed" ? "\u2713" : "\u25CB"
-            }
-          ),
-          /* @__PURE__ */ jsx6(
-            "span",
-            {
-              className: m.state === "completed" ? "text-ink-dim line-through" : "",
-              children: m.title
-            }
-          )
+          /* @__PURE__ */ jsx6("span", { className: m.state === "completed" ? "text-ok" : "text-ink-dim", children: m.state === "completed" ? "\u2713" : "\u25CB" }),
+          /* @__PURE__ */ jsx6("span", { className: m.state === "completed" ? "text-ink-dim line-through" : "", children: m.title })
         ] }),
         /* @__PURE__ */ jsx6(MilestoneEvidence, { milestone: m, sessionId })
       ] }, m.id)) })
@@ -742,9 +655,7 @@ function TaskPanelContent() {
   const messages = useSessionMessages(sessionId);
   const agentActive = useAgentActive(sessionId);
   const t = useTaskText();
-  const latest = messages.findLast(
-    (message) => message.kind === "assistant" && message.taskView
-  );
+  const latest = messages.findLast((message) => message.kind === "assistant" && message.taskView);
   const view = latest?.kind === "assistant" ? latest.taskView : void 0;
   const attention = view?.tasks.filter(taskNeedsUser).length || 0;
   return /* @__PURE__ */ jsxs6("section", { className: "min-h-0 overflow-auto p-3", "data-testid": "task-panel", children: [
@@ -786,8 +697,7 @@ function TaskPanel() {
 function TaskMessage(props) {
   if (typeof props.renderDefault !== "function")
     return /* @__PURE__ */ jsx8(Surface, { children: /* @__PURE__ */ jsx8(Incompatible, {}) });
-  if (props.message.kind !== "assistant" || !props.message.taskView)
-    return props.renderDefault();
+  if (props.message.kind !== "assistant" || !props.message.taskView) return props.renderDefault();
   if (uiCompatibility().status !== "compatible")
     return /* @__PURE__ */ jsx8(Surface, { children: /* @__PURE__ */ jsx8(Incompatible, {}) });
   return /* @__PURE__ */ jsx8(Surface, { children: /* @__PURE__ */ jsx8(TaskMessageContent, { ...props }) });

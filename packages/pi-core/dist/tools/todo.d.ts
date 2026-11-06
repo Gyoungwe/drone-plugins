@@ -1,6 +1,6 @@
-import { type TodoItem } from "../contracts";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { type TodoItem } from "../contracts";
 export { formatTodoList } from "../contracts";
 /**
  * 规整 todo 输入：去空 content；同时最多保留一个 in_progress（保留第一个、其余降 pending）；

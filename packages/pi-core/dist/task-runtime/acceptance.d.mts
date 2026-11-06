@@ -4,9 +4,7 @@ export interface TaskAcceptanceVerifier {
 	readonly evidenceKind: string;
 	readonly operationVerifier: string;
 	readonly label: ((acceptance: Record<string, unknown>) => unknown) | null;
-	readonly verify:
-		| ((acceptance: Record<string, unknown>, context: unknown) => unknown)
-		| null;
+	readonly verify: ((acceptance: Record<string, unknown>, context: unknown) => unknown) | null;
 	readonly observe: ((event: unknown, details: unknown) => unknown) | null;
 	readonly resolve: ((review: unknown, context: unknown) => unknown) | null;
 	readonly identify: ((event: unknown, details: unknown) => unknown) | null;

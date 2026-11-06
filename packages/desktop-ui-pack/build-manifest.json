@@ -1,11 +1,11 @@
 {
   "artifactSource": "ui/src/index.ts",
   "inputs": {
-    "ui/src/index.ts": "7d9d37dc725b751cf0e681b8fca0e4c82af0ca2d3400e551ae70f2d5173731b1",
-    "scripts/build.mjs": "9ccf97f3602471494bedd9b2ded3498302dd6fcd464c110c024fdce4209ca70b",
-    "package.json": "09ec72e0b0ab3095fd0984c732683a805248236851e671a478f2a0cb20ef3bdf",
-    "plugin.manifest.json": "b0f3cddce12127f57d77d59c2b35e2543d74576fad9ac2fded53ac7cde47c8c0",
-    "ui/plugin.json": "ecd998d411ca44e7b12dd54c8dfe13f94c384e11ca3e6b4f9f00a656d19779ed"
+    "ui/src/index.ts": "bd37f751992b0216345361651a1028559d3f88677a0c0b297d068b230dd5b7ba",
+    "scripts/build.mjs": "1f0c6bff08453e6f2fb9149bb7ed7156cffa023fbd17c49ffe143620ea63ebf4",
+    "package.json": "8a4b29cf6ca00fd4e991bfc0c56cea36c43d05c95bb643feb75bb7bff6f99197",
+    "plugin.manifest.json": "c79a9296ab5a009b29ea589dea96cedd50d8c0d998e341b371886ee6c7c679bc",
+    "ui/plugin.json": "9856dbf3733c156065d7cfe190627f974a58dd27dffbfe1783ffd965d9d91013"
   },
   "outputs": {
     "ui/bundle.js": "33b531c15e2b1c489b5a94e6f3ec8ae16ff996c11b028b06cc307c91328ee9b2",

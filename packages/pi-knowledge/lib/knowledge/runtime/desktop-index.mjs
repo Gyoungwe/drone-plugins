@@ -1,12 +1,6 @@
 // src/desktop/index-resource.ts
 import { join as join2 } from "node:path";
 
-// src/core/index-runtime.ts
-import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { setImmediate as yieldTurn } from "node:timers/promises";
-
 // src/core/files.ts
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
@@ -72,6 +66,37 @@ function snippet(text, { startLine = 1, maxChars = 5e3 } = {}) {
   };
 }
 
+// src/core/index-runtime.ts
+import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { setImmediate as yieldTurn } from "node:timers/promises";
+
+// src/core/graph-cache.ts
+function createRevisionCache() {
+  let activeRevision = null;
+  const values = /* @__PURE__ */ new Map();
+  const align = (revision) => {
+    if (activeRevision === revision) return;
+    activeRevision = revision;
+    values.clear();
+  };
+  return {
+    get(revision, key) {
+      align(revision);
+      return values.get(key);
+    },
+    set(revision, key, value) {
+      align(revision);
+      values.set(key, value);
+    },
+    clear() {
+      activeRevision = null;
+      values.clear();
+    }
+  };
+}
+
 // src/core/graph-retrieval.ts
 function backlinkContext(body, target, max = 240) {
   const bare = target.split("/").at(-1)?.replace(/\.md$/, "") || target;
@@ -86,40 +111,6 @@ function backlinkContext(body, target, max = 240) {
     }
   }
   return void 0;
-}
-
-// src/core/search-policy.ts
-function tokenizeKnowledgeText(text) {
-  const words = String(text).normalize("NFKC").toLowerCase().match(/[a-z0-9][a-z0-9._+-]*|[\p{Script=Han}]+/gu) || [];
-  const output = [];
-  for (const word of words) {
-    if (new RegExp("\\p{Script=Han}", "u").test(word)) {
-      const characters = [...word];
-      for (let index = 0; index < characters.length; index++) {
-        const character = characters[index];
-        if (!character) continue;
-        output.push(character);
-        const next = characters[index + 1];
-        if (next) output.push(character + next);
-      }
-    } else output.push(word);
-  }
-  return output;
-}
-function buildKnowledgeSearchExpression(query) {
-  if (typeof query !== "string" || !query.trim() || query.length > 2e3)
-    throw new Error("Query must contain 1\u20132000 characters");
-  const terms = [...new Set(tokenizeKnowledgeText(query))].slice(0, 32);
-  if (!terms.length) throw new Error("Query has no searchable terms");
-  return terms.map((term) => `"${term.replaceAll('"', '""')}"`).join(" OR ");
-}
-function splitKnowledgeChunks(text, maxChars = 1200) {
-  if (!Number.isInteger(maxChars) || maxChars < 1 || maxChars > 8e3)
-    throw new Error("Semantic chunk size must be an integer between 1 and 8000");
-  const chunks = [];
-  for (let start = 0; start < text.length && chunks.length < 64; start += maxChars)
-    chunks.push(text.slice(start, start + maxChars));
-  return chunks;
 }
 
 // src/core/ingest-identity.ts
@@ -357,6 +348,28 @@ function parseFrontmatter(text) {
   }
 }
 
+// src/core/note-category.ts
+function keywordCategory(value) {
+  if (/paper|literature|文献|论文/.test(value)) return "paper";
+  if (/software|tool|软件/.test(value)) return "software";
+  if (/method|protocol|方法/.test(value)) return "method";
+  if (/idea|hypothes|想法|假设/.test(value)) return "idea";
+  return "other";
+}
+function noteCategory(row) {
+  const type = String(parseFrontmatter(row.body).data?.type || "").trim().toLowerCase();
+  if (type) return keywordCategory(type);
+  const segments = row.path.toLowerCase().split("/");
+  const filename = segments.pop();
+  for (const directory of segments.reverse()) {
+    if (/^(papers?|literature|文献|论文|software|tools?|软件|methods?|protocols?|方法|ideas?|hypotheses|想法|假设)$/.test(
+      directory
+    ))
+      return keywordCategory(directory);
+  }
+  return keywordCategory(filename);
+}
+
 // src/core/note-title.ts
 var clean = (value) => typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 200) : "";
 function looksLikeFileName(title) {
@@ -379,6 +392,64 @@ function noteDisplayTitle(text, path) {
   const heading = clean(text.match(/^#\s+(.+)$/m)?.[1]);
   if (title && (!heading || looksLikeFileName(heading))) return title;
   return heading || title || path.split("/").at(-1)?.replace(/\.md$/i, "") || path;
+}
+
+// src/core/recent-by-category.ts
+function recentByCategory(rows, limit = 10) {
+  const groups = {
+    paper: [],
+    software: [],
+    method: [],
+    idea: []
+  };
+  for (const row of rows) {
+    const category = noteCategory(row);
+    if (category === "other") continue;
+    groups[category].push({
+      path: row.path,
+      title: row.title,
+      kind: row.kind,
+      updatedAt: Number.parseFloat(String(row.signature).split(":", 1)[0]) || 0
+    });
+  }
+  const max = Math.max(1, Math.min(24, Math.floor(limit || 10)));
+  for (const key of Object.keys(groups))
+    groups[key] = groups[key].sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, max);
+  return groups;
+}
+
+// src/core/search-policy.ts
+function tokenizeKnowledgeText(text) {
+  const words = String(text).normalize("NFKC").toLowerCase().match(/[a-z0-9][a-z0-9._+-]*|[\p{Script=Han}]+/gu) || [];
+  const output = [];
+  for (const word of words) {
+    if (new RegExp("\\p{Script=Han}", "u").test(word)) {
+      const characters = [...word];
+      for (let index = 0; index < characters.length; index++) {
+        const character = characters[index];
+        if (!character) continue;
+        output.push(character);
+        const next = characters[index + 1];
+        if (next) output.push(character + next);
+      }
+    } else output.push(word);
+  }
+  return output;
+}
+function buildKnowledgeSearchExpression(query) {
+  if (typeof query !== "string" || !query.trim() || query.length > 2e3)
+    throw new Error("Query must contain 1\u20132000 characters");
+  const terms = [...new Set(tokenizeKnowledgeText(query))].slice(0, 32);
+  if (!terms.length) throw new Error("Query has no searchable terms");
+  return terms.map((term) => `"${term.replaceAll('"', '""')}"`).join(" OR ");
+}
+function splitKnowledgeChunks(text, maxChars = 1200) {
+  if (!Number.isInteger(maxChars) || maxChars < 1 || maxChars > 8e3)
+    throw new Error("Semantic chunk size must be an integer between 1 and 8000");
+  const chunks = [];
+  for (let start = 0; start < text.length && chunks.length < 64; start += maxChars)
+    chunks.push(text.slice(start, start + maxChars));
+  return chunks;
 }
 
 // src/core/semantic-model.ts
@@ -433,8 +504,12 @@ function sectorLayout(nodes, relations, seed) {
     adjacency.get(relation.source)?.add(relation.target);
     adjacency.get(relation.target)?.add(relation.source);
   }
-  const categories = new Map(paths.map((path) => [path, contentCategory(nodes.get(path))]));
-  const mains = new Set(paths.filter((path) => isMainNode(nodes.get(path), categories.get(path) ?? "other")));
+  const categories = new Map(
+    paths.map((path) => [path, contentCategory(nodes.get(path))])
+  );
+  const mains = new Set(
+    paths.filter((path) => isMainNode(nodes.get(path), categories.get(path) ?? "other"))
+  );
   if (!mains.size) {
     paths.slice().sort((a, b) => (adjacency.get(b)?.size ?? 0) - (adjacency.get(a)?.size ?? 0) || comparePath(a, b)).slice(0, Math.min(3, paths.length)).forEach((path) => {
       mains.add(path);
@@ -485,11 +560,17 @@ function sectorLayout(nodes, relations, seed) {
     const bridges = sharedWith.get(path);
     if (bridges?.length) {
       const average = bridges.reduce(
-        (point, main) => ({ x: point.x + (centers.get(main)?.x ?? WIDTH / 2), y: point.y + (centers.get(main)?.y ?? centerY) }),
+        (point, main) => ({
+          x: point.x + (centers.get(main)?.x ?? WIDTH / 2),
+          y: point.y + (centers.get(main)?.y ?? centerY)
+        }),
         { x: 0, y: 0 }
       );
       const jitter2 = (hash(`${path}:bridge`, seed) - 0.5) * 30;
-      layout[path] = clampPoint({ x: average.x / bridges.length, y: average.y / bridges.length - 36 + jitter2 });
+      layout[path] = clampPoint({
+        x: average.x / bridges.length,
+        y: average.y / bridges.length - 36 + jitter2
+      });
       continue;
     }
     const connectedMain = [...adjacency.get(path) ?? []].find((candidate) => mains.has(candidate));
@@ -532,9 +613,12 @@ function classifyRelation(source, target, type) {
 function normalizeIdentity2(value) {
   if (!value) return null;
   const normalized = value.trim().toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
-  if (/^doi:\s*/.test(normalized) || /^10\.\d{4,9}\//.test(normalized)) return `doi:${normalized.replace(/^doi:\s*/, "")}`;
-  if (/^pmid:\s*\d+$/.test(normalized) || /^\d{1,9}$/.test(normalized)) return `pmid:${normalized.replace(/^pmid:\s*/, "")}`;
-  if (/^arxiv:\s*/.test(normalized) || /^\d{4}\.\d{4,5}(?:v\d+)?$/.test(normalized)) return `arxiv:${normalized.replace(/^arxiv:\s*/, "")}`;
+  if (/^doi:\s*/.test(normalized) || /^10\.\d{4,9}\//.test(normalized))
+    return `doi:${normalized.replace(/^doi:\s*/, "")}`;
+  if (/^pmid:\s*\d+$/.test(normalized) || /^\d{1,9}$/.test(normalized))
+    return `pmid:${normalized.replace(/^pmid:\s*/, "")}`;
+  if (/^arxiv:\s*/.test(normalized) || /^\d{4}\.\d{4,5}(?:v\d+)?$/.test(normalized))
+    return `arxiv:${normalized.replace(/^arxiv:\s*/, "")}`;
   return normalized || null;
 }
 function fallbackIdentity(node) {
@@ -571,10 +655,15 @@ function assignCommunities(paths, edges, seed = 42) {
       const scores = /* @__PURE__ */ new Map();
       for (const neighbour of neighbours) {
         const label = labels.get(neighbour) ?? 0;
-        scores.set(label, (scores.get(label) ?? 0) + 1 - (degree.get(path) ?? 0) * (degree.get(neighbour) ?? 0) / total);
+        scores.set(
+          label,
+          (scores.get(label) ?? 0) + 1 - (degree.get(path) ?? 0) * (degree.get(neighbour) ?? 0) / total
+        );
       }
       const current = labels.get(path) ?? 0;
-      const best = [...scores.entries()].sort((a, b) => b[1] - a[1] || hash(`${path}:${a[0]}`, seed) - hash(`${path}:${b[0]}`, seed) || a[0] - b[0])[0];
+      const best = [...scores.entries()].sort(
+        (a, b) => b[1] - a[1] || hash(`${path}:${a[0]}`, seed) - hash(`${path}:${b[0]}`, seed) || a[0] - b[0]
+      )[0];
       if (best && best[1] > 0 && best[0] !== current) {
         labels.set(path, best[0]);
         changed = true;
@@ -584,8 +673,12 @@ function assignCommunities(paths, edges, seed = 42) {
   }
   const counts = /* @__PURE__ */ new Map();
   for (const label of labels.values()) counts.set(label, (counts.get(label) ?? 0) + 1);
-  const rank = new Map([...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([label], index) => [label, index]));
-  return Object.fromEntries(ordered.map((path) => [path, degree.get(path) ?? 0 ? rank.get(labels.get(path) ?? -1) ?? -1 : -1]));
+  const rank = new Map(
+    [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([label], index) => [label, index])
+  );
+  return Object.fromEntries(
+    ordered.map((path) => [path, degree.get(path) ?? 0 ? rank.get(labels.get(path) ?? -1) ?? -1 : -1])
+  );
 }
 function createSemanticModel(input, options = {}) {
   const view = options.view ?? "semantic";
@@ -656,7 +749,8 @@ function createSemanticModel(input, options = {}) {
       }
     }
   }
-  for (const duplicate of duplicates) addRelation({ source: duplicate.canonical, target: duplicate.duplicate, type: "duplicate" });
+  for (const duplicate of duplicates)
+    addRelation({ source: duplicate.canonical, target: duplicate.duplicate, type: "duplicate" });
   const communities = assignCommunities([...modelNodes.keys()], relations, seed);
   const { layout, mains, sharedWith } = sectorLayout(modelNodes, relations, seed);
   const linkRelations = relations.filter((edge) => edge.type === "link");
@@ -692,76 +786,14 @@ function createSemanticModel(input, options = {}) {
       ...mirrorPaths.length ? { mirrors: mirrorPaths, warnings: ["mirror"] } : {}
     };
   });
-  return { nodes, edges: linkRelations.map(({ source, target }) => ({ source, target })), relations, duplicates, communities, layout };
-}
-
-// src/core/graph-cache.ts
-function createRevisionCache() {
-  let activeRevision = null;
-  const values = /* @__PURE__ */ new Map();
-  const align = (revision) => {
-    if (activeRevision === revision) return;
-    activeRevision = revision;
-    values.clear();
-  };
   return {
-    get(revision, key) {
-      align(revision);
-      return values.get(key);
-    },
-    set(revision, key, value) {
-      align(revision);
-      values.set(key, value);
-    },
-    clear() {
-      activeRevision = null;
-      values.clear();
-    }
+    nodes,
+    edges: linkRelations.map(({ source, target }) => ({ source, target })),
+    relations,
+    duplicates,
+    communities,
+    layout
   };
-}
-
-// src/core/note-category.ts
-function keywordCategory(value) {
-  if (/paper|literature|文献|论文/.test(value)) return "paper";
-  if (/software|tool|软件/.test(value)) return "software";
-  if (/method|protocol|方法/.test(value)) return "method";
-  if (/idea|hypothes|想法|假设/.test(value)) return "idea";
-  return "other";
-}
-function noteCategory(row) {
-  const type = String(parseFrontmatter(row.body).data?.type || "").trim().toLowerCase();
-  if (type) return keywordCategory(type);
-  const segments = row.path.toLowerCase().split("/");
-  const filename = segments.pop();
-  for (const directory of segments.reverse()) {
-    if (/^(papers?|literature|文献|论文|software|tools?|软件|methods?|protocols?|方法|ideas?|hypotheses|想法|假设)$/.test(directory))
-      return keywordCategory(directory);
-  }
-  return keywordCategory(filename);
-}
-
-// src/core/recent-by-category.ts
-function recentByCategory(rows, limit = 10) {
-  const groups = {
-    paper: [],
-    software: [],
-    method: [],
-    idea: []
-  };
-  for (const row of rows) {
-    const category = noteCategory(row);
-    if (category === "other") continue;
-    groups[category].push({
-      path: row.path,
-      title: row.title,
-      kind: row.kind,
-      updatedAt: Number.parseFloat(String(row.signature).split(":", 1)[0]) || 0
-    });
-  }
-  const max = Math.max(1, Math.min(24, Math.floor(limit || 10)));
-  for (const key of Object.keys(groups))
-    groups[key] = groups[key].sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, max);
-  return groups;
 }
 
 // src/core/index-runtime.ts
@@ -819,7 +851,8 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
   const semanticColumns = db.prepare("PRAGMA table_info(semantic_chunks)").all().map((column) => column.name);
   if (!semanticColumns.includes("start_char"))
     db.exec("ALTER TABLE semantic_chunks ADD COLUMN start_char INTEGER");
-  if (!semanticColumns.includes("end_char")) db.exec("ALTER TABLE semantic_chunks ADD COLUMN end_char INTEGER");
+  if (!semanticColumns.includes("end_char"))
+    db.exec("ALTER TABLE semantic_chunks ADD COLUMN end_char INTEGER");
   if (semanticColumns.includes("text")) {
     db.exec(`BEGIN IMMEDIATE;
 	DROP INDEX IF EXISTS semantic_chunks_lookup;
@@ -1080,28 +1113,32 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     timer.unref();
   }
   let watcher;
-  if (files.watch) try {
-    watcher = await files.watch((name) => {
-      if (_closed) return;
-      const path = name?.toString().replaceAll("\\", "/");
-      if (path?.endsWith(".md")) {
-        try {
-          validateNote(path);
-          dirty.add(path);
-        } catch {
-          return;
+  if (files.watch)
+    try {
+      watcher = await files.watch(
+        (name) => {
+          if (_closed) return;
+          const path = name?.toString().replaceAll("\\", "/");
+          if (path?.endsWith(".md")) {
+            try {
+              validateNote(path);
+              dirty.add(path);
+            } catch {
+              return;
+            }
+          } else if (!path || path.split("/").every(allowedSegment)) fullScanRequested = true;
+          schedule();
+        },
+        (error) => {
+          if (_closed) return;
+          watching = false;
+          statements.problem.run("<watcher>", String(error.message));
         }
-      } else if (!path || path.split("/").every(allowedSegment)) fullScanRequested = true;
-      schedule();
-    }, (error) => {
-      if (_closed) return;
-      watching = false;
+      );
+      watching = true;
+    } catch (error) {
       statements.problem.run("<watcher>", String(error.message));
-    });
-    watching = true;
-  } catch (error) {
-    statements.problem.run("<watcher>", String(error.message));
-  }
+    }
   const reconcileTimer = options.backgroundReconcile === false ? null : setInterval(() => {
     if (!scan) void beginReconcile();
   }, options.reconcileMs || 12e4);
@@ -1182,7 +1219,8 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     })).sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, Math.max(1, Math.min(24, Math.floor(limit || 8))));
   }
   async function read(path, project, options2 = {}) {
-    if (!canRead(validateNote(path), project)) throw new Error("Note is outside shared/current-project scope");
+    if (!canRead(validateNote(path), project))
+      throw new Error("Note is outside shared/current-project scope");
     const row = await updatePath(path);
     if (!row) return { path, missing: true, revision };
     const part = snippet(row.body, options2);
@@ -1456,7 +1494,8 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     await flushDirty();
     const path = validateNote(String(args.path || ""));
     const project = args.project;
-    if (project !== void 0 && !canRead(path, project)) throw new Error("Note is outside shared/current-project scope");
+    if (project !== void 0 && !canRead(path, project))
+      throw new Error("Note is outside shared/current-project scope");
     const outgoing = [];
     for (const { target } of db.prepare("SELECT target FROM links WHERE source=? ORDER BY target").all(path)) {
       if (project !== void 0 && !canRead(target, project)) continue;
@@ -1496,7 +1535,8 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       const found = /* @__PURE__ */ new Map();
       for (const { target } of db.prepare("SELECT target FROM links WHERE source=? ORDER BY target LIMIT 64").all(seedPath)) {
         const resolved = resolveLinkTarget(target);
-        if (resolved && resolved !== seedPath && !found.has(resolved)) found.set(resolved, { direction: "outgoing" });
+        if (resolved && resolved !== seedPath && !found.has(resolved))
+          found.set(resolved, { direction: "outgoing" });
       }
       const name = seedPath.split("/").at(-1);
       const targets = resolveLinkTarget(name) === seedPath ? [seedPath, name] : [seedPath, seedPath];
@@ -1599,7 +1639,10 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
         if (identity) duplicateCounts.set(identity, (duplicateCounts.get(identity) || 0) + 1);
       }
     }
-    const totalDuplicateCount = [...duplicateCounts.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+    const totalDuplicateCount = [...duplicateCounts.values()].reduce(
+      (sum, count) => sum + Math.max(0, count - 1),
+      0
+    );
     const model = createSemanticModel(
       {
         nodes: semanticCandidateNodes.map((row) => ({
@@ -1621,7 +1664,9 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     const chosen = [...model.nodes].sort((a, b) => b.degree - a.degree || a.path.localeCompare(b.path)).slice(0, limit);
     const keep = new Set(chosen.map((node) => node.path));
     const links = model.edges.filter(({ source, target }) => keep.has(source) && keep.has(target));
-    const relations = (model.relations || []).filter(({ source, target }) => keep.has(source) && keep.has(target));
+    const relations = (model.relations || []).filter(
+      ({ source, target }) => keep.has(source) && keep.has(target)
+    );
     const result = {
       nodes: legacyChosen.map((path) => {
         const row = notes.get(path);
@@ -1644,8 +1689,12 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
         view,
         mergeMirrors,
         relations,
-        duplicates: (model.duplicates || []).filter(({ canonical, duplicate }) => keep.has(canonical) || keep.has(duplicate)),
-        communities: Object.fromEntries(Object.entries(model.communities || {}).filter(([path]) => keep.has(path))),
+        duplicates: (model.duplicates || []).filter(
+          ({ canonical, duplicate }) => keep.has(canonical) || keep.has(duplicate)
+        ),
+        communities: Object.fromEntries(
+          Object.entries(model.communities || {}).filter(([path]) => keep.has(path))
+        ),
         layout: Object.fromEntries(Object.entries(model.layout || {}).filter(([path]) => keep.has(path))),
         health: {
           isolated: chosen.filter((node) => node.degree === 0).length,
@@ -1715,10 +1764,21 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       const where = "(scope='shared' OR scope=?)";
       const total = Number(db.prepare(`SELECT count(*) n FROM jobs WHERE ${where}`).get(scope).n);
       const items = db.prepare(`SELECT * FROM jobs WHERE ${where} ORDER BY updated DESC,key LIMIT ? OFFSET ?`).all(scope, limit, offset);
-      return { items, total, offset, nextOffset: offset + items.length < total ? offset + items.length : null, revision };
+      return {
+        items,
+        total,
+        offset,
+        nextOffset: offset + items.length < total ? offset + items.length : null,
+        revision
+      };
     }
     if (op === "recentNotes") return { items: await recentNotes(args.project, args.limit), revision };
-    if (op === "recentByCategory") return { groups: await recentByCategory2(args.project, args.limit), counts: categoryCounts(args.project), revision };
+    if (op === "recentByCategory")
+      return {
+        groups: await recentByCategory2(args.project, args.limit),
+        counts: categoryCounts(args.project),
+        revision
+      };
     if (op === "jobs") return { ...status(), items: pending(args.project, 100, args.kind || null) };
     if (op === "completeJob") {
       db.prepare("DELETE FROM jobs WHERE key=? AND revision=?").run(args.key, args.revision);
@@ -1771,39 +1831,49 @@ var createIndexResource = async (context) => {
   let next = 0;
   let closed = false;
   const requests = /* @__PURE__ */ new Map();
-  const runtime = await createKnowledgeIndexRuntime({ database: join2(context.storageDirectory, "index.sqlite"), backgroundReconcile: false }, {
-    async inspect(path) {
-      validateNote(path);
-      const value = await context.capabilities.call("files.stat", { root, path });
-      if (value.kind !== "file") throw new Error("Expected a regular note");
-      return { signature: fileVersion(value.version) };
+  const runtime = await createKnowledgeIndexRuntime(
+    { database: join2(context.storageDirectory, "index.sqlite"), backgroundReconcile: false },
+    {
+      async inspect(path) {
+        validateNote(path);
+        const value = await context.capabilities.call("files.stat", { root, path });
+        if (value.kind !== "file") throw new Error("Expected a regular note");
+        return { signature: fileVersion(value.version) };
+      },
+      async read(path) {
+        validateNote(path);
+        const value = await context.capabilities.call("files.readText", { root, path });
+        return {
+          path,
+          text: value.text,
+          bytes: value.bytes,
+          hash: value.sha256,
+          signature: fileVersion(value.version)
+        };
+      },
+      list: async (path) => await context.capabilities.call("files.list", { root, path }),
+      watch: null
     },
-    async read(path) {
-      validateNote(path);
-      const value = await context.capabilities.call("files.readText", { root, path });
-      return { path, text: value.text, bytes: value.bytes, hash: value.sha256, signature: fileVersion(value.version) };
-    },
-    list: async (path) => await context.capabilities.call("files.list", { root, path }),
-    watch: null
-  }, {
-    onMessage: (receive) => {
-      handler = receive;
-    },
-    send(message) {
-      if (message.uiChanged) {
-        context.events.changed();
-        return;
+    {
+      onMessage: (receive) => {
+        handler = receive;
+      },
+      send(message) {
+        if (message.uiChanged) {
+          context.events.changed();
+          return;
+        }
+        if (message.ready) return;
+        const request = requests.get(message.id);
+        requests.delete(message.id);
+        if (message.error) request.reject(new Error(message.error));
+        else request.resolve(message.result);
+      },
+      close: () => {
+        closed = true;
       }
-      if (message.ready) return;
-      const request = requests.get(message.id);
-      requests.delete(message.id);
-      if (message.error) request.reject(new Error(message.error));
-      else request.resolve(message.result);
-    },
-    close: () => {
-      closed = true;
     }
-  });
+  );
   async function invoke(operation, input) {
     context.signal.throwIfAborted();
     if (closed) throw new Error("Knowledge index resource is closed");
@@ -1814,15 +1884,19 @@ var createIndexResource = async (context) => {
   }
   try {
     const initial = await invoke("reconcile", {});
-    if (initial.coverage !== "ready") throw new Error("Knowledge index could not read the authorized Vault inventory");
+    if (initial.coverage !== "ready")
+      throw new Error("Knowledge index could not read the authorized Vault inventory");
   } catch (error) {
     await runtime.close();
     throw error;
   }
-  return { invoke, async dispose() {
-    closed = true;
-    await runtime.close();
-  } };
+  return {
+    invoke,
+    async dispose() {
+      closed = true;
+      await runtime.close();
+    }
+  };
 };
 var index_resource_default = createIndexResource;
 export {

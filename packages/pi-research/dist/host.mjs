@@ -4,175 +4,6 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// src/core/research-delivery.ts
-import { createHash } from "node:crypto";
-var summaryHash = (value) => createHash("sha256").update(value).digest("hex");
-var summaryBody = (markdown) => `${markdown.trim()}
-`;
-function deliveryMemoryClaims(input, prepared) {
-  if (input === void 0) return [];
-  if (!Array.isArray(input) || input.length > 24) throw new Error("Provide at most 24 summary memory claims");
-  const bindings = /* @__PURE__ */ new Set();
-  return input.map((claim) => {
-    if (!claim || typeof claim !== "object") throw new Error("Invalid summary memory claim");
-    const binding = prepared.claims.find(
-      (candidate) => claim.bindingId ? candidate.id === claim.bindingId : candidate.claim === claim.claim
-    );
-    if (!binding) throw new Error("Summary memory claim is not bound to this research run");
-    if (bindings.has(binding.id)) throw new Error("Provide one memory claim per bindingId");
-    bindings.add(binding.id);
-    const source = binding.sources.find(
-      (item) => item.path === claim.sourcePath && item.hash === claim.sourceHash
-    );
-    if (!source) throw new Error("Summary memory claim source/hash differs from the bound evidence");
-    for (const key of ["subject", "predicate"]) {
-      if (typeof claim[key] !== "string" || !claim[key].trim() || claim[key].length > 180)
-        throw new Error(`Invalid memory claim ${key}`);
-    }
-    if (!["observation", "interpretation", "hypothesis"].includes(claim.relation))
-      throw new Error("Invalid memory claim relation");
-    const result = {
-      bindingId: binding.id,
-      claim: binding.claim,
-      subject: claim.subject,
-      predicate: claim.predicate,
-      sourcePath: source.path,
-      sourceHash: source.hash,
-      startLine: source.start_line,
-      endLine: source.end_line,
-      location: `${source.start_line}-${source.end_line}`,
-      limitations: binding.limitations,
-      relation: binding.relationship === "hypothesis" || binding.relationship === "unsupported" ? "hypothesis" : claim.relation,
-      deliveryBodySha256: prepared.bodySha256
-    };
-    for (const key of ["value", "organism", "tissue", "stage", "method", "direction", "endpoint", "unit"]) {
-      if (claim[key] !== void 0) {
-        if (typeof claim[key] !== "string" || claim[key].length > 600)
-          throw new Error(`Invalid memory claim ${key}`);
-        result[key] = claim[key];
-      }
-    }
-    if (claim.effect !== void 0) {
-      if (!Number.isFinite(claim.effect)) throw new Error("Invalid memory claim effect");
-      result.effect = claim.effect;
-    }
-    return result;
-  });
-}
-function summaryReviewPacket(prepared, memoryClaims) {
-  const blocks = [...prepared.body.matchAll(/\S[\s\S]*?(?=\n\s*\n|$)/g)].map((match, index) => ({
-    blockId: `block-${index + 1}`,
-    text: match[0],
-    start: match.index,
-    end: match.index + match[0].length,
-    proposedClaimIds: prepared.claims.map((claim) => claim.id)
-  }));
-  const packet = {
-    version: 1,
-    body: prepared.body,
-    bodySha256: prepared.bodySha256,
-    gateSha256: prepared.gateSha256,
-    claimsSha256: prepared.claimsSha256,
-    evidenceRevision: prepared.evidenceRevision,
-    blocks,
-    claims: prepared.claims,
-    readReceipts: prepared.readReceipts,
-    memoryClaims: memoryClaims.map((claim) => ({
-      ...claim,
-      memoryClaimSha256: summaryHash(JSON.stringify(claim))
-    }))
-  };
-  const bytes = JSON.stringify(packet);
-  if (Buffer.byteLength(bytes) > 512 * 1024)
-    throw new Error("Summary evidence packet exceeds 512 KiB; narrow the delivery before review");
-  return { ...packet, packetSha256: summaryHash(bytes) };
-}
-function validateSummaryAssessment(value, packet) {
-  if (!value || typeof value !== "object") throw new Error("Missing summary semantic assessment");
-  const review = value;
-  if (review.packetSha256 !== packet.packetSha256 || review.bodySha256 !== packet.bodySha256)
-    throw new Error("Summary semantic assessment belongs to different body/evidence bytes");
-  if (typeof review.provider !== "string" || !review.provider.trim() || typeof review.model !== "string" || !review.model.trim() || !Array.isArray(review.blocks) || review.blocks.length !== packet.blocks.length)
-    throw new Error("Incomplete summary semantic assessment");
-  const validateRead = (ref) => {
-    const read = packet.readReceipts.find(
-      (item) => item.receiptId === ref.readReceiptId && item.path === ref.path && item.sha256 === ref.sha256
-    );
-    if (!read || !Number.isInteger(ref.startLine) || !Number.isInteger(ref.endLine) || ref.startLine < read.startLine || ref.endLine < ref.startLine || ref.endLine > read.endLine)
-      throw new Error("Summary assessment cites evidence that was not read in this scope");
-  };
-  const seen = /* @__PURE__ */ new Set();
-  for (const block of review.blocks) {
-    if (!block || !packet.blocks.some((item) => item.blockId === block.blockId) || seen.has(block.blockId) || !["claim", "limitation", "navigation"].includes(block.role) || !["supported", "contradicted", "out-of-scope", "unknown"].includes(block.assessment) || typeof block.reason !== "string" || !block.reason.trim() || !Array.isArray(block.claimIds) || !Array.isArray(block.evidence))
-      throw new Error("Invalid summary block assessment");
-    seen.add(block.blockId);
-    const claims2 = block.claimIds.map((id) => {
-      const claim = packet.claims.find((candidate) => candidate.id === id);
-      if (!claim) throw new Error("Summary block references an unknown claim");
-      return claim;
-    });
-    if (!claims2.length) throw new Error("Every summary block requires a valid claim mapping");
-    for (const ref of block.evidence) validateRead(ref);
-    if (block.assessment === "supported")
-      for (const claim of claims2) {
-        if (claim.relationship !== "direct" && claim.relationship !== "indirect") continue;
-        let mapped = false;
-        for (const ref of block.evidence) {
-          if (claim.sources.some(
-            (source) => source.path === ref.path && source.hash === ref.sha256 && ref.startLine >= source.start_line && ref.endLine <= source.end_line
-          ))
-            mapped = true;
-        }
-        if (!mapped)
-          throw new Error(`Summary factual block lacks evidence from its mapped claim: ${claim.id}`);
-      }
-  }
-  if (!Array.isArray(review.memoryClaims) || review.memoryClaims.length !== packet.memoryClaims.length)
-    throw new Error("Incomplete summary memory claim assessment");
-  const reviewedMemory = /* @__PURE__ */ new Set();
-  for (const result of review.memoryClaims) {
-    const memory = packet.memoryClaims.find((claim) => claim.bindingId === result.bindingId);
-    if (!memory || reviewedMemory.has(result.bindingId) || result.memoryClaimSha256 !== memory.memoryClaimSha256 || !["supported", "contradicted", "out-of-scope", "unknown"].includes(result.assessment) || typeof result.reason !== "string" || !result.reason.trim() || !Array.isArray(result.evidence))
-      throw new Error("Invalid summary memory claim assessment or object hash");
-    reviewedMemory.add(result.bindingId);
-    for (const ref of result.evidence) validateRead(ref);
-    if (result.assessment === "supported") {
-      const spans = result.evidence.filter(
-        (ref) => ref.path === memory.sourcePath && ref.sha256 === memory.sourceHash && ref.startLine >= memory.startLine && ref.endLine <= memory.endLine
-      ).sort((a, b) => a.startLine - b.startLine);
-      let nextLine = memory.startLine;
-      for (const ref of spans) {
-        if (ref.startLine > nextLine) break;
-        nextLine = Math.max(nextLine, ref.endLine + 1);
-      }
-      if (nextLine <= memory.endLine)
-        throw new Error(
-          `Summary memory claim lacks complete evidence from its bound source: ${memory.bindingId}`
-        );
-    }
-  }
-  const unresolved = review.blocks.filter((block) => block.assessment !== "supported");
-  if (unresolved.length)
-    throw new Error(
-      `Summary semantic review is unresolved: ${unresolved.map((block) => `${block.blockId} ${block.assessment}: ${block.reason}`).join("; ")}`
-    );
-  const unresolvedMemory = review.memoryClaims.filter((claim) => claim.assessment !== "supported");
-  if (unresolvedMemory.length)
-    throw new Error(
-      `Summary memory claim review is unresolved: ${unresolvedMemory.map((claim) => `${claim.bindingId} ${claim.assessment}: ${claim.reason}`).join("; ")}`
-    );
-  return {
-    status: "model-assessed",
-    packetSha256: packet.packetSha256,
-    bodySha256: packet.bodySha256,
-    provider: review.provider,
-    model: review.model,
-    blocks: review.blocks,
-    memoryClaims: review.memoryClaims,
-    ...review.usage === void 0 ? {} : { usage: review.usage }
-  };
-}
-
 // src/core/claim-bindings.ts
 var claim_bindings_exports = {};
 __export(claim_bindings_exports, {
@@ -449,7 +280,7 @@ __export(literature_operations_exports, {
   destinationRecovery: () => destinationRecovery,
   literatureOperationId: () => literatureOperationId
 });
-import { createHash as createHash3, randomUUID } from "node:crypto";
+import { createHash as createHash2, randomUUID } from "node:crypto";
 
 // src/core/literature-receipt.ts
 var literature_receipt_exports = {};
@@ -458,7 +289,7 @@ __export(literature_receipt_exports, {
   normalizeDoi: () => normalizeDoi,
   verifyLiteratureReceipt: () => verifyLiteratureReceipt
 });
-import { createHash as createHash2 } from "node:crypto";
+import { createHash } from "node:crypto";
 import { readFile as readFile2, realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 function normalizeDoi(value) {
@@ -537,7 +368,7 @@ async function verifyLiteratureReceipt({
       status: linked && dois.some((item) => normalizeDoi(item.replace(/[.,;]+$/, "")) === normalizedDoi) ? "verified" : "identity-mismatch",
       path: notePath,
       vault: root,
-      hash: createHash2("sha256").update(text6).digest("hex")
+      hash: createHash("sha256").update(text6).digest("hex")
     };
   } catch (error) {
     if (vaultResolved && error instanceof Error && "code" in error && error.code === "ENOENT") {
@@ -571,7 +402,7 @@ function destinationRecovery(receipt2 = {}) {
 function literatureOperationId(vault, revision, doi) {
   const normalized = normalizeDoi(doi);
   if (!normalized) throw new Error("Valid DOI required");
-  return createHash3("sha256").update(JSON.stringify([vault, revision, normalized])).digest("hex");
+  return createHash2("sha256").update(JSON.stringify([vault, revision, normalized])).digest("hex");
 }
 function createLiteratureOperations(ports) {
   const now = ports.now || (() => (/* @__PURE__ */ new Date()).toISOString());
@@ -1187,6 +1018,175 @@ function createResearchReceiptJournal(cwd, { sessionId = null, ports }) {
       runs.clear();
       buffer.clear();
     }
+  };
+}
+
+// src/core/research-delivery.ts
+import { createHash as createHash3 } from "node:crypto";
+var summaryHash = (value) => createHash3("sha256").update(value).digest("hex");
+var summaryBody = (markdown) => `${markdown.trim()}
+`;
+function deliveryMemoryClaims(input, prepared) {
+  if (input === void 0) return [];
+  if (!Array.isArray(input) || input.length > 24) throw new Error("Provide at most 24 summary memory claims");
+  const bindings = /* @__PURE__ */ new Set();
+  return input.map((claim) => {
+    if (!claim || typeof claim !== "object") throw new Error("Invalid summary memory claim");
+    const binding = prepared.claims.find(
+      (candidate) => claim.bindingId ? candidate.id === claim.bindingId : candidate.claim === claim.claim
+    );
+    if (!binding) throw new Error("Summary memory claim is not bound to this research run");
+    if (bindings.has(binding.id)) throw new Error("Provide one memory claim per bindingId");
+    bindings.add(binding.id);
+    const source = binding.sources.find(
+      (item) => item.path === claim.sourcePath && item.hash === claim.sourceHash
+    );
+    if (!source) throw new Error("Summary memory claim source/hash differs from the bound evidence");
+    for (const key of ["subject", "predicate"]) {
+      if (typeof claim[key] !== "string" || !claim[key].trim() || claim[key].length > 180)
+        throw new Error(`Invalid memory claim ${key}`);
+    }
+    if (!["observation", "interpretation", "hypothesis"].includes(claim.relation))
+      throw new Error("Invalid memory claim relation");
+    const result = {
+      bindingId: binding.id,
+      claim: binding.claim,
+      subject: claim.subject,
+      predicate: claim.predicate,
+      sourcePath: source.path,
+      sourceHash: source.hash,
+      startLine: source.start_line,
+      endLine: source.end_line,
+      location: `${source.start_line}-${source.end_line}`,
+      limitations: binding.limitations,
+      relation: binding.relationship === "hypothesis" || binding.relationship === "unsupported" ? "hypothesis" : claim.relation,
+      deliveryBodySha256: prepared.bodySha256
+    };
+    for (const key of ["value", "organism", "tissue", "stage", "method", "direction", "endpoint", "unit"]) {
+      if (claim[key] !== void 0) {
+        if (typeof claim[key] !== "string" || claim[key].length > 600)
+          throw new Error(`Invalid memory claim ${key}`);
+        result[key] = claim[key];
+      }
+    }
+    if (claim.effect !== void 0) {
+      if (!Number.isFinite(claim.effect)) throw new Error("Invalid memory claim effect");
+      result.effect = claim.effect;
+    }
+    return result;
+  });
+}
+function summaryReviewPacket(prepared, memoryClaims) {
+  const blocks = [...prepared.body.matchAll(/\S[\s\S]*?(?=\n\s*\n|$)/g)].map((match, index) => ({
+    blockId: `block-${index + 1}`,
+    text: match[0],
+    start: match.index,
+    end: match.index + match[0].length,
+    proposedClaimIds: prepared.claims.map((claim) => claim.id)
+  }));
+  const packet = {
+    version: 1,
+    body: prepared.body,
+    bodySha256: prepared.bodySha256,
+    gateSha256: prepared.gateSha256,
+    claimsSha256: prepared.claimsSha256,
+    evidenceRevision: prepared.evidenceRevision,
+    blocks,
+    claims: prepared.claims,
+    readReceipts: prepared.readReceipts,
+    memoryClaims: memoryClaims.map((claim) => ({
+      ...claim,
+      memoryClaimSha256: summaryHash(JSON.stringify(claim))
+    }))
+  };
+  const bytes = JSON.stringify(packet);
+  if (Buffer.byteLength(bytes) > 512 * 1024)
+    throw new Error("Summary evidence packet exceeds 512 KiB; narrow the delivery before review");
+  return { ...packet, packetSha256: summaryHash(bytes) };
+}
+function validateSummaryAssessment(value, packet) {
+  if (!value || typeof value !== "object") throw new Error("Missing summary semantic assessment");
+  const review = value;
+  if (review.packetSha256 !== packet.packetSha256 || review.bodySha256 !== packet.bodySha256)
+    throw new Error("Summary semantic assessment belongs to different body/evidence bytes");
+  if (typeof review.provider !== "string" || !review.provider.trim() || typeof review.model !== "string" || !review.model.trim() || !Array.isArray(review.blocks) || review.blocks.length !== packet.blocks.length)
+    throw new Error("Incomplete summary semantic assessment");
+  const validateRead = (ref) => {
+    const read = packet.readReceipts.find(
+      (item) => item.receiptId === ref.readReceiptId && item.path === ref.path && item.sha256 === ref.sha256
+    );
+    if (!read || !Number.isInteger(ref.startLine) || !Number.isInteger(ref.endLine) || ref.startLine < read.startLine || ref.endLine < ref.startLine || ref.endLine > read.endLine)
+      throw new Error("Summary assessment cites evidence that was not read in this scope");
+  };
+  const seen = /* @__PURE__ */ new Set();
+  for (const block of review.blocks) {
+    if (!block || !packet.blocks.some((item) => item.blockId === block.blockId) || seen.has(block.blockId) || !["claim", "limitation", "navigation"].includes(block.role) || !["supported", "contradicted", "out-of-scope", "unknown"].includes(block.assessment) || typeof block.reason !== "string" || !block.reason.trim() || !Array.isArray(block.claimIds) || !Array.isArray(block.evidence))
+      throw new Error("Invalid summary block assessment");
+    seen.add(block.blockId);
+    const claims2 = block.claimIds.map((id) => {
+      const claim = packet.claims.find((candidate) => candidate.id === id);
+      if (!claim) throw new Error("Summary block references an unknown claim");
+      return claim;
+    });
+    if (!claims2.length) throw new Error("Every summary block requires a valid claim mapping");
+    for (const ref of block.evidence) validateRead(ref);
+    if (block.assessment === "supported")
+      for (const claim of claims2) {
+        if (claim.relationship !== "direct" && claim.relationship !== "indirect") continue;
+        let mapped = false;
+        for (const ref of block.evidence) {
+          if (claim.sources.some(
+            (source) => source.path === ref.path && source.hash === ref.sha256 && ref.startLine >= source.start_line && ref.endLine <= source.end_line
+          ))
+            mapped = true;
+        }
+        if (!mapped)
+          throw new Error(`Summary factual block lacks evidence from its mapped claim: ${claim.id}`);
+      }
+  }
+  if (!Array.isArray(review.memoryClaims) || review.memoryClaims.length !== packet.memoryClaims.length)
+    throw new Error("Incomplete summary memory claim assessment");
+  const reviewedMemory = /* @__PURE__ */ new Set();
+  for (const result of review.memoryClaims) {
+    const memory = packet.memoryClaims.find((claim) => claim.bindingId === result.bindingId);
+    if (!memory || reviewedMemory.has(result.bindingId) || result.memoryClaimSha256 !== memory.memoryClaimSha256 || !["supported", "contradicted", "out-of-scope", "unknown"].includes(result.assessment) || typeof result.reason !== "string" || !result.reason.trim() || !Array.isArray(result.evidence))
+      throw new Error("Invalid summary memory claim assessment or object hash");
+    reviewedMemory.add(result.bindingId);
+    for (const ref of result.evidence) validateRead(ref);
+    if (result.assessment === "supported") {
+      const spans = result.evidence.filter(
+        (ref) => ref.path === memory.sourcePath && ref.sha256 === memory.sourceHash && ref.startLine >= memory.startLine && ref.endLine <= memory.endLine
+      ).sort((a, b) => a.startLine - b.startLine);
+      let nextLine = memory.startLine;
+      for (const ref of spans) {
+        if (ref.startLine > nextLine) break;
+        nextLine = Math.max(nextLine, ref.endLine + 1);
+      }
+      if (nextLine <= memory.endLine)
+        throw new Error(
+          `Summary memory claim lacks complete evidence from its bound source: ${memory.bindingId}`
+        );
+    }
+  }
+  const unresolved = review.blocks.filter((block) => block.assessment !== "supported");
+  if (unresolved.length)
+    throw new Error(
+      `Summary semantic review is unresolved: ${unresolved.map((block) => `${block.blockId} ${block.assessment}: ${block.reason}`).join("; ")}`
+    );
+  const unresolvedMemory = review.memoryClaims.filter((claim) => claim.assessment !== "supported");
+  if (unresolvedMemory.length)
+    throw new Error(
+      `Summary memory claim review is unresolved: ${unresolvedMemory.map((claim) => `${claim.bindingId} ${claim.assessment}: ${claim.reason}`).join("; ")}`
+    );
+  return {
+    status: "model-assessed",
+    packetSha256: packet.packetSha256,
+    bodySha256: packet.bodySha256,
+    provider: review.provider,
+    model: review.model,
+    blocks: review.blocks,
+    memoryClaims: review.memoryClaims,
+    ...review.usage === void 0 ? {} : { usage: review.usage }
   };
 }
 
@@ -3632,6 +3632,23 @@ function summarizeZoteroAttachments(children, parentKey) {
   }));
 }
 
+// src/core/zotero-library.ts
+var zotero_library_exports = {};
+__export(zotero_library_exports, {
+  zoteroLibraryEnvValue: () => zoteroLibraryEnvValue,
+  zoteroLibraryPath: () => zoteroLibraryPath
+});
+function zoteroLibraryPath(value) {
+  if (value === void 0 || value === null) return "users";
+  const text6 = String(value).trim().toLowerCase();
+  if (text6 === "" || text6 === "user" || text6 === "users") return "users";
+  if (text6 === "group" || text6 === "groups") return "groups";
+  return null;
+}
+function zoteroLibraryEnvValue(path) {
+  return zoteroLibraryPath(path) === "groups" ? "group" : "user";
+}
+
 // src/core/zotero-reconcile.ts
 var zotero_reconcile_exports = {};
 __export(zotero_reconcile_exports, {
@@ -3703,25 +3720,6 @@ __export(zotero_reconcile_runtime_exports, {
   createLocalZoteroReconciler: () => createLocalZoteroReconciler,
   createZoteroReconciler: () => createZoteroReconciler
 });
-
-// src/core/zotero-library.ts
-var zotero_library_exports = {};
-__export(zotero_library_exports, {
-  zoteroLibraryEnvValue: () => zoteroLibraryEnvValue,
-  zoteroLibraryPath: () => zoteroLibraryPath
-});
-function zoteroLibraryPath(value) {
-  if (value === void 0 || value === null) return "users";
-  const text6 = String(value).trim().toLowerCase();
-  if (text6 === "" || text6 === "user" || text6 === "users") return "users";
-  if (text6 === "group" || text6 === "groups") return "groups";
-  return null;
-}
-function zoteroLibraryEnvValue(path) {
-  return zoteroLibraryPath(path) === "groups" ? "group" : "user";
-}
-
-// src/core/zotero-reconcile-runtime.ts
 var LOCAL_API = "http://127.0.0.1:23119/api/users/0";
 var LOCAL_USER_LIBRARY_IDS = /* @__PURE__ */ new Set(["0", "1"]);
 function createZoteroReconciler({
@@ -5441,6 +5439,56 @@ ${changes.map((line) => `- ${line}`).join("\n")}`);
   return lines.join("\n\n");
 }
 
+// src/evidence-gate.ts
+var EVIDENCE_STAGES = Object.freeze([
+  "created",
+  "local_query_recorded",
+  "external_search_recorded",
+  "sources_inspected",
+  "sources_archived",
+  "claims_bound",
+  "answerable"
+]);
+var TERMINAL_FAILURES = /* @__PURE__ */ new Set(["unavailable", "browser_required", "failed"]);
+function createEvidenceGate({ scope = "factual-answer" } = {}) {
+  const events = [];
+  let stage = "created";
+  const record2 = (type, details = {}) => {
+    events.push({ type, at: (/* @__PURE__ */ new Date()).toISOString(), ...details });
+  };
+  const snapshot = () => ({
+    scope,
+    stage,
+    status: "ok",
+    answerable: stage === "answerable",
+    events: [...events]
+  });
+  const advance = (next, details = {}) => {
+    if (!EVIDENCE_STAGES.includes(next)) throw new Error(`Unknown evidence stage: ${next}`);
+    const current = EVIDENCE_STAGES.indexOf(stage);
+    const target = EVIDENCE_STAGES.indexOf(next);
+    if (target < current) throw new Error(`Evidence stage cannot move backwards: ${stage} -> ${next}`);
+    stage = next;
+    record2(next, details);
+    return snapshot();
+  };
+  const fail = (status, details = {}) => {
+    if (!TERMINAL_FAILURES.has(status)) throw new Error(`Unknown evidence failure: ${status}`);
+    record2(status, details);
+    return { ...snapshot(), status, answerable: false };
+  };
+  return Object.freeze({ advance, fail, snapshot });
+}
+function assertEvidenceAnswerable(gate2, { claimBindings = [] } = {}) {
+  const state = gate2.snapshot();
+  if (state.stage !== "answerable" || !Array.isArray(claimBindings) || claimBindings.length === 0 || claimBindings.some((binding) => !binding || typeof binding !== "object" || Array.isArray(binding))) {
+    throw new Error(
+      "Evidence gate is closed: complete retrieval, inspection, archiving and structured claim binding first"
+    );
+  }
+  return state;
+}
+
 // src/extension.ts
 var USER_QUESTION_FOCUS = "Answer the user's current question. Use evidence for factual research claims, not unrelated citations for ordinary chat. For a simple factual question that can be answered from existing local knowledge, take the light path: retrieve, answer, and auto-deposit a bounded note when appropriate; do not create a task_plan or ask for write authorization just to answer. For substantive tasks, do bounded read-only preparation and consolidate scope, assumptions, needed permissions and deliverables into one task_plan for one user authorization. After authorization, carry out routine steps and recoverable checks within that scope without repeatedly asking whether to continue. Respect prior decisions, especially declined installs. New risks or scope, missing credentials and genuinely unavailable user data still require a specific request; never infer consent. At completion, explain what changed, link actual outputs or show key figures, separate execution from validation, and give one next step only if needed. Keep internal counters and tool logs out of the main answer.";
 function sessionKey(ctx) {
@@ -5685,56 +5733,6 @@ For substantive research, use research_loop(action=start) when a tracked run is 
   };
 }
 
-// src/evidence-gate.ts
-var EVIDENCE_STAGES = Object.freeze([
-  "created",
-  "local_query_recorded",
-  "external_search_recorded",
-  "sources_inspected",
-  "sources_archived",
-  "claims_bound",
-  "answerable"
-]);
-var TERMINAL_FAILURES = /* @__PURE__ */ new Set(["unavailable", "browser_required", "failed"]);
-function createEvidenceGate({ scope = "factual-answer" } = {}) {
-  const events = [];
-  let stage = "created";
-  const record2 = (type, details = {}) => {
-    events.push({ type, at: (/* @__PURE__ */ new Date()).toISOString(), ...details });
-  };
-  const snapshot = () => ({
-    scope,
-    stage,
-    status: "ok",
-    answerable: stage === "answerable",
-    events: [...events]
-  });
-  const advance = (next, details = {}) => {
-    if (!EVIDENCE_STAGES.includes(next)) throw new Error(`Unknown evidence stage: ${next}`);
-    const current = EVIDENCE_STAGES.indexOf(stage);
-    const target = EVIDENCE_STAGES.indexOf(next);
-    if (target < current) throw new Error(`Evidence stage cannot move backwards: ${stage} -> ${next}`);
-    stage = next;
-    record2(next, details);
-    return snapshot();
-  };
-  const fail = (status, details = {}) => {
-    if (!TERMINAL_FAILURES.has(status)) throw new Error(`Unknown evidence failure: ${status}`);
-    record2(status, details);
-    return { ...snapshot(), status, answerable: false };
-  };
-  return Object.freeze({ advance, fail, snapshot });
-}
-function assertEvidenceAnswerable(gate2, { claimBindings = [] } = {}) {
-  const state = gate2.snapshot();
-  if (state.stage !== "answerable" || !Array.isArray(claimBindings) || claimBindings.length === 0 || claimBindings.some((binding) => !binding || typeof binding !== "object" || Array.isArray(binding))) {
-    throw new Error(
-      "Evidence gate is closed: complete retrieval, inspection, archiving and structured claim binding first"
-    );
-  }
-  return state;
-}
-
 // src/research-connectors.ts
 import { createHash as createHash10 } from "node:crypto";
 var DEFAULT_TIMEOUT_MS2 = 12e3;
@@ -5801,7 +5799,10 @@ async function fetchText(fetchImpl, url, options) {
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
   try {
     const response = await fetchImpl(url, {
-      headers: { accept: "application/atom+xml,application/xml,text/xml", "user-agent": "Drone-Research-Workbench/0.33" },
+      headers: {
+        accept: "application/atom+xml,application/xml,text/xml",
+        "user-agent": "Drone-Research-Workbench/0.33"
+      },
       signal
     });
     if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
@@ -5908,9 +5909,9 @@ function createArxivConnector(fetchImpl) {
         const title = xmlTag(entry, "title");
         if (!arxivId || !title) return [];
         const locator = `https://arxiv.org/abs/${arxivId}`;
-        const authors = [...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/giu)].map(
-          (item) => text4(item[1]).replaceAll("&amp;", "&")
-        );
+        const authors = [
+          ...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/giu)
+        ].map((item) => text4(item[1]).replaceAll("&amp;", "&"));
         const publishedAt = xmlTag(entry, "published") || void 0;
         return [
           {
@@ -5983,10 +5984,14 @@ function createResearchConnectorHostLoader(options) {
         status: "unavailable",
         list: () => [],
         recommend: async () => {
-          throw new Error("Research connector transport is unavailable; the host must inject an authorized connector registry");
+          throw new Error(
+            "Research connector transport is unavailable; the host must inject an authorized connector registry"
+          );
         },
         search: async () => {
-          throw new Error("Research connector transport is unavailable; the host must inject an authorized connector registry");
+          throw new Error(
+            "Research connector transport is unavailable; the host must inject an authorized connector registry"
+          );
         }
       })
     };
@@ -6005,7 +6010,14 @@ function createResearchConnectorHostLoader(options) {
           if (!connector) {
             return {
               hits: [],
-              failures: [{ connectorId, message: `Unknown research connector: ${connectorId}`, retryable: false, at: isoNow() }]
+              failures: [
+                {
+                  connectorId,
+                  message: `Unknown research connector: ${connectorId}`,
+                  retryable: false,
+                  at: isoNow()
+                }
+              ]
             };
           }
           if (!connector.recommend) return { hits: [], failures: [] };
@@ -6021,7 +6033,12 @@ function createResearchConnectorHostLoader(options) {
           const requested = input.connectorIds ? [...input.connectorIds] : connectors.map((connector) => connector.descriptor.id);
           const selected = requested.map((id) => byId.get(id)).filter((connector) => Boolean(connector));
           const limit = clampLimit(input.limit);
-          const failures = requested.filter((id) => !byId.has(id)).map((connectorId) => ({ connectorId, message: `Unknown research connector: ${connectorId}`, retryable: false, at: isoNow() }));
+          const failures = requested.filter((id) => !byId.has(id)).map((connectorId) => ({
+            connectorId,
+            message: `Unknown research connector: ${connectorId}`,
+            retryable: false,
+            at: isoNow()
+          }));
           const settled = await Promise.allSettled(
             selected.map(
               (connector) => connector.search(query, {
@@ -6039,7 +6056,10 @@ function createResearchConnectorHostLoader(options) {
             if (result.status === "fulfilled") hits.push(...result.value);
             else failures.push(failure(connector.descriptor.id, result.reason));
           });
-          const deduped = [...new Map(hits.map((hit) => [hit.id, hit])).values()].slice(0, limit * Math.max(1, selected.length));
+          const deduped = [...new Map(hits.map((hit) => [hit.id, hit])).values()].slice(
+            0,
+            limit * Math.max(1, selected.length)
+          );
           return { query, hits: deduped, failures, connectors: requested, complete: failures.length === 0 };
         }
       };
@@ -6068,15 +6088,19 @@ function relativePath(value, label) {
   return normalized;
 }
 function asObject(value, label) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error(`${label} must be an object`);
   return value;
 }
 function isErrno(error, code) {
-  return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
+  return Boolean(
+    error && typeof error === "object" && "code" in error && error.code === code
+  );
 }
 function gate(metadata) {
   const value = metadata.evidence_gate;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { stage: "created", answerable: false };
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return { stage: "created", answerable: false };
   const candidate = value;
   const stage = text5(candidate.stage, 80);
   return { stage: STAGES2.has(stage) ? stage : "created", answerable: candidate.answerable === true };
@@ -6132,15 +6156,26 @@ function detail(metadata, runDir, resultsPath) {
     };
   });
   const sourceRefs = Array.isArray(gateObject.source_refs) ? gateObject.source_refs : [];
-  const sources = sourceRefs.map((source) => ({ path: text5(source, 480), status: "inspected", hash: null, verified: false }));
+  const sources = sourceRefs.map((source) => ({
+    path: text5(source, 480),
+    status: "inspected",
+    hash: null,
+    verified: false
+  }));
   const bindings = Array.isArray(gateObject.claim_bindings) ? gateObject.claim_bindings : [];
   const claims2 = bindings.map((binding) => {
     const value = binding && typeof binding === "object" && !Array.isArray(binding) ? binding : {};
     const support = Array.isArray(value.sources) ? value.sources.map((source) => {
-      if (source && typeof source === "object" && !Array.isArray(source)) return text5(source.path, 480);
+      if (source && typeof source === "object" && !Array.isArray(source))
+        return text5(source.path, 480);
       return text5(source, 480);
     }).filter(Boolean) : [];
-    return { id: text5(value.id, 120) || null, claim: text5(value.claim, 480), support, status: text5(value.status || value.relationship, 80) || "bound" };
+    return {
+      id: text5(value.id, 120) || null,
+      claim: text5(value.claim, 480),
+      support,
+      status: text5(value.status || value.relationship, 80) || "bound"
+    };
   }).filter((claim) => claim.claim);
   const warnings = Array.isArray(gateObject.warnings) ? gateObject.warnings.map((warning) => text5(warning, 240)).filter(Boolean) : [];
   const archiveCount = Number(gateObject.archive_count);
@@ -6153,7 +6188,11 @@ function detail(metadata, runDir, resultsPath) {
     claims: claims2,
     warnings,
     coverage: metadata.retrieval_coverage && typeof metadata.retrieval_coverage === "object" && !Array.isArray(metadata.retrieval_coverage) ? metadata.retrieval_coverage : null,
-    archive: { count: Number.isFinite(archiveCount) ? archiveCount : 0, reused: Number.isFinite(reuseCount) ? reuseCount : 0, verified: false }
+    archive: {
+      count: Number.isFinite(archiveCount) ? archiveCount : 0,
+      reused: Number.isFinite(reuseCount) ? reuseCount : 0,
+      verified: false
+    }
   };
 }
 async function configuredResultsRoot(port, workspace) {
@@ -6161,13 +6200,20 @@ async function configuredResultsRoot(port, workspace) {
   if (!workspaceRoot.handle) throw new Error("Host did not grant a workspace files root");
   let config = {};
   try {
-    config = asObject(JSON.parse(await port.readText(workspaceRoot.handle, ".pi/research-workspace.json")), "research workspace configuration");
+    config = asObject(
+      JSON.parse(await port.readText(workspaceRoot.handle, ".pi/research-workspace.json")),
+      "research workspace configuration"
+    );
   } catch (error) {
     if (!isErrno(error, "ENOENT")) throw error;
   }
-  if (config.resultsRoot !== void 0 && typeof config.resultsRoot !== "string") throw new Error("resultsRoot must be a path");
+  if (config.resultsRoot !== void 0 && typeof config.resultsRoot !== "string")
+    throw new Error("resultsRoot must be a path");
   if (!config.resultsRoot || !config.resultsRoot.startsWith("/"))
-    return { handle: workspaceRoot.handle, path: relativePath(config.resultsRoot || "results", "resultsRoot") };
+    return {
+      handle: workspaceRoot.handle,
+      path: relativePath(config.resultsRoot || "results", "resultsRoot")
+    };
   const resultRoot = await port.resolveRoot(config.resultsRoot);
   if (!resultRoot.handle) throw new Error("Host did not grant the configured results root");
   return { handle: resultRoot.handle, path: "" };
@@ -6195,7 +6241,8 @@ async function discover2(port, root, project) {
     for (const run2 of runs.filter((entry) => entry.kind === "directory" && entry.name.startsWith("run-"))) {
       const runDir = `${slug.name}/${run2.name}`;
       const metadata = await readMetadata(port, root, runDir);
-      if (!project || text5(metadata.project, 180) === text5(project, 180)) found.push(summary(metadata, runDir, root.path));
+      if (!project || text5(metadata.project, 180) === text5(project, 180))
+        found.push(summary(metadata, runDir, root.path));
     }
   }
   return found.sort((left, right) => (right.updatedAt || "").localeCompare(left.updatedAt || ""));
