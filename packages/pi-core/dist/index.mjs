@@ -457,6 +457,14 @@ function createTaskAuthorization(journal, checkBinding = async () => null, ui = 
     ) : null;
     if (input.action === "ask-authorization" && !action)
       throw new Error("Authorization action is no longer pending.");
+    if (action?.kind === "rebind" && ui.amendAllowance) {
+      const milestone = task.milestones.find((m) => m.id === action.milestoneId);
+      if (!milestone) throw new Error("Rebind milestone is no longer in the task.");
+      const granted = await ui.amendAllowance(ctx, task, milestone, { ...effectiveAcceptance(milestone), doi: action.expected?.doi }, signal);
+      if (!granted || signal?.aborted) return false;
+      await journal.command({ ...input, action: "acknowledge" });
+      return true;
+    }
     if (!["authorize-task", "approve-plan", "next-stage", "ask-authorization", "confirm-outcome"].includes(
       input.action
     ))
@@ -2654,7 +2662,7 @@ ${journal.render()}`);
   on("before_agent_start", async (event, ctx) => {
     providerTurnOpen = true;
     await ports.acceptance?.load(ctx.signal);
-    const remoteKinds = ports.acceptance?.describe() || [];
+    const remoteKinds = ports.acceptance?.kinds() || [];
     if (!prepared) {
       try {
         await prepare(event.prompt, ctx);

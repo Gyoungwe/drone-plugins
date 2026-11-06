@@ -399,7 +399,7 @@ function createRemoteAcceptance(call) {
   };
   return {
     /** Kinds and their fields, for the task context the model reads. */
-    describe: () => [...kinds].map(([kind, { fields }]) => ({ kind, fields })),
+    kinds: () => [...kinds].map(([kind, { fields }]) => ({ kind, fields })),
     /** Registers every available provider once. Needs a live hook: provider.read is not a bootstrap call. */
     async load(signal) {
       let listed;
@@ -412,6 +412,20 @@ function createRemoteAcceptance(call) {
       for (const { member, state } of listed.members)
         if (state === "available" && !kinds.has(member))
           register(member, await call("provider.read", address(member, "describe", null), signal));
+    },
+    /** The provider's text for one acceptance, fetched now (a rebind names an acceptance not planned). */
+    async describeNow(acceptance, signal) {
+      const kind = acceptance?.kind;
+      if (!kinds.has(kind)) return null;
+      return call("provider.read", address(kind, "describe", acceptance), signal);
+    },
+    /** Write allowances for the host's task authorization: one per milestone whose provider names a consent entry. */
+    allowances(milestones) {
+      return milestones.flatMap((milestone) => {
+        const kind = milestone.acceptance?.kind;
+        const described = kinds.get(kind)?.cache.get(keyOf(effectiveAcceptance(milestone)));
+        return described?.consent ? [{ id: milestone.id, role: ROLE, member: kind, label: String(described.label || kind).slice(0, 300), consent: described.consent }] : [];
+      });
     },
     /** Fetches the provider's text for milestones not seen yet. */
     async prepare(tasks, signal) {
@@ -531,6 +545,14 @@ function createTaskAuthorization(journal, checkBinding = async () => null, ui = 
     ) : null;
     if (input.action === "ask-authorization" && !action)
       throw new Error("Authorization action is no longer pending.");
+    if (action?.kind === "rebind" && ui.amendAllowance) {
+      const milestone = task.milestones.find((m) => m.id === action.milestoneId);
+      if (!milestone) throw new Error("Rebind milestone is no longer in the task.");
+      const granted = await ui.amendAllowance(ctx, task, milestone, { ...effectiveAcceptance(milestone), doi: action.expected?.doi }, signal);
+      if (!granted || signal?.aborted) return false;
+      await journal.command({ ...input, action: "acknowledge" });
+      return true;
+    }
     if (!["authorize-task", "approve-plan", "next-stage", "ask-authorization", "confirm-outcome"].includes(
       input.action
     ))
@@ -2652,7 +2674,7 @@ ${journal.render()}`);
   on("before_agent_start", async (event, ctx) => {
     providerTurnOpen = true;
     await ports.acceptance?.load(ctx.signal);
-    const remoteKinds = ports.acceptance?.describe() || [];
+    const remoteKinds = ports.acceptance?.kinds() || [];
     if (!prepared) {
       try {
         await prepare(event.prompt, ctx);
@@ -3077,6 +3099,7 @@ var EVENT_EFFECTS = Object.fromEntries([
 var PRIVATE_SEGMENT = /^(?:auth|credentials|secrets?|tokens?|password)(?:\.|$)/i;
 var fileError = (code, message) => Object.assign(new Error(message), { code });
 function managedPorts(call, cache) {
+  const acceptance = createRemoteAcceptance(call);
   const readFile = async (ctx, path) => {
     const read = await call("workspace.readFile", { path }, ctx?.signal);
     return { ...read, bytes: Buffer.from(read.base64, "base64") };
@@ -3108,7 +3131,7 @@ function managedPorts(call, cache) {
     return answer.kind === "cancelled" ? void 0 : answer.value;
   };
   return {
-    acceptance: createRemoteAcceptance(call),
+    acceptance,
     // Knowledge-bound (Vault) acceptance needs the knowledge service; not wired yet.
     readKnowledgeBinding: async () => null,
     readOnlyHint: (name) => cache.tools.get(name),
@@ -3152,9 +3175,26 @@ function managedPorts(call, cache) {
           writeDirectories: [...task.writeRoots || []],
           acceptance: task.milestones.map((milestone) => milestone.title).slice(0, 32),
           ...contract.compute ? { compute: contract.compute.slice(0, 2e3) } : {},
+          // External writes the providers will make for these milestones; the host shows each and admits it once.
+          ...(() => {
+            const allowances = acceptance.allowances(task.milestones);
+            return allowances.length ? { allowances } : {};
+          })(),
           maxCalls: contract.maxCalls,
           maxAutoResumes: contract.maxAutoResumes
         }, signal);
+        return true;
+      } catch (error4) {
+        if (/denied/i.test(error4.message)) return false;
+        throw error4;
+      }
+    },
+    // Changing which item a milestone names changes what the grant allows; the host asks.
+    amendAllowance: async (ctx, task, milestone, next, signal) => {
+      const described = await acceptance.describeNow(next, signal);
+      if (!described?.consent) throw new Error("The acceptance provider cannot name this item.");
+      try {
+        await call("task.grant.amend", { taskId: task.id, id: milestone.id, label: String(described.label || next.kind).slice(0, 300), consent: described.consent }, signal);
         return true;
       } catch (error4) {
         if (/denied/i.test(error4.message)) return false;
