@@ -405,6 +405,10 @@ it("a checker another plugin provides is planned, bound from the tool event by t
 	// The model learns the kind and its fields from the task context; the tool schema stays open.
 	expect(context.message.content).toContain("zotero_item (doi, libraryId, collection)");
 	expect(t.tools.task_plan.parameters.properties.milestones.items.properties.acceptance.properties.kind.enum).toBeUndefined();
+	// The authorization lists the provider's write for the milestone; the host shows it and admits it once.
+	expect(t.host.grants[0].allowances).toEqual([
+		{ id: "z", role: "acceptance", member: "zotero_item", label: "Zotero slot", consent: { slot: true } },
+	]);
 	expect(status.snapshot.milestones).toEqual([expect.objectContaining({ id: "z", state: "completed" })]);
 	expect(provider.calls).toEqual(expect.arrayContaining(["describe:null", "describe:slot", "native:zotero_item:identify", `describe:${DOI}`, `verify:${DOI}`]));
 	await t.close();

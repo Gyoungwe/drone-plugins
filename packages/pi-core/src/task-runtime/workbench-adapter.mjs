@@ -253,7 +253,7 @@ ${journal.render()}`);
     providerTurnOpen = true;
     // Picks up acceptance providers enabled since the session started.
     await ports.acceptance?.load(ctx.signal);
-    const remoteKinds = ports.acceptance?.describe() || [];
+    const remoteKinds = ports.acceptance?.kinds() || [];
     if (!prepared) {
       try {
         await prepare(event.prompt, ctx);

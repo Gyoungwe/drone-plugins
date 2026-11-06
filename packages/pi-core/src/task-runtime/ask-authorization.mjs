@@ -50,6 +50,15 @@ function createTaskAuthorization(journal, checkBinding = async () => null, ui = 
     ) : null;
     if (input.action === "ask-authorization" && !action)
       throw new Error("Authorization action is no longer pending.");
+    // A host that keeps the task authorization also renders the rebind it widens.
+    if (action?.kind === "rebind" && ui.amendAllowance) {
+      const milestone = task.milestones.find((m) => m.id === action.milestoneId);
+      if (!milestone) throw new Error("Rebind milestone is no longer in the task.");
+      const granted = await ui.amendAllowance(ctx, task, milestone, { ...effectiveAcceptance(milestone), doi: action.expected?.doi }, signal);
+      if (!granted || signal?.aborted) return false;
+      await journal.command({ ...input, action: "acknowledge" });
+      return true;
+    }
     if (!["authorize-task", "approve-plan", "next-stage", "ask-authorization", "confirm-outcome"].includes(
       input.action
     ))
