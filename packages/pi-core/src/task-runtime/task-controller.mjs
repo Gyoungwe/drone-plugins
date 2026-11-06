@@ -18,6 +18,7 @@ export function createTaskController(session, readSignal) {
     reconcile: cwd => session.action({kind:"reconcile",cwd},readSignal()),
     guard: value => session.observe({kind:"call",value},readSignal()),
     observe: (value,cwd) => session.observe({kind:"result",value,cwd},readSignal()),
+    identified: value => session.observe({kind:"identity",value},readSignal()),
     pause: reason => session.turn({kind:"pause",reason},readSignal()),
     settle: () => session.turn({kind:"settle"},readSignal()),
     reserveContinuation: reason => session.turn({kind:"reserve-continuation",reason},readSignal()),

@@ -3,6 +3,7 @@ import { isAbsolute, resolve } from "node:path";
 import { createTaskApplicationState } from "./application-state.mjs";
 import { inspectTaskBytes } from "./file-inspection.mjs";
 import { bindRuntime, createStandaloneRuntime, withRuntime } from "./runtime-bridge.mjs";
+import { createRemoteAcceptance } from "./remote-acceptance.mjs";
 import { registerWorkbenchAdapter } from "./workbench-adapter.mjs";
 
 const empty = {type:"null"};
@@ -14,7 +15,7 @@ const TOOL_EFFECTS = {task_status:READ,task_plan:READ,task_wait:READ,task_reconc
 const COMMAND_EFFECTS = {"task-status":READ,"task-action":READ};
 const EVENT_EFFECTS = Object.fromEntries([
   "session_start","session_tree","context","input","before_agent_start","message_start",
-  "turn_start","turn_end","tool_call","tool_result","agent_end","agent_settled",
+  "turn_start","turn_end","tool_call","tool_result","tool_execution_end","agent_end","agent_settled",
 ].map(name=>[name,READ]));
 const PRIVATE_SEGMENT = /^(?:auth|credentials|secrets?|tokens?|password)(?:\.|$)/i;
 const fileError = (code, message) => Object.assign(new Error(message), { code });
@@ -52,6 +53,7 @@ function managedPorts(call, cache) {
     return answer.kind === "cancelled" ? undefined : answer.value;
   };
   return {
+    acceptance: createRemoteAcceptance(call),
     // Knowledge-bound (Vault) acceptance needs the knowledge service; not wired yet.
     readKnowledgeBinding: async () => null,
     readOnlyHint: name => cache.tools.get(name),

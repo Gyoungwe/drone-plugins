@@ -16,7 +16,13 @@
     "networkReads": [
       "127.0.0.1:23119/connector/ping",
       "127.0.0.1:23119/connector/getSelectedCollection"
-    ]
+    ],
+    "provides": {
+      "task.acceptance:zotero_item": {
+        "version": 1,
+        "operations": ["describe", "verify", "identify"]
+      }
+    }
   },
   "entrypoints": {
     "extension": "./dist/index.mjs",

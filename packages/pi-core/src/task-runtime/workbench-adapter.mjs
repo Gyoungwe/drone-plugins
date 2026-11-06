@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { acceptanceSchema } from "./acceptance.mjs";
+import { acceptanceSchema, openAcceptanceSchema } from "./acceptance.mjs";
 import { createTaskAuthorization } from "./ask-authorization.mjs";
 import { createTaskSession } from "./task-session.mjs";
 import { createTaskController } from "./task-controller.mjs";
@@ -62,6 +62,7 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
     },
     persist: (record, signal) => ports.persist(currentContext(), record, signal),
     onChanged: () => send(), inspect, authorize,
+    ...(ports.acceptance ? { prepare: (tasks, signal) => ports.acceptance.prepare(tasks, signal) } : {}),
   });
   const { journal, evidence } = createTaskController(session, () => invocation.getStore()?.signal);
   // Committed state and storage receipt, for adapters that serve status outside a hook.
@@ -205,6 +206,7 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
     cancelHandoff();
     providerTurnOpen = false;
     pendingStatus = null;
+    await ports.acceptance?.load(ctx.signal);
     await attach(ctx, true);
     prepared = false;
     awaitingUser = false;
@@ -249,6 +251,9 @@ ${journal.render()}`);
   });
   on("before_agent_start", async (event, ctx) => {
     providerTurnOpen = true;
+    // Picks up acceptance providers enabled since the session started.
+    await ports.acceptance?.load(ctx.signal);
+    const remoteKinds = ports.acceptance?.describe() || [];
     if (!prepared) {
       try {
         await prepare(event.prompt, ctx);
@@ -269,7 +274,7 @@ ${TASK_HANDOFF_POLICY}`,
         customType: "drone-task-context",
         display: false,
         content: `${journal.render()}
-${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uFF0C\u5199\u7ED9\u7528\u6237\u770B\u7684\u5185\u5BB9\u4E00\u5F8B\u7528\u7B80\u4F53\u4E2D\u6587\u3002\uFF09\n" : ""}Host observations only. For substantial execution, first do read-only preparation, consolidate necessary choices/assumptions and call task_plan ONCE with the original user goal, a plain-language scope summary, existing write directories, and file-based deliverables. task_plan automatically opens the host ask_user form for task execution, directory writes, acceptance and automatic stage continuation. Task cards are status and request-entry UI, not consent. Do not duplicate the host question or treat free text as authorization. If declined, stop at the checkpoint. Additional authorization actions from task_wait also open ask_user. Within approved scope, perform routine steps and bounded recovery autonomously; only new risk/scope, credentials, genuinely unavailable user data or actual required human review need intervention. Never claim human/scientific review happened automatically. Prefer machine-checkable deliverables over unnecessary human-review milestones. Preserve prior refusals. File/command denies, sensitive files, unknown effects, total call budget and provenance checks remain binding. task_status delivers host-only results.`
+${remoteKinds.length ? `Acceptance kinds from installed plugins (task_plan acceptance.kind and fields): ${remoteKinds.map(({ kind, fields }) => `${kind} (${fields.join(", ") || "no fields"})`).join("; ")}.\n` : ""}${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uFF0C\u5199\u7ED9\u7528\u6237\u770B\u7684\u5185\u5BB9\u4E00\u5F8B\u7528\u7B80\u4F53\u4E2D\u6587\u3002\uFF09\n" : ""}Host observations only. For substantial execution, first do read-only preparation, consolidate necessary choices/assumptions and call task_plan ONCE with the original user goal, a plain-language scope summary, existing write directories, and file-based deliverables. task_plan automatically opens the host ask_user form for task execution, directory writes, acceptance and automatic stage continuation. Task cards are status and request-entry UI, not consent. Do not duplicate the host question or treat free text as authorization. If declined, stop at the checkpoint. Additional authorization actions from task_wait also open ask_user. Within approved scope, perform routine steps and bounded recovery autonomously; only new risk/scope, credentials, genuinely unavailable user data or actual required human review need intervention. Never claim human/scientific review happened automatically. Prefer machine-checkable deliverables over unnecessary human-review milestones. Preserve prior refusals. File/command denies, sensitive files, unknown effects, total call budget and provenance checks remain binding. task_status delivers host-only results.`
       }
     };
   });
@@ -341,6 +346,15 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       return { block: true, reason: clean(e.message) };
     }
   });
+  // Managed runtime: providers in other owners read the finalized tool event (after tool_result,
+  // before agent_end) and name the identity it carries.
+  if (ports.acceptance)
+    on("tool_execution_end", async (event, ctx) => {
+      const task = journal.snapshot();
+      if (!task) return;
+      for (const { kind, identity } of await ports.acceptance.identify(task.milestones, ctx.signal))
+        await journal.identified({ toolCallId: event.toolCallId, toolName: event.toolName, kind, identity });
+    });
   on("tool_result", async (event, ctx) => {
     await journal.observe(event, ctx.cwd);
     if (event.toolName === "read" && !event.isError)
@@ -469,7 +483,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
             title: str,
             dependsOn: { type: "array", maxItems: 24, items: str },
             // kind 枚举与扩展字段是活引用：后加载的扩展登记的验收种类也会出现在模型看到的 schema 里
-            acceptance: acceptanceSchema()
+            acceptance: ports.acceptance ? openAcceptanceSchema() : acceptanceSchema()
           },
           required: ["id", "title", "acceptance"],
           additionalProperties: false

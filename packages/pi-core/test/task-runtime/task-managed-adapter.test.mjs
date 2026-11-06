@@ -14,7 +14,7 @@ afterEach(async () => {
 	for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
 });
 
-async function harness({ records = [], answer = (_title, options) => options.at(-1), workspace } = {}) {
+async function harness({ records = [], answer = (_title, options) => options.at(-1), workspace, extra = {} } = {}) {
 	const cwd = workspace ?? (await realpath(await mkdtemp(join(tmpdir(), "managed-task-"))));
 	if (!workspace) {
 		dirs.push(cwd);
@@ -42,6 +42,10 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 	};
 	const capabilities = {
 		"caller.scope": () => ({ kind: "session", sessionId: "s1", workspaceDirectory: cwd, workspaceId: "w" }),
+		// As the host answers a package that declares no consumed role.
+		"provider.enumerate": ({ role }) => {
+			throw new Error(`Undeclared provider role: ${role}`);
+		},
 		"session.records.read": () => ({ mode: "persistent", state: "durable", error: null, records: [...host.records] }),
 		"session.records.append": ({ type, data }) => {
 			if (host.failAppend) {
@@ -103,6 +107,7 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 			};
 		},
 	};
+	Object.assign(capabilities, extra);
 	const lifetime = new AbortController();
 	const context = {
 		signal: lifetime.signal,
@@ -342,4 +347,85 @@ it("a reopened session restores the task from records but its old approval canno
 	expect(blocked).toMatchObject({ block: true });
 	expect(reopened.host.grants).toEqual([]);
 	await reopened.close();
+});
+
+const DOI = "10.1000/gut.2021.001";
+const zoteroPlan = {
+	goal: "Save the paper I read to Zotero",
+	summary: "One paper into Zotero",
+	writeDirectories: ["out"],
+	milestones: [{ id: "z", title: "Paper in Zotero", acceptance: { kind: "zotero_item" } }],
+};
+/** A host with one installed provider of task.acceptance:zotero_item; the provider's answers are scripted. */
+function zoteroProvider({ verify } = {}) {
+	const calls = [];
+	const state = { saved: false };
+	const extra = {
+		"provider.enumerate": ({ role }) => {
+			if (role !== "acceptance") throw new Error(`Undeclared provider role: ${role}`);
+			return { members: [{ member: "zotero_item", state: "available", service: "task.acceptance:zotero_item", requestedVersion: 1, provider: null }] };
+		},
+		"provider.read": ({ role, member, operation, input }) => {
+			expect({ role, member }).toEqual({ role: "acceptance", member: "zotero_item" });
+			calls.push(`${operation}:${input === null ? "null" : input.doi || "slot"}`);
+			if (operation === "describe")
+				return input
+					? { fields: ["doi", "libraryId", "collection"], evidenceKind: "zotero-read-only-item-identity", label: input.doi ? `Zotero ${input.doi}` : "Zotero slot", consent: input.doi ? { doi: input.doi } : { slot: true }, pending: { reason: "not in Zotero yet", next: "save it" } }
+					: { fields: ["doi", "libraryId", "collection"], evidenceKind: "zotero-read-only-item-identity" };
+			if (verify) return verify(input);
+			return state.saved && input.doi === DOI ? { state: "found", itemId: "ABCD2345", summary: "found" } : { state: "pending", reason: "doi-unbound" };
+		},
+		// The real host hands the provider the actual tool_execution_end event; this fake only scripts its answer.
+		"provider.native": ({ member, operation, input }) => {
+			calls.push(`native:${member}:${operation}`);
+			expect(input).toBeNull();
+			return state.saved ? { doi: DOI } : null;
+		},
+	};
+	return { extra, calls, state };
+}
+async function runSave(t, state) {
+	await t.hooks.input({ text: zoteroPlan.goal, images: [] }, t.ctx);
+	t.host.streaming = true;
+	const context = await t.hooks.before_agent_start({ prompt: zoteroPlan.goal, systemPrompt: "" }, t.ctx);
+	expect((await t.tool("task_plan", zoteroPlan)).authorized).toBe(true);
+	const save = { toolName: "research_zotero_save", toolCallId: "z1", input: { doi: DOI, title: "Gut signatures" } };
+	await t.hooks.tool_call({ type: "tool_call", ...save }, t.ctx);
+	state.saved = true;
+	await t.hooks.tool_result({ type: "tool_result", ...save, content: [{ type: "text", text: "saved" }], isError: false }, t.ctx);
+	await t.hooks.tool_execution_end({ type: "tool_execution_end", toolCallId: "z1", toolName: save.toolName, result: { content: [] }, isError: false }, t.ctx);
+	await t.hooks.agent_end({ messages: [{ role: "assistant", stopReason: "stop", content: [] }] }, t.ctx);
+	return { context, status: await t.app.operations.status.execute(null, { signal: t.ctx.signal }) };
+}
+
+it("a checker another plugin provides is planned, bound from the tool event by the provider and verified in its owner", async () => {
+	const provider = zoteroProvider();
+	const t = await harness({ extra: provider.extra });
+	const { context, status } = await runSave(t, provider.state);
+	// The model learns the kind and its fields from the task context; the tool schema stays open.
+	expect(context.message.content).toContain("zotero_item (doi, libraryId, collection)");
+	expect(t.tools.task_plan.parameters.properties.milestones.items.properties.acceptance.properties.kind.enum).toBeUndefined();
+	expect(status.snapshot.milestones).toEqual([expect.objectContaining({ id: "z", state: "completed" })]);
+	expect(provider.calls).toEqual(expect.arrayContaining(["describe:null", "describe:slot", "native:zotero_item:identify", `describe:${DOI}`, `verify:${DOI}`]));
+	await t.close();
+});
+
+it("a provider that is gone by the check leaves its milestone blocked, not passed", async () => {
+	const provider = zoteroProvider({
+		verify: () => {
+			throw new Error("Provider task.acceptance:zotero_item is disabled");
+		},
+	});
+	const t = await harness({ extra: provider.extra });
+	const { status } = await runSave(t, provider.state);
+	expect(status.snapshot.milestones).toEqual([expect.objectContaining({ id: "z", state: "blocked" })]);
+	await t.close();
+});
+
+it("without a provider, planning refuses the kind", async () => {
+	const t = await harness();
+	await t.hooks.input({ text: zoteroPlan.goal, images: [] }, t.ctx);
+	await t.hooks.before_agent_start({ prompt: zoteroPlan.goal, systemPrompt: "" }, t.ctx);
+	await expect(t.tool("task_plan", zoteroPlan)).rejects.toThrow(/Acceptance must be one of file \| human_review/);
+	await t.close();
 });

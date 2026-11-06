@@ -29,6 +29,7 @@ export function createTaskSession({
   onChanged,
   readFailure,
   onPersistenceFailed,
+  prepare,
 }) {
   const lifetime = new AbortController();
   let tail = Promise.resolve(),
@@ -96,6 +97,7 @@ export function createTaskSession({
         dirty = false;
         checkpointRequested = false;
         const result = await operation(journal, evidence, combined);
+        if (prepare) await prepare(journal.checkpoint().book.tasks, combined);
         evidence.attach(journal.scope(), journal.snapshot()?.id, records);
         combined.throwIfAborted();
         if (dirty) {
@@ -207,6 +209,7 @@ export function createTaskSession({
           return journal.guard(event.value);
         }
         if (event.kind === "result") return journal.observe(event.value, event.cwd);
+        if (event.kind === "identity") return journal.identified(event.value);
         if (event.kind === "capture")
           return evidence.capture(event.value, event.cwd, event.binding);
         if (event.kind === "evicted") return evidence.evict(event.ids);
