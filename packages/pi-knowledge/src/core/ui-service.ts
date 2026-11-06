@@ -4,22 +4,21 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { loadWorkspaceConfig } from "./runtime-host.js";
-import { inspectObsidianSetup, inspectSetupDirectory, resolveSetupVault } from "./runtime-host.js";
-import { researchSetupOptions } from "./runtime-host.js";
-import { runtimeSlot } from "./runtime-host.js";
-import { LAYOUT } from "./runtime-host.js";
-import {
-	knowledgeDirectory,
-	projectIdentity,
-	readKnowledgeBinding,
-	withKnowledgeBinding,
-} from "./config.js";
+import { knowledgeDirectory, projectIdentity, readKnowledgeBinding, withKnowledgeBinding } from "./config.js";
 import { collectRecentNotes, DAILY_DISCOVERY_LIMITS, ideaNoteMarkdown } from "./daily-discovery.js";
 import { safeNotePath } from "./files.js";
-import { memoryNoteMarkdown, memoryNoteSlug } from "./memory-note.js";
 import { runNavigationMaintenance } from "./maintenance.js";
+import { memoryNoteMarkdown, memoryNoteSlug } from "./memory-note.js";
 import { readReviewMode, saveReviewMode } from "./review-policy.js";
+import {
+	inspectObsidianSetup,
+	inspectSetupDirectory,
+	LAYOUT,
+	loadWorkspaceConfig,
+	researchSetupOptions,
+	resolveSetupVault,
+	runtimeSlot,
+} from "./runtime-host.js";
 import { getKnowledgeService } from "./service.js";
 import { normalizeSourceLinks } from "./source-links.js";
 import { setSpecialistSettings, specialistSettings } from "./specialist-host.js";
@@ -32,6 +31,7 @@ import {
 	undoWikiUpdate,
 	wikiHistory,
 } from "./wiki-review.js";
+
 export { knowledgeMaintenanceTopic } from "./maintenance-topic.js";
 
 const runtimeState = runtimeSlot("knowledge", "uiService", () => ({
@@ -129,7 +129,8 @@ export async function knowledgeOverview({ cwd = null, sessionId = null } = {}) {
 	try {
 		if (!(await stat(binding.vault)).isDirectory()) throw new Error("Vault is not a directory");
 		const service = await getKnowledgeService(binding);
-		recentNotes = (await service.request("recentNotes", { project: project.project, limit: 10 }))?.items || [];
+		recentNotes =
+			(await service.request("recentNotes", { project: project.project, limit: 10 }))?.items || [];
 		try {
 			recentByCategory =
 				(await service.request("recentByCategory", { project: project.project, limit: 10 }))?.groups || null;
@@ -408,8 +409,7 @@ export async function knowledgeOpenTarget({ cwd = null, path = null, revision })
 	if (path) {
 		const { canRead, validateNote } = await import("./files.js");
 		validateNote(path);
-		if (!canRead(path, project))
-			throw new Error("Note is outside shared/current-project scope");
+		if (!canRead(path, project)) throw new Error("Note is outside shared/current-project scope");
 		return { path: await safeNotePath(binding.vault, path), kind: "note" };
 	}
 	if (!(await stat(binding.vault)).isDirectory()) throw new Error("Vault is unavailable");
@@ -613,7 +613,8 @@ export async function dailyDiscoveryContext({ sinceMs = 0 } = {}) {
  * @param {Record<string, any>} options
  */
 export async function saveDiscoveryIdea({ idea } = {}) {
-	if (!idea || typeof idea.title !== "string" || !idea.title.trim()) throw new Error("Idea title is required");
+	if (!idea || typeof idea.title !== "string" || !idea.title.trim())
+		throw new Error("Idea title is required");
 	const binding = await readKnowledgeBinding({ fresh: true });
 	if (!binding) throw new Error("No application knowledge Vault is bound");
 	const base =
@@ -671,7 +672,8 @@ export async function memoryRelatedKnowledge({ cwd = null, query = "", limit = 4
  * @param {Record<string, any>} options
  */
 export async function saveMemoryNote({ cwd, memory } = {}) {
-	if (!memory || typeof memory.title !== "string" || !memory.title.trim()) throw new Error("Memory title is required");
+	if (!memory || typeof memory.title !== "string" || !memory.title.trim())
+		throw new Error("Memory title is required");
 	const binding = await readKnowledgeBinding({ fresh: true });
 	if (!binding) throw new Error("No application knowledge Vault is bound");
 	const info = await projectAt(cwd);

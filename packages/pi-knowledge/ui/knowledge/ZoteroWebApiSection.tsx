@@ -1,7 +1,6 @@
 import type { ZoteroWebApiStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { Button } from "../api";
+import { Button, getKnowledgeApi } from "../api";
 import { useZoteroText } from "./zotero-copy";
 
 /**
@@ -72,7 +71,11 @@ export function ZoteroWebApiSection() {
 							.replace("{library}", library)
 							.replace("{hint}", status.keyHint ?? "")}
 					</p>
-					<Button size="sm" disabled={busy} onClick={() => void act(() => getKnowledgeApi().clearZoteroWebApi())}>
+					<Button
+						size="sm"
+						disabled={busy}
+						onClick={() => void act(() => getKnowledgeApi().clearZoteroWebApi())}
+					>
 						{t("webClear")}
 					</Button>
 				</div>

@@ -1,14 +1,14 @@
 import {
 	approveEvolutionCandidate,
 	approveKnowledgeReuse,
+	type ContractParentRef,
 	createEvolutionCandidate,
 	createKnowledgeReuseDecision,
+	type EvolutionCandidate,
+	type KnowledgeReuseDecisionRecord,
 	revokeEvolutionCandidate,
 	revokeKnowledgeReuse,
 	supersedeEvolutionCandidate,
-	type EvolutionCandidate,
-	type KnowledgeReuseDecisionRecord,
-	type ContractParentRef,
 } from "@gyoungwe/plugin-api/knowledge";
 
 export interface EvolutionIndexStore {
@@ -57,7 +57,11 @@ export class EvolutionIndex {
 		return [...this.candidates.values()];
 	}
 
-	async approveCandidate(id: string, approvalRef: ContractParentRef, now: string): Promise<EvolutionCandidate> {
+	async approveCandidate(
+		id: string,
+		approvalRef: ContractParentRef,
+		now: string,
+	): Promise<EvolutionCandidate> {
 		const candidate = this.requireCandidate(id);
 		const updated = approveEvolutionCandidate(candidate, approvalRef, now);
 		this.candidates.set(id, updated);
@@ -65,7 +69,11 @@ export class EvolutionIndex {
 		return updated;
 	}
 
-	async supersedeCandidate(id: string, supersedingRef: ContractParentRef, now: string): Promise<EvolutionCandidate> {
+	async supersedeCandidate(
+		id: string,
+		supersedingRef: ContractParentRef,
+		now: string,
+	): Promise<EvolutionCandidate> {
 		const candidate = this.requireCandidate(id);
 		const updated = supersedeEvolutionCandidate(candidate, supersedingRef, now);
 		this.candidates.set(id, updated);
@@ -73,7 +81,12 @@ export class EvolutionIndex {
 		return updated;
 	}
 
-	async revokeCandidate(id: string, revokedByRef: ContractParentRef, reason: string, now: string): Promise<EvolutionCandidate> {
+	async revokeCandidate(
+		id: string,
+		revokedByRef: ContractParentRef,
+		reason: string,
+		now: string,
+	): Promise<EvolutionCandidate> {
 		const candidate = this.requireCandidate(id);
 		const updated = revokeEvolutionCandidate(candidate, revokedByRef, reason, now);
 		this.candidates.set(id, updated);
@@ -81,7 +94,9 @@ export class EvolutionIndex {
 		return updated;
 	}
 
-	async recordReuseDecision(input: Parameters<typeof createKnowledgeReuseDecision>[0]): Promise<KnowledgeReuseDecisionRecord> {
+	async recordReuseDecision(
+		input: Parameters<typeof createKnowledgeReuseDecision>[0],
+	): Promise<KnowledgeReuseDecisionRecord> {
 		if (this.decisions.has(input.id)) throw new Error(`Reuse decision already exists: ${input.id}`);
 		const decision = createKnowledgeReuseDecision(input);
 		this.decisions.set(decision.id, decision);
@@ -97,7 +112,11 @@ export class EvolutionIndex {
 		return [...this.decisions.values()];
 	}
 
-	async approveReuse(id: string, approvalRef: ContractParentRef, now: string): Promise<KnowledgeReuseDecisionRecord> {
+	async approveReuse(
+		id: string,
+		approvalRef: ContractParentRef,
+		now: string,
+	): Promise<KnowledgeReuseDecisionRecord> {
 		const decision = this.requireDecision(id);
 		const updated = approveKnowledgeReuse(decision, approvalRef, now);
 		this.decisions.set(id, updated);
@@ -105,7 +124,11 @@ export class EvolutionIndex {
 		return updated;
 	}
 
-	async revokeReuse(id: string, revokedByRef: ContractParentRef, now: string): Promise<KnowledgeReuseDecisionRecord> {
+	async revokeReuse(
+		id: string,
+		revokedByRef: ContractParentRef,
+		now: string,
+	): Promise<KnowledgeReuseDecisionRecord> {
 		const decision = this.requireDecision(id);
 		const updated = revokeKnowledgeReuse(decision, revokedByRef, now);
 		this.decisions.set(id, updated);

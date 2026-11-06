@@ -1,12 +1,15 @@
 import type { KnowledgeIndexStatus, KnowledgeJob, KnowledgePage } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { COMPOSER_FOCUS_EVENT, useDraftStore } from "../api";
-import { useKnowledgeStore } from "../api";
-import { useSessionsStore } from "../api";
-import { useUiStore } from "../api";
-import { Button } from "../api";
-import { StatePanel } from "../api";
+import {
+	Button,
+	COMPOSER_FOCUS_EVENT,
+	getKnowledgeApi,
+	StatePanel,
+	useDraftStore,
+	useKnowledgeStore,
+	useSessionsStore,
+	useUiStore,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 export function KnowledgeMaintenance({
 	cwd,
@@ -73,7 +76,10 @@ export function KnowledgeMaintenance({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: nonce reloads persisted maintenance settings after an action
 	useEffect(() => {
 		let live = true;
-		void Promise.all([getKnowledgeApi().getKnowledgeMaintenanceSettings(), getKnowledgeApi().getKnowledgeMaintenanceRuns()])
+		void Promise.all([
+			getKnowledgeApi().getKnowledgeMaintenanceSettings(),
+			getKnowledgeApi().getKnowledgeMaintenanceRuns(),
+		])
 			.then(([settings, history]) => {
 				if (!live) return;
 				setAutomatic({ ...settings, model: settings.model ?? null });
@@ -229,7 +235,9 @@ export function KnowledgeMaintenance({
 										<button
 											type="button"
 											className="shrink-0 underline"
-											onClick={() => void getKnowledgeApi().openKnowledgeTarget({ cwd, path: item.id, revision })}
+											onClick={() =>
+												void getKnowledgeApi().openKnowledgeTarget({ cwd, path: item.id, revision })
+											}
 										>
 											{t("openTarget")}
 										</button>

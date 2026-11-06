@@ -1,7 +1,6 @@
 import type { ResearchRunDetail, ResearchRunListItem } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { RoadmapLane, roadmapStatus } from "../api";
+import { getKnowledgeApi, RoadmapLane, roadmapStatus } from "../api";
 import { useKnowledgeText } from "./copy";
 import { KnowledgeNoteViewer } from "./KnowledgeNoteViewer";
 

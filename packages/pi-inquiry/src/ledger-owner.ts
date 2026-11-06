@@ -8,13 +8,8 @@ import type {
 import { type Static, Type } from "typebox";
 import { Check } from "typebox/value";
 import { InquiryService } from "./service.js";
-import type {
-	createInquiryWasmEngine,
-	WasmInquiryStorage,
-} from "./wasm-storage.js";
-export type InquiryWasmEngine = Awaited<
-	ReturnType<typeof createInquiryWasmEngine>
->;
+import type { createInquiryWasmEngine, WasmInquiryStorage } from "./wasm-storage.js";
+export type InquiryWasmEngine = Awaited<ReturnType<typeof createInquiryWasmEngine>>;
 const sha = Type.String({ pattern: "^[a-f0-9]{64}$" }),
 	version = Type.Union([sha, Type.Null()]);
 const intentSchema = Type.Object(
@@ -22,11 +17,7 @@ const intentSchema = Type.Object(
 		previousVersion: version,
 		candidateVersion: sha,
 		operation: Type.String({ minLength: 1 }),
-		status: Type.Union([
-			Type.Literal("pending"),
-			Type.Literal("committed"),
-			Type.Literal("not-committed"),
-		]),
+		status: Type.Union([Type.Literal("pending"), Type.Literal("committed"), Type.Literal("not-committed")]),
 	},
 	{ additionalProperties: false },
 );
@@ -55,22 +46,14 @@ export function parseInquiryBinding(
 	workspaceId: string,
 ): InquiryBinding | null {
 	if (result.kind === "missing") return null;
-	if (
-		!Check(bindingSchema, result.value) ||
-		result.value.workspaceId !== workspaceId
-	)
+	if (!Check(bindingSchema, result.value) || result.value.workspaceId !== workspaceId)
 		throw new Error("Invalid Inquiry workspace binding");
 	return result.value;
 }
 export const inquiryBindingPath = () => "inquiry-binding.json";
 const bytes = (value: string) => new Uint8Array(Buffer.from(value, "base64"));
-const digest = (value: Uint8Array) =>
-	createHash("sha256").update(value).digest("hex");
-const sidecars = [
-	"ledger.sqlite-wal",
-	"ledger.sqlite-shm",
-	"ledger.sqlite-journal",
-];
+const digest = (value: Uint8Array) => createHash("sha256").update(value).digest("hex");
+const sidecars = ["ledger.sqlite-wal", "ledger.sqlite-shm", "ledger.sqlite-journal"];
 export class InquiryRecoveryRequired extends Error {
 	readonly code = "INQUIRY_NEEDS_RECOVERY";
 }
@@ -93,10 +76,9 @@ export class InquiryLedgerOwner {
 		const result = this.pending.then(() => {
 			if (this.stopped) throw new Error("Inquiry owner is disposed");
 			if (this.cleanupFailure)
-				throw new Error(
-					"Inquiry cleanup failed; explicit recovery is required",
-					{ cause: this.cleanupFailure },
-				);
+				throw new Error("Inquiry cleanup failed; explicit recovery is required", {
+					cause: this.cleanupFailure,
+				});
 			return operation();
 		});
 		this.pending = result.then(
@@ -111,8 +93,7 @@ export class InquiryLedgerOwner {
 				root: this.root.handle,
 				path,
 			})) as PluginBinaryStateReadResult;
-			if (value.kind !== "missing")
-				throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
+			if (value.kind !== "missing") throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
 		}
 		const raw = (await this.capabilities.call("state.readBinary", {
 			root: this.root.handle,
@@ -123,8 +104,7 @@ export class InquiryLedgerOwner {
 				root: this.root.handle,
 				path,
 			})) as PluginBinaryStateReadResult;
-			if (value.kind !== "missing")
-				throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
+			if (value.kind !== "missing") throw new Error(`Inquiry ledger has an active SQLite sidecar: ${path}`);
 		}
 		return raw;
 	}
@@ -156,9 +136,7 @@ export class InquiryLedgerOwner {
 	}
 	private async openCurrent(): Promise<WasmInquiryStorage> {
 		if (this.binding.value.intent?.status === "pending")
-			throw new InquiryRecoveryRequired(
-				"A prior Inquiry write requires explicit SHA reconciliation",
-			);
+			throw new InquiryRecoveryRequired("A prior Inquiry write requires explicit SHA reconciliation");
 		const raw = await this.readRaw();
 		if (raw.version !== this.binding.value.headVersion)
 			throw new InquiryRecoveryRequired(
@@ -172,16 +150,10 @@ export class InquiryLedgerOwner {
 		return this.current;
 	}
 	async snapshot() {
-		return this.serialize(async () =>
-			new InquiryService(await this.openCurrent()).readOnlyState(),
-		);
+		return this.serialize(async () => new InquiryService(await this.openCurrent()).readOnlyState());
 	}
-	async read<T>(
-		operation: (service: InquiryService) => Promise<T>,
-	): Promise<T> {
-		return this.serialize(async () =>
-			operation(new InquiryService(await this.openCurrent())),
-		);
+	async read<T>(operation: (service: InquiryService) => Promise<T>): Promise<T> {
+		return this.serialize(async () => operation(new InquiryService(await this.openCurrent())));
 	}
 	private async backup(raw: PluginBinaryStateReadResult): Promise<void> {
 		const original = this.binding.value.originalVersion;
@@ -193,15 +165,11 @@ export class InquiryLedgerOwner {
 		})) as PluginBinaryStateReadResult;
 		if (stored.kind === "value") {
 			if (stored.version !== original)
-				throw new InquiryRecoveryRequired(
-					"Original Inquiry backup bytes do not match their recorded SHA",
-				);
+				throw new InquiryRecoveryRequired("Original Inquiry backup bytes do not match their recorded SHA");
 			return;
 		}
 		if (raw.kind !== "value" || raw.version !== original)
-			throw new InquiryRecoveryRequired(
-				"Original Inquiry backup is missing after the ledger changed",
-			);
+			throw new InquiryRecoveryRequired("Original Inquiry backup is missing after the ledger changed");
 		const copied = (await this.capabilities.call("state.writeBinary", {
 			root: this.root.handle,
 			path,
@@ -212,18 +180,13 @@ export class InquiryLedgerOwner {
 		if (copied.kind !== "value" || copied.version !== original)
 			throw new Error("Original Inquiry backup did not read back");
 	}
-	private async withStaged<T>(
-		staged: WasmInquiryStorage,
-		operation: () => Promise<T>,
-	): Promise<T> {
+	private async withStaged<T>(staged: WasmInquiryStorage, operation: () => Promise<T>): Promise<T> {
 		const [result] = await Promise.allSettled([operation()]);
 		const [closed] = await Promise.allSettled([staged.close()]);
 		if (closed.status === "rejected") {
 			this.cleanupFailure = closed.reason;
 			throw new AggregateError(
-				result.status === "rejected"
-					? [result.reason, closed.reason]
-					: [closed.reason],
+				result.status === "rejected" ? [result.reason, closed.reason] : [closed.reason],
 				"Inquiry staged operation or cleanup failed; writer lease retained",
 			);
 		}
@@ -242,10 +205,7 @@ export class InquiryLedgerOwner {
 			const current = await this.openCurrent();
 			const raw = await this.readRaw();
 			signal.throwIfAborted();
-			const staged = this.engine.open(
-				this.binding.value.projectId,
-				await current.exportBytes(),
-			);
+			const staged = this.engine.open(this.binding.value.projectId, await current.exportBytes());
 			return this.withStaged(staged, async () => {
 				const result = await mutate(new InquiryService(staged));
 				signal.throwIfAborted();
@@ -276,13 +236,8 @@ export class InquiryLedgerOwner {
 					},
 					signal,
 				)) as PluginBinaryStateReadResult;
-				if (
-					committed.kind !== "value" ||
-					committed.version !== candidateVersion
-				)
-					throw new InquiryRecoveryRequired(
-						"Inquiry write has no verified candidate SHA readback",
-					);
+				if (committed.kind !== "value" || committed.version !== candidateVersion)
+					throw new InquiryRecoveryRequired("Inquiry write has no verified candidate SHA readback");
 				signal.throwIfAborted();
 				await this.writeBinding({
 					...this.binding.value,
@@ -300,8 +255,7 @@ export class InquiryLedgerOwner {
 			signal.throwIfAborted();
 			await this.reserve();
 			const intent = this.binding.value.intent;
-			if (intent?.status !== "pending")
-				return { state: "no-pending-write" as const };
+			if (intent?.status !== "pending") return { state: "no-pending-write" as const };
 			const raw = await this.readRaw();
 			const state =
 				raw.version === intent.candidateVersion
@@ -310,17 +264,12 @@ export class InquiryLedgerOwner {
 						? "not-committed"
 						: null;
 			if (!state)
-				throw new InquiryRecoveryRequired(
-					"Inquiry bytes match neither the previous nor the candidate SHA",
-				);
+				throw new InquiryRecoveryRequired("Inquiry bytes match neither the previous nor the candidate SHA");
 			if (
 				raw.kind === "value" &&
-				this.engine.inspect(bytes(raw.base64)).projectId !==
-					this.binding.value.projectId
+				this.engine.inspect(bytes(raw.base64)).projectId !== this.binding.value.projectId
 			)
-				throw new InquiryRecoveryRequired(
-					"Recovered Inquiry bytes belong to another project",
-				);
+				throw new InquiryRecoveryRequired("Recovered Inquiry bytes belong to another project");
 			signal.throwIfAborted();
 			await this.writeBinding({
 				...this.binding.value,
@@ -337,12 +286,9 @@ export class InquiryLedgerOwner {
 			signal.throwIfAborted();
 			await this.reserve();
 			if (this.binding.value.intent?.status === "pending")
-				throw new InquiryRecoveryRequired(
-					"Reconcile the pending write before restoring",
-				);
+				throw new InquiryRecoveryRequired("Reconcile the pending write before restoring");
 			const version = this.binding.value.originalVersion;
-			if (version === null)
-				throw new Error("This Inquiry ledger had no original SQLite file");
+			if (version === null) throw new Error("This Inquiry ledger had no original SQLite file");
 			const backup = (await this.capabilities.call("state.readBinary", {
 				root: this.root.handle,
 				path: `ledger.sqlite.pre-plugin-${version}.bak`,
@@ -350,15 +296,12 @@ export class InquiryLedgerOwner {
 			if (
 				backup.kind !== "value" ||
 				backup.version !== version ||
-				this.engine.inspect(bytes(backup.base64)).projectId !==
-					this.binding.value.projectId
+				this.engine.inspect(bytes(backup.base64)).projectId !== this.binding.value.projectId
 			)
 				throw new Error("Original Inquiry backup is missing or invalid");
 			const raw = await this.readRaw();
 			if (raw.version !== this.binding.value.headVersion)
-				throw new InquiryRecoveryRequired(
-					"Inquiry bytes changed before restore",
-				);
+				throw new InquiryRecoveryRequired("Inquiry bytes changed before restore");
 			const intent = {
 				previousVersion: raw.version,
 				candidateVersion: version,
@@ -379,9 +322,7 @@ export class InquiryLedgerOwner {
 				signal,
 			)) as PluginBinaryStateReadResult;
 			if (restored.kind !== "value" || restored.version !== version)
-				throw new InquiryRecoveryRequired(
-					"Original Inquiry restore has no SHA readback",
-				);
+				throw new InquiryRecoveryRequired("Original Inquiry restore has no SHA readback");
 			signal.throwIfAborted();
 			await this.writeBinding({
 				...this.binding.value,

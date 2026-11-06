@@ -12,9 +12,7 @@ const require = createRequire(import.meta.url),
 	projectId = "original-project";
 let engine: Awaited<ReturnType<typeof createInquiryWasmEngine>>;
 beforeAll(async () => {
-	engine = await createInquiryWasmEngine(
-		await readFile(require.resolve("sql.js/dist/sql-wasm.wasm")),
-	);
+	engine = await createInquiryWasmEngine(await readFile(require.resolve("sql.js/dist/sql-wasm.wasm")));
 });
 it("projects the same submitted compute receipt, terminal artifacts, attempts and decision associations into memory and canonical SQLite", async () => {
 	vi.useFakeTimers({ toFake: ["Date"] });
@@ -24,11 +22,7 @@ it("projects the same submitted compute receipt, terminal artifacts, attempts an
 	try {
 		for (const storage of [memory, sqlite]) {
 			const service = new InquiryService(storage),
-				projector = new InquiryEventProjector(
-					storage,
-					service,
-					(id) => id ?? "",
-				);
+				projector = new InquiryEventProjector(storage, service, (id) => id ?? "");
 			await projector.recordComputeEvent({
 				id: "submitted-event",
 				jobId: "job-1",
@@ -48,9 +42,7 @@ it("projects the same submitted compute receipt, terminal artifacts, attempts an
 				sessionId: "session-1",
 				turn: 2,
 				runProvenance: { workflow: "synthetic" },
-				artifacts: [
-					{ path: "runs/run-1/results.tsv", bytes: 8, sha256: digest },
-				],
+				artifacts: [{ path: "runs/run-1/results.tsv", bytes: 8, sha256: digest }],
 			});
 		}
 		expect(await sqlite.snapshot()).toEqual(await memory.snapshot());
@@ -86,9 +78,7 @@ it("projects terminal task and local receipts with original field semantics and 
 			status: "partial",
 			at: date,
 			projectId,
-			artifacts: [
-				{ path: "runs/task-run/output.txt", size: 4, sha256: digest },
-			],
+			artifacts: [{ path: "runs/task-run/output.txt", size: 4, sha256: digest }],
 		});
 		await projector.recordLocalExecution({
 			id: "local-run",

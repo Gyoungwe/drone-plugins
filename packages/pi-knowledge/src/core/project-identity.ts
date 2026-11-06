@@ -161,7 +161,9 @@ export async function readConfiguredProject(cwd: string): Promise<unknown> {
 }
 
 /** 读取工作区配置后解析项目身份。工具层传入 `sessionEntries: sessionEntriesOf(ctx)`。 */
-export async function resolveWorkspaceProject(input: Omit<ResolveProjectInput, "configured">): Promise<ProjectResolution> {
+export async function resolveWorkspaceProject(
+	input: Omit<ResolveProjectInput, "configured">,
+): Promise<ProjectResolution> {
 	return resolveProjectIdentity({ ...input, configured: await readConfiguredProject(input.cwd) });
 }
 

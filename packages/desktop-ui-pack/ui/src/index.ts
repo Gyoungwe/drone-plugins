@@ -4,7 +4,9 @@
  * the host instance; public package imports provide types only.
  */
 type DroneUiRuntime = {
-	React: { createElement: (type: unknown, props: Record<string, unknown> | null, ...children: unknown[]) => unknown };
+	React: {
+		createElement: (type: unknown, props: Record<string, unknown> | null, ...children: unknown[]) => unknown;
+	};
 	hooks: { useLanguage: () => "zh" | "en" };
 };
 

@@ -1,12 +1,4 @@
-import {
-	mkdir,
-	mkdtemp,
-	readFile,
-	readdir,
-	realpath,
-	rm,
-	writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,9 +19,7 @@ const answer = {
 };
 
 beforeEach(async () => {
-	root = await realpath(
-		await mkdtemp(join(tmpdir(), "specialist-delivery-owners-")),
-	);
+	root = await realpath(await mkdtemp(join(tmpdir(), "specialist-delivery-owners-")));
 });
 afterEach(async () => {
 	vi.unstubAllEnvs();
@@ -96,15 +86,9 @@ describe("specialist delivery owners", () => {
 				producer: "knowledge-explainer",
 				skill: "show-me",
 			});
-			expect(receipt.result_file.startsWith(`${item.runDir}/show-me-`)).toBe(
-				true,
-			);
+			expect(receipt.result_file.startsWith(`${item.runDir}/show-me-`)).toBe(true);
 			expect(await readFile(receipt.result_file, "utf8")).toBe(html);
-			expect(item.evidenceReceipts).toHaveBeenCalledWith(
-				item.context.ticket,
-				root,
-				answer.data.source_paths,
-			);
+			expect(item.evidenceReceipts).toHaveBeenCalledWith(item.context.ticket, root, answer.data.source_paths);
 			expect(item.publish).toHaveBeenCalledOnce();
 			expect(item.publish).toHaveBeenCalledWith(
 				expect.objectContaining({
@@ -130,9 +114,7 @@ describe("specialist delivery owners", () => {
 				{ runDir: b.runDir, topicId: "topic", answer },
 			),
 		).rejects.toThrow("Knowledge binding changed");
-		a.evidenceReceipts.mockRejectedValueOnce(
-			new Error("Evidence ticket revoked"),
-		);
+		a.evidenceReceipts.mockRejectedValueOnce(new Error("Evidence ticket revoked"));
 		await expect(
 			a.delivery.saveSpecialistExplainer(
 				a.context,

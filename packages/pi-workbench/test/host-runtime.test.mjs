@@ -20,7 +20,11 @@ function harness(access = "read-write", stored = { kind: "missing", version: nul
 				throw new Error(`unexpected capability ${name}`);
 			},
 		},
-		events: { changed() { calls.push({ name: "changed" }); } },
+		events: {
+			changed() {
+				calls.push({ name: "changed" });
+			},
+		},
 	};
 	return { context, calls, getState: () => state };
 }
@@ -43,12 +47,20 @@ test("restores a persisted snapshot and rejects persistence without a write gran
 	const stored = {
 		kind: "value",
 		version: "v1",
-		value: { tasks: [{ id: "task-1", content: "Existing", state: "completed", updatedAt: "2026-01-01T00:00:00.000Z" }], memory: [] },
+		value: {
+			tasks: [
+				{ id: "task-1", content: "Existing", state: "completed", updatedAt: "2026-01-01T00:00:00.000Z" },
+			],
+			memory: [],
+		},
 	};
 	const fixture = harness("read", stored);
 	const runtime = await createWorkbenchRuntime(fixture.context);
 	assert.equal((await runtime.operations.status.execute({}, fixture.context)).tasks[0].id, "task-1");
-	await assert.rejects(() => runtime.operations.persist.execute({}, fixture.context), /read-write state grant/);
+	await assert.rejects(
+		() => runtime.operations.persist.execute({}, fixture.context),
+		/read-write state grant/,
+	);
 });
 
 test("honors cancellation on an individual runtime call", async () => {
@@ -56,5 +68,8 @@ test("honors cancellation on an individual runtime call", async () => {
 	const runtime = await createWorkbenchRuntime(fixture.context);
 	const controller = new AbortController();
 	controller.abort();
-	await assert.rejects(() => runtime.operations.status.execute({}, { ...fixture.context, signal: controller.signal }), /disposed/);
+	await assert.rejects(
+		() => runtime.operations.status.execute({}, { ...fixture.context, signal: controller.signal }),
+		/disposed/,
+	);
 });

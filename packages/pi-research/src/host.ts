@@ -1,4 +1,4 @@
-export * from "./core/research-delivery.js";
+export * as claimBindings from "./core/claim-bindings.js";
 /** Research domain implementation. Hosts inject workspace, project, authorization and transport ports. */
 export {
 	CLAIM_BINDING_SCHEMA,
@@ -9,6 +9,7 @@ export {
 	claimBindingRefs,
 	validateClaimBindings,
 } from "./core/claim-bindings.js";
+export * as institutionalAccess from "./core/institutional-access.js";
 export {
 	detectAndSaveTemplateFromUrl,
 	emptyInstitutionalConfig,
@@ -21,10 +22,12 @@ export {
 	normalizeInstitutionalConfig,
 	saveInstitutionalConfig,
 } from "./core/institutional-access.js";
+export * as institutionalProxy from "./core/institutional-proxy.js";
 export {
 	buildProxiedUrl,
 	inferEzproxyTemplateFromUrl,
 } from "./core/institutional-proxy.js";
+export * as literatureOperations from "./core/literature-operations.js";
 export {
 	createLiteratureOperations,
 	type DestinationRecovery,
@@ -41,6 +44,7 @@ export {
 	literatureOperationId,
 	type ZoteroWriteReceipt,
 } from "./core/literature-operations.js";
+export * as literatureReceipt from "./core/literature-receipt.js";
 export {
 	exactDoiItems,
 	type LiteratureItem,
@@ -49,6 +53,7 @@ export {
 	normalizeDoi,
 	verifyLiteratureReceipt,
 } from "./core/literature-receipt.js";
+export * as openAccess from "./core/open-access.js";
 export {
 	contactEmail,
 	normalizePmcid,
@@ -64,11 +69,13 @@ export {
 	pmcCloudHttps,
 	resolveOpenAccess,
 } from "./core/open-access.js";
+export * as receiptJournal from "./core/receipt-journal.js";
 export {
 	createResearchReceiptJournal,
 	type ResearchJournalPorts,
 	type ResearchJournalWorkspace,
 } from "./core/receipt-journal.js";
+export * as receiptJournalPolicy from "./core/receipt-journal-policy.js";
 export {
 	CORE_RESEARCH_RECEIPT_TOOLS,
 	type CoreResearchReceiptTool,
@@ -79,18 +86,22 @@ export {
 	receiptBelongsToRun,
 	shouldRecordResearchReceipt,
 } from "./core/receipt-journal-policy.js";
+export * from "./core/research-delivery.js";
+export * as researchLoop from "./core/research-loop.js";
 export {
 	createResearchLoop,
 	RESEARCH_STAGES,
 	type ResearchLoopPorts,
 	type ResearchLoopWorkspace,
 } from "./core/research-loop.js";
+export * as researchRunUi from "./core/research-run-ui.js";
 export {
 	getResearchRun,
 	listResearchRuns,
 	type ResearchRunUiDetailInput,
 	type ResearchRunUiListInput,
 } from "./core/research-run-ui.js";
+export * as runProvenance from "./core/run-provenance.js";
 export {
 	type ExecutionReceiptInput,
 	observeExecutionReceipt,
@@ -99,16 +110,20 @@ export {
 	type RunProvenanceInput,
 	type RunProvenanceManifest,
 	type RunProvenanceResult,
+	readMethodsFacts,
 	recordRunProvenance,
+	saveMethodsSection,
 	type WorkspaceConfig,
 	type WorkspaceConfigLoader,
 } from "./core/run-provenance.js";
+export * as sourceArchive from "./core/source-archive.js";
 export {
 	archiveSource,
 	type SourceArchivePorts,
 	type SourceArchiveWorkspace,
 	sourceStatus,
 } from "./core/source-archive.js";
+export * as sourceArchivePolicy from "./core/source-archive-policy.js";
 export {
 	type CloudflareAskCopy,
 	type ContentValidation,
@@ -127,7 +142,9 @@ export {
 	validateContent,
 	validateRunDir,
 } from "./core/source-archive-policy.js";
+export * as sourceDelivery from "./core/source-delivery.js";
 export {
+	assessManualPage,
 	type DeliveryContract,
 	deliveryContract,
 	hasPaperCitation,
@@ -135,6 +152,7 @@ export {
 	RESEARCH_ANSWER_GUIDANCE,
 	requiresPaperEvidence,
 } from "./core/source-delivery.js";
+export * as zoteroIdentity from "./core/zotero-identity.js";
 export {
 	findZoteroItemsByIdentity,
 	isValidZoteroDoi,
@@ -147,6 +165,9 @@ export {
 	type ZoteroIdentityQuery,
 	zoteroItemDoi,
 } from "./core/zotero-identity.js";
+export * as zoteroLibrary from "./core/zotero-library.js";
+export { zoteroLibraryEnvValue, zoteroLibraryPath } from "./core/zotero-library.js";
+export * as zoteroReconcile from "./core/zotero-reconcile.js";
 export {
 	lookupZoteroByDoi,
 	type ZoteroListResponse,
@@ -154,11 +175,13 @@ export {
 	type ZoteroReconcileContext,
 	type ZoteroReconcileExpectation,
 } from "./core/zotero-reconcile.js";
+export * as zoteroReconcileRuntime from "./core/zotero-reconcile-runtime.js";
 export {
 	createCompositeZoteroReconciler,
 	createLocalZoteroReconciler,
 	createZoteroReconciler,
 } from "./core/zotero-reconcile-runtime.js";
+export * as zoteroSetup from "./core/zotero-setup.js";
 export {
 	mergeZoteroMcpConfig,
 	readZoteroMcpConfig,
@@ -168,6 +191,7 @@ export {
 	type ZoteroSetupStatus,
 	zoteroMcpSpec,
 } from "./core/zotero-setup.js";
+export * as zoteroSetupRuntime from "./core/zotero-setup-runtime.js";
 export {
 	bootstrapZotero,
 	inspectZotero,
@@ -181,6 +205,7 @@ export {
 	setupZoteroAgentMessage,
 	uvBootstrapCommand,
 } from "./core/zotero-setup-runtime.js";
+export * as zoteroWrite from "./core/zotero-write.js";
 export {
 	type ConnectorZoteroItem,
 	connectorTargetId,
@@ -197,15 +222,20 @@ export {
 	type ZoteroCreator,
 	type ZoteroWriteInput,
 } from "./core/zotero-write.js";
+export * as zoteroWriteRuntime from "./core/zotero-write-runtime.js";
 export {
 	connectorSaveTarget,
 	describeZoteroSavePlan,
+	describeZoteroUpdatePlan,
 	executeZoteroSave,
+	executeZoteroUpdate,
 	localApiChildren,
 	localApiSearchByDoi,
 	localServerId,
 	prepareZoteroSave,
+	prepareZoteroUpdate,
 	probeZoteroConnector,
+	receiptWithoutUpdate,
 	receiptWithoutWrite,
 	webChildren,
 	webCreateItems,
@@ -214,70 +244,12 @@ export {
 	zoteroLocalWriteConfig,
 	zoteroWebApiConfig,
 } from "./core/zotero-write-runtime.js";
-export * as claimBindings from "./core/claim-bindings.js";
-export * as institutionalAccess from "./core/institutional-access.js";
-export * as institutionalProxy from "./core/institutional-proxy.js";
-export * as literatureOperations from "./core/literature-operations.js";
-export * as literatureReceipt from "./core/literature-receipt.js";
-export * as openAccess from "./core/open-access.js";
-export * as receiptJournalPolicy from "./core/receipt-journal-policy.js";
-export * as receiptJournal from "./core/receipt-journal.js";
-export * as researchLoop from "./core/research-loop.js";
-export * as researchRunUi from "./core/research-run-ui.js";
-export * as runProvenance from "./core/run-provenance.js";
-export * as sourceArchivePolicy from "./core/source-archive-policy.js";
-export * as sourceArchive from "./core/source-archive.js";
-export * as sourceDelivery from "./core/source-delivery.js";
-export * as zoteroIdentity from "./core/zotero-identity.js";
-export * as zoteroLibrary from "./core/zotero-library.js";
-export * as zoteroReconcileRuntime from "./core/zotero-reconcile-runtime.js";
-export * as zoteroReconcile from "./core/zotero-reconcile.js";
-export * as zoteroSetupRuntime from "./core/zotero-setup-runtime.js";
-export * as zoteroSetup from "./core/zotero-setup.js";
-export * as zoteroWriteRuntime from "./core/zotero-write-runtime.js";
-export * as zoteroWrite from "./core/zotero-write.js";
-
-export { registerResearchExtension, type ResearchExtensionPorts, type ResearchExtensionHandle } from "./extension.js";
-export { readMethodsFacts, saveMethodsSection } from "./core/run-provenance.js";
-export { assessManualPage } from "./core/source-delivery.js";
-export { zoteroLibraryEnvValue, zoteroLibraryPath } from "./core/zotero-library.js";
-export { describeZoteroUpdatePlan, executeZoteroUpdate, prepareZoteroUpdate, receiptWithoutUpdate } from "./core/zotero-write-runtime.js";
 export * from "./evidence-gate.js";
 export {
-	createResearchHost,
-	registerResearchHost,
-	researchHostLoader,
-	type ResearchFileEntry,
-	type ResearchHostAdapter,
-	type ResearchHostLoader,
-	type ResearchHostOperations,
-	type ResearchHostPort,
-	type ResearchHostRegistry,
-	type ResearchResolvedRoot,
-	type ResearchRunListInput,
-	type ResearchRunListResult,
-	type ResearchRunStatusInput,
-	type ResearchRunSummary,
-} from "./research-host.js";
-export {
-	createZoteroConnectorHost,
-	createZoteroHost,
-	registerZoteroConnectorHost,
-	registerZoteroHost,
-	zoteroHostLoader,
-	type ZoteroHostAdapter,
-	type ZoteroConnectorHostPort,
-	type ZoteroHostLoader,
-	type ZoteroHostOperations,
-	type ZoteroHostPort,
-	type ZoteroHostRegistry,
-} from "./zotero-host.js";
-
-export {
-	createResearchConnectorHostLoader,
-	researchConnectorHostLoader,
-	researchWriteAdapterHostLoader,
-} from "./research-host.js";
+	type ResearchExtensionHandle,
+	type ResearchExtensionPorts,
+	registerResearchExtension,
+} from "./extension.js";
 export type {
 	ResearchConnectorContext,
 	ResearchConnectorDescriptor,
@@ -293,3 +265,35 @@ export type {
 	ResearchSearchRequest,
 	ResearchSearchResponse,
 } from "./research-host.js";
+export {
+	createResearchConnectorHostLoader,
+	createResearchHost,
+	type ResearchFileEntry,
+	type ResearchHostAdapter,
+	type ResearchHostLoader,
+	type ResearchHostOperations,
+	type ResearchHostPort,
+	type ResearchHostRegistry,
+	type ResearchResolvedRoot,
+	type ResearchRunListInput,
+	type ResearchRunListResult,
+	type ResearchRunStatusInput,
+	type ResearchRunSummary,
+	registerResearchHost,
+	researchConnectorHostLoader,
+	researchHostLoader,
+	researchWriteAdapterHostLoader,
+} from "./research-host.js";
+export {
+	createZoteroConnectorHost,
+	createZoteroHost,
+	registerZoteroConnectorHost,
+	registerZoteroHost,
+	type ZoteroConnectorHostPort,
+	type ZoteroHostAdapter,
+	type ZoteroHostLoader,
+	type ZoteroHostOperations,
+	type ZoteroHostPort,
+	type ZoteroHostRegistry,
+	zoteroHostLoader,
+} from "./zotero-host.js";

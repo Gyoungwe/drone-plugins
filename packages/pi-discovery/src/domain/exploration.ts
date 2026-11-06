@@ -39,18 +39,9 @@ export class ExplorationBudgetError extends Error {
 	readonly code = "exploration-budget-exceeded";
 }
 function validateBudget(budget: DiscoveryExplorationBudget): void {
-	assertValid(
-		boundedInteger(budget.maxExecutions, 1, 1_000_000),
-		"maxExecutions is invalid",
-	);
-	assertValid(
-		boundedInteger(budget.maxWallTimeMs, 1, 365 * 24 * 60 * 60_000),
-		"maxWallTimeMs is invalid",
-	);
-	assertValid(
-		boundedInteger(budget.maxOutputBytes, 1, Number.MAX_SAFE_INTEGER),
-		"maxOutputBytes is invalid",
-	);
+	assertValid(boundedInteger(budget.maxExecutions, 1, 1_000_000), "maxExecutions is invalid");
+	assertValid(boundedInteger(budget.maxWallTimeMs, 1, 365 * 24 * 60 * 60_000), "maxWallTimeMs is invalid");
+	assertValid(boundedInteger(budget.maxOutputBytes, 1, Number.MAX_SAFE_INTEGER), "maxOutputBytes is invalid");
 	assertValid(positiveFinite(budget.maxCostUnits), "maxCostUnits is invalid");
 }
 function validatePrior(prior: QuestionPrior): void {
@@ -60,15 +51,9 @@ function validatePrior(prior: QuestionPrior): void {
 		"prior direction is invalid",
 	);
 	if (prior.magnitude !== undefined)
-		assertValid(
-			finiteNonNegative(prior.magnitude),
-			"prior magnitude is invalid",
-		);
+		assertValid(finiteNonNegative(prior.magnitude), "prior magnitude is invalid");
 	if (prior.confidence !== undefined)
-		assertValid(
-			prior.confidence >= 0 && prior.confidence <= 1,
-			"prior confidence is invalid",
-		);
+		assertValid(prior.confidence >= 0 && prior.confidence <= 1, "prior confidence is invalid");
 }
 export function createExplorationMilestone(input: {
 	readonly id: string;
@@ -110,14 +95,8 @@ export class ExplorationBudgetLedger {
 			boundedInteger(input.executions, 0, this.budget.maxExecutions),
 			"usage executions are invalid",
 		);
-		assertValid(
-			finiteNonNegative(input.wallTimeMs),
-			"usage wall time is invalid",
-		);
-		assertValid(
-			finiteNonNegative(input.outputBytes),
-			"usage output bytes is invalid",
-		);
+		assertValid(finiteNonNegative(input.wallTimeMs), "usage wall time is invalid");
+		assertValid(finiteNonNegative(input.outputBytes), "usage output bytes is invalid");
 		assertValid(finiteNonNegative(input.costUnits), "usage cost is invalid");
 		const next = {
 			executions: this.current.executions + input.executions,
@@ -136,52 +115,28 @@ export class ExplorationBudgetLedger {
 		return this.usage;
 	}
 }
-export function computeSurprise(
-	prior: QuestionPrior,
-	posterior: QuestionPosterior,
-): number {
+export function computeSurprise(prior: QuestionPrior, posterior: QuestionPosterior): number {
 	validatePrior(prior);
-	assertValid(
-		posterior && isoDate(posterior.recordedAt),
-		"posterior timestamp is invalid",
-	);
-	assertValid(
-		Date.parse(posterior.recordedAt) >= Date.parse(prior.recordedAt),
-		"posterior predates prior",
-	);
+	assertValid(posterior && isoDate(posterior.recordedAt), "posterior timestamp is invalid");
+	assertValid(Date.parse(posterior.recordedAt) >= Date.parse(prior.recordedAt), "posterior predates prior");
 	if (posterior.magnitude !== undefined)
-		assertValid(
-			finiteNonNegative(posterior.magnitude),
-			"posterior magnitude is invalid",
-		);
+		assertValid(finiteNonNegative(posterior.magnitude), "posterior magnitude is invalid");
 	if (posterior.confidence !== undefined)
-		assertValid(
-			posterior.confidence >= 0 && posterior.confidence <= 1,
-			"posterior confidence is invalid",
-		);
+		assertValid(posterior.confidence >= 0 && posterior.confidence <= 1, "posterior confidence is invalid");
 	const directionChange =
-		posterior.direction &&
-		posterior.direction !== "unknown" &&
-		posterior.direction !== prior.direction
+		posterior.direction && posterior.direction !== "unknown" && posterior.direction !== prior.direction
 			? 0.5
 			: 0;
 	const magnitudeChange = Math.min(
 		1,
-		Math.abs(
-			(posterior.magnitude ?? prior.magnitude ?? 0) - (prior.magnitude ?? 0),
-		) / Math.max(1, Math.abs(prior.magnitude ?? 0)),
+		Math.abs((posterior.magnitude ?? prior.magnitude ?? 0) - (prior.magnitude ?? 0)) /
+			Math.max(1, Math.abs(prior.magnitude ?? 0)),
 	);
 	const confidenceChange = Math.min(
 		1,
-		Math.abs(
-			(posterior.confidence ?? prior.confidence ?? 0.5) -
-				(prior.confidence ?? 0.5),
-		),
+		Math.abs((posterior.confidence ?? prior.confidence ?? 0.5) - (prior.confidence ?? 0.5)),
 	);
-	return Math.min(
-		1,
-		directionChange + magnitudeChange * 0.35 + confidenceChange * 0.15,
-	);
+	return Math.min(1, directionChange + magnitudeChange * 0.35 + confidenceChange * 0.15);
 }
 export interface ExplorationCandidate {
 	readonly id: string;
@@ -196,18 +151,12 @@ export function rankExplorationCandidates(
 ): readonly ExplorationCandidate[] {
 	for (const candidate of candidates) {
 		assertValid(safeId(candidate.id), "candidate id is invalid");
-		assertValid(
-			nonEmptyText(candidate.statement, 10_000),
-			"candidate statement is invalid",
-		);
+		assertValid(nonEmptyText(candidate.statement, 10_000), "candidate statement is invalid");
 		assertValid(
 			finiteNonNegative(candidate.surprise) && candidate.surprise <= 1,
 			"candidate surprise is invalid",
 		);
-		assertValid(
-			positiveFinite(candidate.estimatedCost),
-			"candidate cost is invalid",
-		);
+		assertValid(positiveFinite(candidate.estimatedCost), "candidate cost is invalid");
 		assertValid(
 			finiteNonNegative(candidate.expectedExplanationsExcluded),
 			"candidate discrimination is invalid",
@@ -219,17 +168,12 @@ export function rankExplorationCandidates(
 	}
 	return [...candidates].sort(
 		(a, b) =>
-			b.expectedExplanationsExcluded / b.estimatedCost -
-				a.expectedExplanationsExcluded / a.estimatedCost ||
+			b.expectedExplanationsExcluded / b.estimatedCost - a.expectedExplanationsExcluded / a.estimatedCost ||
 			b.surprise - a.surprise ||
 			a.id.localeCompare(b.id),
 	);
 }
-export type ExplanationKind =
-	| "biological"
-	| "technical"
-	| "sampling"
-	| "procedural";
+export type ExplanationKind = "biological" | "technical" | "sampling" | "procedural";
 export interface CompetitiveExplanation {
 	readonly id: string;
 	readonly statement: string;
@@ -237,9 +181,7 @@ export interface CompetitiveExplanation {
 	readonly plausibility: number;
 	readonly testIds: readonly string[];
 }
-export function generateCompetitiveExplanations(
-	anomaly: string,
-): readonly CompetitiveExplanation[] {
+export function generateCompetitiveExplanations(anomaly: string): readonly CompetitiveExplanation[] {
 	assertValid(nonEmptyText(anomaly, 10_000), "anomaly is required");
 	return [
 		{
@@ -269,23 +211,17 @@ export function validateCompetitiveExplanations(
 	explanations: readonly CompetitiveExplanation[],
 ): readonly string[] {
 	const errors: string[] = [];
-	if (explanations.length < 3)
-		errors.push("at least three competing explanations are required");
+	if (explanations.length < 3) errors.push("at least three competing explanations are required");
 	if (!explanations.some((item) => item.kind === "technical"))
 		errors.push("a technical explanation is required");
 	const ids = new Set<string>();
 	for (const explanation of explanations) {
-		if (!safeId(explanation.id))
-			errors.push(`invalid explanation id: ${explanation.id}`);
-		if (ids.has(explanation.id))
-			errors.push(`duplicate explanation id: ${explanation.id}`);
+		if (!safeId(explanation.id)) errors.push(`invalid explanation id: ${explanation.id}`);
+		if (ids.has(explanation.id)) errors.push(`duplicate explanation id: ${explanation.id}`);
 		ids.add(explanation.id);
 		if (!nonEmptyText(explanation.statement, 10_000))
 			errors.push(`invalid explanation statement: ${explanation.id}`);
-		if (
-			!finiteNonNegative(explanation.plausibility) ||
-			explanation.plausibility > 1
-		)
+		if (!finiteNonNegative(explanation.plausibility) || explanation.plausibility > 1)
 			errors.push(`invalid plausibility: ${explanation.id}`);
 	}
 	return [...new Set(errors)];
@@ -297,29 +233,17 @@ export interface DiscriminatingTest {
 	readonly estimatedCost: number;
 	readonly description: string;
 }
-export function rankDiscriminatingTests(
-	tests: readonly DiscriminatingTest[],
-): readonly DiscriminatingTest[] {
+export function rankDiscriminatingTests(tests: readonly DiscriminatingTest[]): readonly DiscriminatingTest[] {
 	for (const test of tests) {
 		assertValid(safeId(test.id), "test id is invalid");
-		assertValid(
-			test.explanationIds.length > 0,
-			"test must target an explanation",
-		);
-		assertValid(
-			finiteNonNegative(test.expectedExplanationsExcluded),
-			"test discrimination is invalid",
-		);
+		assertValid(test.explanationIds.length > 0, "test must target an explanation");
+		assertValid(finiteNonNegative(test.expectedExplanationsExcluded), "test discrimination is invalid");
 		assertValid(positiveFinite(test.estimatedCost), "test cost is invalid");
-		assertValid(
-			nonEmptyText(test.description, 10_000),
-			"test description is invalid",
-		);
+		assertValid(nonEmptyText(test.description, 10_000), "test description is invalid");
 	}
 	return [...tests].sort(
 		(a, b) =>
-			b.expectedExplanationsExcluded / b.estimatedCost -
-				a.expectedExplanationsExcluded / a.estimatedCost ||
+			b.expectedExplanationsExcluded / b.estimatedCost - a.expectedExplanationsExcluded / a.estimatedCost ||
 			a.id.localeCompare(b.id),
 	);
 }
@@ -333,9 +257,7 @@ export interface DiscoveryLedgerInput {
 	readonly explanations: readonly CompetitiveExplanation[];
 	readonly testsPlanned: readonly string[];
 	readonly attemptId: string;
-	readonly parameters?: Readonly<
-		Record<string, string | number | boolean | null>
-	>;
+	readonly parameters?: Readonly<Record<string, string | number | boolean | null>>;
 	readonly artifactIds?: readonly string[];
 }
 export async function recordDiscoveryToInquiry(
@@ -364,9 +286,7 @@ export async function recordDiscoveryToInquiry(
 					surprise: computeSurprise(input.prior, input.posterior),
 				}
 			: {}),
-		competingExplanations: input.explanations.map(
-			(item) => `${item.kind}: ${item.statement}`,
-		),
+		competingExplanations: input.explanations.map((item) => `${item.kind}: ${item.statement}`),
 		testsDone: [],
 		testsPlanned: input.testsPlanned,
 		status: "open",

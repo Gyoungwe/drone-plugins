@@ -58,17 +58,13 @@ describe("delivery presentation", () => {
 		});
 	});
 	it("does not offer continuation while the agent is running", () => {
-		expect(
-			taskDeliveryPresentation(task({ state: "partial" }), true),
-		).toMatchObject({
+		expect(taskDeliveryPresentation(task({ state: "partial" }), true)).toMatchObject({
 			label: "执行中",
 			canContinue: false,
 		});
 	});
 	it("does not infer completion from zero milestones", () => {
-		expect(
-			taskDeliveryPresentation(task({ state: "partial" }), false).canContinue,
-		).toBe(true);
+		expect(taskDeliveryPresentation(task({ state: "partial" }), false).canContinue).toBe(true);
 	});
 	it("keeps unknown operations visible even when every milestone passed", () => {
 		const value = taskDeliveryPresentation(
@@ -84,18 +80,13 @@ describe("delivery presentation", () => {
 	});
 	it("preserves cancelled and archived states", () => {
 		for (const state of ["cancelled", "archived"] as const)
-			expect(
-				taskDeliveryPresentation(task({ state, milestones: accepted }), false)
-					.canContinue,
-			).toBe(false);
+			expect(taskDeliveryPresentation(task({ state, milestones: accepted }), false).canContinue).toBe(false);
 	});
 });
 
 describe("流内工作台卡的取舍", () => {
 	it("纯进度任务不进流：一个任务跑一趟会刷出十几份 revision，全渲染就是刷屏", () => {
-		expect(
-			tasksForTranscript(view([task({ state: "running", stage: 3 })])),
-		).toEqual([]);
+		expect(tasksForTranscript(view([task({ state: "running", stage: 3 })]))).toEqual([]);
 		expect(tasksForTranscript(view([task({ state: "pending" })]))).toEqual([]);
 	});
 
@@ -151,12 +142,7 @@ describe("流内工作台卡的取舍", () => {
 	});
 
 	it("终态不再占用流：完成与否属于状态，侧栏常驻可查", () => {
-		for (const state of [
-			"completed",
-			"cancelled",
-			"archived",
-			"partial",
-		] as const) {
+		for (const state of ["completed", "cancelled", "archived", "partial"] as const) {
 			expect(tasksForTranscript(view([task({ state })]))).toEqual([]);
 		}
 	});
@@ -176,23 +162,15 @@ describe("流内工作台卡的取舍", () => {
 		});
 		expect(tasksForTranscript(view([review]))).toEqual([review]);
 		expect(
-			tasksForTranscript(
-				view([{ ...review, actions: [{ ...action, state: "acknowledged" }] }]),
-			),
+			tasksForTranscript(view([{ ...review, actions: [{ ...action, state: "acknowledged" }] }])),
 		).toEqual([]);
 	});
 
 	it("等用户拍板的也不进流：决策走 ask_user 弹窗，不靠一张要自己去找的卡", () => {
 		expect(tasksForTranscript(view([task({ state: "blocked" })]))).toEqual([]);
-		expect(tasksForTranscript(view([task({ state: "waiting_user" })]))).toEqual(
-			[],
-		);
+		expect(tasksForTranscript(view([task({ state: "waiting_user" })]))).toEqual([]);
 		expect(
-			tasksForTranscript(
-				view([
-					task({ authorizationRequired: true, executionConsent: undefined }),
-				]),
-			),
+			tasksForTranscript(view([task({ authorizationRequired: true, executionConsent: undefined })])),
 		).toEqual([]);
 	});
 
@@ -258,9 +236,7 @@ describe("task decision card", () => {
 		expect(decision.cannotComplete).toContain("不能替你勾完成");
 		expect(decision.details.join("\n")).toContain("stage-budget");
 		expect(decision.details.join("\n")).toContain("read · returned");
-		expect(tasksForDecision(view([task({ state: "running" })]))[0]?.id).toBe(
-			"t1",
-		);
+		expect(tasksForDecision(view([task({ state: "running" })]))[0]?.id).toBe("t1");
 	});
 	it("offers completion only for an open human-review deliverable, then collapses", () => {
 		const open = taskDecision(
@@ -280,17 +256,13 @@ describe("task decision card", () => {
 		);
 		expect(open.canComplete).toBe(true);
 		expect(open.completeActionId).toBe("review-1");
-		const quiet = taskDecision(
-			task({ goal: "配置并验证 Zotero 文献读取能力", state: "partial" }),
-		);
+		const quiet = taskDecision(task({ goal: "配置并验证 Zotero 文献读取能力", state: "partial" }));
 		expect(quiet.mode).toBe("line");
 		expect(quiet.line).toBe("配置并验证 Zotero 文献读取能力 · 还在做");
 		expect(quiet.canDefer).toBe(false);
-		expect(
-			taskDecision(
-				task({ goal: "配置并验证 Zotero 文献读取能力", state: "cancelled" }),
-			).line,
-		).toContain("已结束");
+		expect(taskDecision(task({ goal: "配置并验证 Zotero 文献读取能力", state: "cancelled" })).line).toContain(
+			"已结束",
+		);
 	});
 	it("english copy stays on the same facts", () => {
 		const decision = taskDecision(

@@ -1,11 +1,7 @@
 import { getKnowledgeApi, useKnowledgeStore } from "../api";
 import { KnowledgeLinksView } from "./KnowledgeLinksView";
 /** UI v1 navigation adapter; remove after all full-page consumers move to runtime v2. */
-export function openKnowledgeNote(
-	cwd: string | null,
-	path: string,
-	revision: number,
-) {
+export function openKnowledgeNote(cwd: string | null, path: string, revision: number) {
 	const store = useKnowledgeStore.getState();
 	store.open({
 		cwd,

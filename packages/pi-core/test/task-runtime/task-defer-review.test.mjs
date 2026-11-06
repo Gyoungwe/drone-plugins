@@ -1,6 +1,6 @@
-import { it } from "./scoped-test.mjs";
 import { expect } from "vitest";
 import { createTaskWorkbench, LIMITS } from "./fixture.mjs";
+import { it } from "./scoped-test.mjs";
 
 function setup() {
 	const j = createTaskWorkbench({ requireAuthorization: true, persist: () => undefined });

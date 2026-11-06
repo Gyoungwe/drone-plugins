@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { build } from "esbuild";
 
@@ -21,7 +21,12 @@ const artifactOutputs = [
 	"lib/knowledge/runtime/desktop-index.mjs",
 	"lib/knowledge/runtime/worker.mjs",
 ];
-const outputs = [...artifactOutputs, "lib/knowledge/runtime/.knowledge-worker-manifest.json", "ui/bundle.js", "ui/build-manifest.json"];
+const outputs = [
+	...artifactOutputs,
+	"lib/knowledge/runtime/.knowledge-worker-manifest.json",
+	"ui/bundle.js",
+	"ui/build-manifest.json",
+];
 const expectedSkills = ["research-vault", "research-show-me"];
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -89,22 +94,40 @@ if (!checkOnly) {
 		sourcemap: false,
 		external: ["node:*"],
 	});
-	for (const [entry, output] of [["src/desktop/runtime.ts", "dist/desktop-runtime.mjs"], ["src/desktop/index-resource.ts", "lib/knowledge/runtime/desktop-index.mjs"]]) {
-		await build({ entryPoints: [join(packageRoot, entry)], bundle: true, format: "esm", platform: "node", target: "node20",
-			outfile: join(packageRoot, output), sourcemap: false, external: ["node:*"] });
+	for (const [entry, output] of [
+		["src/desktop/runtime.ts", "dist/desktop-runtime.mjs"],
+		["src/desktop/index-resource.ts", "lib/knowledge/runtime/desktop-index.mjs"],
+	]) {
+		await build({
+			entryPoints: [join(packageRoot, entry)],
+			bundle: true,
+			format: "esm",
+			platform: "node",
+			target: "node20",
+			outfile: join(packageRoot, output),
+			sourcemap: false,
+			external: ["node:*"],
+		});
 	}
 	const tsc = join(workspaceRoot, "node_modules/.bin/tsc");
 	execFileSync(tsc, ["-p", join(packageRoot, "tsconfig.build.json")], { cwd: packageRoot, stdio: "inherit" });
 }
 
-execFileSync(process.execPath, [join(packageRoot, "scripts/build-ui.mjs"), ...(checkOnly ? ["--check"] : [])], { cwd: packageRoot, stdio: "inherit" });
+execFileSync(
+	process.execPath,
+	[join(packageRoot, "scripts/build-ui.mjs"), ...(checkOnly ? ["--check"] : [])],
+	{ cwd: packageRoot, stdio: "inherit" },
+);
 
 for (const relativePath of artifactOutputs) await ensureFile(relativePath);
 for (const relativePath of ["dist/index.mjs", "dist/host.mjs", "lib/knowledge/runtime/worker.mjs"]) {
 	const text = (await readFile(await ensureFile(relativePath))).toString("utf8");
-	if (/from\s+["'](?:electron|@drone\/(?:backend|desktop))["']/.test(text)) fail(`${relativePath} contains a forbidden host import`);
-	if (/import\s*\(\s*["'](?:electron|@drone\/(?:backend|desktop))["']/.test(text)) fail(`${relativePath} contains a forbidden dynamic host import`);
-	if (/(?:from|import\s*\(|require\s*\()["'](?:\.\/\.\/)+/.test(text)) fail(`${relativePath} contains a package-boundary relative import`);
+	if (/from\s+["'](?:electron|@drone\/(?:backend|desktop))["']/.test(text))
+		fail(`${relativePath} contains a forbidden host import`);
+	if (/import\s*\(\s*["'](?:electron|@drone\/(?:backend|desktop))["']/.test(text))
+		fail(`${relativePath} contains a forbidden dynamic host import`);
+	if (/(?:from|import\s*\(|require\s*\()["'](?:\.\/\.\/)+/.test(text))
+		fail(`${relativePath} contains a package-boundary relative import`);
 }
 
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -112,7 +135,8 @@ if (manifest.schemaVersion !== 1) fail("plugin.manifest schemaVersion must be 1"
 if (manifest.id !== "drone-pi-knowledge") fail("plugin.manifest id is incorrect");
 if (manifest.version !== packageJson.version) fail("plugin.manifest version must match package.json");
 if (manifest.entrypoints?.extension !== "./dist/index.mjs") fail("extension entrypoint is incorrect");
-if (manifest.entrypoints?.worker !== "./lib/knowledge/runtime/worker.mjs") fail("worker entrypoint is incorrect");
+if (manifest.entrypoints?.worker !== "./lib/knowledge/runtime/worker.mjs")
+	fail("worker entrypoint is incorrect");
 if (manifest.entrypoints?.host !== "./dist/host.mjs") fail("host entrypoint is incorrect");
 
 const skills = [];
@@ -126,7 +150,8 @@ const sourceFiles = (await collectFiles(join(packageRoot, "src")))
 	.filter((path) => /\.(?:ts|mjs)$/.test(path))
 	.sort();
 const sourceHashes = {};
-for (const path of sourceFiles) sourceHashes[relative(packageRoot, path).replaceAll("\\", "/")] = sha256(await readFile(path));
+for (const path of sourceFiles)
+	sourceHashes[relative(packageRoot, path).replaceAll("\\", "/")] = sha256(await readFile(path));
 const sourceDigest = createHash("sha256");
 for (const path of sourceFiles) {
 	sourceDigest.update(relative(packageRoot, path).replaceAll("\\", "/"));
@@ -156,7 +181,8 @@ if (checkOnly) {
 	await writeFile(workerManifestPath, `${JSON.stringify(workerManifest, null, "\t")}\n`);
 }
 const outputHashes = {};
-for (const relativePath of outputs) outputHashes[relativePath] = sha256(await readFile(await ensureFile(relativePath)));
+for (const relativePath of outputs)
+	outputHashes[relativePath] = sha256(await readFile(await ensureFile(relativePath)));
 const next = {
 	version: 1,
 	generator: "packages/pi-knowledge/scripts/build.mjs",
@@ -167,7 +193,8 @@ const next = {
 };
 const current = existsSync(buildManifestPath) ? JSON.parse(await readFile(buildManifestPath, "utf8")) : null;
 if (checkOnly) {
-	if (JSON.stringify(current) !== JSON.stringify(next)) fail("build-manifest.json is stale; run npm run build");
+	if (JSON.stringify(current) !== JSON.stringify(next))
+		fail("build-manifest.json is stale; run npm run build");
 	console.log("pi-knowledge source artifacts are up to date");
 } else {
 	await writeFile(buildManifestPath, `${JSON.stringify(next, null, "\t")}\n`);

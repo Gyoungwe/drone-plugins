@@ -1,8 +1,5 @@
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
-import type {
-	InquirySqliteConnection,
-	InquirySqliteStatement,
-} from "./sqlite-connection.js";
+import type { InquirySqliteConnection, InquirySqliteStatement } from "./sqlite-connection.js";
 import {
 	CanonicalSqliteInquiryStorage,
 	configureInquirySqlite,
@@ -106,12 +103,8 @@ export async function createInquiryWasmEngine(wasmBinary: Uint8Array): Promise<{
 			}
 		},
 		open(projectId, bytes) {
-			if (!projectId.trim())
-				throw new Error("Inquiry projectId cannot be empty");
-			return new WasmInquiryStorage(
-				projectId,
-				new WasmConnection(new SQL.Database(bytes)),
-			);
+			if (!projectId.trim()) throw new Error("Inquiry projectId cannot be empty");
+			return new WasmInquiryStorage(projectId, new WasmConnection(new SQL.Database(bytes)));
 		},
 	};
 }

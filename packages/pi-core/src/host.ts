@@ -6,13 +6,10 @@
  * pi-core; the host entry is the stable composition boundary.
  */
 
-import type { MemoryType } from "./memory";
-import {
-	memoryIndexPrompt as memoryIndexPromptImpl,
-	writeMemory as writeMemoryImpl,
-} from "./memory";
-import { normalizeTaskMilestones } from "./milestone-plan";
 import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
+import type { MemoryType } from "./memory";
+import { memoryIndexPrompt as memoryIndexPromptImpl, writeMemory as writeMemoryImpl } from "./memory";
+import { normalizeTaskMilestones } from "./milestone-plan";
 import type { TaskAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
 import { createTaskApplication } from "./task-runtime/owner.mjs";
 import { makeDeliverFilesTool as makeDeliverFilesToolImpl } from "./tools/deliver-files";
@@ -85,8 +82,7 @@ export const coreHostLoader = {
 		makeStatusTool: makeStatusToolImpl,
 		makeTodoTool: makeTodoToolImpl,
 		memoryIndexPrompt: memoryIndexPromptImpl,
-		writeMemory: (cwd: string, entry: CoreMemoryEntry) =>
-			writeMemoryImpl(cwd, { ...entry }),
+		writeMemory: (cwd: string, entry: CoreMemoryEntry) => writeMemoryImpl(cwd, { ...entry }),
 	}),
 } satisfies CoreHostLoaderContract;
 
@@ -98,9 +94,7 @@ interface TaskHostLoaderContract {
 			kind: string,
 			definition: Readonly<Record<string, unknown>>,
 		) => void;
-		readonly readAcceptanceVerifier: (
-			kind: string,
-		) => TaskAcceptanceVerifier | null;
+		readonly readAcceptanceVerifier: (kind: string) => TaskAcceptanceVerifier | null;
 		readonly createNativeSession: () => PluginNativeSession;
 		readonly dispose: () => Promise<void>;
 		readonly normalizeMilestones: typeof normalizeTaskMilestones;
@@ -109,16 +103,9 @@ interface TaskHostLoaderContract {
 }
 
 interface WorkbenchPluginClient {
-	readonly invoke: (
-		operation: string,
-		input: unknown,
-		signal?: AbortSignal,
-	) => Promise<unknown>;
+	readonly invoke: (operation: string, input: unknown, signal?: AbortSignal) => Promise<unknown>;
 	readonly subscribe: (
-		listener: (event: {
-			readonly type: "changed";
-			readonly revision: number;
-		}) => void,
+		listener: (event: { readonly type: "changed"; readonly revision: number }) => void,
 	) => () => void;
 }
 
@@ -126,17 +113,17 @@ interface WorkbenchPluginClient {
 export const taskHostLoader = {
 	contractVersion: 1 as const,
 	load: (input?: { readonly workbench?: WorkbenchPluginClient }) => {
-    const application = createTaskApplication();
-    return {
-      contractVersion: 1 as const,
-      registerAcceptanceVerifier: application.registerAcceptanceVerifier,
-      readAcceptanceVerifier: application.readAcceptanceVerifier,
-      normalizeMilestones: normalizeTaskMilestones,
-      createNativeSession: application.createNativeSession,
-      dispose: application.dispose,
-      ...(input?.workbench ? { workbench: input.workbench } : {}),
-    };
-  },
+		const application = createTaskApplication();
+		return {
+			contractVersion: 1 as const,
+			registerAcceptanceVerifier: application.registerAcceptanceVerifier,
+			readAcceptanceVerifier: application.readAcceptanceVerifier,
+			normalizeMilestones: normalizeTaskMilestones,
+			createNativeSession: application.createNativeSession,
+			dispose: application.dispose,
+			...(input?.workbench ? { workbench: input.workbench } : {}),
+		};
+	},
 } satisfies TaskHostLoaderContract;
 
 export { normalizeTaskMilestones } from "./milestone-plan";

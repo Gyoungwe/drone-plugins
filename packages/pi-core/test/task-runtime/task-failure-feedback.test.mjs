@@ -1,4 +1,4 @@
-import { it } from "./scoped-test.mjs";
+import { describe, expect } from "vitest";
 import {
 	diagnosticText,
 	FAILURE_EXPLANATION_POLICY,
@@ -9,8 +9,8 @@ import {
 	taskProgressContext,
 	toolResultFailed,
 } from "../../src/task-runtime/failure-feedback.mjs";
-import { describe, expect } from "vitest";
 import { createTaskWorkbench, WORKBENCH_ENTRY } from "./fixture.mjs";
+import { it } from "./scoped-test.mjs";
 
 const call = (id, toolName = "read", path = "input.csv") => ({ toolCallId: id, toolName, input: { path } });
 function setup() {

@@ -1,5 +1,5 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 import { evidenceHostLoader } from "../dist/host.mjs";
 
 test("evidence host loader exposes read-only validation tools", async () => {

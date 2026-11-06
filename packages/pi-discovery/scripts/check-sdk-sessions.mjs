@@ -3,18 +3,12 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-	copyFileSync,
-	mkdirSync,
-	mkdtempSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+
 const api = await candidatePluginApi();
 const args = process.argv.slice(2);
 assert.equal(
@@ -79,9 +73,10 @@ try {
 		mkdirSync(prefix);
 		const env = environment(prefix);
 		const dependencies = Object.fromEntries(
-			(target === "locked" ? family : ["pi-coding-agent", "pi-ai"]).map(
-				(name) => [`@earendil-works/${name}`, version],
-			),
+			(target === "locked" ? family : ["pi-coding-agent", "pi-ai"]).map((name) => [
+				`@earendil-works/${name}`,
+				version,
+			]),
 		);
 		dependencies["@gyoungwe/pi-discovery"] = `file:${tarball}`;
 		dependencies["@gyoungwe/plugin-api"] = `file:${api.path}`;
@@ -89,16 +84,8 @@ try {
 			join(prefix, "package.json"),
 			JSON.stringify({ private: true, type: "module", dependencies }),
 		);
-		run(
-			"npm",
-			["install", "--ignore-scripts", "--no-audit", "--no-fund"],
-			prefix,
-			env,
-		);
-		copyFileSync(
-			join(import.meta.dirname, "sdk-session-probe.mjs"),
-			join(prefix, "probe.mjs"),
-		);
+		run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], prefix, env);
+		copyFileSync(join(import.meta.dirname, "sdk-session-probe.mjs"), join(prefix, "probe.mjs"));
 		const probe = spawnSync(process.execPath, ["probe.mjs", ...workspaces], {
 			cwd: prefix,
 			env,
@@ -112,9 +99,7 @@ try {
 	console.log(
 		JSON.stringify({
 			status: "PASS",
-			tarballSha256: createHash("sha256")
-				.update(readFileSync(tarball))
-				.digest("hex"),
+			tarballSha256: createHash("sha256").update(readFileSync(tarball)).digest("hex"),
 			writer: "host-supplied actual-writer workspaces; see companion host test",
 			matrix,
 		}),

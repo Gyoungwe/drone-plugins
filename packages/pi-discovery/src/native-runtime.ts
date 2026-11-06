@@ -1,39 +1,25 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import {
-	link,
-	lstat,
-	mkdir,
-	readFile,
-	readdir,
-	realpath,
-	rename,
-	rm,
-	writeFile,
-} from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { link, lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import {
+	type ContainerSandboxOptions,
 	ContainerSandboxRunner,
 	describeContainerExecution,
+	type ExecutionIdentity,
 	ExecutionTransactions,
 	NodeExecutionReceiptStorage,
 	prepareSandboxRunDirectory,
-	type ContainerSandboxOptions,
-	type ExecutionIdentity,
 } from "@gyoungwe/plugin-api/node/execution";
-import type {
-	ExtensionAPI,
-	ExtensionContext,
-	ToolDefinition,
-} from "@earendil-works/pi-coding-agent";
 import { PluginResourceReservations } from "@gyoungwe/plugin-api/node/reservations";
 import type {
+	PluginExecutionInput,
 	PluginRuntimeCapabilities,
 	PluginRuntimeScope,
 	PluginStateReadResult,
 	PluginStateWriteInput,
-	PluginExecutionInput,
 } from "@gyoungwe/plugin-api/runtime";
 import { createDiscoveryRuntime } from "./runtime.js";
 
@@ -104,11 +90,7 @@ export async function nativeDiscoveryExtension(
 			throw new Error("Native execution caller or canonical workspace changed");
 		return workspace;
 	};
-	const executeCapability = async (
-		name: string,
-		input: unknown,
-		caller: NativeCaller,
-	): Promise<unknown> => {
+	const executeCapability = async (name: string, input: unknown, caller: NativeCaller): Promise<unknown> => {
 		await assertExecutionCaller(caller);
 		if (name === "execution.describe") {
 			const available = await describeContainerExecution(options.container);
@@ -147,9 +129,7 @@ export async function nativeDiscoveryExtension(
 		if (!/^sha256:[a-f0-9]{64}$/.test(request.image))
 			throw new Error("Native execution requires an exact cached image ID");
 		if (!caller.context.hasUI)
-			throw new Error(
-				"Native execution requires interactive approval; headless calls cannot authorize code",
-			);
+			throw new Error("Native execution requires interactive approval; headless calls cannot authorize code");
 		const approved = await caller.context.ui.confirm(
 			"Bounded container execution",
 			`Workspace: ${caller.scope.workspaceDirectory}\nCreator SDK session: ${caller.scope.sessionId}\nLanguage: ${request.language}\nDirectory: ${request.runDirectory}\nConfigured image ID: ${request.image}\nData: ${request.dataClassification}\nTimeout: ${request.timeoutMs}ms; output: ${request.maxOutputBytes} bytes\nNetwork disabled; only this runs directory writable; no image pull.\nCode:\n${request.code}`,
@@ -159,15 +139,13 @@ export async function nativeDiscoveryExtension(
 		const workspace = await assertExecutionCaller(caller);
 		const available = await describeContainerExecution(options.container);
 		if (!available.runtime || !available.images[request.language])
-			throw Object.assign(
-				new Error("Configured language image is not cached; no image was pulled"),
-				{ code: "EXECUTION_IMAGE_NOT_CACHED" },
-			);
+			throw Object.assign(new Error("Configured language image is not cached; no image was pulled"), {
+				code: "EXECUTION_IMAGE_NOT_CACHED",
+			});
 		if (available.images[request.language] !== request.image)
-			throw Object.assign(
-				new Error("Requested image does not match the configured cached language image"),
-				{ code: "EXECUTION_IMAGE_MISMATCH" },
-			);
+			throw Object.assign(new Error("Requested image does not match the configured cached language image"), {
+				code: "EXECUTION_IMAGE_MISMATCH",
+			});
 		await prepareSandboxRunDirectory(workspace, request.runDirectory, caller.signal);
 		const runner = await ContainerSandboxRunner.create({
 			...options.container,
@@ -195,8 +173,7 @@ export async function nativeDiscoveryExtension(
 			(path !== "" && path.split("/").some((part) => !part || part === "." || part === ".."))
 		)
 			throw new Error("Expected a discovery state-relative path");
-		if ((await lstat(root)).isSymbolicLink())
-			throw new Error("Discovery state root contains a symlink");
+		if ((await lstat(root)).isSymbolicLink()) throw new Error("Discovery state root contains a symlink");
 		let selected = root;
 		for (const part of path === "" ? [] : path.split("/")) {
 			selected = join(selected, part);
@@ -218,8 +195,7 @@ export async function nativeDiscoveryExtension(
 				throw new Error("Discovery JSON state must be a file of at most 1 MiB");
 			bytes = await readFile(selected);
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "ENOENT")
-				return { kind: "missing", version: null };
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing", version: null };
 			throw error;
 		}
 		if (bytes.length > 1048576) throw new Error("Discovery JSON state exceeds 1 MiB");
@@ -261,21 +237,19 @@ export async function nativeDiscoveryExtension(
 			throw error;
 		}
 		const stored = await read(caller.root, input.path);
-		if (stored.version !== hash(bytes))
-			throw new Error("Discovery state did not read back after write");
+		if (stored.version !== hash(bytes)) throw new Error("Discovery state did not read back after write");
 		return stored;
 	};
 	const capabilities: PluginRuntimeCapabilities = {
 		async call(name, input, signal) {
 			const actual = current();
-			const caller = signal
-				? { ...actual, signal: AbortSignal.any([actual.signal, signal]) }
-				: actual;
+			const caller = signal ? { ...actual, signal: AbortSignal.any([actual.signal, signal]) } : actual;
 			caller.signal.throwIfAborted();
 			return calls.run(caller, async () => {
 				if (name === "caller.scope") return { ...caller.scope };
-                // Standard Pi cross-package discovery needs an SDK event-bus transport; no global registry or invented host authority.
-                if (name === "provider.inspect") return { state: "unavailable", service: "inquiry.runtime", requestedVersion: 1, provider: null };
+				// Standard Pi cross-package discovery needs an SDK event-bus transport; no global registry or invented host authority.
+				if (name === "provider.inspect")
+					return { state: "unavailable", service: "inquiry.runtime", requestedVersion: 1, provider: null };
 				if (name.startsWith("execution.")) return executeCapability(name, input, caller);
 				if (name === "roots.describe") {
 					try {
@@ -302,9 +276,7 @@ export async function nativeDiscoveryExtension(
 					return Promise.all(
 						(await readdir(await filePath(caller.root, request.path))).map(async (name) => ({
 							name,
-							kind: (await lstat(join(caller.root, request.path, name))).isDirectory()
-								? "directory"
-								: "file",
+							kind: (await lstat(join(caller.root, request.path, name))).isDirectory() ? "directory" : "file",
 						})),
 					);
 				if (name === "state.reserve") {
@@ -328,10 +300,7 @@ export async function nativeDiscoveryExtension(
 		events: { changed() {} },
 	});
 	const native = await runtime.createNativeSession!();
-	const resolveCaller = async (
-		context: ExtensionContext,
-		signal: AbortSignal,
-	): Promise<NativeCaller> => {
+	const resolveCaller = async (context: ExtensionContext, signal: AbortSignal): Promise<NativeCaller> => {
 		signal.throwIfAborted();
 		const canonical = await realpath(context.cwd);
 		if (!options.stateDirectory)
@@ -428,9 +397,7 @@ export async function nativeDiscoveryExtension(
 								root: caller.handle,
 							};
 					}
-					const result = await calls.run(caller, () =>
-						execute(id, input, caller.signal, update, context),
-					);
+					const result = await calls.run(caller, () => execute(id, input, caller.signal, update, context));
 					caller.signal.throwIfAborted();
 					return result;
 				})();

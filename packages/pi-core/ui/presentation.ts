@@ -1,8 +1,4 @@
-import type {
-	TaskState,
-	TaskView,
-	WorkbenchTask,
-} from "@gyoungwe/plugin-api/ui";
+import type { TaskState, TaskView, WorkbenchTask } from "@gyoungwe/plugin-api/ui";
 
 export function taskActionArguments(
 	view: TaskView,
@@ -30,16 +26,12 @@ export function taskDeliveryPresentation(
 	language: "zh" | "en" = "zh",
 ) {
 	const terminal = TERMINAL_TASK_STATES.has(task.state);
-	const allAccepted =
-		task.milestones.length > 0 &&
-		task.milestones.every((m) => m.state === "completed");
+	const allAccepted = task.milestones.length > 0 && task.milestones.every((m) => m.state === "completed");
 	const unsettled =
-		task.operations.some(
-			(o) => o.state === "started" || o.state === "unknown",
-		) || task.actions.some((a) => a.state === "pending");
+		task.operations.some((o) => o.state === "started" || o.state === "unknown") ||
+		task.actions.some((a) => a.state === "pending");
 	const deliveryComplete = allAccepted && !unsettled;
-	const warnings =
-		!!task.reason || task.operations.some((o) => o.state === "failed");
+	const warnings = !!task.reason || task.operations.some((o) => o.state === "failed");
 	const closed = task.state === "cancelled" || task.state === "archived";
 	const labels = language === "en" ? TASK_STATE_LABELS_EN : TASK_STATE_LABELS;
 	const label = closed
@@ -90,68 +82,49 @@ const TASK_STATE_LABELS_EN: Record<TaskState, string> = {
 };
 /** Human-readable explanation with a next step for host reason codes; unknown codes fall back to the code. Mirrors the package-owned task workbench runtime. */
 export const TASK_REASON_TEXT: Record<string, string> = {
-	"task-authorization-required":
-		"计划已经准备好，等你点头。确认一次，后面就自动做完，不再反复打扰。",
-	"automatic-recovery":
-		"刚才中断后已重新读取记录；后续操作按当前授权处理。",
+	"task-authorization-required": "计划已经准备好，等你点头。确认一次，后面就自动做完，不再反复打扰。",
+	"automatic-recovery": "刚才中断后已重新读取记录；后续操作按当前授权处理。",
 	"automatic-stage-checkpoint": "进展已保存，正在接着做下一部分。",
 	"automatic-handoff": "这一步的进展已保存，后续执行按当前授权范围处理。",
-	"total-budget":
-		"这个任务的步数已经用完，做出来的结果都保留着。想继续做，请重新描述需求开一个新任务。",
+	"total-budget": "这个任务的步数已经用完，做出来的结果都保留着。想继续做，请重新描述需求开一个新任务。",
 	"stage-budget": "最近一段没有做出新进展，先停下来保留结果，避免空转。",
-	"budget-review-required":
-		"这一段的步数用完了。先看看目前的结果，确认后可以在任务面板继续。",
+	"budget-review-required": "这一段的步数用完了。先看看目前的结果，确认后可以在任务面板继续。",
 	"reconcile-before-retry":
 		"上次有操作没等到结果就中断了（比如写文件、安装、上传），现在不确定它做没做成。请先点“核对已有结果”看一下实际情况，别让它盲目重做一遍。",
-	"binding-changed":
-		"知识库换了，旧任务里查到的内容不能继续用。请重新描述需求，开一个新任务。",
-	"tool-failure":
-		"中间有一步出错了。具体是哪一步、影不影响结果，看下面的记录。",
-	"user-cancelled-choice-not-consent":
-		"你取消了刚才的选择。任务停在原地等你决定，不会自作主张继续。",
-	"user-action-cancelled":
-		"你跳过了一个需要你处理的事项，任务先停着。想继续时再说一声就行。",
-	"wiki-rejected-or-stale":
-		"Wiki 修改没有通过审阅（或者来源内容变了），这一项还不算完成。",
+	"binding-changed": "知识库换了，旧任务里查到的内容不能继续用。请重新描述需求，开一个新任务。",
+	"tool-failure": "中间有一步出错了。具体是哪一步、影不影响结果，看下面的记录。",
+	"user-cancelled-choice-not-consent": "你取消了刚才的选择。任务停在原地等你决定，不会自作主张继续。",
+	"user-action-cancelled": "你跳过了一个需要你处理的事项，任务先停着。想继续时再说一声就行。",
+	"wiki-rejected-or-stale": "Wiki 修改没有通过审阅（或者来源内容变了），这一项还不算完成。",
 	"verified-stage-checkpoint": "有一项交付已经确认完成，接着做下一项。",
 	"session-restored": "已从磁盘读取先前任务记录；后续执行需要当前会话授权。",
-	"legacy-checkpoint-unreviewed":
-		"这是从旧版本带过来的任务记录，之前做了什么还没核对过。",
+	"legacy-checkpoint-unreviewed": "这是从旧版本带过来的任务记录，之前做了什么还没核对过。",
 	"user-cancelled": "你已取消这个任务。",
 	"user-archived": "任务已归档。",
 };
 const TASK_REASON_TEXT_EN: Record<string, string> = {
-	"task-authorization-required":
-		"The plan is ready for your approval. One approval covers the agreed work.",
-	"automatic-recovery":
-		"The saved checkpoint was read again; further actions use current authorization.",
-	"automatic-stage-checkpoint":
-		"Progress was saved and the next part is continuing.",
-	"automatic-handoff":
-		"This step was saved; further work uses the current authorization scope.",
+	"task-authorization-required": "The plan is ready for your approval. One approval covers the agreed work.",
+	"automatic-recovery": "The saved checkpoint was read again; further actions use current authorization.",
+	"automatic-stage-checkpoint": "Progress was saved and the next part is continuing.",
+	"automatic-handoff": "This step was saved; further work uses the current authorization scope.",
 	"total-budget":
 		"The task reached its call limit. Existing results are retained; start a new task to continue.",
 	"stage-budget":
 		"Recent steps made no new progress. Work paused to preserve results and avoid repeating effects.",
-	"budget-review-required":
-		"This stage reached its call limit. Review the saved results before continuing.",
+	"budget-review-required": "This stage reached its call limit. Review the saved results before continuing.",
 	"reconcile-before-retry":
 		"An earlier side effect has an uncertain outcome. Check the existing result before retrying it.",
 	"binding-changed":
 		"The knowledge binding changed. Start a newly scoped task instead of reusing old evidence or permissions.",
-	"tool-failure":
-		"An operation failed. Check its recorded result and effect on the remaining work.",
+	"tool-failure": "An operation failed. Check its recorded result and effect on the remaining work.",
 	"user-cancelled-choice-not-consent":
 		"The choice was cancelled. The task is waiting; cancellation grants no consent.",
-	"user-action-cancelled":
-		"A requested user action was skipped. The task remains paused.",
-	"wiki-rejected-or-stale":
-		"The Wiki update was rejected or its sources changed; this item is not accepted.",
-	"verified-stage-checkpoint":
-		"One deliverable was checked; work continues with the next item.",
-	"session-restored": "The saved task record was restored; further execution needs current-session authorization.",
-	"legacy-checkpoint-unreviewed":
-		"This older checkpoint has not been reconciled yet.",
+	"user-action-cancelled": "A requested user action was skipped. The task remains paused.",
+	"wiki-rejected-or-stale": "The Wiki update was rejected or its sources changed; this item is not accepted.",
+	"verified-stage-checkpoint": "One deliverable was checked; work continues with the next item.",
+	"session-restored":
+		"The saved task record was restored; further execution needs current-session authorization.",
+	"legacy-checkpoint-unreviewed": "This older checkpoint has not been reconciled yet.",
 	"user-cancelled": "You cancelled this task.",
 	"user-archived": "The task was archived.",
 };
@@ -159,16 +132,10 @@ export function explainTaskReason(
 	code: string | null | undefined,
 	language: "zh" | "en" = "zh",
 ): string | null {
-	return code
-		? (language === "en" ? TASK_REASON_TEXT_EN : TASK_REASON_TEXT)[code] || code
-		: null;
+	return code ? (language === "en" ? TASK_REASON_TEXT_EN : TASK_REASON_TEXT)[code] || code : null;
 }
 /** Task states with no further agent continuation; the UI hides resume/stage/cancel for them. */
-export const TERMINAL_TASK_STATES: ReadonlySet<TaskState> = new Set([
-	"completed",
-	"cancelled",
-	"archived",
-]);
+export const TERMINAL_TASK_STATES: ReadonlySet<TaskState> = new Set(["completed", "cancelled", "archived"]);
 /**
  * 流内应渲染的任务子集。
  *
@@ -178,9 +145,7 @@ export const TERMINAL_TASK_STATES: ReadonlySet<TaskState> = new Set([
  */
 export function tasksForTranscript(view: TaskView): WorkbenchTask[] {
 	return view.tasks.filter((task) =>
-		task.actions.some(
-			(action) => action.kind === "review" && action.state === "pending",
-		),
+		task.actions.some((action) => action.kind === "review" && action.state === "pending"),
 	);
 }
 
@@ -212,18 +177,14 @@ function clip(text: string, max: number): string {
 }
 
 function pendingReview(task: WorkbenchTask) {
-	return task.actions.find(
-		(action) => action.kind === "review" && action.state === "pending",
-	);
+	return task.actions.find((action) => action.kind === "review" && action.state === "pending");
 }
 
 /** The latest snapshot's card. Pending reviews first; otherwise the active task, as one line. */
 export function tasksForDecision(view: TaskView): WorkbenchTask[] {
 	const pending = tasksForTranscript(view);
 	if (pending.length) return pending;
-	const active =
-		view.tasks.find((task) => task.id === view.activeTaskId) ??
-		view.tasks.at(-1);
+	const active = view.tasks.find((task) => task.id === view.activeTaskId) ?? view.tasks.at(-1);
 	return active ? [active] : [];
 }
 
@@ -231,28 +192,18 @@ export function tasksForDecision(view: TaskView): WorkbenchTask[] {
  * Title is the decision itself. Three lines say where it stopped, what is done, and what is left.
  * Completion is offered only when the review is tied to an open human-review deliverable.
  */
-export function taskDecision(
-	task: WorkbenchTask,
-	lang: TaskDecisionLang = "zh",
-): TaskDecision {
+export function taskDecision(task: WorkbenchTask, lang: TaskDecisionLang = "zh"): TaskDecision {
 	const zh = lang !== "en";
 	const review = pendingReview(task);
 	const milestone = review?.milestoneId
 		? task.milestones.find((item) => item.id === review.milestoneId)
 		: undefined;
 	const canComplete = Boolean(
-		review &&
-			milestone &&
-			milestone.acceptance.kind === "human_review" &&
-			milestone.state !== "completed",
+		review && milestone && milestone.acceptance.kind === "human_review" && milestone.state !== "completed",
 	);
 	const terminal = TERMINAL_TASK_STATES.has(task.state);
-	const doneNames = task.milestones
-		.filter((item) => item.state === "completed")
-		.map((item) => item.title);
-	const openNames = task.milestones
-		.filter((item) => item.state !== "completed")
-		.map((item) => item.title);
+	const doneNames = task.milestones.filter((item) => item.state === "completed").map((item) => item.title);
+	const openNames = task.milestones.filter((item) => item.state !== "completed").map((item) => item.title);
 	const done = doneNames.length
 		? zh
 			? `已经做成：${doneNames.join("、")}`
@@ -347,9 +298,7 @@ export function taskDecision(
 					? "这项对不上具体交付，不能替你勾完成。"
 					: "This review is not tied to a deliverable, so it cannot be marked complete."
 				: null,
-		completeLabel: zh
-			? "我看过了，这项算完成"
-			: "I checked it; count this done",
+		completeLabel: zh ? "我看过了，这项算完成" : "I checked it; count this done",
 		deferLabel: zh ? "先不验收，继续后面的" : "Leave it unchecked and continue",
 		endLabel: zh ? "结束这项任务" : "End this task",
 		detailsLabel: zh ? "详情" : "Details",
@@ -359,7 +308,5 @@ export function taskDecision(
 export function taskNeedsUser(task: WorkbenchTask): boolean {
 	if (task.authorizationRequired && !task.executionConsent) return true;
 	if (task.state === "waiting_user" || task.state === "blocked") return true;
-	return task.actions.some(
-		(a) => a.kind === "authorization" && a.state === "pending",
-	);
+	return task.actions.some((a) => a.kind === "authorization" && a.state === "pending");
 }

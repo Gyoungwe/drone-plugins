@@ -1,8 +1,7 @@
 import type { KnowledgeSearchResult } from "@gyoungwe/plugin-api/ui";
 import { useState } from "react";
+import { getKnowledgeApi, useKnowledgeStore } from "../api";
 import { KnowledgeSearchView } from "./KnowledgeSearchView";
-import { getKnowledgeApi } from "../api";
-import { useKnowledgeStore } from "../api";
 import type { KnowledgeCategory } from "./knowledge-home-model";
 
 export type { KnowledgeCategory } from "./knowledge-home-model";
@@ -30,15 +29,13 @@ export function KnowledgeSearch({
 	const [error, setError] = useState<string | null>(null);
 
 	const openHit = (path: string) =>
-		useKnowledgeStore
-			.getState()
-			.open({
-				cwd,
-				sessionId,
-				tab: "reviews",
-				note: path,
-				noteRevision: bindingRevision,
-			});
+		useKnowledgeStore.getState().open({
+			cwd,
+			sessionId,
+			tab: "reviews",
+			note: path,
+			noteRevision: bindingRevision,
+		});
 
 	return (
 		<KnowledgeSearchView

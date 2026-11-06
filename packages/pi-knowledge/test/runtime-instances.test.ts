@@ -1,12 +1,14 @@
 import { expect, it } from "vitest";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
 import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
-import { createKnowledgeUi } from "../src/core/ui-state.js";
 import { createKnowledgeSpecialistHost } from "../src/core/specialist-host.js";
+import { createKnowledgeUi } from "../src/core/ui-state.js";
 
 function latch() {
 	let release!: () => void;
-	const promise = new Promise<void>((resolve) => { release = resolve; });
+	const promise = new Promise<void>((resolve) => {
+		release = resolve;
+	});
 	return { promise, release };
 }
 function owner() {
@@ -35,7 +37,9 @@ it("isolates callbacks, storage slots and exclusive queues between application o
 	});
 	await started.promise;
 	try {
-		await expect(b.runtime.runRuntimeExclusive("writes", "same-key", async () => "b advanced")).resolves.toBe("b advanced");
+		await expect(b.runtime.runRuntimeExclusive("writes", "same-key", async () => "b advanced")).resolves.toBe(
+			"b advanced",
+		);
 	} finally {
 		held.release();
 		await running;
@@ -76,15 +80,21 @@ it("isolates specialist registrations and occupied concurrency slots", async () 
 	const removeB = b.specialists.registerKnowledgeSpecialistHost("same-session", runB);
 	const held = latch();
 	const started = latch();
-	const work = a.specialists.withSpecialistSlot(undefined, async () => {
-		started.release();
-		await held.promise;
-	}, { concurrency: 1 });
+	const work = a.specialists.withSpecialistSlot(
+		undefined,
+		async () => {
+			started.release();
+			await held.promise;
+		},
+		{ concurrency: 1 },
+	);
 	await started.promise;
 	try {
 		expect(a.specialists.knowledgeSpecialistHost({ sessionId: "same-session" })).toBe(runA);
 		expect(b.specialists.knowledgeSpecialistHost({ sessionId: "same-session" })).toBe(runB);
-		await expect(b.specialists.withSpecialistSlot(undefined, async () => "b completed", { concurrency: 1 })).resolves.toBe("b completed");
+		await expect(
+			b.specialists.withSpecialistSlot(undefined, async () => "b completed", { concurrency: 1 }),
+		).resolves.toBe("b completed");
 		expect(a.specialists.specialistQueueSnapshot()).toEqual({ active: 1, queueLength: 0 });
 		expect(b.specialists.specialistQueueSnapshot()).toEqual({ active: 0, queueLength: 0 });
 		removeA();

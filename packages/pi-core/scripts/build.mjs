@@ -18,8 +18,7 @@ async function filesBelow(directory, prefix = "") {
 	const files = [];
 	for (const entry of await readdir(directory, { withFileTypes: true })) {
 		const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-		if (entry.isDirectory())
-			files.push(...(await filesBelow(join(directory, entry.name), path)));
+		if (entry.isDirectory()) files.push(...(await filesBelow(join(directory, entry.name), path)));
 		else files.push(path);
 	}
 	return files.sort();
@@ -27,9 +26,7 @@ async function filesBelow(directory, prefix = "") {
 
 async function buildReceipt() {
 	const inputs = [
-		...(await filesBelow(join(packageRoot, "src"))).map(
-			(name) => `src/${name}`,
-		),
+		...(await filesBelow(join(packageRoot, "src"))).map((name) => `src/${name}`),
 		"package.json",
 		"plugin.manifest.json",
 		"scripts/build.mjs",
@@ -57,40 +54,26 @@ async function buildReceipt() {
 }
 
 async function verify() {
-	const pkg = JSON.parse(
-		await readFile(join(packageRoot, "package.json"), "utf8"),
-	);
-	const manifest = JSON.parse(
-		await readFile(join(packageRoot, "plugin.manifest.json"), "utf8"),
-	);
-	if (pkg.version !== manifest.version)
-		throw new Error("pi-core manifest version must match package.json");
+	const pkg = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
+	const manifest = JSON.parse(await readFile(join(packageRoot, "plugin.manifest.json"), "utf8"));
+	if (pkg.version !== manifest.version) throw new Error("pi-core manifest version must match package.json");
 	for (const value of Object.values(pkg.exports)) {
 		for (const entry of [value.types, value.import]) {
 			if (entry.includes("*")) {
-				for (const tool of [
-					"ask-user",
-					"deliver-files",
-					"memory-save",
-					"status",
-					"todo",
-				])
+				for (const tool of ["ask-user", "deliver-files", "memory-save", "status", "todo"])
 					if (!existsSync(join(packageRoot, entry.replace("*", tool))))
 						throw new Error(`Missing public export ${entry}: ${tool}`);
-			} else if (!existsSync(join(packageRoot, entry)))
-				throw new Error(`Missing public export ${entry}`);
+			} else if (!existsSync(join(packageRoot, entry))) throw new Error(`Missing public export ${entry}`);
 		}
 	}
 
-	if (!existsSync(outputPath))
-		throw new Error("pi-core dist/index.mjs is missing");
+	if (!existsSync(outputPath)) throw new Error("pi-core dist/index.mjs is missing");
 	const output = await readFile(outputPath, "utf8");
 	for (const pattern of [
 		/(?:from|import\s*\(|require\s*\()["']electron["']/u,
 		/(?:from|import\s*\(|require\s*\()["']@drone\/(?:backend|desktop|shared|tasks)["']/u,
 	]) {
-		if (pattern.test(output))
-			throw new Error(`pi-core bundle contains forbidden import: ${pattern}`);
+		if (pattern.test(output)) throw new Error(`pi-core bundle contains forbidden import: ${pattern}`);
 	}
 	for (const name of [
 		"ask_user",
@@ -103,8 +86,7 @@ async function verify() {
 		"drone-doctor",
 		"drone-example",
 	])
-		if (!output.includes(JSON.stringify(name)))
-			throw new Error(`pi-core bundle is missing ${name}`);
+		if (!output.includes(JSON.stringify(name))) throw new Error(`pi-core bundle is missing ${name}`);
 }
 
 if (!check) {
@@ -158,24 +140,20 @@ if (!check) {
 	await mkdir(join(distRoot, "task-runtime"), { recursive: true });
 	for (const name of await readdir(join(packageRoot, "src/task-runtime")))
 		if (name.endsWith(".d.mts"))
-			await cp(
-				join(packageRoot, "src/task-runtime", name),
-				join(distRoot, "task-runtime", name),
-			);
+			await cp(join(packageRoot, "src/task-runtime", name), join(distRoot, "task-runtime", name));
 	const output = await readFile(outputPath, "utf8");
-	if (!output.startsWith("// @ts-nocheck"))
-		await writeFile(outputPath, `// @ts-nocheck\n${output}`);
+	if (!output.startsWith("// @ts-nocheck")) await writeFile(outputPath, `// @ts-nocheck\n${output}`);
 	await writeFile(
 		join(packageRoot, "build-manifest.json"),
 		`${JSON.stringify(await buildReceipt(), null, "\t")}\n`,
 	);
 }
-execFileSync(process.execPath, [join(packageRoot, "scripts/build-ui.mjs"), ...(check ? ["--check"] : [])], { stdio: "inherit" });
+execFileSync(process.execPath, [join(packageRoot, "scripts/build-ui.mjs"), ...(check ? ["--check"] : [])], {
+	stdio: "inherit",
+});
 await verify();
 if (check) {
-	const recorded = JSON.parse(
-		await readFile(join(packageRoot, "build-manifest.json"), "utf8"),
-	);
+	const recorded = JSON.parse(await readFile(join(packageRoot, "build-manifest.json"), "utf8"));
 	if (JSON.stringify(recorded) !== JSON.stringify(await buildReceipt()))
 		throw new Error("pi-core generated artifacts are stale");
 }

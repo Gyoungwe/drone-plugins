@@ -14,8 +14,12 @@ type DroneUiRuntime = {
 		useLanguage: () => "zh" | "en";
 	};
 	stores: {
-		useSessionsStore: <Selected>(selector: (state: { activeSessionId: string | null }) => Selected) => Selected;
-		useTranscriptStore: <Selected>(selector: (state: { bySession: Record<string, TranscriptEntry> }) => Selected) => Selected;
+		useSessionsStore: <Selected>(
+			selector: (state: { activeSessionId: string | null }) => Selected,
+		) => Selected;
+		useTranscriptStore: <Selected>(
+			selector: (state: { bySession: Record<string, TranscriptEntry> }) => Selected,
+		) => Selected;
 	};
 };
 
@@ -31,37 +35,78 @@ function WorkbenchPanelImpl(): unknown {
 	if (!drone) return null;
 	const language = drone.hooks.useLanguage();
 	const activeSessionId = drone.stores.useSessionsStore((state) => state.activeSessionId);
-	const entry = drone.stores.useTranscriptStore((state) =>
-		(activeSessionId ? state.bySession[activeSessionId] : undefined) ?? EMPTY_ENTRY,
+	const entry = drone.stores.useTranscriptStore(
+		(state) => (activeSessionId ? state.bySession[activeSessionId] : undefined) ?? EMPTY_ENTRY,
 	);
 	const tasks = entry.todos ?? EMPTY_TASKS;
-	const text = language === "zh"
-		? { title: "工作台", tasks: "任务", memory: "记忆", noTasks: "当前会话还没有任务。", noMemory: "还没有保存的工作台记忆。" }
-		: { title: "Workbench", tasks: "Tasks", memory: "Memory", noTasks: "No tasks in the active session.", noMemory: "No saved workbench memory yet." };
-	const taskChildren = tasks.length > 0
-		? tasks.map((task) => drone.React.createElement(
-			"li",
-			{ key: `${task.status}:${task.content}`, className: "flex items-start gap-2 text-[13px] text-ink" },
-			drone.React.createElement("span", { className: "text-ink-dim", "aria-hidden": true }, task.status === "completed" ? "✓" : "·"),
-			task.content,
-		))
-		: [drone.React.createElement("li", { key: "empty", className: "text-[13px] text-ink-dim" }, text.noTasks)];
+	const text =
+		language === "zh"
+			? {
+					title: "工作台",
+					tasks: "任务",
+					memory: "记忆",
+					noTasks: "当前会话还没有任务。",
+					noMemory: "还没有保存的工作台记忆。",
+				}
+			: {
+					title: "Workbench",
+					tasks: "Tasks",
+					memory: "Memory",
+					noTasks: "No tasks in the active session.",
+					noMemory: "No saved workbench memory yet.",
+				};
+	const taskChildren =
+		tasks.length > 0
+			? tasks.map((task) =>
+					drone.React.createElement(
+						"li",
+						{
+							key: `${task.status}:${task.content}`,
+							className: "flex items-start gap-2 text-[13px] text-ink",
+						},
+						drone.React.createElement(
+							"span",
+							{ className: "text-ink-dim", "aria-hidden": true },
+							task.status === "completed" ? "✓" : "·",
+						),
+						task.content,
+					),
+				)
+			: [
+					drone.React.createElement(
+						"li",
+						{ key: "empty", className: "text-[13px] text-ink-dim" },
+						text.noTasks,
+					),
+				];
 	return drone.React.createElement(
 		"section",
 		{ "data-drone-ui-workbench": "panel", className: "flex flex-col gap-4 p-4 text-ink" },
 		drone.React.createElement("h2", { className: "text-[15px] font-medium" }, text.title),
 		drone.React.createElement(
-		"div",
-		{ className: "flex flex-col gap-2" },
-		drone.React.createElement("h3", { className: "text-[12px] font-medium uppercase tracking-wide text-ink-dim" }, text.tasks),
-		drone.React.createElement("ul", { className: "flex flex-col gap-1", "aria-label": text.tasks }, taskChildren),
-	),
+			"div",
+			{ className: "flex flex-col gap-2" },
+			drone.React.createElement(
+				"h3",
+				{ className: "text-[12px] font-medium uppercase tracking-wide text-ink-dim" },
+				text.tasks,
+			),
+			drone.React.createElement(
+				"ul",
+				{ className: "flex flex-col gap-1", "aria-label": text.tasks },
+				taskChildren,
+			),
+		),
 		drone.React.createElement(
-		"div",
-		{ className: "flex flex-col gap-2" },
-		drone.React.createElement("h3", { className: "text-[12px] font-medium uppercase tracking-wide text-ink-dim" }, text.memory),
-		drone.React.createElement("p", { className: "text-[13px] text-ink-dim" }, text.noMemory),
-	),
+			"div",
+			{ className: "flex flex-col gap-2" },
+			drone.React.createElement(
+				"h3",
+				{ className: "text-[12px] font-medium uppercase tracking-wide text-ink-dim" },
+				text.memory,
+			),
+			drone.React.createElement("p", { className: "text-[13px] text-ink-dim" }, text.noMemory),
+		),
 	);
 }
 

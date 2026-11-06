@@ -10,7 +10,9 @@ export function maintenancePrompt(
 		`Detail: ${item.detail || ""}`,
 		`Note body (first 4000 characters):\n${String(item.markdown || "").slice(0, 4000)}`,
 		...(kind === "source-changed"
-			? [`Current source body (first 4000 characters):\n${String(item.sourceMarkdown || item.markdown || "").slice(0, 4000)}`]
+			? [
+					`Current source body (first 4000 characters):\n${String(item.sourceMarkdown || item.markdown || "").slice(0, 4000)}`,
+				]
 			: []),
 	].join("\n");
 	if (kind === "missing-topic")
@@ -19,8 +21,13 @@ export function maintenancePrompt(
 }
 
 export function parseMaintenanceJson(text: string): Record<string, unknown> {
-	const normalized = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+	const normalized = text
+		.trim()
+		.replace(/^```(?:json)?\s*/i, "")
+		.replace(/\s*```$/i, "")
+		.trim();
 	const value: unknown = JSON.parse(normalized);
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("maintenance model output must be a JSON object");
+	if (!value || typeof value !== "object" || Array.isArray(value))
+		throw new Error("maintenance model output must be a JSON object");
 	return value as Record<string, unknown>;
 }

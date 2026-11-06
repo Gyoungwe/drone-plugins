@@ -18,7 +18,10 @@ describe("knowledge answer metric persistence", () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-knowledge-ui-state-"));
 		roots.push(root);
 		await mkdir(root, { recursive: true });
-		await writeFile(join(root, "answer-metrics.json"), JSON.stringify({ answered: 3, total: 5, updatedAt: 123 }));
+		await writeFile(
+			join(root, "answer-metrics.json"),
+			JSON.stringify({ answered: 3, total: 5, updatedAt: 123 }),
+		);
 		process.env.DRONE_KNOWLEDGE_DIR = root;
 		expect(knowledgeAnswerRate()).toMatchObject({ answered: 3, total: 5, rate: 0.6, updatedAt: 123 });
 	});

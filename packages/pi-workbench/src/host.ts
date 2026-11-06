@@ -3,12 +3,7 @@ import type {
 	PluginRuntimeFactory,
 	PluginRuntimeOperation,
 } from "@gyoungwe/plugin-api/runtime";
-import {
-	WorkbenchStore,
-	emptyWorkbenchSnapshot,
-	type TaskState,
-	type WorkbenchSnapshot,
-} from "./index.js";
+import { emptyWorkbenchSnapshot, type TaskState, type WorkbenchSnapshot, WorkbenchStore } from "./index.js";
 
 const stateFile = "workbench.json";
 
@@ -34,9 +29,15 @@ function snapshotFromState(value: unknown): WorkbenchSnapshot {
 		};
 	});
 	const memory = input.memory.map((entry) => {
-		if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("Invalid workbench memory");
+		if (!entry || typeof entry !== "object" || Array.isArray(entry))
+			throw new Error("Invalid workbench memory");
 		const item = entry as Record<string, unknown>;
-		if (typeof item.id !== "string" || typeof item.title !== "string" || typeof item.body !== "string" || typeof item.createdAt !== "string")
+		if (
+			typeof item.id !== "string" ||
+			typeof item.title !== "string" ||
+			typeof item.body !== "string" ||
+			typeof item.createdAt !== "string"
+		)
 			throw new Error("Invalid workbench memory");
 		return { id: item.id, title: item.title, body: item.body, createdAt: item.createdAt };
 	});
@@ -51,13 +52,16 @@ type StateRead = { kind: "missing"; version: null } | { kind: "value"; value: un
  */
 export const createWorkbenchRuntime: PluginRuntimeFactory = async (factoryContext) => {
 	const states = factoryContext.resources.filter((resource) => resource.kind === "state");
-	if (states.length !== 1) throw new Error("Workbench runtime requires exactly one authorized application-state root");
+	if (states.length !== 1)
+		throw new Error("Workbench runtime requires exactly one authorized application-state root");
 	const state = states[0];
 	const stored = (await factoryContext.capabilities.call("state.readJson", {
 		root: state.handle,
 		path: stateFile,
 	})) as StateRead;
-	const store = new WorkbenchStore(stored.kind === "missing" ? emptyWorkbenchSnapshot() : snapshotFromState(stored.value));
+	const store = new WorkbenchStore(
+		stored.kind === "missing" ? emptyWorkbenchSnapshot() : snapshotFromState(stored.value),
+	);
 	let version = stored.version;
 	let disposed = false;
 	const assertActive = () => {
@@ -81,31 +85,50 @@ export const createWorkbenchRuntime: PluginRuntimeFactory = async (factoryContex
 		operations: {
 			status: operation({}, "read", async () => store.snapshot()),
 			plan: operation(
-				{ type: "object", properties: { items: { type: "array", items: { type: "string" } } }, required: ["items"] },
+				{
+					type: "object",
+					properties: { items: { type: "array", items: { type: "string" } } },
+					required: ["items"],
+				},
 				"write",
 				async (input: { items: string[] }) => {
-					if (!Array.isArray(input.items) || input.items.some((item) => typeof item !== "string")) throw new Error("items must be an array of strings");
+					if (!Array.isArray(input.items) || input.items.some((item) => typeof item !== "string"))
+						throw new Error("items must be an array of strings");
 					return { tasks: store.plan(input.items) };
 				},
 			),
 			todo: operation(
-				{ type: "object", properties: { id: { type: "string" }, state: { type: "string" } }, required: ["id", "state"] },
+				{
+					type: "object",
+					properties: { id: { type: "string" }, state: { type: "string" } },
+					required: ["id", "state"],
+				},
 				"write",
 				async (input: { id: string; state: TaskState }) => {
-					if (typeof input.id !== "string" || !(["pending", "in_progress", "completed", "blocked"] as const).includes(input.state)) throw new Error("id and state are required");
+					if (
+						typeof input.id !== "string" ||
+						!(["pending", "in_progress", "completed", "blocked"] as const).includes(input.state)
+					)
+						throw new Error("id and state are required");
 					return { task: store.update(input.id, input.state) };
 				},
 			),
 			memorySave: operation(
-				{ type: "object", properties: { title: { type: "string" }, body: { type: "string" } }, required: ["title", "body"] },
+				{
+					type: "object",
+					properties: { title: { type: "string" }, body: { type: "string" } },
+					required: ["title", "body"],
+				},
 				"write",
 				async (input: { title: string; body: string }) => {
-					if (typeof input.title !== "string" || typeof input.body !== "string") throw new Error("title and body are required");
+					if (typeof input.title !== "string" || typeof input.body !== "string")
+						throw new Error("title and body are required");
 					return { memory: store.saveMemory(input.title, input.body) };
 				},
 			),
 			persist: operation({}, "write", async () => {
-				if (state.access !== "read-write") throw new Error("Workbench persistence requires a read-write state grant");
+				if (state.access !== "read-write")
+					throw new Error("Workbench persistence requires a read-write state grant");
 				const result = (await factoryContext.capabilities.call("state.writeJson", {
 					root: state.handle,
 					path: stateFile,

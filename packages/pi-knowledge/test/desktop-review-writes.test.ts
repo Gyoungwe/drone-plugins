@@ -5,12 +5,12 @@ import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
 import { createKnowledgeOwnerLifecycle } from "../src/core/owner-lifecycle.js";
-import { immutableWikiProposalHash } from "../src/core/wiki-policy.js";
-import { createKnowledgeReviewModel } from "../src/desktop/reviews.js";
-import { createKnowledgeWikiReview } from "../src/core/wiki-review.js";
 import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
-import { createBrokerWikiReviewPorts } from "../src/desktop/review-storage.js";
+import { immutableWikiProposalHash } from "../src/core/wiki-policy.js";
+import { createKnowledgeWikiReview } from "../src/core/wiki-review.js";
 import { createLocalWikiReviewPorts } from "../src/core/wiki-review-node.js";
+import { createBrokerWikiReviewPorts } from "../src/desktop/review-storage.js";
+import { createKnowledgeReviewModel } from "../src/desktop/reviews.js";
 
 const roots: string[] = [];
 afterEach(async () => {

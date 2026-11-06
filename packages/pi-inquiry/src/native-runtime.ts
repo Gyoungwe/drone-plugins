@@ -3,11 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Stats } from "node:fs";
 import { lstat, mkdir, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
-import type {
-	ExtensionAPI,
-	ExtensionContext,
-	ToolDefinition,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import {
 	type BinaryStateWriteAccess,
 	readBinaryStateFile,
@@ -69,16 +65,12 @@ export async function nativeInquiryExtension(
 			current = await lstat(root.path);
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-			if (root.identity)
-				throw new Error("Native Inquiry root disappeared", { cause: error });
+			if (root.identity) throw new Error("Native Inquiry root disappeared", { cause: error });
 			return;
 		}
 		if (!current.isDirectory() || current.isSymbolicLink())
 			throw new Error("Native Inquiry root must be a real directory");
-		if (
-			root.identity &&
-			(current.dev !== root.identity.dev || current.ino !== root.identity.ino)
-		)
+		if (root.identity && (current.dev !== root.identity.dev || current.ino !== root.identity.ino))
 			throw new Error("Native Inquiry root changed after selection");
 		root.identity = current;
 	};
@@ -87,8 +79,7 @@ export async function nativeInquiryExtension(
 			isAbsolute(value) ||
 			value.includes("\\") ||
 			value.includes("\0") ||
-			(value !== "" &&
-				value.split("/").some((part) => !part || part === "." || part === ".."))
+			(value !== "" && value.split("/").some((part) => !part || part === "." || part === ".."))
 		)
 			throw new Error("Expected a confined root-relative Inquiry path");
 		await verify(root);
@@ -142,17 +133,12 @@ export async function nativeInquiryExtension(
 			await verify(caller.root);
 			return;
 		}
-		for (const directory of [
-			join(caller.root.workspace, "runs"),
-			caller.root.path,
-		]) {
+		for (const directory of [join(caller.root.workspace, "runs"), caller.root.path]) {
 			caller.signal.throwIfAborted();
 			try {
 				const existing = await lstat(directory);
 				if (!existing.isDirectory() || existing.isSymbolicLink())
-					throw new Error(
-						"Native Inquiry state directory is not a real directory",
-					);
+					throw new Error("Native Inquiry state directory is not a real directory");
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 				await mkdir(directory, { mode: 0o700 });
@@ -164,8 +150,7 @@ export async function nativeInquiryExtension(
 		resolvePath: (value) => path(caller.root, value),
 		checkRoot: () => verify(caller.root),
 		checkWrite: () => live(caller),
-		assertReserved: (directory) =>
-			reservations.assertReserved("state-writers", directory),
+		assertReserved: (directory) => reservations.assertReserved("state-writers", directory),
 		conflictError: () => {
 			const error = new Error("Inquiry state version conflict");
 			Object.assign(error, { code: "ESTATECONFLICT" });
@@ -187,20 +172,14 @@ export async function nativeInquiryExtension(
 		return value;
 	};
 	const handle = (root: string, kind: "state" | "binary-state") => {
-		if (
-			root !==
-			(kind === "state" ? "native-inquiry-json" : "native-inquiry-binary")
-		)
+		if (root !== (kind === "state" ? "native-inquiry-json" : "native-inquiry-binary"))
 			throw new Error("Native Inquiry root handle was not granted");
 	};
 	const capabilities: PluginRuntimeCapabilities = {
 		async call(name, input, signal) {
 			const parent = calls.getStore();
-			if (!parent)
-				throw new Error("Native Inquiry capability has no actual caller");
-			const caller = signal
-				? { ...parent, signal: AbortSignal.any([parent.signal, signal]) }
-				: parent;
+			if (!parent) throw new Error("Native Inquiry capability has no actual caller");
+			const caller = signal ? { ...parent, signal: AbortSignal.any([parent.signal, signal]) } : parent;
 			await live(caller);
 			if (name === "caller.scope") return { ...caller.scope };
 			if (name === "roots.describe")
@@ -220,15 +199,8 @@ export async function nativeInquiryExtension(
 				];
 			const request = input as { root: string; path: string };
 			if (name === "state.reserve") {
-				if (
-					!["native-inquiry-json", "native-inquiry-binary"].includes(
-						request.root,
-					) ||
-					request.path !== ""
-				)
-					throw new Error(
-						"Native Inquiry reserves only the selected ledger directory",
-					);
+				if (!["native-inquiry-json", "native-inquiry-binary"].includes(request.root) || request.path !== "")
+					throw new Error("Native Inquiry reserves only the selected ledger directory");
 				await approve(
 					caller,
 					"Reserve Inquiry writer",
@@ -236,9 +208,7 @@ export async function nativeInquiryExtension(
 				);
 				await ensure(caller);
 				await live(caller);
-				reservations.reserve("state-writers", [
-					await realpath(caller.root.path),
-				]);
+				reservations.reserve("state-writers", [await realpath(caller.root.path)]);
 				return { reserved: true };
 			}
 			if (name === "state.readBinary") {
@@ -253,8 +223,7 @@ export async function nativeInquiryExtension(
 				await live(caller);
 				if (raw.kind === "missing") return raw;
 				const bytes = Buffer.from(raw.base64, "base64");
-				if (bytes.length > 1024 * 1024)
-					throw new Error("Native Inquiry JSON metadata exceeds 1 MiB");
+				if (bytes.length > 1024 * 1024) throw new Error("Native Inquiry JSON metadata exceeds 1 MiB");
 				try {
 					return {
 						kind: "value",
@@ -270,8 +239,7 @@ export async function nativeInquiryExtension(
 			if (name === "state.writeJson") {
 				const value = input as PluginStateWriteInput;
 				handle(value.root, "state");
-				if (!value.path.endsWith(".json"))
-					throw new Error("Native Inquiry JSON writes require a .json file");
+				if (!value.path.endsWith(".json")) throw new Error("Native Inquiry JSON writes require a .json file");
 				const text = `${JSON.stringify(value.value, null, 2)}\n`;
 				if (Buffer.byteLength(text) > 1024 * 1024)
 					throw new Error("Native Inquiry JSON metadata exceeds 1 MiB");
@@ -293,8 +261,7 @@ export async function nativeInquiryExtension(
 						prepare: () => access(caller),
 					},
 				);
-				if (raw.kind !== "value")
-					throw new Error("Native Inquiry JSON write has no readback");
+				if (raw.kind !== "value") throw new Error("Native Inquiry JSON write has no readback");
 				return {
 					kind: "value",
 					value: JSON.parse(Buffer.from(raw.base64, "base64").toString("utf8")),
@@ -331,8 +298,7 @@ export async function nativeInquiryExtension(
 			},
 		},
 	});
-	if (!runtime.createNativeSession)
-		throw new Error("Inquiry runtime has no native projection");
+	if (!runtime.createNativeSession) throw new Error("Inquiry runtime has no native projection");
 	const native = await runtime.createNativeSession();
 	const adapted = Object.create(pi) as ExtensionAPI;
 	adapted.registerTool = ((definition: ToolDefinition) => {
@@ -360,9 +326,7 @@ export async function nativeInquiryExtension(
 					const caller: Caller = {
 						root,
 						context,
-						signal: signal
-							? AbortSignal.any([abort.signal, signal])
-							: abort.signal,
+						signal: signal ? AbortSignal.any([abort.signal, signal]) : abort.signal,
 						scope: {
 							kind: "session",
 							workspaceId,
@@ -371,9 +335,7 @@ export async function nativeInquiryExtension(
 						},
 					};
 					await live(caller);
-					return calls.run(caller, () =>
-						execute(id, input, caller.signal, update, context),
-					);
+					return calls.run(caller, () => execute(id, input, caller.signal, update, context));
 				})();
 				pending.add(running);
 				void running.then(

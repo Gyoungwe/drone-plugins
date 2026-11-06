@@ -2,12 +2,13 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { createResearchLoop } from "../../src/core/research-loop.js";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { verifyLiteratureReceipt } from "../../src/core/literature-receipt.js";
 import { createResearchReceiptJournal as createJournal } from "../../src/core/receipt-journal.js";
+import { createResearchLoop } from "../../src/core/research-loop.js";
 import { observeExecutionReceipt } from "../../src/core/run-provenance.js";
 import { sourceStatus } from "../../src/core/source-archive.js";
-import { verifyLiteratureReceipt } from "../../src/core/literature-receipt.js";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
 let loop, config, owners;
 const workspace = async () => config;
 const saveWorkspaceConfig = async (_cwd, patch) => {

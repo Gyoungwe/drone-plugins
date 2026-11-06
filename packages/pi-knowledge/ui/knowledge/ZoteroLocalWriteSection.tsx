@@ -1,7 +1,6 @@
 import type { ZoteroLocalWriteStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { Button } from "../api";
+import { Button, getKnowledgeApi } from "../api";
 import { useZoteroText } from "./zotero-copy";
 
 /** 校验失败时 IPC 返回错误信封（无 authorized 字段），不能当作状态 */

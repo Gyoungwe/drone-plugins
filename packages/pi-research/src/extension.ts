@@ -1,16 +1,16 @@
-import { createResearchReceiptJournal } from "./core/receipt-journal.js";
 import { CLAIM_BINDING_SCHEMA } from "./core/claim-bindings.js";
-import { createResearchLoop, type ResearchLoopPorts } from "./core/research-loop.js";
-import { observeExecutionReceipt } from "./core/run-provenance.js";
+import { createResearchReceiptJournal } from "./core/receipt-journal.js";
 import {
 	deliveryMemoryClaims,
-	summaryReviewPacket,
-	validateSummaryAssessment,
 	type PreparedResearchDelivery,
 	type ResearchDeliveryCopy,
 	type ResearchDeliveryReceipt,
 	type ResearchSummaryReviewPacket,
+	summaryReviewPacket,
+	validateSummaryAssessment,
 } from "./core/research-delivery.js";
+import { createResearchLoop, type ResearchLoopPorts } from "./core/research-loop.js";
+import { observeExecutionReceipt } from "./core/run-provenance.js";
 
 export interface ResearchExtensionPorts extends ResearchLoopPorts {
 	resolveSessionProject(ctx: any, requested?: string): Promise<{ project: string }>;

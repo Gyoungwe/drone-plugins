@@ -26,9 +26,7 @@ const call = (registered, name, cwd, input = {}) =>
 const journal = (cwd) => join(cwd, "runs/.drone-discovery");
 
 test("native entry registers exactly its declared tools with explicit write metadata", async () => {
-	const manifest = JSON.parse(
-		await readFile(new URL("../plugin.manifest.json", import.meta.url), "utf8"),
-	);
+	const manifest = JSON.parse(await readFile(new URL("../plugin.manifest.json", import.meta.url), "utf8"));
 	const registered = await tools();
 	assert.deepEqual([...registered.keys()].sort(), [...manifest.tools].sort());
 	assert(
@@ -69,8 +67,7 @@ test("the same extension uses each calling workspace and leaves original journal
 		const a = join(root, "a"),
 			b = join(root, "b");
 		for (const cwd of [a, b]) await mkdir(journal(cwd), { recursive: true });
-		const source =
-			'[ {"findingId":"finding-a", "questions":[{"question":"Batch explanation?"}]} ]\n';
+		const source = '[ {"findingId":"finding-a", "questions":[{"question":"Batch explanation?"}]} ]\n';
 		const file = join(journal(a), "critics.json");
 		await writeFile(file, source);
 		await writeFile(join(journal(b), "critics.json"), '[{"findingId":"finding-b"}]');
@@ -205,13 +202,9 @@ test("native plan writing binds the actual workspace and excludes a second nativ
 				},
 			],
 		};
+		assert.equal((await call(first, "discovery_create_plan", root, input)).details.id, "plan-native");
 		assert.equal(
-			(await call(first, "discovery_create_plan", root, input)).details.id,
-			"plan-native",
-		);
-		assert.equal(
-			(await call(first, "discovery_list_records", root, { journal: "plans" })).details.records[0]
-				.id,
+			(await call(first, "discovery_list_records", root, { journal: "plans" })).details.records[0].id,
 			"plan-native",
 		);
 		await assert.rejects(
@@ -230,8 +223,7 @@ test("native plan writing binds the actual workspace and excludes a second nativ
 		).details;
 		assert.equal(recovered.readiness, "ready");
 		assert.equal(
-			(await call(second, "discovery_list_records", root, { journal: "plans" })).details.records[0]
-				.id,
+			(await call(second, "discovery_list_records", root, { journal: "plans" })).details.records[0].id,
 			"plan-native",
 		);
 	} finally {

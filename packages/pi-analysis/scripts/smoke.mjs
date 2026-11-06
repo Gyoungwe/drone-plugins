@@ -8,8 +8,8 @@ import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const packageRoot = resolve(import.meta.dirname, "..");
@@ -42,7 +42,9 @@ try {
 	assert.equal(packageJson.dependencies?.["@gyoungwe/plugin-api"], "^1.2.0");
 	assert.equal(packageJson.peerDependencies?.["@earendil-works/pi-coding-agent"], ">=1.1.0 <2.0.0");
 	assert.equal(packageJson.dependencies?.["@earendil-works/pi-coding-agent"], undefined);
-	const apiPackage = JSON.parse(await readFile(join(installRoot, "node_modules/@gyoungwe/plugin-api/package.json"), "utf8"));
+	const apiPackage = JSON.parse(
+		await readFile(join(installRoot, "node_modules/@gyoungwe/plugin-api/package.json"), "utf8"),
+	);
 	assert.equal(apiPackage.version, "1.2.0");
 	await readFile(join(installRoot, "node_modules/@gyoungwe/pi-analysis/dist/index.d.ts"), "utf8");
 	assert.deepEqual(manifest.capabilities, ["analysis", "planning", "evidence-context", "files"]);
@@ -53,7 +55,10 @@ try {
 	assert.equal(host.analysisHostLoader.contractVersion, 1);
 	assert.equal(host.analysisHostLoader.load().contractVersion, 1);
 	assert.deepEqual(
-		host.analysisHostLoader.load().registry.list().map((adapter) => adapter.identity.id),
+		host.analysisHostLoader
+			.load()
+			.registry.list()
+			.map((adapter) => adapter.identity.id),
 		["assembly", "bulk-rnaseq"],
 	);
 	const { DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
@@ -70,11 +75,10 @@ try {
 	assert.deepEqual(errors, [], JSON.stringify(errors));
 	const extension = extensions.find((item) => item.path === extensionPath);
 	assert(extension, "installed pi-analysis extension was not discovered");
-	assert.deepEqual([...extension.tools.keys()], [
-		"analysis_list_adapters",
-		"analysis_assess_readiness",
-		"analysis_prepare_evidence",
-	]);
+	assert.deepEqual(
+		[...extension.tools.keys()],
+		["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"],
+	);
 	assert.deepEqual(manifest.tools, [...extension.tools.keys()]);
 	console.log(
 		JSON.stringify({

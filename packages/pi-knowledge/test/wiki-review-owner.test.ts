@@ -6,9 +6,9 @@ import { afterEach, expect, it } from "vitest";
 import type { KnowledgeDepositMode } from "../src/core/config.js";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
 import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
+import { immutableWikiProposalHash } from "../src/core/wiki-policy.js";
 import { createKnowledgeWikiReview } from "../src/core/wiki-review.js";
 import { createLocalWikiReviewPorts } from "../src/core/wiki-review-node.js";
-import { immutableWikiProposalHash } from "../src/core/wiki-policy.js";
 
 const roots: string[] = [];
 afterEach(async () => {

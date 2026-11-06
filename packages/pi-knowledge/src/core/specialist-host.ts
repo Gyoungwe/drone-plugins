@@ -2,13 +2,20 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost, type ProcessEventEmitter } from "./runtime-host.js";
-import * as compatibilityConfig from "./config.js";
 import type { KnowledgeConfigApi } from "./config.js";
-import * as compatibilityUi from "./ui-state.js";
+import * as compatibilityConfig from "./config.js";
+import {
+	compatibilityKnowledgeRuntimeHost,
+	type KnowledgeRuntimeHost,
+	type ProcessEventEmitter,
+} from "./runtime-host.js";
 import type { createKnowledgeUi } from "./ui-state.js";
+import * as compatibilityUi from "./ui-state.js";
 
-export type KnowledgeSpecialistConfig = Pick<KnowledgeConfigApi, "readKnowledgeBinding" | "withKnowledgeBinding"> &
+export type KnowledgeSpecialistConfig = Pick<
+	KnowledgeConfigApi,
+	"readKnowledgeBinding" | "withKnowledgeBinding"
+> &
 	Partial<Pick<KnowledgeConfigApi, "knowledgeDirectory">>;
 
 export interface SpecialistSettingsStorage {
@@ -17,7 +24,13 @@ export interface SpecialistSettingsStorage {
 }
 
 /** Explicit owner; constructing this API never installs a process listener. */
-function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config: KnowledgeSpecialistConfig, ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">, emitLegacyPeerEvent: ProcessEventEmitter | null, storage?: SpecialistSettingsStorage) {
+function createKnowledgeSpecialistHostApi(
+	runtime: KnowledgeRuntimeHost,
+	config: KnowledgeSpecialistConfig,
+	ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">,
+	emitLegacyPeerEvent: ProcessEventEmitter | null,
+	storage?: SpecialistSettingsStorage,
+) {
 	const { runtimeSlot } = runtime;
 	const { knowledgeDirectory, readKnowledgeBinding, withKnowledgeBinding } = config;
 	const { invalidateKnowledgeUi } = ui;
@@ -192,17 +205,17 @@ function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config:
 					data.revision = revision + 1;
 					if (storage) await storage.write(data, revision);
 					else {
-					const dir = knowledgeDirectory(),
-						temp = join(dir, `specialists.${randomUUID()}.tmp`);
-					await mkdir(dir, { recursive: true, mode: 0o700 });
-					try {
-						await writeFile(temp, `${JSON.stringify(data)}\n`, { flag: "wx", mode: 0o600 });
-						await rename(temp, join(dir, "specialists.json"));
-					} finally {
-						await unlink(temp).catch((e) => {
-							if (e.code !== "ENOENT") throw e;
-						});
-					}
+						const dir = knowledgeDirectory(),
+							temp = join(dir, `specialists.${randomUUID()}.tmp`);
+						await mkdir(dir, { recursive: true, mode: 0o700 });
+						try {
+							await writeFile(temp, `${JSON.stringify(data)}\n`, { flag: "wx", mode: 0o600 });
+							await rename(temp, join(dir, "specialists.json"));
+						} finally {
+							await unlink(temp).catch((e) => {
+								if (e.code !== "ENOENT") throw e;
+							});
+						}
 					}
 					invalidateKnowledgeUi();
 					return { ...SPECIALIST_LIMITS, ...data };
@@ -221,7 +234,11 @@ function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config:
 			SPECIALIST_LIMITS.concurrency,
 			SPECIALIST_LIMITS.maxConcurrency,
 		);
-		const queueLimit = bounded(options.queueLimit, SPECIALIST_LIMITS.queueLimit, SPECIALIST_LIMITS.queueLimit);
+		const queueLimit = bounded(
+			options.queueLimit,
+			SPECIALIST_LIMITS.queueLimit,
+			SPECIALIST_LIMITS.queueLimit,
+		);
 		const queueWaitMs = bounded(
 			options.queueWaitMs,
 			SPECIALIST_LIMITS.queueWaitMs,
@@ -276,16 +293,46 @@ function createKnowledgeSpecialistHostApi(runtime: KnowledgeRuntimeHost, config:
 			else state.active--;
 		}
 	}
-	return { dispose: () => state.dispose(), SPECIALIST_LIMITS, contextSessionId, specialistQueueSnapshot, registerKnowledgeSpecialistHost, knowledgeSpecialistHost, specialistSettings, setSpecialistSettings, withSpecialistSlot, receiveCompatibilityEvent };
+	return {
+		dispose: () => state.dispose(),
+		SPECIALIST_LIMITS,
+		contextSessionId,
+		specialistQueueSnapshot,
+		registerKnowledgeSpecialistHost,
+		knowledgeSpecialistHost,
+		specialistSettings,
+		setSpecialistSettings,
+		withSpecialistSlot,
+		receiveCompatibilityEvent,
+	};
 }
 
 /** New owners keep function-valued specialist registrations inside their registry. */
-export function createKnowledgeSpecialistHost(runtime: KnowledgeRuntimeHost, config: KnowledgeSpecialistConfig, ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">, storage?: SpecialistSettingsStorage) {
+export function createKnowledgeSpecialistHost(
+	runtime: KnowledgeRuntimeHost,
+	config: KnowledgeSpecialistConfig,
+	ui: Pick<ReturnType<typeof createKnowledgeUi>, "invalidateKnowledgeUi">,
+	storage?: SpecialistSettingsStorage,
+) {
 	return createKnowledgeSpecialistHostApi(runtime, config, ui, null, storage);
 }
 
 // pi-knowledge 0.2 compatibility only. Delete when native/Desktop composition
 // shares one explicit 0.3 owner and no host consumer imports these facades.
-const compatibilityKnowledgeSpecialists = createKnowledgeSpecialistHostApi(compatibilityKnowledgeRuntimeHost, compatibilityConfig, compatibilityUi, compatibilityKnowledgeRuntimeHost.emitProcessEvent);
+const compatibilityKnowledgeSpecialists = createKnowledgeSpecialistHostApi(
+	compatibilityKnowledgeRuntimeHost,
+	compatibilityConfig,
+	compatibilityUi,
+	compatibilityKnowledgeRuntimeHost.emitProcessEvent,
+);
 process.on("drone:knowledge-specialist-host/v1", compatibilityKnowledgeSpecialists.receiveCompatibilityEvent);
-export const { SPECIALIST_LIMITS, contextSessionId, specialistQueueSnapshot, registerKnowledgeSpecialistHost, knowledgeSpecialistHost, specialistSettings, setSpecialistSettings, withSpecialistSlot } = compatibilityKnowledgeSpecialists;
+export const {
+	SPECIALIST_LIMITS,
+	contextSessionId,
+	specialistQueueSnapshot,
+	registerKnowledgeSpecialistHost,
+	knowledgeSpecialistHost,
+	specialistSettings,
+	setSpecialistSettings,
+	withSpecialistSlot,
+} = compatibilityKnowledgeSpecialists;

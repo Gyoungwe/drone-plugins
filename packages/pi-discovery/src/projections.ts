@@ -1,12 +1,12 @@
+import type { CriticReviewResult, MultipathAssessment } from "./domain/critic.js";
+import type { DiscoveryEvaluationRun } from "./domain/evaluation.js";
+import type { DiscoveryExplorationBudget } from "./domain/exploration.js";
 import type {
 	DiscoveryClassification,
 	DiscoveryLanguage,
-	DiscoveryRunnerCapabilities,
 	DiscoveryQuestionPrior,
+	DiscoveryRunnerCapabilities,
 } from "./ports.js";
-import type { CriticReviewResult, MultipathAssessment } from "./domain/critic.js";
-import type { DiscoveryExplorationBudget } from "./domain/exploration.js";
-import type { DiscoveryEvaluationRun } from "./domain/evaluation.js";
 export type DiscoveryCapabilities = DiscoveryRunnerCapabilities;
 export type DiscoveryDataClassification = DiscoveryClassification;
 export type DiscoveryKernelLanguage = DiscoveryLanguage;
@@ -15,13 +15,7 @@ export interface DiscoveryKernelSession {
 	readonly language: DiscoveryLanguage;
 	readonly dataClassification: DiscoveryClassification;
 	readonly runDirectory: string;
-	readonly status:
-		| "ready"
-		| "running"
-		| "closed"
-		| "idle-timeout"
-		| "needs-container"
-		| "cleanup-failed";
+	readonly status: "ready" | "running" | "closed" | "idle-timeout" | "needs-container" | "cleanup-failed";
 	readonly executionCount: number;
 	readonly remainingExecutions: number;
 	readonly expiresAt?: string;

@@ -1,13 +1,13 @@
-export * from "./artifacts.js";
 export * from "./analysis-plan.js";
+export * from "./artifacts.js";
 export * from "./capsule.js";
 export * from "./checkpoints.js";
 export * from "./digest.js";
 export * from "./provenance.js";
 export * from "./replay.js";
 
-import { validateArtifactManifest } from "./artifacts.js";
 import { validateAnalysisEvidencePlan } from "./analysis-plan.js";
+import { validateArtifactManifest } from "./artifacts.js";
 import { validateCapsuleImport } from "./capsule.js";
 import { verifyReplay } from "./replay.js";
 

@@ -273,7 +273,8 @@ export const DEFAULT_CONNECTOR_DESCRIPTORS: readonly ConnectorDescriptor[] = [
 		version: "1",
 		kind: "search",
 		label: "Semantic Scholar",
-		description: "Read public Semantic Scholar paper metadata and citation links through a host-owned adapter.",
+		description:
+			"Read public Semantic Scholar paper metadata and citation links through a host-owned adapter.",
 		permissions: {
 			capabilities: ["search", "read", "resolve"],
 			hosts: ["native-pi", "drone-desktop"],

@@ -3,7 +3,9 @@ import { localApiSearchByDoi, probeZoteroConnector } from "../src/core/zotero-wr
 import { capabilityFetch } from "../src/desktop/capability-fetch.js";
 
 /** A host that answers network.read/write the way Drone's network capabilities do. */
-function host(respond: (request: any) => { status: number; headers?: Record<string, string>; body?: string }) {
+function host(
+	respond: (request: any) => { status: number; headers?: Record<string, string>; body?: string },
+) {
 	const calls: { name: string; input: any; signal?: AbortSignal }[] = [];
 	const call = async (name: string, input: any, signal?: AbortSignal) => {
 		calls.push({ name, input, signal });

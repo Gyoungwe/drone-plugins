@@ -23,13 +23,7 @@ function Incompatible() {
 }
 export function TaskPanel() {
 	return (
-		<Surface>
-			{uiCompatibility().status === "compatible" ? (
-				<TaskPanelContent />
-			) : (
-				<Incompatible />
-			)}
-		</Surface>
+		<Surface>{uiCompatibility().status === "compatible" ? <TaskPanelContent /> : <Incompatible />}</Surface>
 	);
 }
 export function TaskMessage(props: ChatMessageProps) {
@@ -39,8 +33,7 @@ export function TaskMessage(props: ChatMessageProps) {
 				<Incompatible />
 			</Surface>
 		);
-	if (props.message.kind !== "assistant" || !props.message.taskView)
-		return props.renderDefault();
+	if (props.message.kind !== "assistant" || !props.message.taskView) return props.renderDefault();
 	if (uiCompatibility().status !== "compatible")
 		return (
 			<Surface>

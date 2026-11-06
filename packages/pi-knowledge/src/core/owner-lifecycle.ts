@@ -16,20 +16,27 @@ export function createKnowledgeOwnerLifecycle(resources: { beforeDrain?(): void;
 	function attachSession(close: () => Promise<void>) {
 		assertActive();
 		sessions.add(close);
-		return () => { sessions.delete(close); };
+		return () => {
+			sessions.delete(close);
+		};
 	}
 	function dispose(): Promise<void> {
 		if (disposal) return disposal;
 		disposed = true;
 		disposal = (async () => {
-			const sessionResults = await Promise.allSettled([...sessions].map(close => close()));
+			const sessionResults = await Promise.allSettled([...sessions].map((close) => close()));
 			sessions.clear();
 			resources.beforeDrain?.();
 			const operationResults = await Promise.allSettled([...operations]);
 			const resourceResults = await Promise.allSettled([resources.dispose()]);
-			const failures = [...sessionResults, ...operationResults, ...resourceResults]
-				.filter((result): result is PromiseRejectedResult => result.status === "rejected");
-			if (failures.length) throw new AggregateError(failures.map(result => result.reason), "Knowledge runtime disposal failed");
+			const failures = [...sessionResults, ...operationResults, ...resourceResults].filter(
+				(result): result is PromiseRejectedResult => result.status === "rejected",
+			);
+			if (failures.length)
+				throw new AggregateError(
+					failures.map((result) => result.reason),
+					"Knowledge runtime disposal failed",
+				);
 		})();
 		return disposal;
 	}

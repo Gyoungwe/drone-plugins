@@ -4,28 +4,12 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
-import type {
-	ArtifactRecord,
-	AttemptRecord,
-	FindingRecord,
-	QuestionRecord,
-} from "../src/models.js";
-import { InquiryService, decisionRecord } from "../src/service.js";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ArtifactRecord, AttemptRecord, FindingRecord, QuestionRecord } from "../src/models.js";
+import { decisionRecord, InquiryService } from "../src/service.js";
 import { SqliteInquiryStorage } from "../src/storage.js";
 import type { InquiryStorage } from "../src/storage-contract.js";
-import {
-	createInquiryWasmEngine,
-	type WasmInquiryStorage,
-} from "../src/wasm-storage.js";
+import { createInquiryWasmEngine, type WasmInquiryStorage } from "../src/wasm-storage.js";
 
 const date = "2026-10-28T00:00:00.000Z",
 	projectId = "project-1";
@@ -34,9 +18,7 @@ let engine: Awaited<ReturnType<typeof createInquiryWasmEngine>>;
 const roots: string[] = [],
 	stores: InquiryStorage[] = [];
 beforeAll(async () => {
-	engine = await createInquiryWasmEngine(
-		await readFile(require.resolve("sql.js/dist/sql-wasm.wasm")),
-	);
+	engine = await createInquiryWasmEngine(await readFile(require.resolve("sql.js/dist/sql-wasm.wasm")));
 });
 beforeEach(() => {
 	vi.useFakeTimers({ toFake: ["Date"] });
@@ -45,9 +27,7 @@ beforeEach(() => {
 afterEach(async () => {
 	vi.useRealTimers();
 	await Promise.all(stores.splice(0).map((store) => store.close?.()));
-	await Promise.all(
-		roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
-	);
+	await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 async function temporary() {
 	const root = await mkdtemp(join(tmpdir(), "inquiry-wasm-contract-"));
@@ -97,10 +77,7 @@ function question(overrides: Partial<QuestionRecord> = {}): QuestionRecord {
 async function open(kind: "node" | "wasm") {
 	const store =
 		kind === "node"
-			? new SqliteInquiryStorage(
-					projectId,
-					join(await temporary(), "ledger.sqlite"),
-				)
+			? new SqliteInquiryStorage(projectId, join(await temporary(), "ledger.sqlite"))
 			: engine.open(projectId);
 	stores.push(store);
 	return store;
@@ -156,17 +133,9 @@ async function exercise(store: InquiryStorage) {
 		createdAt: date,
 	});
 	await service.recordDecision(decision);
-	await service.revokeDecision(
-		decision.id,
-		"Explicit fixture revocation",
-		date,
-	);
+	await service.revokeDecision(decision.id, "Explicit fixture revocation", date);
 	expect((await store.artifacts.get("child"))?.status).toBe("pending-review");
-	await service.confirmDecision(
-		decision.id,
-		"Explicit fixture human review",
-		date,
-	);
+	await service.confirmDecision(decision.id, "Explicit fixture human review", date);
 	await service.recordDecision(decision);
 	expect((await service.listDecisions())[0]?.status).toBe("revoked");
 	service.setRerunHandler(async () => ({ jobId: "synthetic-job" }));
@@ -174,9 +143,7 @@ async function exercise(store: InquiryStorage) {
 	expect(submitted.status).toBe("submitted");
 	const rerun = (await service.pendingReruns())[0]!;
 	await service.markRerunRunning(rerun.id);
-	expect(
-		(await service.completeRerun(rerun.id, { artifact: artifact() }))?.status,
-	).toBe("reproduced");
+	expect((await service.completeRerun(rerun.id, { artifact: artifact() }))?.status).toBe("reproduced");
 	return {
 		snapshot: await service.snapshot(),
 		projection: await service.readOnlyState(),
@@ -204,9 +171,9 @@ for (const kind of ["node", "wasm"] as const) {
 				service = new InquiryService(store);
 			await service.recordArtifact(artifact());
 			const before = await store.snapshot();
-			await expect(
-				service.recordArtifact(artifact({ id: "invalid", path: "../outside" })),
-			).rejects.toThrow("safe project-relative");
+			await expect(service.recordArtifact(artifact({ id: "invalid", path: "../outside" }))).rejects.toThrow(
+				"safe project-relative",
+			);
 			expect(await store.snapshot()).toEqual(before);
 			await service.recordQuestion(question());
 			expect((await store.snapshot()).revision).toBe(before.revision + 1);
@@ -214,18 +181,14 @@ for (const kind of ["node", "wasm"] as const) {
 	});
 }
 it("produces identical domain state from the Node and WASM adapters", async () => {
-	expect(await exercise(await open("wasm"))).toEqual(
-		await exercise(await open("node")),
-	);
+	expect(await exercise(await open("wasm"))).toEqual(await exercise(await open("node")));
 });
 it("exports the original SQLite format, reopens after export and remains readable by canonical Node", async () => {
 	const store = engine.open(projectId);
 	stores.push(store);
 	await exercise(store);
 	const bytes = await store.exportBytes();
-	expect(Buffer.from(bytes.subarray(0, 16)).toString()).toBe(
-		"SQLite format 3\0",
-	);
+	expect(Buffer.from(bytes.subarray(0, 16)).toString()).toBe("SQLite format 3\0");
 	await store.questions.put(question({ id: "after-export" }));
 	const updated = await store.exportBytes();
 	const reopened = engine.open(projectId, updated);
@@ -306,7 +269,5 @@ it("keeps a multi-megabyte synthetic DB in the same format for the later bounded
 	expect(bytes.length).toBeLessThan(4 * 1024 * 1024);
 	const reopened = engine.open(projectId, bytes);
 	stores.push(reopened);
-	expect((await reopened.questions.get("question"))?.statement.length).toBe(
-		3 * 1024 * 1024 + 10,
-	);
+	expect((await reopened.questions.get("question"))?.statement.length).toBe(3 * 1024 * 1024 + 10);
 });

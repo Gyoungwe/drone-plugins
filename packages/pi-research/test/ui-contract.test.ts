@@ -11,7 +11,11 @@ describe("pi-research UI contribution contract", () => {
 		expect(manifest.contributions).toEqual([
 			expect.objectContaining({ id: "research-home", region: "home.section", export: "ResearchHome" }),
 			expect.objectContaining({ id: "research-citations", region: "panel.tab", export: "ResearchCitations" }),
-			expect.objectContaining({ id: "research-connectors", region: "skills.section", export: "ResearchConnectors" }),
+			expect.objectContaining({
+				id: "research-connectors",
+				region: "skills.section",
+				export: "ResearchConnectors",
+			}),
 		]);
 	});
 

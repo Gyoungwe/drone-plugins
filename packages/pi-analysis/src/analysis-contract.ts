@@ -148,8 +148,14 @@ export interface AnalysisNumericalComparisonInput {
 	readonly context: AnalysisContext;
 	readonly method: AnalysisIdentity;
 	readonly scientificPlan: AnalysisScientificPlan;
-	readonly expected: { readonly artifacts: readonly AnalysisArtifactEvidence[]; readonly reader: AnalysisArtifactReader };
-	readonly actual: { readonly artifacts: readonly AnalysisArtifactEvidence[]; readonly reader: AnalysisArtifactReader };
+	readonly expected: {
+		readonly artifacts: readonly AnalysisArtifactEvidence[];
+		readonly reader: AnalysisArtifactReader;
+	};
+	readonly actual: {
+		readonly artifacts: readonly AnalysisArtifactEvidence[];
+		readonly reader: AnalysisArtifactReader;
+	};
 }
 export interface AnalysisNumericalComparison {
 	readonly policy: AnalysisNumericalComparatorPolicy;

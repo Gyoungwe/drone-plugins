@@ -84,10 +84,7 @@ test("critic enforces independent provider and records read-only review question
 		artifactIds: [],
 		primaryProviderId: "primary",
 	};
-	assert.equal(
-		(await host.runCritic(request)).status,
-		"needs-independent-provider",
-	);
+	assert.equal((await host.runCritic(request)).status, "needs-independent-provider");
 	services.criticProvider = {
 		providerId: "independent",
 		review: async (input) => {

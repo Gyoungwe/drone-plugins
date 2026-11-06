@@ -17,10 +17,8 @@ export const RESPONSE_CONTRACT = [
 	"- Keep private reasoning private; expose observable actions, evidence, decisions, and conclusions.",
 ].join("\n");
 
-
 export function resolveHarnessModelFamily(provider: string, model: string): string {
-	const value =
-		`${provider}/${model}`.toLowerCase();
+	const value = `${provider}/${model}`.toLowerCase();
 	if (value.includes("astra") || value.includes("gpt-6")) return "gpt-astra";
 	if (value.includes("codex")) return "codex";
 	if (value.includes("claude") || value.includes("anthropic")) return "anthropic";
@@ -30,11 +28,11 @@ export function resolveHarnessModelFamily(provider: string, model: string): stri
 	return "default";
 }
 
-
 export function specialistContract(provider: string, model: string, role: string): string {
 	return [
 		`Specialist contract (${role}; model family ${resolveHarnessModelFamily(provider, model)}): return only the requested structured handoff and do not delegate or ask the user.`,
-		SCIENCE_CONTRACT, RESPONSE_CONTRACT,
+		SCIENCE_CONTRACT,
+		RESPONSE_CONTRACT,
 		[
 			"Harness posture: effort NORMAL. Stay focused and add branches only when they materially help.",
 			"Delegation: off. Keep the work in the lead conversation.",

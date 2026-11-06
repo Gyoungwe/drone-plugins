@@ -31,7 +31,11 @@ function ResearchCard({
 }
 
 function Badge({ children }: { children: ReactNode }) {
-	return <span className="rounded-md border border-border bg-canvas px-2 py-1 text-[11px] text-ink-2">{children}</span>;
+	return (
+		<span className="rounded-md border border-border bg-canvas px-2 py-1 text-[11px] text-ink-2">
+			{children}
+		</span>
+	);
 }
 
 export const ResearchHome = memo(function ResearchHome() {

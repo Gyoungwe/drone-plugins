@@ -14,11 +14,7 @@ export function TaskStorageNotice({ view }: { view: TaskView }) {
 				? "storage.memory"
 				: "storage.deferred";
 	return (
-		<p
-			className="mt-2 text-xs text-warn"
-			role="status"
-			data-task-storage={storage?.state || "unknown"}
-		>
+		<p className="mt-2 text-xs text-warn" role="status" data-task-storage={storage?.state || "unknown"}>
 			{t(key)}
 		</p>
 	);

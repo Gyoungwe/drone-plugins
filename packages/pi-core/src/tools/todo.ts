@@ -1,6 +1,6 @@
-import { formatTodoList, TODO_TOOL_NAME, type TodoItem } from "../contracts";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { formatTodoList, TODO_TOOL_NAME, type TodoItem } from "../contracts";
 
 export { formatTodoList } from "../contracts";
 

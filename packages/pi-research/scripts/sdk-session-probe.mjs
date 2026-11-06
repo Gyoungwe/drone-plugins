@@ -2,11 +2,7 @@
 import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import {
-	fauxProvider,
-	fauxAssistantMessage,
-	fauxToolCall,
-} from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
 import {
 	createAgentSession,
 	DefaultResourceLoader,
@@ -19,22 +15,14 @@ const cwd = resolve("workspace");
 const agentDir = process.env.PI_CODING_AGENT_DIR;
 await mkdir(cwd);
 await mkdir(agentDir, { recursive: true });
-await writeFile(
-	join(cwd, "source.md"),
-	"# SDK acceptance source\nBounded local evidence for SDKRESEARCH.\n",
-);
+await writeFile(join(cwd, "source.md"), "# SDK acceptance source\nBounded local evidence for SDKRESEARCH.\n");
 await writeFile(
 	join(cwd, "second.md"),
 	"# Independent SDK source\nA distinct bounded observation for SDKRESEARCH.\n",
 );
-const extensionPath = resolve(
-	"node_modules/@gyoungwe/pi-research/dist/index.mjs",
-);
+const extensionPath = resolve("node_modules/@gyoungwe/pi-research/dist/index.mjs");
 const manifest = JSON.parse(
-	await readFile(
-		resolve("node_modules/@gyoungwe/pi-research/plugin.manifest.json"),
-		"utf8",
-	),
+	await readFile(resolve("node_modules/@gyoungwe/pi-research/plugin.manifest.json"), "utf8"),
 );
 const settingsManager = SettingsManager.inMemory({ projectTrusted: true });
 const contexts = [];
@@ -57,13 +45,8 @@ const loader = new DefaultResourceLoader({
 });
 await loader.reload();
 assert.deepEqual(loader.getExtensions().errors, []);
-const extension = loader
-	.getExtensions()
-	.extensions.find((item) => item.path === extensionPath);
-assert.deepEqual(
-	[...extension.tools.keys()].sort(),
-	[...manifest.tools].sort(),
-);
+const extension = loader.getExtensions().extensions.find((item) => item.path === extensionPath);
+assert.deepEqual([...extension.tools.keys()].sort(), [...manifest.tools].sort());
 const runtime = await ModelRuntime.create({
 	authPath: join(agentDir, "auth.json"),
 	modelsPath: null,
@@ -106,11 +89,7 @@ async function call(session, name, args) {
 	]);
 	try {
 		await session.prompt("Execute the scheduled acceptance tool.");
-		assert.equal(
-			receipts.length,
-			1,
-			"must execute exactly one real tool via the agent loop",
-		);
+		assert.equal(receipts.length, 1, "must execute exactly one real tool via the agent loop");
 		assert.equal(receipts[0].toolName, name);
 		dispatchCount++;
 		return receipts[0];
@@ -158,13 +137,9 @@ try {
 	});
 	assert.equal(deposit.isError, false);
 	assert.equal(deposit.result.details.scientificallyVerified, false);
-	const savedNote = await readFile(
-		join(cwd, deposit.result.details.path),
-		"utf8",
-	);
+	const savedNote = await readFile(join(cwd, deposit.result.details.path), "utf8");
 	assert(savedNote.includes("Candidate fixture synthesis."));
-	for (const citation of answer.result.details.citations)
-		assert(savedNote.includes(citation.read_hash));
+	for (const citation of answer.result.details.citations) assert(savedNote.includes(citation.read_hash));
 	const started = await call(session, "research_loop", {
 		action: "start",
 		query: "SDKRESEARCH",
@@ -185,13 +160,9 @@ try {
 		action: "finalize",
 		run_dir: runDir,
 	});
-	assert(
-		emptyBind.isError ||
-			emptyBind.result.details.evidence_gate.answerable === false,
-	);
+	assert(emptyBind.isError || emptyBind.result.details.evidence_gate.answerable === false);
 	const emptyClaimsBlocked =
-		emptyFinalize.isError ||
-		emptyFinalize.result.details.evidence_gate.answerable === false;
+		emptyFinalize.isError || emptyFinalize.result.details.evidence_gate.answerable === false;
 	// Keep the first session active so its run remains owned.
 	// Reuse this loader, so both sessions exercise the same extension closure and maps.
 	session = await openSession();
@@ -202,20 +173,12 @@ try {
 	const leakedRead = await call(session, "research_read_source", {
 		source_id: sourceId,
 	});
-	assert.equal(
-		leakedRead.isError,
-		true,
-		"second session must not read a first-session source ID",
-	);
+	assert.equal(leakedRead.isError, true, "second session must not read a first-session source ID");
 	const leakedRun = await call(session, "research_loop", {
 		action: "status",
 		run_dir: runDir,
 	});
-	assert.equal(
-		leakedRun.isError,
-		true,
-		"second session must not access the first-session ledger",
-	);
+	assert.equal(leakedRun.isError, true, "second session must not access the first-session ledger");
 	assert.deepEqual(new Set(contexts), new Set(ids));
 	console.log(
 		JSON.stringify({

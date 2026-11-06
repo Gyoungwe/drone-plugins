@@ -1,7 +1,6 @@
 import type { ZoteroStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { Button } from "../api";
+import { Button, getKnowledgeApi } from "../api";
 import { ZoteroLocalWriteSection } from "./ZoteroLocalWriteSection";
 import { ZoteroWebApiSection } from "./ZoteroWebApiSection";
 import { useZoteroText } from "./zotero-copy";

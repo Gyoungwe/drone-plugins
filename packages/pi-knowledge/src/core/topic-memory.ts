@@ -2,10 +2,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
 import { compareClaimSets } from "./claim-conflicts.js";
-import { knowledgeDirectory, type KnowledgeConfigApi } from "./config.js";
+import { type KnowledgeConfigApi, knowledgeDirectory } from "./config.js";
 import { canRead, readNoteFile, validateNote } from "./files.js";
+import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
 
 export interface TopicMemoryStorage {
 	readonly key: string;
@@ -13,7 +13,10 @@ export interface TopicMemoryStorage {
 	write(value: unknown, expectedRevision: number): Promise<void>;
 	readSource(path: string): ReturnType<typeof readNoteFile>;
 }
-export type TopicMemoryStorageFactory = (binding: import("./config.js").KnowledgeBinding, project: string) => TopicMemoryStorage;
+export type TopicMemoryStorageFactory = (
+	binding: import("./config.js").KnowledgeBinding,
+	project: string,
+) => TopicMemoryStorage;
 
 export const TOPIC_MEMORY_VERSION = 1;
 export const TOPIC_MEMORY_LIMITS = Object.freeze({
@@ -527,7 +530,9 @@ function createTopicMemoryWithHost(
 						stale.push({ path: source.path, reason: "out-of-scope" });
 						continue;
 					}
-					const current = storage ? await storage.readSource(source.path) : await readNoteFile(binding.vault, source.path);
+					const current = storage
+						? await storage.readSource(source.path)
+						: await readNoteFile(binding.vault, source.path);
 					if (current.hash !== source.hash) stale.push({ path: source.path, reason: "changed" });
 				} catch {
 					stale.push({ path: source.path, reason: "missing-or-invalid" });
@@ -787,7 +792,8 @@ export function createTopicMemoryApi(
 	config: Pick<KnowledgeConfigApi, "knowledgeDirectory"> | undefined,
 	storageFactory?: TopicMemoryStorageFactory,
 ) {
-	const createTopicMemory = (options = {}) => createTopicMemoryWithHost(runtime, config, options, storageFactory);
+	const createTopicMemory = (options = {}) =>
+		createTopicMemoryWithHost(runtime, config, options, storageFactory);
 	async function listTopics(options = {}) {
 		return (await createTopicMemory(options).list(options.query || "")).topics;
 	}
@@ -812,5 +818,7 @@ export function createTopicMemoryApi(
 
 // pi-knowledge 0.2 compatibility. Remove once every native/Desktop consumer uses
 // the same explicitly composed 0.3 runtime owner instead of module facades.
-export const { createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic } =
-	createTopicMemoryApi(compatibilityKnowledgeRuntimeHost, { knowledgeDirectory });
+export const { createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic } = createTopicMemoryApi(
+	compatibilityKnowledgeRuntimeHost,
+	{ knowledgeDirectory },
+);

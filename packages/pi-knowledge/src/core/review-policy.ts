@@ -1,5 +1,5 @@
-import * as compatibilityConfig from "./config.js";
 import type { KnowledgeConfigApi } from "./config.js";
+import * as compatibilityConfig from "./config.js";
 import { createLocalReviewPolicyStorage } from "./review-policy-storage.js";
 
 export type ReviewMode = "automatic" | "strict";
@@ -47,10 +47,7 @@ export function createStoredKnowledgeReviewPolicy(
 				diagnostic: "invalid-json",
 			};
 		const value = document.value;
-		const mode =
-			value && typeof value === "object" && "mode" in value
-				? value.mode
-				: undefined;
+		const mode = value && typeof value === "object" && "mode" in value ? value.mode : undefined;
 		if (mode !== "automatic" && mode !== "strict")
 			return {
 				mode: "strict",
@@ -74,13 +71,9 @@ export function createStoredKnowledgeReviewPolicy(
 		mode: string,
 		expectedVersion?: string | null,
 	): Promise<{ mode: ReviewMode }> {
-		if (mode !== "automatic" && mode !== "strict")
-			throw new Error("Invalid review mode");
+		if (mode !== "automatic" && mode !== "strict") throw new Error("Invalid review mode");
 		const current = await readReviewPolicy();
-		if (current.diagnostic)
-			throw new Error(
-				"Review policy is damaged; repair it before changing settings",
-			);
+		if (current.diagnostic) throw new Error("Review policy is damaged; repair it before changing settings");
 		await storage.write(
 			{ version: 1, mode },
 			expectedVersion === undefined ? current.version : expectedVersion,
@@ -93,9 +86,7 @@ export function createStoredKnowledgeReviewPolicy(
 	return { readReviewMode, readReviewPolicy, saveReviewMode };
 }
 
-export function createKnowledgeReviewPolicy(
-	config: Pick<KnowledgeConfigApi, "knowledgeDirectory">,
-) {
+export function createKnowledgeReviewPolicy(config: Pick<KnowledgeConfigApi, "knowledgeDirectory">) {
 	return createStoredKnowledgeReviewPolicy(
 		createLocalReviewPolicyStorage(config),
 		() => process.env.DRONE_REVIEW_MODE === "strict",
@@ -104,8 +95,7 @@ export function createKnowledgeReviewPolicy(
 
 // pi-knowledge 0.2 compatibility; remove when all native/Desktop consumers
 // share the same explicit 0.3 owner and fixed configuration directory.
-export const { readReviewMode, saveReviewMode } =
-	createKnowledgeReviewPolicy(compatibilityConfig);
+export const { readReviewMode, saveReviewMode } = createKnowledgeReviewPolicy(compatibilityConfig);
 
 export const advisoryCodes = new Set([
 	"paper-citation-required",

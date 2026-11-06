@@ -95,7 +95,12 @@ describe("research host contract seam", () => {
 			sourceReceipt: { readOnly: true, sourceType: "literature" },
 		});
 
-		const projectResult = await host.search({ query: "methods", cwd: "/workspace", connectorIds: ["project-storage"], limit: 2 });
+		const projectResult = await host.search({
+			query: "methods",
+			cwd: "/workspace",
+			connectorIds: ["project-storage"],
+			limit: 2,
+		});
 		expect(projectResult.complete).toBe(true);
 		expect(projectResult.hits[0]).toMatchObject({
 			id: expect.stringMatching(/^project-storage:/u),

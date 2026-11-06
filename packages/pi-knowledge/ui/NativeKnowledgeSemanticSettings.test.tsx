@@ -27,18 +27,10 @@ afterEach(cleanup);
 
 it("reads semantic settings through the runtime and saves with binding and settings revisions", async () => {
 	const runtime = {
-		invoke: vi.fn(async (operation: string) =>
-			operation === "semanticSettings" ? semantic : semantic,
-		),
+		invoke: vi.fn(async (operation: string) => (operation === "semanticSettings" ? semantic : semantic)),
 		subscribe: vi.fn(() => () => {}),
 	};
-	render(
-		<NativeKnowledgeSemanticSettings
-			client={runtime}
-			observationRevision={1}
-			refreshing={false}
-		/>,
-	);
+	render(<NativeKnowledgeSemanticSettings client={runtime} observationRevision={1} refreshing={false} />);
 	await screen.findByText("相似内容设置");
 	fireEvent.click(screen.getByRole("checkbox"));
 	fireEvent.change(screen.getByRole("combobox", { name: "模型服务" }), {
@@ -70,16 +62,8 @@ it("keeps semantic writes disabled without the host state grant", async () => {
 		invoke: vi.fn(async () => ({ ...semantic, canWriteState: false })),
 		subscribe: vi.fn(() => () => {}),
 	};
-	render(
-		<NativeKnowledgeSemanticSettings
-			client={runtime}
-			observationRevision={1}
-			refreshing={false}
-		/>,
-	);
+	render(<NativeKnowledgeSemanticSettings client={runtime} observationRevision={1} refreshing={false} />);
 	await screen.findByText(/当前仅授权读取状态/);
 	expect((screen.getByRole("button", { name: "保存相似内容设置" }) as HTMLButtonElement).disabled).toBe(true);
-	expect(runtime.invoke.mock.calls.map(([operation]) => operation)).toEqual([
-		"semanticSettings",
-	]);
+	expect(runtime.invoke.mock.calls.map(([operation]) => operation)).toEqual(["semanticSettings"]);
 });

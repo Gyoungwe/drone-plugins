@@ -1,8 +1,14 @@
-import type { PluginModelSelection, PluginModelToolDeclaration, PluginModelToolMessage, PluginModelToolStepInput, PluginModelToolStepResult } from "@gyoungwe/plugin-api/runtime";
+import type {
+	PluginModelSelection,
+	PluginModelToolDeclaration,
+	PluginModelToolMessage,
+	PluginModelToolStepInput,
+	PluginModelToolStepResult,
+} from "@gyoungwe/plugin-api/runtime";
 import { Type } from "typebox";
 import { Check } from "typebox/value";
-import { type KnowledgeSpecialistRole, PROTECTED_KNOWLEDGE_AGENTS } from "./specialist-profiles.js";
 import { specialistContract } from "./specialist-contract.js";
+import { type KnowledgeSpecialistRole, PROTECTED_KNOWLEDGE_AGENTS } from "./specialist-profiles.js";
 
 type Tool = PluginModelToolDeclaration;
 
@@ -14,7 +20,7 @@ export interface SpecialistRequest {
 	task: string;
 	packet: string;
 	skillText?: string;
-	
+
 	capabilities: SpecialistCapability[];
 	signal?: AbortSignal;
 	timeoutMs?: number;
@@ -210,9 +216,16 @@ export async function runKnowledgeSpecialist(
 			if (Buffer.byteLength(JSON.stringify(messages)) > 80000)
 				throw new Error("Specialist private context budget exhausted");
 			request.progress({ action: "model" });
-			const result = await deps.step({
-				selection, systemPrompt: context.systemPrompt, messages, tools, maxTokens: profile.maxTokens,
-			}, controller.signal);
+			const result = await deps.step(
+				{
+					selection,
+					systemPrompt: context.systemPrompt,
+					messages,
+					tools,
+					maxTokens: profile.maxTokens,
+				},
+				controller.signal,
+			);
 			const reply = result.reply;
 			const observed = result.usage;
 			const reportedFields = [...observed.reportedFields];
@@ -223,19 +236,37 @@ export async function runKnowledgeSpecialist(
 			}
 			// Zeroes are internal sums only; reportedFields preserves unknown telemetry and pricing.
 			const delta = {
-				inputTokens: observed.inputTokens ?? 0, outputTokens: observed.outputTokens ?? 0,
-				cacheReadTokens: observed.cacheReadTokens ?? 0, cacheWriteTokens: observed.cacheWriteTokens ?? 0,
-				reasoningTokens: observed.reasoningTokens ?? 0, totalTokens: observed.totalTokens ?? 0,
-				cost: observed.cost ?? 0, reported: reportedUsage, reportedFields,
+				inputTokens: observed.inputTokens ?? 0,
+				outputTokens: observed.outputTokens ?? 0,
+				cacheReadTokens: observed.cacheReadTokens ?? 0,
+				cacheWriteTokens: observed.cacheWriteTokens ?? 0,
+				reasoningTokens: observed.reasoningTokens ?? 0,
+				totalTokens: observed.totalTokens ?? 0,
+				cost: observed.cost ?? 0,
+				reported: reportedUsage,
+				reportedFields,
 			};
-			for (const key of ["inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "reasoningTokens", "totalTokens", "cost"] as const)
+			for (const key of [
+				"inputTokens",
+				"outputTokens",
+				"cacheReadTokens",
+				"cacheWriteTokens",
+				"reasoningTokens",
+				"totalTokens",
+				"cost",
+			] as const)
 				usage[key] += delta[key];
 			if (reportedUsage) await request.onUsage?.(delta);
 			if (["error", "aborted", "length"].includes(reply.stopReason))
 				throw new Error(`Specialist model did not complete (${reply.stopReason})`);
 			await checked();
 			messages.push(reply);
-			const requested = reply.content.filter((b) => b.type === "toolCall") as Array<{ type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> }>;
+			const requested = reply.content.filter((b) => b.type === "toolCall") as Array<{
+				type: "toolCall";
+				id: string;
+				name: string;
+				arguments: Record<string, unknown>;
+			}>;
 			if (!requested.length) throw new Error("Specialist ended without a structured result");
 			if (requested.length > 4) throw new Error("Specialist tool batch exceeds its limit");
 			for (const call of requested) {

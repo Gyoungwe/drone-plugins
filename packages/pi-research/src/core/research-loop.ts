@@ -3,12 +3,12 @@ import { access, mkdir, readFile, realpath, rename, writeFile } from "node:fs/pr
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { claimBindingRefs, validateClaimBindings } from "./claim-bindings.js";
 import {
-	summaryBody,
-	summaryHash,
 	type PreparedResearchDelivery,
 	type ResearchDeliveryCopy,
 	type ResearchDeliveryReceipt,
 	type ResearchSummaryAssessment,
+	summaryBody,
+	summaryHash,
 } from "./research-delivery.js";
 
 export const RESEARCH_STAGES = Object.freeze([

@@ -1,18 +1,14 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Worker } from "node:worker_threads";
-import type { KnowledgeBinding } from "./config.js";
+import type { KnowledgeBinding, KnowledgeConfigApi } from "./config.js";
 import type {
 	KnowledgeRuntimeHost,
 	KnowledgeWorkerLifecycleStage,
 	KnowledgeWorkerMetadata,
 } from "./runtime-host.js";
-import type { KnowledgeConfigApi } from "./config.js";
+import type { KnowledgeServiceTransport, KnowledgeServiceTransportFactory } from "./service-transport.js";
 import type { acquireKnowledgeWriterLease } from "./writer-lease.js";
-import type {
-	KnowledgeServiceTransport,
-	KnowledgeServiceTransportFactory,
-} from "./service-transport.js";
 
 /** CLI adapter: all Worker protocol, process liveness and SQLite lease ownership live here. */
 export function createKnowledgeWorkerTransportFactory(
@@ -21,11 +17,7 @@ export function createKnowledgeWorkerTransportFactory(
 	invalidateKnowledgeUi: () => void,
 	acquireWriterLease: typeof acquireKnowledgeWriterLease | null,
 ): KnowledgeServiceTransportFactory {
-	const {
-		createKnowledgeWorker,
-		knowledgeWorkerMetadata,
-		emitKnowledgeWorkerLifecycle,
-	} = runtime;
+	const { createKnowledgeWorker, knowledgeWorkerMetadata, emitKnowledgeWorkerLifecycle } = runtime;
 	class KnowledgeWorkerTransport implements KnowledgeServiceTransport {
 		private pending: Map<
 			number,
@@ -45,17 +37,11 @@ export function createKnowledgeWorkerTransportFactory(
 		lifecycle: KnowledgeWorkerLifecycleStage;
 		private readyPromise: Promise<{ version: string }>;
 		private ready: boolean;
-		private writerLease:
-			| ReturnType<typeof acquireKnowledgeWriterLease>
-			| undefined;
+		private writerLease: ReturnType<typeof acquireKnowledgeWriterLease> | undefined;
 		private leaseReleaseError: unknown;
 		private workerFailure: unknown;
 		private worker: Worker;
-		constructor(
-			binding: KnowledgeBinding,
-			directory: string,
-			options: { workerVersion?: string },
-		) {
+		constructor(binding: KnowledgeBinding, directory: string, options: { workerVersion?: string }) {
 			this.pending = new Map();
 			this.inFlightRequests = 0;
 			this.next = 0;
@@ -115,10 +101,7 @@ export function createKnowledgeWorkerTransportFactory(
 					version: this.version,
 					source: this.metadata.source,
 					integrity: this.metadata.integrity,
-					reason: String(error instanceof Error ? error.message : error).slice(
-						0,
-						400,
-					),
+					reason: String(error instanceof Error ? error.message : error).slice(0, 400),
 				});
 				throw error;
 			}
@@ -137,10 +120,7 @@ export function createKnowledgeWorkerTransportFactory(
 					version: this.version,
 					source: this.metadata.source,
 					integrity: this.metadata.integrity,
-					reason: String(error instanceof Error ? error.message : error).slice(
-						0,
-						400,
-					),
+					reason: String(error instanceof Error ? error.message : error).slice(0, 400),
 				});
 			};
 			this.worker.on("message", (message) => {
@@ -199,8 +179,7 @@ export function createKnowledgeWorkerTransportFactory(
 			if (this.closed || (this.closing && op !== "close"))
 				return Promise.reject(new Error("Knowledge service is closed"));
 			const post = () => {
-				if (this.closed)
-					return Promise.reject(new Error("Knowledge service is closed"));
+				if (this.closed) return Promise.reject(new Error("Knowledge service is closed"));
 				const id = ++this.next;
 				this.worker.ref();
 				return new Promise<unknown>((resolvePromise, reject) => {
@@ -209,9 +188,7 @@ export function createKnowledgeWorkerTransportFactory(
 							this.pending.delete(id);
 							if (!this.pending.size) this.worker.unref();
 							reject(
-								new Error(
-									`Knowledge ${op} timed out; it was not reported as a successful empty result`,
-								),
+								new Error(`Knowledge ${op} timed out; it was not reported as a successful empty result`),
 							);
 						},
 						op === "reconcile" ? 120000 : 20000,
@@ -270,9 +247,7 @@ export function createKnowledgeWorkerTransportFactory(
 					this.pending.clear();
 					this.worker.ref();
 					const fallback = setTimeout(() => {
-						drainFailure = new Error(
-							"Knowledge worker required forced termination; drain did not complete",
-						);
+						drainFailure = new Error("Knowledge worker required forced termination; drain did not complete");
 						void this.worker.terminate();
 					}, 5000);
 					try {
@@ -284,11 +259,10 @@ export function createKnowledgeWorkerTransportFactory(
 					if (drainFailure) {
 						emitKnowledgeWorkerLifecycle("disabled", {
 							version: this.version,
-							reason: String(
-								drainFailure instanceof Error
-									? drainFailure.message
-									: drainFailure,
-							).slice(0, 400),
+							reason: String(drainFailure instanceof Error ? drainFailure.message : drainFailure).slice(
+								0,
+								400,
+							),
 						});
 						throw drainFailure;
 					}
@@ -303,8 +277,7 @@ export function createKnowledgeWorkerTransportFactory(
 			return this.closePromise;
 		}
 		prepareUnload() {
-			if (this.closing || this.closed)
-				return { pendingRequests: this.pending.size, version: this.version };
+			if (this.closing || this.closed) return { pendingRequests: this.pending.size, version: this.version };
 			this.closing = true;
 			return { pendingRequests: this.pending.size, version: this.version };
 		}
@@ -319,7 +292,7 @@ export function createKnowledgeWorkerTransportFactory(
 	}
 	return {
 		metadata: knowledgeWorkerMetadata,
-		resourceKey: binding => join(directory(), binding.vaultId, "index.sqlite"),
+		resourceKey: (binding) => join(directory(), binding.vaultId, "index.sqlite"),
 		create: ({ binding, workerVersion }) =>
 			new KnowledgeWorkerTransport(binding, directory(), { workerVersion }),
 	};

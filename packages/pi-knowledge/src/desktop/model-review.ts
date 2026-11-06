@@ -1,13 +1,13 @@
 import type { PluginModelSelection, PluginRuntimeContext } from "@gyoungwe/plugin-api/runtime";
 import type { createKnowledgeModelReview } from "../core/wiki-model-review.js";
 import { generateWikiModelReview } from "../core/wiki-model-review.js";
-import { createKnowledgeReviewContext, type KnowledgeReviewOwner } from "./reviews.js";
 import type {
-	KnowledgeModelReviewInput,
-	KnowledgeModelReviewInfoInput,
-	KnowledgeModelReviewResult,
 	KnowledgeModelReviewInfo,
+	KnowledgeModelReviewInfoInput,
+	KnowledgeModelReviewInput,
+	KnowledgeModelReviewResult,
 } from "./contract.js";
+import { createKnowledgeReviewContext, type KnowledgeReviewOwner } from "./reviews.js";
 
 /** One foreground operation on the same owner and scoped Wiki IO as human review/history/undo. */
 export function createKnowledgeModelReviewModel(
@@ -16,10 +16,7 @@ export function createKnowledgeModelReviewModel(
 	canWriteFiles: boolean,
 ) {
 	const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
-	async function selection(
-		call: PluginRuntimeContext,
-		profile?: string,
-	): Promise<PluginModelSelection> {
+	async function selection(call: PluginRuntimeContext, profile?: string): Promise<PluginModelSelection> {
 		if (call.scope.kind !== "session")
 			throw new Error("Choose the originating live session before model review");
 		return (await call.capabilities.call(
@@ -83,8 +80,7 @@ export function createKnowledgeModelReviewModel(
 					{
 						signal: call.signal,
 						check,
-						evaluate: (request: unknown) =>
-							generateWikiModelReview(call.capabilities, initial, request),
+						evaluate: (request: unknown) => generateWikiModelReview(call.capabilities, initial, request),
 					},
 				);
 			});
@@ -93,26 +89,19 @@ export function createKnowledgeModelReviewModel(
 }
 
 /** A slash command is external user input; it never accepts caller identity or a filesystem path. */
-export function parseModelReviewCommandInput(
-	args: string,
-): Omit<KnowledgeModelReviewInput, "revision"> {
+export function parseModelReviewCommandInput(args: string): Omit<KnowledgeModelReviewInput, "revision"> {
 	let input: unknown;
 	try {
 		input = JSON.parse(args);
 	} catch {
-		throw new Error(
-			"Expected model-review command JSON; raw arguments are not included in diagnostics",
-		);
+		throw new Error("Expected model-review command JSON; raw arguments are not included in diagnostics");
 	}
 	if (!input || typeof input !== "object" || Array.isArray(input))
-		throw new Error(
-			"Expected JSON with id, expectedProposalHash, acknowledged:true and autoApply:boolean",
-		);
+		throw new Error("Expected JSON with id, expectedProposalHash, acknowledged:true and autoApply:boolean");
 	const value = input as Record<string, unknown>;
 	if (
 		Object.keys(value).some(
-			(key) =>
-				!["id", "expectedProposalHash", "acknowledged", "autoApply", "profile"].includes(key),
+			(key) => !["id", "expectedProposalHash", "acknowledged", "autoApply", "profile"].includes(key),
 		) ||
 		typeof value.id !== "string" ||
 		!/^[0-9a-f-]{36}$/.test(value.id) ||

@@ -10,33 +10,40 @@ function scopeWorkspace(scope: PluginRuntimeScope): string {
 }
 
 function paramsOf(input: unknown): Record<string, unknown> {
-	return input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
+	return input && typeof input === "object" && !Array.isArray(input)
+		? (input as Record<string, unknown>)
+		: {};
 }
 
 function portFor(capabilities: { call(name: string, input: unknown): Promise<unknown> }): ResearchHostPort {
 	return {
 		async resolveRoot(path) {
-			const response = await capabilities.call("roots.resolve", { path, kind: "files" }) as { handle?: unknown };
+			const response = (await capabilities.call("roots.resolve", { path, kind: "files" })) as {
+				handle?: unknown;
+			};
 			if (!response || typeof response.handle !== "string" || !response.handle)
 				throw new Error("Host did not grant a workspace files root");
 			return { handle: response.handle };
 		},
 		async readText(root, path) {
-			const response = await capabilities.call("files.readText", { root, path }) as { text?: unknown };
-			if (!response || typeof response.text !== "string") throw new Error(`Host returned invalid text for ${path}`);
+			const response = (await capabilities.call("files.readText", { root, path })) as { text?: unknown };
+			if (!response || typeof response.text !== "string")
+				throw new Error(`Host returned invalid text for ${path}`);
 			return response.text;
 		},
 		async listFiles(root, path) {
 			const response = await capabilities.call("files.list", { root, path });
 			if (!Array.isArray(response)) throw new Error(`Host returned invalid directory listing for ${path}`);
-			return response.map(value => {
-				if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("directory entry must be an object");
+			return response.map((value) => {
+				if (!value || typeof value !== "object" || Array.isArray(value))
+					throw new Error("directory entry must be an object");
 				const entry = value as Record<string, unknown>;
-				if (typeof entry.name !== "string" || typeof entry.kind !== "string") throw new Error("Host returned an invalid directory entry");
+				if (typeof entry.name !== "string" || typeof entry.kind !== "string")
+					throw new Error("Host returned an invalid directory entry");
 				return {
 					name: entry.name,
 					kind: ["file", "directory", "symlink", "other"].includes(entry.kind)
-						? entry.kind as "file" | "directory" | "symlink" | "other"
+						? (entry.kind as "file" | "directory" | "symlink" | "other")
 						: "other",
 				};
 			});
@@ -48,7 +55,7 @@ function portFor(capabilities: { call(name: string, input: unknown): Promise<unk
  * Desktop runtime: read-only research operations over host-granted roots, and per session the
  * Zotero tools, whose network goes through the host.
  */
-const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
+const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	const adapterFor = (capabilities: { call(name: string, input: unknown): Promise<unknown> }) =>
 		createResearchHost(portFor(capabilities));
 	const operation = (name: "status" | "listRuns" | "detail"): PluginRuntimeOperation => ({
@@ -68,7 +75,11 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 			if (name === "status") return adapter.operations.status({ ...base, runDir });
 			if (name === "detail") {
 				if (!adapter.operations.detail) throw new Error("Research detail operation is unavailable");
-				return adapter.operations.detail({ ...base, runDir, runId: params.runId === undefined ? undefined : String(params.runId) });
+				return adapter.operations.detail({
+					...base,
+					runDir,
+					runId: params.runId === undefined ? undefined : String(params.runId),
+				});
 			}
 			return adapter.operations.listRuns(base);
 		},
@@ -84,7 +95,9 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 			toolEffects: ZOTERO_TOOL_EFFECTS,
 			nativeOperations: { identify: zoteroIdentifyNativeOperation },
 			extension: (pi: { registerTool(tool: unknown): void }) =>
-				registerManagedZoteroTools(pi, (name, input, signal) => context.capabilities.call(name, input, signal)),
+				registerManagedZoteroTools(pi, (name, input, signal) =>
+					context.capabilities.call(name, input, signal),
+				),
 			dispose: async () => {},
 		}),
 		dispose: async () => {},

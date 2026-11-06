@@ -1,24 +1,23 @@
 // @ts-nocheck
 import { createHash, randomUUID } from "node:crypto";
-import * as compatibilityConfig from "./config.js";
 import type { KnowledgeConfigApi } from "./config.js";
-import { runtimeSlot } from "./runtime-host.js";
-import { diagnosticText } from "./runtime-host.js";
+import * as compatibilityConfig from "./config.js";
+import { evaluateMetacognitivePublication } from "./metacognitive-policy.js";
 import {
 	advisoryLine,
 	advisoryNotice,
 	knowledgeFailure,
 	publicationNotices as notices,
 } from "./publication-policy.js";
-import { evaluateMetacognitivePublication } from "./metacognitive-policy.js";
-import { advisoryCodes } from "./review-policy.js";
 import * as compatibilityReviewPolicy from "./review-policy.js";
+import { advisoryCodes } from "./review-policy.js";
+import { diagnosticText, runtimeSlot } from "./runtime-host.js";
 
 export { advisoryLine, advisoryNotice, knowledgeFailure };
 
-import * as compatibilityUi from "./ui-state.js";
-import type { createKnowledgeUi } from "./ui-state.js";
 import type { PluginRuntimeContext } from "@gyoungwe/plugin-api/runtime";
+import type { createKnowledgeUi } from "./ui-state.js";
+import * as compatibilityUi from "./ui-state.js";
 
 interface PublicationPorts {
 	available(): boolean;
@@ -44,14 +43,15 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 			.digest("hex");
 	// Private provider replay only: publication authority still requires this
 	// session's WeakSet proof. Host projections may remove that domain proof.
-	const protocolKey = (message) => hash({
-		timestamp: message.timestamp,
-		api: message.api,
-		provider: message.provider,
-		model: message.model,
-		responseId: message.responseId,
-		calls: message.content.filter((block) => block.type === "toolCall"),
-	});
+	const protocolKey = (message) =>
+		hash({
+			timestamp: message.timestamp,
+			api: message.api,
+			provider: message.provider,
+			model: message.model,
+			responseId: message.responseId,
+			calls: message.content.filter((block) => block.type === "toolCall"),
+		});
 	function sanitizeError(text) {
 		return diagnosticText(text, 4096).trim();
 	}
@@ -66,18 +66,21 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 		// Only answer content and the provider error text belong to this projection.
 		const { errorMessage: originalError, diagnostics, ...metadata } = message;
 		const errorMessage =
-			message.stopReason === "error" && typeof originalError === "string"
-				? sanitizeError(originalError)
-				: "";
+			message.stopReason === "error" && typeof originalError === "string" ? sanitizeError(originalError) : "";
 		return {
 			...metadata,
 			content,
 			// Diagnostics do not control provider replay. Keep only safe error text;
 			// arbitrary details and stacks must not enter public/persisted history.
-			...(diagnostics ? { diagnostics: diagnostics.map(({ type, timestamp, error }) => ({
-				type: sanitizeError(type), timestamp,
-				...(error ? { error: { message: sanitizeError(error.message) } } : {}),
-			})) } : {}),
+			...(diagnostics
+				? {
+						diagnostics: diagnostics.map(({ type, timestamp, error }) => ({
+							type: sanitizeError(type),
+							timestamp,
+							...(error ? { error: { message: sanitizeError(error.message) } } : {}),
+						})),
+					}
+				: {}),
 			...(errorMessage ? { errorMessage } : {}),
 		};
 	}
@@ -87,7 +90,14 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 		state.proofs.add(proof);
 		return { ...base(message, content), [FIELD]: proof };
 	}
-	function blocked(message, code = "check-failed", turnId = null, operational = null, paths = [], extra = null) {
+	function blocked(
+		message,
+		code = "check-failed",
+		turnId = null,
+		operational = null,
+		paths = [],
+		extra = null,
+	) {
 		return seal(
 			message,
 			[
@@ -170,7 +180,9 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 		if (event.type === "agent_end")
 			return {
 				...event,
-				messages: event.messages.map((m) => (m.role === "assistant" && !isSealed(m) ? projectUnsealed(m) : m)),
+				messages: event.messages.map((m) =>
+					m.role === "assistant" && !isSealed(m) ? projectUnsealed(m) : m,
+				),
 			};
 		return event;
 	}
@@ -293,12 +305,15 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 			const evaluation = evaluateMetacognitivePublication(text, snapshot);
 			if (!evaluation.ok)
 				throw Object.assign(new Error("Metacognitive publication checks failed"), {
-				code: evaluation.failures.some((failure) => failure.code === "artifact-pending-review")
-					? "artifact-pending-review"
-					: "metacognitive-inconsistency",
-				paths: evaluation.failures.map((item) => item.path).filter(Boolean).slice(0, 6),
-				metacognition: evaluation,
-				verified: { metacognition: evaluation },
+					code: evaluation.failures.some((failure) => failure.code === "artifact-pending-review")
+						? "artifact-pending-review"
+						: "metacognitive-inconsistency",
+					paths: evaluation.failures
+						.map((item) => item.path)
+						.filter(Boolean)
+						.slice(0, 6),
+					metacognition: evaluation,
+					verified: { metacognition: evaluation },
 				});
 			return evaluation;
 		};
@@ -328,7 +343,7 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 			const tools = blocks.filter((b) => b.type === "toolCall");
 			if (tools.length) {
 				toolRounds += 1;
-				if (toolRounds > maxToolRounds && await getTaskRuntime?.()?.advanceStage?.()) toolRounds = 1;
+				if (toolRounds > maxToolRounds && (await getTaskRuntime?.()?.advanceStage?.())) toolRounds = 1;
 				const bytes = Buffer.byteLength(JSON.stringify(blocks), "utf8");
 				// 熔断：软预算（tool-budget 的 read/search 上限）只是建议，弱模型会无视并空转。
 				// 这里在本轮工具轮次超过硬上限（或字节/条数兜底）时强制结束本轮——早于旧的 64 轮/4MB，
@@ -372,7 +387,7 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 				);
 			if (
 				["aborted", "length", "pending"].includes(message.stopReason) ||
-					signal?.aborted ||
+				signal?.aborted ||
 				isUserAbortError(message)
 			)
 				return report(failure(message, { code: "interrupted" }));
@@ -422,7 +437,10 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 				return {
 					message: seal(
 						message,
-						[{ type: "text", text: "【尚未核实的补充材料】以下内容不是主会话已确认的最终结论。\n\n" }, ...content],
+						[
+							{ type: "text", text: "【尚未核实的补充材料】以下内容不是主会话已确认的最终结论。\n\n" },
+							...content,
+						],
 						{ status: "evidence-only", turnId, scientificallyVerified: false },
 					),
 				};
@@ -485,12 +503,15 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 					proof = await validateWithTimeout();
 				}
 				if (signal?.aborted) return report(failure(message, { code: "interrupted" }));
-					const metacognitive = await evaluateMetacognition(flowCtx, c, publishText);
-					const warnings = [
-						...(Array.isArray(proof.warnings) ? proof.warnings : []),
-						...(metacognitive?.warnings || []).map((warning) => ({ code: warning.code, message: warning.detail })),
-					];
-					let reviewerWarnings = [];
+				const metacognitive = await evaluateMetacognition(flowCtx, c, publishText);
+				const warnings = [
+					...(Array.isArray(proof.warnings) ? proof.warnings : []),
+					...(metacognitive?.warnings || []).map((warning) => ({
+						code: warning.code,
+						message: warning.detail,
+					})),
+				];
+				let reviewerWarnings = [];
 				if (reviewer && typeof getMetacognition === "function") {
 					try {
 						const reviewSnapshot = await getMetacognition(flowCtx, c);
@@ -501,7 +522,12 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 							reviewerWarnings = [
 								...(Array.isArray(cached?.findings) ? cached.findings : []),
 								...(Array.isArray(prior) ? prior : []),
-							].filter((finding, index, all) => finding.severity === "high" && !finding.handled && all.findIndex((item) => item.id === finding.id) === index);
+							].filter(
+								(finding, index, all) =>
+									finding.severity === "high" &&
+									!finding.handled &&
+									all.findIndex((item) => item.id === finding.id) === index,
+							);
 							scheduleReview(flowCtx, snapshot, "publication-projection");
 						}
 					} catch {
@@ -550,22 +576,14 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 							? []
 							: [{ type: "text", text: `\n\n【有提醒】${advisoryLine(info.code, error)}` }];
 					return report(
-						seal(
-							message,
-							[
-								...content,
-								...advisoryContent,
-								...advisoryFooter(flowCtx),
-							],
-							{
-								status: "released",
-								reviewMode: "automatic",
-								...verifiedEvidence(error),
-								warnings: [info],
-								turnId,
-								scientificallyVerified: false,
-							},
-						),
+						seal(message, [...content, ...advisoryContent, ...advisoryFooter(flowCtx)], {
+							status: "released",
+							reviewMode: "automatic",
+							...verifiedEvidence(error),
+							warnings: [info],
+							turnId,
+							scientificallyVerified: false,
+						}),
 					);
 				}
 				return report(failure(message, error));
@@ -581,7 +599,7 @@ function createPublicationApi(ui, reviewPolicy, ports: PublicationPorts, createS
 				const flowCtx = { sessionId };
 				const c = getCurrent(ctx);
 				if (!c) return;
-			const receipt = await c.service.deliveryReceipt(c.ticket, cwd, path);
+				const receipt = await c.service.deliveryReceipt(c.ticket, cwd, path);
 				deliveries.set(receipt.path, receipt);
 				scheduleReview(
 					flowCtx,
@@ -713,22 +731,29 @@ export function createManagedKnowledgePublication(
 	signal: AbortSignal,
 ) {
 	let finalizer: ((event: any, context: any) => Promise<any>) | undefined;
-	const publication = createPublicationApi(ui, reviewPolicy, {
-		available: () => true,
-		registerFinalizer(_pi, handler) {
-			if (finalizer) throw new Error("Knowledge publication is already registered");
-			finalizer = handler;
+	const publication = createPublicationApi(
+		ui,
+		reviewPolicy,
+		{
+			available: () => true,
+			registerFinalizer(_pi, handler) {
+				if (finalizer) throw new Error("Knowledge publication is already registered");
+				finalizer = handler;
+			},
+			// Only the host's private SDK-origin courier can preserve this identity across IPC.
+			// History display never enrolls a recovered proof in the live WeakSet.
+			persisted: (message, saved) => saved.includes(message),
 		},
-		// Only the host's private SDK-origin courier can preserve this identity across IPC.
-		// History display never enrolls a recovered proof in the live WeakSet.
-		persisted: (message, saved) => saved.includes(message),
-	}, (create) => create(), signal);
+		(create) => create(),
+		signal,
+	);
 	return {
 		...publication,
 		projection: {
 			async finalize(event: any, context: PluginRuntimeContext) {
 				if (!finalizer) throw new Error("Knowledge publication has not been registered");
-				if (context.scope.kind !== "session") throw new Error("Knowledge publication requires its live session");
+				if (context.scope.kind !== "session")
+					throw new Error("Knowledge publication requires its live session");
 				context.signal.throwIfAborted();
 				const result = await finalizer(event, {
 					cwd: context.scope.workspaceDirectory,
@@ -751,11 +776,21 @@ export function createManagedKnowledgePublication(
 }
 
 /** Each native session adapter owns its proof identities and projections. */
-export function createKnowledgePublication(ui: Pick<ReturnType<typeof createKnowledgeUi>, "publicationKnowledgeFlow" | "updateKnowledgeFlow">, reviewPolicy: Pick<typeof compatibilityReviewPolicy, "readReviewMode">, config: Pick<KnowledgeConfigApi, "knowledgeDirectory">, signal: AbortSignal) {
+export function createKnowledgePublication(
+	ui: Pick<ReturnType<typeof createKnowledgeUi>, "publicationKnowledgeFlow" | "updateKnowledgeFlow">,
+	reviewPolicy: Pick<typeof compatibilityReviewPolicy, "readReviewMode">,
+	config: Pick<KnowledgeConfigApi, "knowledgeDirectory">,
+	signal: AbortSignal,
+) {
 	return createPublicationApi(ui, reviewPolicy, localPublicationPorts(config), (create) => create(), signal);
 }
 
 // pi-knowledge 0.2 compatibility. Remove after all native/Desktop adapters
 // use explicit owners and per-session publication instances in 0.3.
-const compatibility = createPublicationApi(compatibilityUi, compatibilityReviewPolicy, localPublicationPorts(compatibilityConfig), (create) => runtimeSlot("knowledge", "publication", create));
+const compatibility = createPublicationApi(
+	compatibilityUi,
+	compatibilityReviewPolicy,
+	localPublicationPorts(compatibilityConfig),
+	(create) => runtimeSlot("knowledge", "publication", create),
+);
 export const { projectKnowledgeEvent, projectKnowledgeSnapshot, registerAnswerPublication } = compatibility;

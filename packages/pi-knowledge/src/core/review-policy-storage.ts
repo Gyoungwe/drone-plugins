@@ -2,10 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { KnowledgeConfigApi } from "./config.js";
-import type {
-	KnowledgeReviewPolicyStorage,
-	ReviewPolicyDocument,
-} from "./review-policy.js";
+import type { KnowledgeReviewPolicyStorage, ReviewPolicyDocument } from "./review-policy.js";
 
 /** CLI persistence adapter; Desktop uses the host's authorized JSON store. */
 export function createLocalReviewPolicyStorage(
@@ -19,8 +16,7 @@ export function createLocalReviewPolicyStorage(
 		try {
 			bytes = await readFile(join(directory, "review-policy.json"));
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "ENOENT")
-				return { kind: "missing", version: null };
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing", version: null };
 			throw error;
 		}
 		let value: unknown;
@@ -29,9 +25,7 @@ export function createLocalReviewPolicyStorage(
 		} catch (error) {
 			if (!(error instanceof SyntaxError)) throw error;
 			// Strict mode stays active and the caller sees an invalid-json diagnostic.
-			console.warn(
-				"[knowledge review policy] Invalid JSON; strict mode applies",
-			);
+			console.warn("[knowledge review policy] Invalid JSON; strict mode applies");
 			return { kind: "corrupt", version: null };
 		}
 		return {
@@ -51,19 +45,13 @@ export function createLocalReviewPolicyStorage(
 					if (!directory) throw new Error("No application knowledge directory");
 					const current = await read();
 					if (current.kind === "corrupt")
-						throw new Error(
-							"Review policy is damaged; repair it before changing settings",
-						);
+						throw new Error("Review policy is damaged; repair it before changing settings");
 					if (current.version !== expectedVersion)
-						throw Object.assign(
-							new Error("Review policy changed; refresh before saving"),
-							{ code: "ESTATECONFLICT" },
-						);
+						throw Object.assign(new Error("Review policy changed; refresh before saving"), {
+							code: "ESTATECONFLICT",
+						});
 					await mkdir(directory, { recursive: true, mode: 0o700 });
-					const temporary = join(
-						directory,
-						`review-policy.${randomUUID()}.tmp`,
-					);
+					const temporary = join(directory, `review-policy.${randomUUID()}.tmp`);
 					await writeFile(temporary, JSON.stringify(value), {
 						flag: "wx",
 						mode: 0o600,

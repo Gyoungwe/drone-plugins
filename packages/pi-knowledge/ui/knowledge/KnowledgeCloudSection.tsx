@@ -6,8 +6,7 @@ import type {
 	KnowledgeSearchResult,
 } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { Button } from "../api";
+import { Button, getKnowledgeApi } from "../api";
 import { useKnowledgeText } from "./copy";
 
 const MODE_COPY_KEYS = {
@@ -80,7 +79,9 @@ export function KnowledgeCloudSection({
 		setError(null);
 		try {
 			setStatus(
-				await (kind === "probe" ? getKnowledgeApi().probeKnowledgeCloud() : getKnowledgeApi().initializeKnowledgeCloud()),
+				await (kind === "probe"
+					? getKnowledgeApi().probeKnowledgeCloud()
+					: getKnowledgeApi().initializeKnowledgeCloud()),
 			);
 		} catch (value) {
 			setError(value instanceof Error ? value.message : String(value));
@@ -105,7 +106,9 @@ export function KnowledgeCloudSection({
 		setBusy("search");
 		setError(null);
 		try {
-			setSearchResult(await getKnowledgeApi().searchKnowledge({ cwd, bindingRevision, query: query.trim(), limit: 8 }));
+			setSearchResult(
+				await getKnowledgeApi().searchKnowledge({ cwd, bindingRevision, query: query.trim(), limit: 8 }),
+			);
 		} catch (value) {
 			setError(value instanceof Error ? value.message : String(value));
 		} finally {

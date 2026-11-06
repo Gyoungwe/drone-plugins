@@ -5,10 +5,7 @@
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",
-		"testedHosts": [
-			"1.1.0",
-			"latest"
-		]
+		"testedHosts": ["1.1.0", "latest"]
 	},
 	"drone": {
 		"pluginApi": 1,
@@ -26,9 +23,7 @@
 		"desktopRuntime": "./dist/runtime.mjs",
 		"ui": "./ui/plugin.json"
 	},
-	"capabilities": [
-		"discovery"
-	],
+	"capabilities": ["discovery"],
 	"tools": [
 		"discovery_status",
 		"discovery_list_records",
@@ -45,20 +40,11 @@
 		"discovery_reconcile_executions",
 		"discovery_record_inquiry"
 	],
-	"hosts": [
-		"native-pi",
-		"drone-desktop"
-	],
+	"hosts": ["native-pi", "drone-desktop"],
 	"permissions": {
-		"filesystem": [
-			"workspace",
-			"application-state",
-			"application-state-write"
-		],
+		"filesystem": ["workspace", "application-state", "application-state-write"],
 		"network": [],
-		"subprocess": [
-			"container"
-		],
+		"subprocess": ["container"],
 		"externalWrites": false
 	}
 }

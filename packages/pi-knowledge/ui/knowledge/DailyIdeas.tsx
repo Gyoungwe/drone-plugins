@@ -1,9 +1,6 @@
 import type { DailyDiscoveryState } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { useKnowledgeStore } from "../api";
-import { Button } from "../api";
-import { Switch } from "../api";
+import { Button, getKnowledgeApi, Switch, useKnowledgeStore } from "../api";
 import { useKnowledgeText } from "./copy";
 
 /**
@@ -90,7 +87,9 @@ export function DailyIdeas({
 					{t("dailyEnabled")}
 					<Switch
 						checked={state.enabled}
-						onCheckedChange={(enabled) => void act("toggle", () => getKnowledgeApi().updateDailyDiscovery({ enabled }))}
+						onCheckedChange={(enabled) =>
+							void act("toggle", () => getKnowledgeApi().updateDailyDiscovery({ enabled }))
+						}
 					/>
 				</span>
 				<Button
@@ -168,7 +167,9 @@ export function DailyIdeas({
 											size="sm"
 											disabled={busy !== null}
 											onClick={() =>
-												void act(idea.id, () => getKnowledgeApi().decideDailyIdea({ id: idea.id, action: "save" }))
+												void act(idea.id, () =>
+													getKnowledgeApi().decideDailyIdea({ id: idea.id, action: "save" }),
+												)
 											}
 										>
 											{t("dailySave")}
@@ -177,7 +178,9 @@ export function DailyIdeas({
 											size="sm"
 											disabled={busy !== null}
 											onClick={() =>
-												void act(idea.id, () => getKnowledgeApi().decideDailyIdea({ id: idea.id, action: "dismiss" }))
+												void act(idea.id, () =>
+													getKnowledgeApi().decideDailyIdea({ id: idea.id, action: "dismiss" }),
+												)
 											}
 										>
 											{t("dailyDismiss")}

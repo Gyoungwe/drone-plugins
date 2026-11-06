@@ -33,8 +33,7 @@ describe("review policy", () => {
 			version: 1,
 			mode: "strict",
 		});
-		if (process.platform !== "win32")
-			expect((await stat(path)).mode & 0o777).toBe(0o600);
+		if (process.platform !== "win32") expect((await stat(path)).mode & 0o777).toBe(0o600);
 	});
 
 	it("lets the strict environment override persisted automatic mode", async () => {
@@ -51,17 +50,13 @@ describe("review policy", () => {
 			writeFile(join(root, "app", "review-policy.json"), "{invalid"),
 		);
 		expect(await readReviewMode()).toBe("strict");
-		await expect(saveReviewMode("invalid")).rejects.toThrow(
-			"Invalid review mode",
-		);
+		await expect(saveReviewMode("invalid")).rejects.toThrow("Invalid review mode");
 		vi.stubEnv("DRONE_KNOWLEDGE_DIR", "relative");
 		await expect(readReviewMode()).rejects.toThrow("must be absolute");
 	});
 
 	it("rejects a stale version and preserves corrupt policy bytes", async () => {
-		const policy = createKnowledgeReviewPolicy(
-			createKnowledgeConfigApi(undefined, join(root, "app")),
-		);
+		const policy = createKnowledgeReviewPolicy(createKnowledgeConfigApi(undefined, join(root, "app")));
 		const initial = await policy.readReviewPolicy();
 		expect(initial).toMatchObject({
 			mode: "automatic",
@@ -72,9 +67,9 @@ describe("review policy", () => {
 		await policy.saveReviewMode("strict", initial.version);
 		const strict = await policy.readReviewPolicy();
 		expect(strict.version).toMatch(/^[a-f0-9]{64}$/);
-		await expect(
-			policy.saveReviewMode("automatic", initial.version),
-		).rejects.toMatchObject({ code: "ESTATECONFLICT" });
+		await expect(policy.saveReviewMode("automatic", initial.version)).rejects.toMatchObject({
+			code: "ESTATECONFLICT",
+		});
 		expect((await policy.readReviewPolicy()).mode).toBe("strict");
 		const path = join(root, "app", "review-policy.json");
 		const { writeFile } = await import("node:fs/promises");
@@ -83,9 +78,7 @@ describe("review policy", () => {
 			mode: "strict",
 			diagnostic: "invalid-json",
 		});
-		await expect(
-			policy.saveReviewMode("automatic", strict.version),
-		).rejects.toThrow("damaged");
+		await expect(policy.saveReviewMode("automatic", strict.version)).rejects.toThrow("damaged");
 		expect(await readFile(path, "utf8")).toBe("{broken");
 	});
 

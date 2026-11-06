@@ -8,15 +8,8 @@ export interface DiscoveryRunProvenanceSummary {
 }
 
 export type DiscoveryFindingLabel = "exploratory" | "confirmatory";
-export type DiscoveryFindingReviewStatus =
-	| "unreviewed"
-	| "reviewed"
-	| "rejected";
-export type DiscoveryRobustnessGrade =
-	| "robust"
-	| "sensitive"
-	| "unstable"
-	| "unknown";
+export type DiscoveryFindingReviewStatus = "unreviewed" | "reviewed" | "rejected";
+export type DiscoveryRobustnessGrade = "robust" | "sensitive" | "unstable" | "unknown";
 
 export interface DiscoveryFindingValue {
 	readonly metric: string;
@@ -49,17 +42,9 @@ export interface DiscoveryFindingRecord {
 }
 
 export type DiscoveryQuestionKind = "question" | "hypothesis" | "anomaly";
-export type DiscoveryQuestionStatus =
-	| "open"
-	| "supported"
-	| "refuted"
-	| "deferred";
+export type DiscoveryQuestionStatus = "open" | "supported" | "refuted" | "deferred";
 export type DiscoveryQuestionProposer = "user" | "agent";
-export type DiscoveryPriorDirection =
-	| "positive"
-	| "negative"
-	| "none"
-	| "unknown";
+export type DiscoveryPriorDirection = "positive" | "negative" | "none" | "unknown";
 
 export interface DiscoveryQuestionPrior {
 	readonly direction: DiscoveryPriorDirection;
@@ -94,12 +79,7 @@ export interface DiscoveryQuestionRecord {
 	readonly updatedAt: string;
 }
 
-export type DiscoveryAttemptOutcome =
-	| "running"
-	| "succeeded"
-	| "failed"
-	| "blocked"
-	| "unknown";
+export type DiscoveryAttemptOutcome = "running" | "succeeded" | "failed" | "blocked" | "unknown";
 
 export interface DiscoveryAttemptRecord {
 	readonly id: string;
@@ -107,9 +87,7 @@ export interface DiscoveryAttemptRecord {
 	readonly projectId: string;
 	readonly hypothesisIds: readonly string[];
 	readonly codeFingerprint?: string;
-	readonly parameters: Readonly<
-		Record<string, string | number | boolean | null>
-	>;
+	readonly parameters: Readonly<Record<string, string | number | boolean | null>>;
 	readonly artifactIds: readonly string[];
 	readonly resultSummary?: string;
 	readonly sessionId?: string;
@@ -122,11 +100,7 @@ export interface DiscoveryAttemptRecord {
 }
 
 export type DiscoveryLanguage = "python" | "r";
-export type DiscoveryClassification =
-	| "public"
-	| "internal"
-	| "controlled"
-	| "restricted";
+export type DiscoveryClassification = "public" | "internal" | "controlled" | "restricted";
 export interface DiscoveryRunnerCapabilities {
 	readonly kind: "container" | "fixture" | "unavailable";
 	readonly languages: readonly DiscoveryLanguage[];
@@ -176,10 +150,7 @@ export interface DiscoveryKernelExecution {
 export type DiscoveryAuthorizationOperation =
 	| { readonly kind: "create-kernel-session"; readonly projectId: string }
 	| {
-			readonly kind:
-				| "execute-kernel"
-				| "export-kernel"
-				| "close-kernel-session";
+			readonly kind: "execute-kernel" | "export-kernel" | "close-kernel-session";
 			readonly projectId: string;
 			readonly sessionId: string;
 	  }
@@ -262,9 +233,7 @@ export interface DiscoveryHostServices {
 	readonly inquiry?: DiscoveryInquiryPort;
 	readonly criticProvider?: DiscoveryCriticProvider;
 	onExecution(receipt: DiscoveryExecutionReceipt): void | Promise<void>;
-	legacyJournal(): Promise<
-		{ readonly status: "unassigned"; readonly path: string } | undefined
-	>;
+	legacyJournal(): Promise<{ readonly status: "unassigned"; readonly path: string } | undefined>;
 }
 export interface DiscoveryHostInput {
 	readonly projectId: string;

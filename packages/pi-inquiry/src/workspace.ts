@@ -88,9 +88,7 @@ export function planWorkspacePromotion(input: {
 		.filter((artifact) => artifact.runId === input.run.id && artifact.status === "valid")
 		.sort((a, b) => a.id.localeCompare(b.id));
 	const relativeResultPath = (artifact: ArtifactRecord): string => {
-		const relativePath = artifact.path
-			.replaceAll("\\", "/")
-			.replace(/^runs\/(?:[^/]+)\/(?:[^/]+)\/?/, "");
+		const relativePath = artifact.path.replaceAll("\\", "/").replace(/^runs\/(?:[^/]+)\/(?:[^/]+)\/?/, "");
 		return `results/${input.run.taskId}/${input.run.id}/${relativePath || artifact.id}`;
 	};
 	const moves = selected.map((artifact) => {
@@ -154,9 +152,7 @@ export function workspaceIndexForSnapshot(snapshot: {
 	readonly attempts: readonly AttemptRecord[];
 }): readonly WorkspaceEntry[] {
 	const referenced = new Set(
-		snapshot.artifacts
-			.filter((artifact) => artifact.status === "valid")
-			.map((artifact) => artifact.id),
+		snapshot.artifacts.filter((artifact) => artifact.status === "valid").map((artifact) => artifact.id),
 	);
 	return snapshot.artifacts
 		.filter((artifact) => referenced.has(artifact.id) && artifact.purpose === "deliverable")

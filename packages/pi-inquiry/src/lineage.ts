@@ -23,8 +23,7 @@ function nonEmpty(value: unknown): value is string {
 
 export function validateArtifactRecord(record: ArtifactRecord): readonly string[] {
 	const errors: string[] = [];
-	if (record.schemaVersion !== 1 && record.schemaVersion !== 2)
-		errors.push("unsupported schema version");
+	if (record.schemaVersion !== 1 && record.schemaVersion !== 2) errors.push("unsupported schema version");
 	if (!nonEmpty(record.id)) errors.push("id is required");
 	if (!nonEmpty(record.projectId)) errors.push("projectId is required");
 	if (!isSafeArtifactPath(record.path)) errors.push("path must be a safe project-relative path");
@@ -37,14 +36,9 @@ export function validateArtifactRecord(record: ArtifactRecord): readonly string[
 		errors.push("invalid source kind");
 	if (!["input", "draft", "intermediate", "deliverable", "evidence"].includes(record.purpose))
 		errors.push("invalid purpose");
-	if (
-		!["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].includes(
-			record.status,
-		)
-	)
+	if (!["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].includes(record.status))
 		errors.push("invalid status");
-	if (new Set(record.parentIds).size !== record.parentIds.length)
-		errors.push("parentIds must be unique");
+	if (new Set(record.parentIds).size !== record.parentIds.length) errors.push("parentIds must be unique");
 	if (record.parentIds.some((id) => !nonEmpty(id))) errors.push("parentIds must be non-empty");
 	if (
 		record.pendingReviewDecisionIds?.some((id) => !nonEmpty(id)) ||
@@ -85,20 +79,14 @@ export function validateArtifactLineage(
 			errors.push(`missing parent artifact: ${parentId}`);
 			continue;
 		}
-		if (parent.projectId !== record.projectId)
-			errors.push(`parent belongs to another project: ${parentId}`);
+		if (parent.projectId !== record.projectId) errors.push(`parent belongs to another project: ${parentId}`);
 		if (parent.id === record.id) errors.push("artifact cannot parent itself");
-		if (hasAncestor(parent.id, record.id, byId))
-			errors.push(`lineage cycle through parent: ${parentId}`);
+		if (hasAncestor(parent.id, record.id, byId)) errors.push(`lineage cycle through parent: ${parentId}`);
 	}
 	return [...new Set(errors)];
 }
 
-function hasAncestor(
-	start: string,
-	target: string,
-	byId: ReadonlyMap<string, ArtifactRecord>,
-): boolean {
+function hasAncestor(start: string, target: string, byId: ReadonlyMap<string, ArtifactRecord>): boolean {
 	const seen = new Set<string>();
 	let current = byId.get(start);
 	while (current) {

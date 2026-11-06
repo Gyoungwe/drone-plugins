@@ -1,23 +1,32 @@
 // @ts-nocheck
 import { randomUUID } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
-import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
-import * as compatibilityConfig from "./config.js";
 import type { KnowledgeConfigApi } from "./config.js";
+import * as compatibilityConfig from "./config.js";
 import { canRead, validateNote } from "./files.js";
 import {
 	createSpecialistBudget,
 	decideSpecialistRun,
 	specialistRequestSignature,
 } from "./orchestration-policy.js";
+import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
 import * as compatibilitySpecialists from "./specialist-host.js";
-import * as compatibilityUi from "./ui-state.js";
 import type { createKnowledgeUi } from "./ui-state.js";
+import * as compatibilityUi from "./ui-state.js";
 
-export function createKnowledgeSpecialistTools(runtime: Pick<KnowledgeRuntimeHost, "deliveryContract">, config: Pick<KnowledgeConfigApi, "readKnowledgeBinding">, specialists: Pick<ReturnType<typeof compatibilitySpecialists.createKnowledgeSpecialistHost>, "knowledgeSpecialistHost" | "specialistQueueSnapshot" | "specialistSettings" | "withSpecialistSlot">, ui: Pick<ReturnType<typeof createKnowledgeUi>, "noteKnowledgeSpecialist">) {
+export function createKnowledgeSpecialistTools(
+	runtime: Pick<KnowledgeRuntimeHost, "deliveryContract">,
+	config: Pick<KnowledgeConfigApi, "readKnowledgeBinding">,
+	specialists: Pick<
+		ReturnType<typeof compatibilitySpecialists.createKnowledgeSpecialistHost>,
+		"knowledgeSpecialistHost" | "specialistQueueSnapshot" | "specialistSettings" | "withSpecialistSlot"
+	>,
+	ui: Pick<ReturnType<typeof createKnowledgeUi>, "noteKnowledgeSpecialist">,
+) {
 	const { deliveryContract } = runtime;
 	const { readKnowledgeBinding } = config;
-	const { knowledgeSpecialistHost, specialistQueueSnapshot, specialistSettings, withSpecialistSlot } = specialists;
+	const { knowledgeSpecialistHost, specialistQueueSnapshot, specialistSettings, withSpecialistSlot } =
+		specialists;
 	const { noteKnowledgeSpecialist } = ui;
 	const profiles = {
 		navigator: ["knowledge-navigator", "知识导航员"],
@@ -73,7 +82,9 @@ export function createKnowledgeSpecialistTools(runtime: Pick<KnowledgeRuntimeHos
 			!!deliveryContract(text) ||
 			(/比较|对比|分析|综述|compare|analy[sz]|review/i.test(text) &&
 				/论文|文献|研究|证据|方法|软件|papers?|evidence|software/i.test(text)) ||
-			/知识库|已有知识|主题.{0,8}(?:知识|进展)|根据.{0,10}(?:文献|笔记)|(?:介绍|解读|讲解).{0,12}(?:论文|文献)|下载.{0,12}(?:软件说明书|说明书|软件文档)|show\s*-?\s*me|\bwiki\b/i.test(text)
+			/知识库|已有知识|主题.{0,8}(?:知识|进展)|根据.{0,10}(?:文献|笔记)|(?:介绍|解读|讲解).{0,12}(?:论文|文献)|下载.{0,12}(?:软件说明书|说明书|软件文档)|show\s*-?\s*me|\bwiki\b/i.test(
+				text,
+			)
 		);
 	}
 	function createKnowledgeSpecialists(pi, { getCurrent, readOnly = false }) {
@@ -442,7 +453,9 @@ export function createKnowledgeSpecialistTools(runtime: Pick<KnowledgeRuntimeHos
 								];
 								return budget.updateUsage(
 									{
-										totalTokens: usage.reportedFields?.includes("totalTokens") ? usage.totalTokens : undefined,
+										totalTokens: usage.reportedFields?.includes("totalTokens")
+											? usage.totalTokens
+											: undefined,
 										cost: usage.reportedFields?.includes("cost") ? usage.cost : undefined,
 									},
 									turnToken,
@@ -623,5 +636,10 @@ export function createKnowledgeSpecialistTools(runtime: Pick<KnowledgeRuntimeHos
 
 // pi-knowledge 0.2 compatibility. Remove after all native/Desktop adapters
 // use explicit owners and per-session publication instances in 0.3.
-const compatibility = createKnowledgeSpecialistTools(compatibilityKnowledgeRuntimeHost, compatibilityConfig, compatibilitySpecialists, compatibilityUi);
+const compatibility = createKnowledgeSpecialistTools(
+	compatibilityKnowledgeRuntimeHost,
+	compatibilityConfig,
+	compatibilitySpecialists,
+	compatibilityUi,
+);
 export const { knowledgeReadStart, shouldOrientKnowledge, createKnowledgeSpecialists } = compatibility;

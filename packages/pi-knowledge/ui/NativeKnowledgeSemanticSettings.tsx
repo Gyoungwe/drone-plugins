@@ -1,8 +1,8 @@
 import type { PluginUiRuntimeClient } from "@gyoungwe/plugin-api/ui";
-import type { KnowledgeSemanticPreferences } from "../src/desktop/contract";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "./runtime-api";
+import type { KnowledgeSemanticPreferences } from "../src/desktop/contract";
 import { useNativeKnowledgeText } from "./native-copy";
+import { Button } from "./runtime-api";
 
 type SemanticSettings = NonNullable<KnowledgeSemanticPreferences["settings"]>;
 type Provider = SemanticSettings["provider"];
@@ -40,24 +40,27 @@ export function NativeKnowledgeSemanticSettings({
 		setSaved(false);
 		setError(null);
 		setValue(null);
-		void client.invoke("semanticSettings", null).then(
-			(result) => {
-				if (request !== epoch.current) return;
-				const settings = result as KnowledgeSemanticPreferences;
-				setValue(settings);
-				if (settings.settings) {
-					setProvider(settings.settings.provider);
-					setEnabled(settings.settings.enabled);
-					setBaseUrl(settings.settings.baseUrl);
-					setModel(settings.settings.model);
-				}
-			},
-			(cause) => {
-				if (request === epoch.current) setError(errorText(cause));
-			},
-		).finally(() => {
-			if (request === epoch.current) setLoading(false);
-		});
+		void client
+			.invoke("semanticSettings", null)
+			.then(
+				(result) => {
+					if (request !== epoch.current) return;
+					const settings = result as KnowledgeSemanticPreferences;
+					setValue(settings);
+					if (settings.settings) {
+						setProvider(settings.settings.provider);
+						setEnabled(settings.settings.enabled);
+						setBaseUrl(settings.settings.baseUrl);
+						setModel(settings.settings.model);
+					}
+				},
+				(cause) => {
+					if (request === epoch.current) setError(errorText(cause));
+				},
+			)
+			.finally(() => {
+				if (request === epoch.current) setLoading(false);
+			});
 		return () => {
 			++epoch.current;
 		};
@@ -105,8 +108,16 @@ export function NativeKnowledgeSemanticSettings({
 			data-testid="native-knowledge-semantic-settings"
 		>
 			<h3 className="text-sm font-medium">{t.semanticSettings}</h3>
-			{loading && <p role="status" className="mt-3 text-sm text-ink-dim">{t.loading}</p>}
-			{error && <p role="alert" className="mt-3 text-sm text-err">{error}</p>}
+			{loading && (
+				<p role="status" className="mt-3 text-sm text-ink-dim">
+					{t.loading}
+				</p>
+			)}
+			{error && (
+				<p role="alert" className="mt-3 text-sm text-err">
+					{error}
+				</p>
+			)}
 			{value?.settings && (
 				<div className="mt-3 space-y-3 text-xs">
 					<p className="text-ink-dim">{t.semanticSettingsHint}</p>
@@ -114,7 +125,10 @@ export function NativeKnowledgeSemanticSettings({
 						<input
 							type="checkbox"
 							checked={enabled}
-							onChange={(event) => { setEnabled(event.target.checked); setSaved(false); }}
+							onChange={(event) => {
+								setEnabled(event.target.checked);
+								setSaved(false);
+							}}
 							disabled={!value.canWriteState || saving || refreshing}
 						/>
 						{t.semanticEnabled}
@@ -124,7 +138,10 @@ export function NativeKnowledgeSemanticSettings({
 						<select
 							aria-label={t.semanticProvider}
 							value={provider}
-							onChange={(event) => { setProvider(event.target.value as Provider); setSaved(false); }}
+							onChange={(event) => {
+								setProvider(event.target.value as Provider);
+								setSaved(false);
+							}}
 							disabled={!value.canWriteState || saving || refreshing}
 							className="ml-2 rounded-lg border border-border bg-surface px-3 py-2"
 						>
@@ -137,11 +154,29 @@ export function NativeKnowledgeSemanticSettings({
 						<div className="grid gap-3 sm:grid-cols-2">
 							<label className="block">
 								<span>{t.semanticBaseUrl}</span>
-								<input aria-label={t.semanticBaseUrl} className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2" value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setSaved(false); }} disabled={!value.canWriteState || saving || refreshing} />
+								<input
+									aria-label={t.semanticBaseUrl}
+									className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2"
+									value={baseUrl}
+									onChange={(event) => {
+										setBaseUrl(event.target.value);
+										setSaved(false);
+									}}
+									disabled={!value.canWriteState || saving || refreshing}
+								/>
 							</label>
 							<label className="block">
 								<span>{t.semanticModel}</span>
-								<input aria-label={t.semanticModel} className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2" value={model} onChange={(event) => { setModel(event.target.value); setSaved(false); }} disabled={!value.canWriteState || saving || refreshing} />
+								<input
+									aria-label={t.semanticModel}
+									className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2"
+									value={model}
+									onChange={(event) => {
+										setModel(event.target.value);
+										setSaved(false);
+									}}
+									disabled={!value.canWriteState || saving || refreshing}
+								/>
 							</label>
 						</div>
 					)}
@@ -156,7 +191,11 @@ export function NativeKnowledgeSemanticSettings({
 						>
 							{saving ? t.saving : t.saveSemantic}
 						</Button>
-						{saved && <span role="status" className="text-ink-dim">{t.semanticSaved}</span>}
+						{saved && (
+							<span role="status" className="text-ink-dim">
+								{t.semanticSaved}
+							</span>
+						)}
 					</div>
 				</div>
 			)}

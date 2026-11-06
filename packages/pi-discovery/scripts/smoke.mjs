@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+
 const api = await candidatePluginApi();
 const exec = promisify(execFile);
 const root = await mkdtemp(join(tmpdir(), "pi-discovery-smoke-"));
@@ -41,9 +42,7 @@ try {
 	const packageJson = JSON.parse(await readFile(join(installedRoot, "package.json"), "utf8"));
 	assert.deepEqual(manifest.hosts, ["native-pi", "drone-desktop"]);
 	assert.deepEqual(packageJson.pi.extensions, ["./dist/index.mjs"]);
-	const extension = await import(
-		pathToFileURL(join(installedRoot, packageJson.pi.extensions[0])).href
-	);
+	const extension = await import(pathToFileURL(join(installedRoot, packageJson.pi.extensions[0])).href);
 	const registered = new Map();
 	const listeners = new Map();
 	await extension.default({
@@ -68,12 +67,10 @@ try {
 			)
 			.every((tool) => tool.drone.readOnly === true),
 	);
-	const status = await registered
-		.get("discovery_status")
-		.execute("smoke", {}, undefined, undefined, {
-			cwd: root,
-			sessionManager: { getSessionId: () => "smoke-native" },
-		});
+	const status = await registered.get("discovery_status").execute("smoke", {}, undefined, undefined, {
+		cwd: root,
+		sessionManager: { getSessionId: () => "smoke-native" },
+	});
 	assert.equal(status.details.status, "unconfigured");
 	const { discoveryHostLoader } = await import(
 		pathToFileURL(join(prefix, "node_modules/@gyoungwe/pi-discovery/dist/host.mjs")).href

@@ -1,7 +1,7 @@
-import { createEventBus } from "@earendil-works/pi-coding-agent";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
+import { createEventBus } from "@earendil-works/pi-coding-agent";
 
 process.env.DRONE_TASK_WORKBENCH = "off";
 const { registerPiCore, createNativePiHostPort } = await import("../dist/index.mjs");
@@ -147,33 +147,53 @@ test("native host adapter uses ctx.ui authorization and advertises native Pi", a
 	assert.equal(host.capabilities().capabilities.includes("requestAuthorization"), true);
 });
 
-
 test("task session attachment never borrows another owner from a session-manager property", async () => {
 	function host() {
-		const emitter = new EventEmitter(), hooks = new Map(), tools = [];
+		const emitter = new EventEmitter(),
+			hooks = new Map(),
+			tools = [];
 		const pi = {
-			events: { on(name, handler) { emitter.on(name, handler); return () => emitter.off(name, handler); }, emit: (name, value) => emitter.emit(name, value) },
-			on(name, handler) { hooks.set(name, [...(hooks.get(name) || []), handler]); },
-			registerTool(tool) { tools.push(tool); }, registerCommand() {},
-			getAllTools: () => tools, getCommands: () => [], appendEntry() {}, sendMessage() {},
+			events: {
+				on(name, handler) {
+					emitter.on(name, handler);
+					return () => emitter.off(name, handler);
+				},
+				emit: (name, value) => emitter.emit(name, value),
+			},
+			on(name, handler) {
+				hooks.set(name, [...(hooks.get(name) || []), handler]);
+			},
+			registerTool(tool) {
+				tools.push(tool);
+			},
+			registerCommand() {},
+			getAllTools: () => tools,
+			getCommands: () => [],
+			appendEntry() {},
+			sendMessage() {},
 		};
 		registerPiCore(pi);
 		const readJournal = () => {
 			let journal;
-			const remove = pi.events.on("drone:task-runtime/v1", value => { journal = value.registry.journal; });
+			const remove = pi.events.on("drone:task-runtime/v1", (value) => {
+				journal = value.registry.journal;
+			});
 			pi.events.emit("drone:task-runtime/request/v1", { version: 1 });
 			remove();
 			return journal;
 		};
 		return { hooks, readJournal };
 	}
-	const first = host(), restored = host();
+	const first = host(),
+		restored = host();
 	const original = first.readJournal();
 	assert.notEqual(restored.readJournal(), original);
 	const manager = { getSessionFile: () => undefined, getSessionId: () => "restored", getBranch: () => [] };
 	Object.defineProperty(manager, "__drone_task_workbench_v2", { value: { version: 2, journal: original } });
-	for (const handler of restored.hooks.get("session_start") || []) await handler({}, { cwd: process.cwd(), sessionManager: manager });
+	for (const handler of restored.hooks.get("session_start") || [])
+		await handler({}, { cwd: process.cwd(), sessionManager: manager });
 	assert.notEqual(restored.readJournal(), original);
-	for (const handler of restored.hooks.get("session_tree") || []) await handler({}, { cwd: process.cwd(), sessionManager: manager });
+	for (const handler of restored.hooks.get("session_tree") || [])
+		await handler({}, { cwd: process.cwd(), sessionManager: manager });
 	assert.notEqual(restored.readJournal(), original);
 });

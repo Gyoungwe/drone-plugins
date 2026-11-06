@@ -133,12 +133,19 @@ const SHA256 = /^[a-f0-9]{64}$/i;
 
 function bounded(value: unknown, max = MAX_TEXT): string {
 	const text = typeof value === "string" ? value : JSON.stringify(value);
-	return String(text ?? "").replace(/[\r\n]+/g, " ").slice(0, max);
+	return String(text ?? "")
+		.replace(/[\r\n]+/g, " ")
+		.slice(0, max);
 }
 
 function sameValue(left: unknown, right: unknown): boolean {
 	if (Object.is(left, right)) return true;
-	if (typeof left === "number" && typeof right === "number" && Number.isFinite(left) && Number.isFinite(right))
+	if (
+		typeof left === "number" &&
+		typeof right === "number" &&
+		Number.isFinite(left) &&
+		Number.isFinite(right)
+	)
 		return left === right;
 	try {
 		return JSON.stringify(left) === JSON.stringify(right);
@@ -151,10 +158,15 @@ function hasKey(value: object, key: string): boolean {
 	return Object.hasOwn(value, key);
 }
 
-function subset(expected: Readonly<Record<string, unknown>> | undefined, observed: Readonly<Record<string, unknown>> | undefined): string[] {
+function subset(
+	expected: Readonly<Record<string, unknown>> | undefined,
+	observed: Readonly<Record<string, unknown>> | undefined,
+): string[] {
 	if (!expected) return [];
 	if (!observed) return Object.keys(expected);
-	return Object.keys(expected).filter((key) => !hasKey(observed, key) || !sameValue(expected[key], observed[key]));
+	return Object.keys(expected).filter(
+		(key) => !hasKey(observed, key) || !sameValue(expected[key], observed[key]),
+	);
 }
 
 function numberValue(value: number | string): number | null {
@@ -173,8 +185,11 @@ function numberMatches(expected: number | string, observed: number | string, tol
 function artifactHasNumber(artifact: MetacognitiveArtifact, claim: MetacognitiveNumberClaim): boolean {
 	const tolerance =
 		claim.rounding?.tolerance ??
-		(typeof claim.rounding?.digits === "number" && claim.rounding.digits >= 0 ? 0.5 * 10 ** -claim.rounding.digits : 0);
-	if (artifact.numbers?.some((item) => numberMatches(claim.value, item.value, item.tolerance ?? tolerance))) return true;
+		(typeof claim.rounding?.digits === "number" && claim.rounding.digits >= 0
+			? 0.5 * 10 ** -claim.rounding.digits
+			: 0);
+	if (artifact.numbers?.some((item) => numberMatches(claim.value, item.value, item.tolerance ?? tolerance)))
+		return true;
 	if (typeof artifact.text !== "string") return false;
 	const rendered = claim.rendered ?? String(claim.value);
 	if (artifact.text.includes(rendered)) return true;
@@ -199,10 +214,7 @@ function addWarning(warnings: MetacognitiveWarning[], warning: MetacognitiveWarn
 }
 
 /** Compare a final answer with host-observed reports, workflows and findings. */
-export function evaluateMetacognitivePublication(
-	answer: string,
-	snapshot: unknown,
-): MetacognitiveEvaluation {
+export function evaluateMetacognitivePublication(answer: string, snapshot: unknown): MetacognitiveEvaluation {
 	if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot))
 		return { ok: true, failures: [], warnings: [], findings: [] };
 	const input = snapshot as MetacognitiveSnapshot;
@@ -305,7 +317,11 @@ export function evaluateMetacognitivePublication(
 	for (const method of Array.isArray(input.methods) ? input.methods : []) {
 		const executed = input.executed;
 		if (!method || typeof method.description !== "string" || !method.description.trim()) {
-			addFailure(failures, { code: "metacognition-invalid", subject: "method", detail: "Method description is empty" });
+			addFailure(failures, {
+				code: "metacognition-invalid",
+				subject: "method",
+				detail: "Method description is empty",
+			});
 			continue;
 		}
 		if (!answer.includes(method.description))
@@ -348,7 +364,11 @@ export function evaluateMetacognitivePublication(
 	for (const rawFinding of Array.isArray(input.findings) ? input.findings : []) {
 		const finding = rawFinding as MetacognitiveFinding;
 		if (!finding || typeof finding.id !== "string" || typeof finding.text !== "string") {
-			addFailure(failures, { code: "metacognition-invalid", subject: "finding", detail: "Finding is malformed" });
+			addFailure(failures, {
+				code: "metacognition-invalid",
+				subject: "finding",
+				detail: "Finding is malformed",
+			});
 			continue;
 		}
 		findingMap.set(finding.id, finding);
@@ -359,7 +379,12 @@ export function evaluateMetacognitivePublication(
 				),
 			),
 		);
-		findingEvidence.push({ id: finding.id, text: bounded(finding.text), label: finding.label, citationPaths: paths });
+		findingEvidence.push({
+			id: finding.id,
+			text: bounded(finding.text),
+			label: finding.label,
+			citationPaths: paths,
+		});
 		for (const path of paths) {
 			if (!citations.has(path))
 				addFailure(failures, {
@@ -396,7 +421,11 @@ export function evaluateMetacognitivePublication(
 	}
 
 	for (const diagnostic of Array.isArray(input.diagnostics) ? input.diagnostics : []) {
-		if (!diagnostic || typeof diagnostic.id !== "string" || !sameValue(diagnostic.reported, diagnostic.observed))
+		if (
+			!diagnostic ||
+			typeof diagnostic.id !== "string" ||
+			!sameValue(diagnostic.reported, diagnostic.observed)
+		)
 			addFailure(failures, {
 				code: "diagnostic-drift",
 				subject: diagnostic?.id || "diagnostic",

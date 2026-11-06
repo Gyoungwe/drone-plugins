@@ -3,7 +3,12 @@
  * 只覆盖 Obsidian frontmatter 常见写法（映射、列表、行内列表、引号字符串、注释），不执行任何 YAML 标签或锚点。
  * 纯函数，不读写文件。
  */
-import { contentHash, type KnowledgeIdentity, identifyReference, normalizeIdentity } from "./ingest-identity.js";
+import {
+	contentHash,
+	identifyReference,
+	type KnowledgeIdentity,
+	normalizeIdentity,
+} from "./ingest-identity.js";
 
 export const NOTE_SCHEMA = "drone-note/1";
 
@@ -246,7 +251,8 @@ function parseScalar(raw: string): unknown {
 	return text;
 }
 
-const KEY_LINE = /^("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^\s"'#\-[{][^:#]*?|-[^\s:#][^:#]*?)\s*:(?:\s+(.*)|\s*)$/;
+const KEY_LINE =
+	/^("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^\s"'#\-[{][^:#]*?|-[^\s:#][^:#]*?)\s*:(?:\s+(.*)|\s*)$/;
 
 function isListItem(line: Line): boolean {
 	return line.text === "-" || line.text.startsWith("- ");
@@ -569,7 +575,11 @@ export function validateFrontmatter(input: unknown, options: { body?: string } =
 		if (source) sources.push(source);
 	});
 
-	if (raw.identity !== undefined && raw.identity !== null && (typeof raw.identity !== "object" || Array.isArray(raw.identity)))
+	if (
+		raw.identity !== undefined &&
+		raw.identity !== null &&
+		(typeof raw.identity !== "object" || Array.isArray(raw.identity))
+	)
 		errors.push("identity: expected a mapping");
 	const identity = normalizeIdentity(raw.identity);
 	if (raw.identity && typeof raw.identity === "object") {
@@ -611,13 +621,18 @@ export function validateFrontmatter(input: unknown, options: { body?: string } =
 	for (const key of ["created", "updated"] as const) {
 		if (raw[key] === undefined || raw[key] === null || raw[key] === "") continue;
 		const value = asString(raw[key], 64);
-		if (value && ISO_DATE.test(value) && !Number.isNaN(Date.parse(value.replace(" ", "T")))) dates[key] = value;
+		if (value && ISO_DATE.test(value) && !Number.isNaN(Date.parse(value.replace(" ", "T"))))
+			dates[key] = value;
 		else errors.push(`${key}: expected an ISO 8601 date`);
 	}
 
-	if (noteClass === "knowledge" && ["paper", "method", "dataset", "software", "claim", "evidence"].includes(type)) {
+	if (
+		noteClass === "knowledge" &&
+		["paper", "method", "dataset", "software", "claim", "evidence"].includes(type)
+	) {
 		const hasIdentity = Object.keys(identity).length > 0;
-		if (!sources.length && !hasIdentity) warnings.push(`sources: a ${type} note should cite at least one source`);
+		if (!sources.length && !hasIdentity)
+			warnings.push(`sources: a ${type} note should cite at least one source`);
 	}
 
 	if (errors.length || !isNoteType(type) || !noteClass || !project) return { value: null, errors, warnings };

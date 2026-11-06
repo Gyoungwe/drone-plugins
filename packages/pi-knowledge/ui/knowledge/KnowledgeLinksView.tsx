@@ -1,7 +1,4 @@
-import type {
-	KnowledgeLinkRef,
-	KnowledgeNoteLinks,
-} from "@gyoungwe/plugin-api/ui";
+import type { KnowledgeLinkRef, KnowledgeNoteLinks } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useState } from "react";
 import { useKnowledgeText } from "./copy";
 /** 笔记的双向链接：反链（链接到本笔记的）与出链（本笔记链接到的），点击即打开 */
@@ -12,10 +9,7 @@ export function KnowledgeLinksView({
 	path,
 	revision,
 }: {
-	load: (input: {
-		path: string;
-		revision: number;
-	}) => Promise<KnowledgeNoteLinks>;
+	load: (input: { path: string; revision: number }) => Promise<KnowledgeNoteLinks>;
 	nonce: number;
 	onOpenNote: (path: string) => void;
 	path: string;
@@ -34,8 +28,7 @@ export function KnowledgeLinksView({
 				if (live) setLinks(value);
 			},
 			(cause) => {
-				if (live)
-					setError(String(cause instanceof Error ? cause.message : cause));
+				if (live) setError(String(cause instanceof Error ? cause.message : cause));
 			},
 		);
 		return () => {
@@ -66,10 +59,7 @@ export function KnowledgeLinksView({
 								{item.title}
 							</button>
 						) : (
-							<span
-								className="text-[11px] text-ink-faint"
-								title={t("linkMissing")}
-							>
+							<span className="text-[11px] text-ink-faint" title={t("linkMissing")}>
 								{item.title} · {t("linkMissing")}
 							</span>
 						)}

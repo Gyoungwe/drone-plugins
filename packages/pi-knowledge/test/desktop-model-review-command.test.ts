@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { parseModelReviewCommandInput } from "../src/desktop/model-review.js";
+
 const input = {
 	id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
 	expectedProposalHash: "a".repeat(64),

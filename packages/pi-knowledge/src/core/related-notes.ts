@@ -6,7 +6,9 @@ import { readKnowledgeBinding, withKnowledgeBinding } from "./config.js";
 import { getKnowledgeService } from "./service.js";
 
 export async function findRelatedNotes(title: string, limit = 5): Promise<string[]> {
-	const query = String(title || "").trim().slice(0, 120);
+	const query = String(title || "")
+		.trim()
+		.slice(0, 120);
 	if (!query) return [];
 	try {
 		const binding = await readKnowledgeBinding();
@@ -20,7 +22,12 @@ export async function findRelatedNotes(title: string, limit = 5): Promise<string
 		for (const hit of (found?.hits ?? []) as { path: string; title: string; kind: string }[]) {
 			if (hit.kind === "explainer" || hit.kind === "navigation") continue;
 			// The note being deposited may already exist under the same title; never link a note to itself.
-			if (String(hit.title || "").trim().toLowerCase() === wanted) continue;
+			if (
+				String(hit.title || "")
+					.trim()
+					.toLowerCase() === wanted
+			)
+				continue;
 			paths.push(hit.path);
 			if (paths.length >= limit) break;
 		}

@@ -23,7 +23,10 @@ export interface MaintenanceGraphNode {
 export interface MaintenanceGraph {
 	readonly nodes?: readonly MaintenanceGraphNode[];
 	readonly edges?: readonly { source: string; target: string; type?: string }[];
-	readonly semantic?: { nodes?: readonly MaintenanceGraphNode[]; edges?: readonly { source: string; target: string; type?: string }[] };
+	readonly semantic?: {
+		nodes?: readonly MaintenanceGraphNode[];
+		edges?: readonly { source: string; target: string; type?: string }[];
+	};
 }
 
 export interface MaintenanceSettings {
@@ -74,7 +77,9 @@ export function planMaintenance(
 		const warnings = node.warnings ?? [];
 		const base = { id: path, path, ...(title ? { title } : {}) };
 		if (looksLikeFileName(title)) add({ ...base, kind: "missing-topic", detail: "title-is-file-name" });
-		if (warnings.some((warning) => /content_sha256.*changed|source.*hash.*changed|hash.*changed/i.test(warning)))
+		if (
+			warnings.some((warning) => /content_sha256.*changed|source.*hash.*changed|hash.*changed/i.test(warning))
+		)
 			add({ ...base, kind: "source-changed", detail: warnings.join("; ") });
 		const degree = node.degree ?? (outgoing.get(path) ?? 0) + (incoming.get(path) ?? 0);
 		if (degree === 0 && node.kind !== "wiki") add({ ...base, kind: "orphan", detail: "no-links" });

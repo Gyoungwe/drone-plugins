@@ -1,5 +1,5 @@
-import { withDeadline } from "./deadline.js";
 import { randomUUID } from "node:crypto";
+import { withDeadline } from "./deadline.js";
 import {
 	assertValid,
 	boundedInteger,
@@ -101,15 +101,10 @@ export function evaluateVerificationTime(
 ): EvaluationMetric {
 	const values = cases
 		.map((item) => item.verificationTimeMs)
-		.filter(
-			(value): value is number =>
-				value !== undefined && Number.isFinite(value) && value >= 0,
-		);
+		.filter((value): value is number => value !== undefined && Number.isFinite(value) && value >= 0);
 	return {
 		name: "verification-time-ms",
-		value: values.length
-			? values.reduce((sum, value) => sum + value, 0) / values.length
-			: 0,
+		value: values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0,
 		denominator: values.length,
 		measuredAt: now,
 	};
@@ -158,9 +153,7 @@ export interface EvaluationResult {
 	readonly missingData: readonly string[];
 	readonly blockedCases: readonly string[];
 }
-export function metricDescription(
-	metric: EvaluationMetricName | DiscoveryEvaluationMetric,
-): string {
+export function metricDescription(metric: EvaluationMetricName | DiscoveryEvaluationMetric): string {
 	return metric === "repeated-failure-count"
 		? "count of repeated failure signatures"
 		: metric.replaceAll("-", " ");
@@ -175,8 +168,7 @@ export const DISCOVERY_EVALUATION_METRICS = [
 	"verification-time-ms",
 	"repeated-failure-count",
 ] as const;
-export type DiscoveryEvaluationMetric =
-	(typeof DISCOVERY_EVALUATION_METRICS)[number];
+export type DiscoveryEvaluationMetric = (typeof DISCOVERY_EVALUATION_METRICS)[number];
 export interface DiscoveryEvaluationCase {
 	readonly id: string;
 	readonly metric: DiscoveryEvaluationMetric;
@@ -214,19 +206,12 @@ export interface DiscoveryBaselineStore {
 export type Baseline = DiscoveryBaselineRecord;
 export class MemoryBaselineStore implements DiscoveryBaselineStore {
 	private readonly records = new Map<string, DiscoveryBaselineRecord>();
-	private key(
-		metric: DiscoveryEvaluationMetric,
-		datasetId: string,
-		revision: string,
-	): string {
+	private key(metric: DiscoveryEvaluationMetric, datasetId: string, revision: string): string {
 		return `${metric}:${datasetId}:${revision}`;
 	}
 	async put(record: DiscoveryBaselineRecord): Promise<void> {
 		validateBaseline(record);
-		this.records.set(
-			this.key(record.metric, record.datasetId, record.datasetRevision),
-			record,
-		);
+		this.records.set(this.key(record.metric, record.datasetId, record.datasetRevision), record);
 	}
 	async get(
 		metric: DiscoveryEvaluationMetric,
@@ -257,10 +242,7 @@ function validateBaseline(item: DiscoveryBaselineRecord): void {
 		"baseline metric is invalid",
 	);
 	assertValid(safeId(item.datasetId), "baseline dataset id is invalid");
-	assertValid(
-		nonEmptyText(item.datasetRevision, 256),
-		"baseline revision is invalid",
-	);
+	assertValid(nonEmptyText(item.datasetRevision, 256), "baseline revision is invalid");
 	assertValid(finiteNonNegative(item.value), "baseline value is invalid");
 	const expectedUnit = item.metric.endsWith("rate")
 		? "ratio"
@@ -269,16 +251,10 @@ function validateBaseline(item: DiscoveryBaselineRecord): void {
 			: item.metric === "repeated-failure-count"
 				? "count"
 				: "score";
-	assertValid(
-		item.unit === expectedUnit,
-		"baseline unit does not match metric",
-	);
+	assertValid(item.unit === expectedUnit, "baseline unit does not match metric");
 	assertValid(safeId(item.runId), "baseline run id is invalid");
 	assertValid(isoDate(item.recordedAt), "baseline timestamp is invalid");
-	assertValid(
-		item.source === "fixture" || item.source === "external",
-		"baseline source is invalid",
-	);
+	assertValid(item.source === "fixture" || item.source === "external", "baseline source is invalid");
 }
 export interface DiscoveryMetricEvaluation {
 	readonly metric: DiscoveryEvaluationMetric;
@@ -295,9 +271,7 @@ export interface DiscoveryEvaluationRun {
 	readonly startedAt: string;
 	readonly finishedAt: string;
 	readonly metrics: readonly DiscoveryMetricEvaluation[];
-	readonly observations: Readonly<
-		Record<string, DiscoveryEvaluationObservation>
-	>;
+	readonly observations: Readonly<Record<string, DiscoveryEvaluationObservation>>;
 	readonly missingData: readonly string[];
 	readonly blockedCases: readonly string[];
 }
@@ -320,8 +294,7 @@ async function legacy(
 		}
 		try {
 			const result = await evaluator(item);
-			if (!finiteNonNegative(result.value))
-				throw new Error("invalid evaluation value");
+			if (!finiteNonNegative(result.value)) throw new Error("invalid evaluation value");
 			metrics.push({
 				id: item.id,
 				metric: item.metric,
@@ -333,11 +306,7 @@ async function legacy(
 		}
 	}
 	return {
-		status: blockedCases.length
-			? "blocked"
-			: missingData.length
-				? "needs-data"
-				: "complete",
+		status: blockedCases.length ? "blocked" : missingData.length ? "needs-data" : "complete",
 		metrics,
 		missingData,
 		blockedCases,
@@ -345,9 +314,7 @@ async function legacy(
 }
 export async function runEvaluation(
 	items: readonly EvaluationItem[],
-	evaluator: (
-		item: EvaluationItem,
-	) => Promise<{
+	evaluator: (item: EvaluationItem) => Promise<{
 		readonly value: number;
 		readonly verificationTimeMs?: number;
 	}>,
@@ -355,9 +322,7 @@ export async function runEvaluation(
 ): Promise<EvaluationResult>;
 export async function runEvaluation(
 	cases: readonly DiscoveryEvaluationCase[],
-	evaluator: (
-		item: DiscoveryEvaluationCase,
-	) => Promise<DiscoveryEvaluationObservation>,
+	evaluator: (item: DiscoveryEvaluationCase) => Promise<DiscoveryEvaluationObservation>,
 	store: DiscoveryBaselineStore,
 	options?: { readonly timeoutMs?: number; readonly runId?: string },
 ): Promise<DiscoveryEvaluationRun>;
@@ -368,12 +333,8 @@ export async function runEvaluation(
 	options: { readonly timeoutMs?: number; readonly runId?: string } = {},
 ): Promise<any> {
 	if (!items.length) throw new Error("evaluation requires at least one case");
-	if ("expectedFindingIds" in items[0])
-		return legacy(items as EvaluationItem[], evaluator);
-	assertValid(
-		store && typeof store.get === "function",
-		"baseline store is required",
-	);
+	if ("expectedFindingIds" in items[0]) return legacy(items as EvaluationItem[], evaluator);
+	assertValid(store && typeof store.get === "function", "baseline store is required");
 	const cases = items as DiscoveryEvaluationCase[];
 	assertValid(
 		new Set(cases.map((item) => item.id)).size === cases.length,
@@ -386,55 +347,31 @@ export async function runEvaluation(
 			"evaluation metric is invalid",
 		);
 		assertValid(safeId(item.datasetId), "evaluation dataset id is invalid");
-		assertValid(
-			nonEmptyText(item.datasetRevision, 256),
-			"evaluation dataset revision is invalid",
-		);
+		assertValid(nonEmptyText(item.datasetRevision, 256), "evaluation dataset revision is invalid");
 		assertValid(
 			item.datasetStatus === "fixture" ||
 				item.datasetStatus === "external" ||
 				item.datasetStatus === "missing",
 			"evaluation dataset status is invalid",
 		);
-		assertValid(
-			nonEmptyText(item.description, 20_000),
-			"evaluation description is invalid",
-		);
+		assertValid(nonEmptyText(item.description, 20_000), "evaluation description is invalid");
 	}
 	const timeoutMs = options.timeoutMs ?? 60_000;
-	assertValid(
-		boundedInteger(timeoutMs, 1, 86_400_000),
-		"evaluation timeout is invalid",
-	);
+	assertValid(boundedInteger(timeoutMs, 1, 86_400_000), "evaluation timeout is invalid");
 	const runId = options.runId ?? `evaluation-${randomUUID()}`;
 	const startedAt = new Date().toISOString();
 	const observations: Record<string, DiscoveryEvaluationObservation> = {};
 	const blockedCases: string[] = [];
-	const missingData = cases
-		.filter((item) => item.datasetStatus === "missing")
-		.map((item) => item.id);
+	const missingData = cases.filter((item) => item.datasetStatus === "missing").map((item) => item.id);
 	for (const item of cases) {
 		if (item.datasetStatus === "missing") continue;
 		try {
-			const result = await withDeadline(
-				evaluator(item),
-				timeoutMs,
-				"evaluation-timeout",
-			);
-			assertValid(
-				finiteNonNegative(result.value),
-				"evaluation value is invalid",
-			);
+			const result = await withDeadline(evaluator(item), timeoutMs, "evaluation-timeout");
+			assertValid(finiteNonNegative(result.value), "evaluation value is invalid");
 			if (item.metric.endsWith("rate") || item.metric === "bixbench-regression")
-				assertValid(
-					result.value <= 1,
-					"ratio/score must be between zero and one",
-				);
+				assertValid(result.value <= 1, "ratio/score must be between zero and one");
 			if (item.metric === "repeated-failure-count")
-				assertValid(
-					Number.isSafeInteger(result.value),
-					"failure count must be an integer",
-				);
+				assertValid(Number.isSafeInteger(result.value), "failure count must be an integer");
 			observations[item.id] = result;
 		} catch {
 			blockedCases.push(item.id);
@@ -442,15 +379,10 @@ export async function runEvaluation(
 	}
 	const metrics: DiscoveryMetricEvaluation[] = [];
 	for (const metric of DISCOVERY_EVALUATION_METRICS) {
-		const selected = cases.filter(
-			(item) => item.metric === metric && observations[item.id],
-		);
+		const selected = cases.filter((item) => item.metric === metric && observations[item.id]);
 		if (!selected.length) continue;
 		const values = selected.map(
-			(item) =>
-				observations[item.id]?.verificationTimeMs ??
-				observations[item.id]?.value ??
-				0,
+			(item) => observations[item.id]?.verificationTimeMs ?? observations[item.id]?.value ?? 0,
 		);
 		const value =
 			metric === "verification-time-ms"
@@ -459,24 +391,13 @@ export async function runEvaluation(
 					? values.reduce((sum, item) => sum + item, 0)
 					: values.reduce((sum, item) => sum + item, 0) / values.length;
 		const first = selected[0] as DiscoveryEvaluationCase;
-		const baseline = await store.get(
-			metric,
-			first.datasetId,
-			first.datasetRevision,
-		);
-		const lower =
-			metric === "verification-time-ms" || metric === "repeated-failure-count";
+		const baseline = await store.get(metric, first.datasetId, first.datasetRevision);
+		const lower = metric === "verification-time-ms" || metric === "repeated-failure-count";
 		metrics.push({
 			metric,
 			value,
-			...(baseline
-				? { baseline: baseline.value, delta: value - baseline.value }
-				: {}),
-			passed: baseline
-				? lower
-					? value <= baseline.value
-					: value >= baseline.value
-				: false,
+			...(baseline ? { baseline: baseline.value, delta: value - baseline.value } : {}),
+			passed: baseline ? (lower ? value <= baseline.value : value >= baseline.value) : false,
 			baselineAvailable: Boolean(baseline),
 			caseIds: selected.map((item) => item.id),
 		});

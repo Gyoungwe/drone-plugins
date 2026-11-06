@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { zoteroLibraryEnvValue, zoteroLibraryPath } from "../../src/core/zotero-library.js";
-import { createCompositeZoteroReconciler, createZoteroReconciler } from "../../src/core/zotero-reconcile-runtime.js";
+import {
+	createCompositeZoteroReconciler,
+	createZoteroReconciler,
+} from "../../src/core/zotero-reconcile-runtime.js";
 import { zoteroWebApiConfig } from "../../src/core/zotero-write-runtime.js";
 
 describe("Zotero library type spellings", () => {

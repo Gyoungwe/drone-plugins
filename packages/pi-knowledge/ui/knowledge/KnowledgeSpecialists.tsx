@@ -1,4 +1,3 @@
-import { PROTECTED_KNOWLEDGE_AGENTS, SUBAGENT_THINKING_LEVELS } from "../api";
 import {
 	type KnowledgeSpecialistMode,
 	type KnowledgeSpecialistRun,
@@ -6,11 +5,15 @@ import {
 	type SubagentThinkingLevel,
 } from "@gyoungwe/plugin-api/ui";
 import { useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { useKnowledgeStore } from "../api";
-import { useSessionsStore } from "../api";
-import { useSettingsStore } from "../api";
-import { Button } from "../api";
+import {
+	Button,
+	getKnowledgeApi,
+	PROTECTED_KNOWLEDGE_AGENTS,
+	SUBAGENT_THINKING_LEVELS,
+	useKnowledgeStore,
+	useSessionsStore,
+	useSettingsStore,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 
 export function KnowledgeSpecialists({
@@ -38,7 +41,11 @@ export function KnowledgeSpecialists({
 		setBusy(true);
 		setError(null);
 		try {
-			await getKnowledgeApi().setKnowledgeSpecialistSettings({ mode, revision: settings.revision, bindingRevision });
+			await getKnowledgeApi().setKnowledgeSpecialistSettings({
+				mode,
+				revision: settings.revision,
+				bindingRevision,
+			});
 			await refresh();
 		} catch (e) {
 			setError(String((e as Error).message || e));

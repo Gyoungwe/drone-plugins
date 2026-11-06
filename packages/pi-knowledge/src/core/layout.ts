@@ -13,7 +13,9 @@ async function hashRegularFile(path: string): Promise<string> {
 	const flags = constants.O_RDONLY | (constants.O_NOFOLLOW || 0);
 	const handle = await open(path, flags);
 	try {
-		return createHash("sha256").update(await handle.readFile()).digest("hex");
+		return createHash("sha256")
+			.update(await handle.readFile())
+			.digest("hex");
 	} finally {
 		await handle.close();
 	}
@@ -120,7 +122,8 @@ export async function replaceVaultFile(
 	options: ReplaceVaultFileOptions = {},
 ): Promise<void> {
 	const current = await lstat(path);
-	if (!current.isFile() || current.isSymbolicLink()) throw new Error(`Expected a regular Vault file: ${path}`);
+	if (!current.isFile() || current.isSymbolicLink())
+		throw new Error(`Expected a regular Vault file: ${path}`);
 	if (options.expectedHash !== undefined) {
 		const observed = await hashRegularFile(path);
 		if (observed !== options.expectedHash) throw new VaultFileConflictError(path);

@@ -14,7 +14,12 @@ afterEach(async () => {
 	for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
 });
 
-async function harness({ records = [], answer = (_title, options) => options.at(-1), workspace, extra = {} } = {}) {
+async function harness({
+	records = [],
+	answer = (_title, options) => options.at(-1),
+	workspace,
+	extra = {},
+} = {}) {
 	const cwd = workspace ?? (await realpath(await mkdtemp(join(tmpdir(), "managed-task-"))));
 	if (!workspace) {
 		dirs.push(cwd);
@@ -46,7 +51,12 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 		"provider.enumerate": ({ role }) => {
 			throw new Error(`Undeclared provider role: ${role}`);
 		},
-		"session.records.read": () => ({ mode: "persistent", state: "durable", error: null, records: [...host.records] }),
+		"session.records.read": () => ({
+			mode: "persistent",
+			state: "durable",
+			error: null,
+			records: [...host.records],
+		}),
 		"session.records.append": ({ type, data }) => {
 			if (host.failAppend) {
 				host.failAppend = false;
@@ -116,7 +126,9 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 	};
 	const app = createManagedTaskApplication(context);
 	const native = app.createNativeSession();
-	const hooks = {}, tools = {}, commands = {};
+	const hooks = {},
+		tools = {},
+		commands = {};
 	native.extension({
 		on: (name, handler) => {
 			hooks[name] = (...args) => during(() => handler(...args));
@@ -131,7 +143,9 @@ async function harness({ records = [], answer = (_title, options) => options.at(
 	const ctx = { cwd, signal: lifetime.signal, hasUI: false, sessionManager: { getSessionId: () => "s1" } };
 	await hooks.session_start({}, ctx);
 	const tool = async (name, input) => {
-		const result = await during(() => tools[name].execute(`${name}-1`, input, lifetime.signal, undefined, ctx));
+		const result = await during(() =>
+			tools[name].execute(`${name}-1`, input, lifetime.signal, undefined, ctx),
+		);
 		return JSON.parse(result.content[0].text);
 	};
 	const command = (name, args) => during(() => commands[name].handler(args, ctx));
@@ -150,12 +164,18 @@ const plan = {
 
 it("declares every hook, tool and command read so ordinary chat raises no plugin dialog", async () => {
 	const t = await harness();
-	expect(Object.values(t.native.eventEffects)).toEqual(Object.values(t.native.eventEffects).map(() => "read"));
+	expect(Object.values(t.native.eventEffects)).toEqual(
+		Object.values(t.native.eventEffects).map(() => "read"),
+	);
 	expect(Object.keys(t.native.toolEffects).sort()).toEqual(Object.keys(t.tools).sort());
 	expect(Object.values(t.native.toolEffects).every((effect) => effect === "read")).toBe(true);
 	expect(Object.keys(t.native.commandEffects).sort()).toEqual(Object.keys(t.commands).sort());
 	// session_shutdown only releases the attachment; the host runs it without a capability caller.
-	expect(Object.keys(t.hooks).filter((name) => name !== "session_shutdown").every((name) => t.native.eventEffects[name] === "read")).toBe(true);
+	expect(
+		Object.keys(t.hooks)
+			.filter((name) => name !== "session_shutdown")
+			.every((name) => t.native.eventEffects[name] === "read"),
+	).toBe(true);
 	await t.close();
 });
 
@@ -182,7 +202,10 @@ it("one host task grant authorizes the plan; delivered files complete it and the
 	const write = { toolName: "write", toolCallId: "w1", input: { path: "out/a.md", content: "A" } };
 	expect(await t.hooks.tool_call({ type: "tool_call", ...write }, t.ctx)).toBeUndefined();
 	await writeFile(join(t.cwd, "out/a.md"), "A");
-	await t.hooks.tool_result({ type: "tool_result", ...write, content: [{ type: "text", text: "ok" }], isError: false }, t.ctx);
+	await t.hooks.tool_result(
+		{ type: "tool_result", ...write, content: [{ type: "text", text: "ok" }], isError: false },
+		t.ctx,
+	);
 	await t.hooks.agent_end({ messages: [{ role: "assistant", stopReason: "stop", content: [] }] }, t.ctx);
 
 	const status = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
@@ -231,7 +254,9 @@ it("a status query outside a run posts its card while the input hook is still li
 const taskAction = (input) => Buffer.from(JSON.stringify(input)).toString("base64url");
 
 it("the progress action posts its status inside the command, so choosing to only re-check cannot fence the task", async () => {
-	const t = await harness({ answer: (_title, options) => options.find((option) => option === "仅核对已有产物") });
+	const t = await harness({
+		answer: (_title, options) => options.find((option) => option === "仅核对已有产物"),
+	});
 	await t.hooks.input({ text: plan.goal, images: [] }, t.ctx);
 	await t.tool("task_plan", plan);
 	const { snapshot } = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
@@ -263,7 +288,10 @@ async function exhaustHandoffs(t) {
 		const write = { toolName: "write", toolCallId: `w${n}`, input: { path: `out/${n}.md`, content: "x" } };
 		await t.hooks.tool_call({ type: "tool_call", ...write }, t.ctx);
 		await writeFile(join(t.cwd, `out/${n}.md`), "x");
-		await t.hooks.tool_result({ type: "tool_result", ...write, content: [{ type: "text", text: "ok" }], isError: false }, t.ctx);
+		await t.hooks.tool_result(
+			{ type: "tool_result", ...write, content: [{ type: "text", text: "ok" }], isError: false },
+			t.ctx,
+		);
 		await t.hooks.agent_end({ messages: [{ role: "assistant", stopReason: "stop", content: [] }] }, t.ctx);
 	}
 }
@@ -300,18 +328,18 @@ it("after a failed checkpoint append, status serves the last committed task and 
 	await t.tool("task_plan", plan);
 	const committed = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
 	t.host.failAppend = true;
-	await expect(t.app.operations.pause.execute({ reason: "must-not-commit" }, { signal: t.ctx.signal })).rejects.toThrow(
-		/Actual managed checkpoint append failed/,
-	);
+	await expect(
+		t.app.operations.pause.execute({ reason: "must-not-commit" }, { signal: t.ctx.signal }),
+	).rejects.toThrow(/Actual managed checkpoint append failed/);
 	const fenced = await t.app.operations.status.execute(null, { signal: t.ctx.signal });
 	expect(fenced).toMatchObject({
 		snapshot: { id: committed.snapshot.id, reason: committed.snapshot.reason },
 		storage: { state: "needs-reopen" },
 	});
 	const records = t.host.records.length;
-	await expect(t.app.operations.pause.execute({ reason: "no-phantom-chain" }, { signal: t.ctx.signal })).rejects.toThrow(
-		/reopen the application from disk/,
-	);
+	await expect(
+		t.app.operations.pause.execute({ reason: "no-phantom-chain" }, { signal: t.ctx.signal }),
+	).rejects.toThrow(/reopen the application from disk/);
 	expect(t.host.records).toHaveLength(records);
 	await t.close();
 });
@@ -363,17 +391,35 @@ function zoteroProvider({ verify } = {}) {
 	const extra = {
 		"provider.enumerate": ({ role }) => {
 			if (role !== "acceptance") throw new Error(`Undeclared provider role: ${role}`);
-			return { members: [{ member: "zotero_item", state: "available", service: "task.acceptance:zotero_item", requestedVersion: 1, provider: null }] };
+			return {
+				members: [
+					{
+						member: "zotero_item",
+						state: "available",
+						service: "task.acceptance:zotero_item",
+						requestedVersion: 1,
+						provider: null,
+					},
+				],
+			};
 		},
 		"provider.read": ({ role, member, operation, input }) => {
 			expect({ role, member }).toEqual({ role: "acceptance", member: "zotero_item" });
 			calls.push(`${operation}:${input === null ? "null" : input.doi || "slot"}`);
 			if (operation === "describe")
 				return input
-					? { fields: ["doi", "libraryId", "collection"], evidenceKind: "zotero-read-only-item-identity", label: input.doi ? `Zotero ${input.doi}` : "Zotero slot", consent: input.doi ? { doi: input.doi } : { slot: true }, pending: { reason: "not in Zotero yet", next: "save it" } }
+					? {
+							fields: ["doi", "libraryId", "collection"],
+							evidenceKind: "zotero-read-only-item-identity",
+							label: input.doi ? `Zotero ${input.doi}` : "Zotero slot",
+							consent: input.doi ? { doi: input.doi } : { slot: true },
+							pending: { reason: "not in Zotero yet", next: "save it" },
+						}
 					: { fields: ["doi", "libraryId", "collection"], evidenceKind: "zotero-read-only-item-identity" };
 			if (verify) return verify(input);
-			return state.saved && input.doi === DOI ? { state: "found", itemId: "ABCD2345", summary: "found" } : { state: "pending", reason: "doi-unbound" };
+			return state.saved && input.doi === DOI
+				? { state: "found", itemId: "ABCD2345", summary: "found" }
+				: { state: "pending", reason: "doi-unbound" };
 		},
 		// The real host hands the provider the actual tool_execution_end event; this fake only scripts its answer.
 		"provider.native": ({ member, operation, input }) => {
@@ -389,11 +435,27 @@ async function runSave(t, state) {
 	t.host.streaming = true;
 	const context = await t.hooks.before_agent_start({ prompt: zoteroPlan.goal, systemPrompt: "" }, t.ctx);
 	expect((await t.tool("task_plan", zoteroPlan)).authorized).toBe(true);
-	const save = { toolName: "research_zotero_save", toolCallId: "z1", input: { doi: DOI, title: "Gut signatures" } };
+	const save = {
+		toolName: "research_zotero_save",
+		toolCallId: "z1",
+		input: { doi: DOI, title: "Gut signatures" },
+	};
 	await t.hooks.tool_call({ type: "tool_call", ...save }, t.ctx);
 	state.saved = true;
-	await t.hooks.tool_result({ type: "tool_result", ...save, content: [{ type: "text", text: "saved" }], isError: false }, t.ctx);
-	await t.hooks.tool_execution_end({ type: "tool_execution_end", toolCallId: "z1", toolName: save.toolName, result: { content: [] }, isError: false }, t.ctx);
+	await t.hooks.tool_result(
+		{ type: "tool_result", ...save, content: [{ type: "text", text: "saved" }], isError: false },
+		t.ctx,
+	);
+	await t.hooks.tool_execution_end(
+		{
+			type: "tool_execution_end",
+			toolCallId: "z1",
+			toolName: save.toolName,
+			result: { content: [] },
+			isError: false,
+		},
+		t.ctx,
+	);
 	await t.hooks.agent_end({ messages: [{ role: "assistant", stopReason: "stop", content: [] }] }, t.ctx);
 	return { context, status: await t.app.operations.status.execute(null, { signal: t.ctx.signal }) };
 }
@@ -404,13 +466,23 @@ it("a checker another plugin provides is planned, bound from the tool event by t
 	const { context, status } = await runSave(t, provider.state);
 	// The model learns the kind and its fields from the task context; the tool schema stays open.
 	expect(context.message.content).toContain("zotero_item (doi, libraryId, collection)");
-	expect(t.tools.task_plan.parameters.properties.milestones.items.properties.acceptance.properties.kind.enum).toBeUndefined();
+	expect(
+		t.tools.task_plan.parameters.properties.milestones.items.properties.acceptance.properties.kind.enum,
+	).toBeUndefined();
 	// The authorization lists the provider's write for the milestone; the host shows it and admits it once.
 	expect(t.host.grants[0].allowances).toEqual([
 		{ id: "z", role: "acceptance", member: "zotero_item", label: "Zotero slot", consent: { slot: true } },
 	]);
 	expect(status.snapshot.milestones).toEqual([expect.objectContaining({ id: "z", state: "completed" })]);
-	expect(provider.calls).toEqual(expect.arrayContaining(["describe:null", "describe:slot", "native:zotero_item:identify", `describe:${DOI}`, `verify:${DOI}`]));
+	expect(provider.calls).toEqual(
+		expect.arrayContaining([
+			"describe:null",
+			"describe:slot",
+			"native:zotero_item:identify",
+			`describe:${DOI}`,
+			`verify:${DOI}`,
+		]),
+	);
 	await t.close();
 });
 
@@ -430,6 +502,8 @@ it("without a provider, planning refuses the kind", async () => {
 	const t = await harness();
 	await t.hooks.input({ text: zoteroPlan.goal, images: [] }, t.ctx);
 	await t.hooks.before_agent_start({ prompt: zoteroPlan.goal, systemPrompt: "" }, t.ctx);
-	await expect(t.tool("task_plan", zoteroPlan)).rejects.toThrow(/Acceptance must be one of file \| human_review/);
+	await expect(t.tool("task_plan", zoteroPlan)).rejects.toThrow(
+		/Acceptance must be one of file \| human_review/,
+	);
 	await t.close();
 });

@@ -13,14 +13,10 @@ function countMatches(value: string, pattern: RegExp): number {
 }
 
 function markerAfterColon(value: string): MarkerSpec | undefined {
-	const match = value.match(
-		/[:：][ \t]*(?:[-*•][ \t]+|\d+[.)、][ \t]+|[一二三四五六七八九十]+[、.][ \t]+)/,
-	);
+	const match = value.match(/[:：][ \t]*(?:[-*•][ \t]+|\d+[.)、][ \t]+|[一二三四五六七八九十]+[、.][ \t]+)/);
 	if (!match) return undefined;
 	return MARKERS.find((marker) =>
-		new RegExp(`^${marker.pattern.source}`).test(
-			match[0].replace(/^[:：][ \t]*/, ""),
-		),
+		new RegExp(`^${marker.pattern.source}`).test(match[0].replace(/^[:：][ \t]*/, "")),
 	);
 }
 
@@ -29,22 +25,14 @@ function formatLine(line: string): string {
 	if (!normalized) return "";
 
 	const colonMarker = markerAfterColon(normalized);
-	const repeatedMarker = MARKERS.find(
-		(marker) => countMatches(normalized, marker.pattern) >= 2,
-	);
+	const repeatedMarker = MARKERS.find((marker) => countMatches(normalized, marker.pattern) >= 2);
 	const marker = colonMarker ?? repeatedMarker;
 	if (!marker) return normalized;
 
 	const withColonBreak = colonMarker
-		? normalized.replace(
-				new RegExp(`([:：])[ \t]*(?=${marker.pattern.source})`),
-				"$1\n",
-			)
+		? normalized.replace(new RegExp(`([:：])[ \t]*(?=${marker.pattern.source})`), "$1\n")
 		: normalized;
-	return withColonBreak.replace(
-		new RegExp(`[ \t]+(?=${marker.pattern.source})`, "g"),
-		"\n",
-	);
+	return withColonBreak.replace(new RegExp(`[ \t]+(?=${marker.pattern.source})`, "g"), "\n");
 }
 
 /**
@@ -52,10 +40,5 @@ function formatLine(line: string): string {
  * Existing newlines are preserved; a line is split only when its list shape is unambiguous.
  */
 export function formatCardText(value: string): string {
-	return value
-		.replace(/\r\n?/g, "\n")
-		.split("\n")
-		.map(formatLine)
-		.join("\n")
-		.trim();
+	return value.replace(/\r\n?/g, "\n").split("\n").map(formatLine).join("\n").trim();
 }

@@ -11,6 +11,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+
 const root = resolve(import.meta.dirname, "..");
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const piVersions = (process.env.PI_CLI_VERSIONS ?? "1.1.0,latest")
@@ -60,14 +61,15 @@ async function run(file, args, options = {}) {
 			finish({
 				exitCode: 1,
 				stdout: Buffer.concat(stdout).subarray(0, maxBuffer).toString("utf8"),
-				stderr: Buffer.concat(stderr).subarray(0, maxBuffer).toString("utf8") || String(error.message ?? error),
+				stderr:
+					Buffer.concat(stderr).subarray(0, maxBuffer).toString("utf8") || String(error.message ?? error),
 				timedOut,
 			});
 		});
 		child.on("close", (code) => {
 			clearTimeout(timer);
 			finish({
-				exitCode: timedOut ? 124 : code ?? 1,
+				exitCode: timedOut ? 124 : (code ?? 1),
 				stdout: Buffer.concat(stdout).subarray(0, maxBuffer).toString("utf8"),
 				stderr: Buffer.concat(stderr).subarray(0, maxBuffer).toString("utf8"),
 				timedOut,
@@ -141,7 +143,9 @@ async function packSource(source, tarballRoot, env) {
 async function packageMetadataFromTarball(tarball) {
 	const result = await run("tar", ["-xOf", tarball, "package/package.json"], { cwd: root });
 	if (result.exitCode !== 0) {
-		throw new Error(`could not inspect research-suite tarball: ${result.stderr.trim() || result.stdout.trim()}`);
+		throw new Error(
+			`could not inspect research-suite tarball: ${result.stderr.trim() || result.stdout.trim()}`,
+		);
 	}
 	try {
 		return JSON.parse(result.stdout);
@@ -209,7 +213,8 @@ async function invokePi({ pi, packageSource, runRoot, env, expected }) {
 
 	// Keep this invocation literal and visible in evidence. It is the actual
 	// regression target, rather than a loader-only approximation.
-	const requestedCommands = expected === "pass" ? ["/task-status", "/drone-doctor", "/drone-example"] : ["/task-status"];
+	const requestedCommands =
+		expected === "pass" ? ["/task-status", "/drone-doctor", "/drone-example"] : ["/task-status"];
 	const probes = [];
 	for (const requested of requestedCommands) {
 		const execution = await run(pi.bin, ["-p", "--no-session", requested], { cwd: runRoot, env });

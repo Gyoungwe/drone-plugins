@@ -1,3 +1,4 @@
+import { normalizeZoteroDoi } from "../core/zotero-identity.js";
 import { ZOTERO_ITEM_TYPES } from "../core/zotero-write.js";
 import {
 	executeZoteroSave,
@@ -8,7 +9,6 @@ import {
 	receiptWithoutUpdate,
 	receiptWithoutWrite,
 } from "../core/zotero-write-runtime.js";
-import { normalizeZoteroDoi } from "../core/zotero-identity.js";
 import { type CapabilityCall, capabilityFetch } from "./capability-fetch.js";
 
 /**
@@ -52,7 +52,11 @@ function observedWrites(call: CapabilityCall) {
  * The allowance the user's task authorization gave this package for a DOI: the milestone naming it, else an
  * unused "one paper after close reading" slot. Without one the host asks as usual.
  */
-async function allowanceFor(call: CapabilityCall, doi: string, signal?: AbortSignal): Promise<string | undefined> {
+async function allowanceFor(
+	call: CapabilityCall,
+	doi: string,
+	signal?: AbortSignal,
+): Promise<string | undefined> {
 	let held: { allowances?: { id: string; member: string; consent: any; used: boolean }[] } | null;
 	try {
 		held = (await call("task.grant.allowances", null, signal)) as typeof held;
@@ -120,7 +124,10 @@ export async function updateInZotero(
 		signal,
 	});
 	if (writes.declinedBeforeAnyWrite())
-		return { ...receiptWithoutUpdate({ ...plan, action: "cancelled", reason: "user-declined" }), consent: { via: "host-dialog" } };
+		return {
+			...receiptWithoutUpdate({ ...plan, action: "cancelled", reason: "user-declined" }),
+			consent: { via: "host-dialog" },
+		};
 	return { ...receipt, consent: { via: "host-dialog" } };
 }
 
@@ -150,7 +157,8 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 		label: "Zotero literature status",
 		description: `Read-only: report whether Zotero desktop is reachable and which write channels are available. ${MANAGED_LIMITS}`,
 		parameters: { type: "object", properties: {}, additionalProperties: false },
-		execute: async (_id: string, _params: unknown, signal?: AbortSignal) => text(await zoteroStatus(call, signal)),
+		execute: async (_id: string, _params: unknown, signal?: AbortSignal) =>
+			text(await zoteroStatus(call, signal)),
 	});
 	pi.registerTool({
 		name: "research_zotero_save",
@@ -162,7 +170,11 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 			properties: {
 				doi: { type: "string", description: "Exact DOI, e.g. 10.1038/s41586-020-2649-2" },
 				title: { type: "string" },
-				item_type: { type: "string", enum: [...ZOTERO_ITEM_TYPES], description: "Zotero item type; default journalArticle." },
+				item_type: {
+					type: "string",
+					enum: [...ZOTERO_ITEM_TYPES],
+					description: "Zotero item type; default journalArticle.",
+				},
 				creators: {
 					type: "array",
 					description: "Authors in order. Use last_name/first_name, or name for organisations.",
@@ -186,7 +198,8 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 				tags: { type: "array", items: { type: "string" } },
 				attachment_url: {
 					type: "string",
-					description: "Optional http(s) URL of an open-access PDF whose license allows saving; Zotero desktop downloads it.",
+					description:
+						"Optional http(s) URL of an open-access PDF whose license allows saving; Zotero desktop downloads it.",
 				},
 				attachment_title: { type: "string" },
 				target: {
@@ -207,12 +220,27 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 			type: "object",
 			properties: {
 				zotero_key: { type: "string", description: "8-character key of the existing item (preferred)." },
-				doi: { type: "string", description: "Exact DOI when the key is unknown; must match exactly one item." },
-				collection_key: { type: "string", description: "8-character key of the collection to add the item to." },
-				collection_name: { type: "string", description: "Exact collection name, used when the key is unknown." },
-				attachment_url: { type: "string", description: "http(s) URL of an open-access PDF to attach as a link." },
+				doi: {
+					type: "string",
+					description: "Exact DOI when the key is unknown; must match exactly one item.",
+				},
+				collection_key: {
+					type: "string",
+					description: "8-character key of the collection to add the item to.",
+				},
+				collection_name: {
+					type: "string",
+					description: "Exact collection name, used when the key is unknown.",
+				},
+				attachment_url: {
+					type: "string",
+					description: "http(s) URL of an open-access PDF to attach as a link.",
+				},
 				attachment_title: { type: "string" },
-				local_file: { type: "string", description: "Path (inside the project) of a PDF to upload as a stored attachment." },
+				local_file: {
+					type: "string",
+					description: "Path (inside the project) of a PDF to upload as a stored attachment.",
+				},
 			},
 		},
 		execute: async (

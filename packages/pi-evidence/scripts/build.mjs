@@ -17,7 +17,8 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 async function checkOutput() {
 	const outputPath = join(distRoot, "index.mjs");
 	const hostOutputPath = join(distRoot, "host.mjs");
-	if (!existsSync(outputPath) || !existsSync(hostOutputPath)) throw new Error("pi-evidence dist/index.mjs and dist/host.mjs are required");
+	if (!existsSync(outputPath) || !existsSync(hostOutputPath))
+		throw new Error("pi-evidence dist/index.mjs and dist/host.mjs are required");
 	const output = await readFile(outputPath, "utf8");
 	const hostOutput = await readFile(hostOutputPath, "utf8");
 	for (const pattern of [
@@ -28,7 +29,8 @@ async function checkOutput() {
 		/(?:from|import\s*\(|require\s*\()["']\.\.\/\.\./u,
 	]) {
 		if (pattern.test(output)) throw new Error(`pi-evidence bundle contains forbidden import: ${pattern}`);
-		if (pattern.test(hostOutput)) throw new Error(`pi-evidence host bundle contains forbidden import: ${pattern}`);
+		if (pattern.test(hostOutput))
+			throw new Error(`pi-evidence host bundle contains forbidden import: ${pattern}`);
 	}
 	for (const name of [
 		"evidence_validate_analysis_plan",

@@ -1,14 +1,11 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { resolve, join, dirname } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const suiteRoot = resolve("node_modules/@gyoungwe/research-suite");
-const extension = join(
-	suiteRoot,
-	"node_modules/@gyoungwe/pi-research/dist/index.mjs",
-);
+const extension = join(suiteRoot, "node_modules/@gyoungwe/pi-research/dist/index.mjs");
 const require = createRequire(extension);
 // Resolve exactly as the installed bundled extension does, never from the source tree.
 const { createCanvas } = require("@napi-rs/canvas");
@@ -32,8 +29,7 @@ for (const [i, object] of objects.entries()) {
 }
 const xref = Buffer.byteLength(pdf);
 pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
-for (const offset of offsets.slice(1))
-	pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+for (const offset of offsets.slice(1)) pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
 pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
 const cwd = resolve("workspace");
 await mkdir(cwd);
@@ -41,9 +37,7 @@ const file = join(cwd, "source.pdf");
 await writeFile(file, pdf);
 const ctx = { cwd, sessionId: "packed-suite-pdf" };
 const invoke = (name, params) =>
-	tools
-		.get(name)
-		.execute(name, params, new AbortController().signal, () => {}, ctx);
+	tools.get(name).execute(name, params, new AbortController().signal, () => {}, ctx);
 const search = await invoke("research_search_sources", {
 	query: "acceptance",
 	source_dir: ".",
@@ -60,10 +54,7 @@ const { getDocument } = await import(pathToFileURL(pdfPath));
 const loading = getDocument({
 	data: new Uint8Array(await readFile(file)),
 	disableFontFace: true,
-	standardFontDataUrl: join(
-		dirname(require.resolve("pdfjs-dist/package.json")),
-		"standard_fonts/",
-	),
+	standardFontDataUrl: join(dirname(require.resolve("pdfjs-dist/package.json")), "standard_fonts/"),
 });
 const document = await loading.promise;
 try {
@@ -74,14 +65,12 @@ try {
 	await page.render({ canvas: null, canvasContext: context, viewport }).promise;
 	const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
 	let marked = 0;
-	for (let i = 0; i < pixels.length; i += 4)
-		if (pixels[i] < 240 && pixels[i + 3] > 0) marked++;
+	for (let i = 0; i < pixels.length; i += 4) if (pixels[i] < 240 && pixels[i + 3] > 0) marked++;
 	assert(marked > 100, "PDF render must contain visible text pixels");
 	console.log(
 		JSON.stringify({
 			status: "PASS",
-			scope:
-				"installed suite PDF text/page receipt and native Canvas rendering",
+			scope: "installed suite PDF text/page receipt and native Canvas rendering",
 			page: 1,
 			markedPixels: marked,
 		}),

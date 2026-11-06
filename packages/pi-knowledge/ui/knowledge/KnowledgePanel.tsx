@@ -1,9 +1,6 @@
 import type { KnowledgeSetupPreview } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { useSessionsStore } from "../api";
-import { useSettingsStore } from "../api";
-import { Button } from "../api";
+import { Button, getKnowledgeApi, useSessionsStore, useSettingsStore } from "../api";
 import { useKnowledgeText } from "./copy";
 import { launchKnowledgeSetup, reportKnowledgeError, useKnowledgeOverview } from "./hooks";
 import { KnowledgeCloudSection } from "./KnowledgeCloudSection";
@@ -84,7 +81,9 @@ export function KnowledgePanel({
 		setBusy(true);
 		setActionError(null);
 		try {
-			setPreview(await getKnowledgeApi().previewKnowledgeSetup({ cwd, path: path.trim() || binding?.vault || null }));
+			setPreview(
+				await getKnowledgeApi().previewKnowledgeSetup({ cwd, path: path.trim() || binding?.vault || null }),
+			);
 		} catch (e) {
 			setActionError(String((e as Error).message || e));
 		} finally {
@@ -241,7 +240,9 @@ export function KnowledgePanel({
 							<Button
 								size="sm"
 								onClick={() =>
-									void getKnowledgeApi().openExternal("https://www.zotero.org/download").catch(reportKnowledgeError)
+									void getKnowledgeApi()
+										.openExternal("https://www.zotero.org/download")
+										.catch(reportKnowledgeError)
 								}
 							>
 								{t("literatureDownload")}

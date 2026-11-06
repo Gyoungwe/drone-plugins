@@ -1,51 +1,31 @@
 // Opt-in real Pi SDK acceptance of a packed default CLI extension.
 // Uses synthetic temporary Vault/state and an offline faux model; never loads user credentials.
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import {
-	mkdir,
-	mkdtemp,
-	readFile,
-	realpath,
-	rm,
-	writeFile,
-} from "node:fs/promises";
-import { tmpdir, homedir } from "node:os";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
 import {
-	createAgentSessionRuntime,
 	createAgentSessionFromServices,
+	createAgentSessionRuntime,
 	createAgentSessionServices,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import {
-	fauxAssistantMessage,
-	fauxProvider,
-	fauxToolCall,
-} from "@earendil-works/pi-ai";
-const root = await realpath(
-	await mkdtemp(join(tmpdir(), "knowledge-state-packed-cli-")),
-);
+
+const root = await realpath(await mkdtemp(join(tmpdir(), "knowledge-state-packed-cli-")));
 const tarball = process.argv[2];
-assert(
-	tarball,
-	"Usage: node scripts/check-native-policy-session.mjs <candidate.tgz> [evidence.json]",
-);
+assert(tarball, "Usage: node scripts/check-native-policy-session.mjs <candidate.tgz> [evidence.json]");
 execFileSync("tar", ["-xzf", tarball, "-C", root]);
 const state = join(root, "state"),
 	vault = join(root, "Vault"),
 	workspace = join(root, "workspace");
-for (const path of [
-	state,
-	workspace,
-	join(vault, "Wiki"),
-	join(vault, "Library/Methods"),
-])
+for (const path of [state, workspace, join(vault, "Wiki"), join(vault, "Library/Methods")])
 	await mkdir(path, { recursive: true });
 const vaultId = createHash("sha256").update(vault).digest("hex").slice(0, 24);
 await writeFile(
@@ -61,29 +41,15 @@ await writeFile(
 		updatedAt: new Date().toISOString(),
 	}),
 );
-await writeFile(
-	join(state, "review-policy.json"),
-	JSON.stringify({ version: 1, mode: "strict" }),
-);
+await writeFile(join(state, "review-policy.json"), JSON.stringify({ version: 1, mode: "strict" }));
 await writeFile(join(vault, "Home.md"), "# Home\n[[Wiki/Orchid]]\n");
 await writeFile(join(vault, "Wiki/Index.md"), "# Wiki\n[[Wiki/Orchid]]\n");
-await writeFile(
-	join(vault, "Wiki/Orchid.md"),
-	"# Orchid\nOrchid method overview.\n",
-);
-await writeFile(
-	join(vault, "Library/Methods/orchid.md"),
-	"# Orchid method\nOrchid assay evidence.\n",
-);
+await writeFile(join(vault, "Wiki/Orchid.md"), "# Orchid\nOrchid method overview.\n");
+await writeFile(join(vault, "Library/Methods/orchid.md"), "# Orchid method\nOrchid assay evidence.\n");
 process.env.DRONE_KNOWLEDGE_DIR = state;
 delete process.env.DRONE_REVIEW_MODE;
-const extension = (
-	await import(pathToFileURL(join(root, "package/dist/index.mjs")).href)
-).default;
-const leasePaths = [
-	`vault:${vault}`,
-	`index:${join(state, vaultId, "index.sqlite")}`,
-].map((key) =>
+const extension = (await import(pathToFileURL(join(root, "package/dist/index.mjs")).href)).default;
+const leasePaths = [`vault:${vault}`, `index:${join(state, vaultId, "index.sqlite")}`].map((key) =>
 	join(
 		homedir(),
 		".drone/runtime-leases/knowledge-writers",
@@ -155,8 +121,7 @@ try {
 				});
 		});
 		try {
-			const answer =
-				"Orchid assay evidence is recorded in [[Library/Methods/orchid.md]].";
+			const answer = "Orchid assay evidence is recorded in [[Library/Methods/orchid.md]].";
 			provider.setResponses([
 				fauxAssistantMessage([fauxToolCall("knowledge_status", {})], {
 					stopReason: "toolUse",
@@ -169,35 +134,24 @@ try {
 					],
 					{ stopReason: "toolUse" },
 				),
-				fauxAssistantMessage(
-					[fauxToolCall("research_search_knowledge", { query: "Orchid" })],
-					{ stopReason: "toolUse" },
-				),
-				fauxAssistantMessage(
-					[fauxToolCall("research_check_answer", { draft: answer })],
-					{ stopReason: "toolUse" },
-				),
+				fauxAssistantMessage([fauxToolCall("research_search_knowledge", { query: "Orchid" })], {
+					stopReason: "toolUse",
+				}),
+				fauxAssistantMessage([fauxToolCall("research_check_answer", { draft: answer })], {
+					stopReason: "toolUse",
+				}),
 				fauxAssistantMessage(answer),
 			]);
-			await runtime.session.prompt(
-				"Use the knowledge library to explain the Orchid method.",
-			);
+			await runtime.session.prompt("Use the knowledge library to explain the Orchid method.");
 			assert.equal(errors.length, 0);
 			assert.equal(receipts.length, 4);
 			assert(
 				receipts.every((item) => !item.error),
 				JSON.stringify(receipts),
 			);
-			assert.equal(
-				receipts.at(-1).details.ok,
-				true,
-				JSON.stringify(receipts.at(-1).details),
-			);
+			assert.equal(receipts.at(-1).details.ok, true, JSON.stringify(receipts.at(-1).details));
 			assert.equal(receipts.at(-1).details.proof.status, "ready");
-			assert.equal(
-				receipts.at(-1).details.proof.sources[0].path,
-				"Library/Methods/orchid.md",
-			);
+			assert.equal(receipts.at(-1).details.proof.sources[0].path, "Library/Methods/orchid.md");
 			assert(
 				leasePaths.every((path) => existsSync(path)),
 				"real writer reservations missing",
@@ -226,8 +180,7 @@ try {
 		runs,
 		shutdownReleasesLease: true,
 	};
-	if (process.argv[3])
-		await writeFile(process.argv[3], JSON.stringify(report, null, 2) + "\n");
+	if (process.argv[3]) await writeFile(process.argv[3], JSON.stringify(report, null, 2) + "\n");
 	console.log(JSON.stringify(report));
 } finally {
 	await rm(root, { recursive: true, force: true });

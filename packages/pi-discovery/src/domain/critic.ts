@@ -1,16 +1,11 @@
-import { withDeadline } from "./deadline.js";
 import type {
 	DiscoveryAttemptRecord as AttemptRecord,
 	DiscoveryFindingRecord as FindingRecord,
 	DiscoveryQuestionRecord as QuestionRecord,
 } from "../ports.js";
+import { withDeadline } from "./deadline.js";
 import type { InquiryDiscoveryPort } from "./inquiry-port.js";
-import {
-	assertValid,
-	boundedInteger,
-	nonEmptyText,
-	safeId,
-} from "./validation.js";
+import { assertValid, boundedInteger, nonEmptyText, safeId } from "./validation.js";
 
 export const CRITIC_CHECKLIST = [
 	"confounding",
@@ -45,14 +40,9 @@ export interface CriticRequest {
 }
 export interface CriticProvider {
 	readonly providerId: string;
-	review(
-		input: CriticRequest & { readonly role: typeof CRITIC_ROLE },
-	): Promise<readonly CriticQuestion[]>;
+	review(input: CriticRequest & { readonly role: typeof CRITIC_ROLE }): Promise<readonly CriticQuestion[]>;
 }
-export type CriticReviewStatus =
-	| "complete"
-	| "blocked"
-	| "needs-independent-provider";
+export type CriticReviewStatus = "complete" | "blocked" | "needs-independent-provider";
 export interface CriticReviewResult {
 	readonly status: CriticReviewStatus;
 	readonly providerId?: string;
@@ -60,18 +50,9 @@ export interface CriticReviewResult {
 	readonly reason?: string;
 }
 function validateQuestion(question: CriticQuestion): void {
-	assertValid(
-		CRITIC_CHECKLIST.includes(question.checklistItem),
-		"invalid critic checklist item",
-	);
-	assertValid(
-		nonEmptyText(question.question, 10_000),
-		"critic question is invalid",
-	);
-	assertValid(
-		["high", "medium", "low"].includes(question.severity),
-		"critic severity is invalid",
-	);
+	assertValid(CRITIC_CHECKLIST.includes(question.checklistItem), "invalid critic checklist item");
+	assertValid(nonEmptyText(question.question, 10_000), "critic question is invalid");
+	assertValid(["high", "medium", "low"].includes(question.severity), "critic severity is invalid");
 	for (const id of question.evidenceArtifactIds)
 		assertValid(safeId(id), "critic evidence artifact id is invalid");
 }
@@ -81,32 +62,18 @@ export async function runCriticReview(
 	options: { readonly timeoutMs?: number; readonly maxQuestions?: number } = {},
 ): Promise<CriticReviewResult> {
 	assertValid(safeId(request.findingId), "finding id is invalid");
-	assertValid(
-		nonEmptyText(request.findingStatement, 20_000),
-		"finding statement is invalid",
-	);
-	assertValid(
-		safeId(request.primaryProviderId),
-		"primary provider id is invalid",
-	);
-	for (const id of request.artifactIds)
-		assertValid(safeId(id), "artifact id is invalid");
+	assertValid(nonEmptyText(request.findingStatement, 20_000), "finding statement is invalid");
+	assertValid(safeId(request.primaryProviderId), "primary provider id is invalid");
+	for (const id of request.artifactIds) assertValid(safeId(id), "artifact id is invalid");
 	const checklist = request.checklist ?? CRITIC_CHECKLIST;
 	assertValid(
-		checklist.length > 0 &&
-			checklist.every((item) => CRITIC_CHECKLIST.includes(item)),
+		checklist.length > 0 && checklist.every((item) => CRITIC_CHECKLIST.includes(item)),
 		"invalid critic checklist",
 	);
 	const timeoutMs = options.timeoutMs ?? 30_000;
 	const maxQuestions = options.maxQuestions ?? 64;
-	assertValid(
-		boundedInteger(timeoutMs, 1, 600_000),
-		"critic timeout is invalid",
-	);
-	assertValid(
-		boundedInteger(maxQuestions, 1, 256),
-		"critic question limit is invalid",
-	);
+	assertValid(boundedInteger(timeoutMs, 1, 600_000), "critic timeout is invalid");
+	assertValid(boundedInteger(maxQuestions, 1, 256), "critic question limit is invalid");
 	if (!provider || provider.providerId === request.primaryProviderId)
 		return {
 			status: "needs-independent-provider",
@@ -157,12 +124,7 @@ export async function recordCriticQuestions(
 			testsPlanned: [],
 			status: "open",
 			proposer: "agent",
-			priority:
-				question.severity === "high"
-					? 1
-					: question.severity === "medium"
-						? 0.7
-						: 0.4,
+			priority: question.severity === "high" ? 1 : question.severity === "medium" ? 0.7 : 0.4,
 			createdAt: now,
 			updatedAt: now,
 		};
@@ -171,16 +133,10 @@ export async function recordCriticQuestions(
 	return records;
 }
 export type DiscoveryAnalysisIntent = "exploratory" | "confirmatory";
-export type DiscoveryPathOutcome =
-	| "succeeded"
-	| "failed"
-	| "blocked"
-	| "unknown";
+export type DiscoveryPathOutcome = "succeeded" | "failed" | "blocked" | "unknown";
 export interface MultipathAnalysisPath {
 	readonly id: string;
-	readonly parameters?: Readonly<
-		Record<string, string | number | boolean | null>
-	>;
+	readonly parameters?: Readonly<Record<string, string | number | boolean | null>>;
 	readonly description: string;
 }
 export interface MultipathPlan {
@@ -217,37 +173,26 @@ export interface MultipathAssessment {
 export function createMultiPathPlan(input: MultipathPlan): MultipathPlan {
 	assertValid(safeId(input.id), "multi-path plan id is invalid");
 	assertValid(safeId(input.findingId), "finding id is invalid");
-	assertValid(
-		input.paths.length >= 5 && input.paths.length <= 10,
-		"multi-path plans require 5 to 10 paths",
-	);
+	assertValid(input.paths.length >= 5 && input.paths.length <= 10, "multi-path plans require 5 to 10 paths");
 	assertValid(
 		input.intent === "exploratory" || input.intent === "confirmatory",
 		"analysis intent is invalid",
 	);
 	for (const path of input.paths) {
 		assertValid(safeId(path.id), "analysis path id is invalid");
-		assertValid(
-			nonEmptyText(path.description, 10_000),
-			"analysis path description is invalid",
-		);
+		assertValid(nonEmptyText(path.description, 10_000), "analysis path description is invalid");
 	}
 	assertValid(
 		new Set(input.paths.map((path) => path.id)).size === input.paths.length,
 		"analysis path ids must be unique",
 	);
 	if (input.intent === "confirmatory")
-		assertValid(
-			input.priorRegistered,
-			"confirmatory analysis requires a registered prior",
-		);
+		assertValid(input.priorRegistered, "confirmatory analysis requires a registered prior");
 	return { ...input, paths: [...input.paths] };
 }
 export async function executeMultiPath(
 	plan: MultipathPlan,
-	executor: (
-		path: MultipathAnalysisPath,
-	) => Promise<MultipathPathExecutionResult>,
+	executor: (path: MultipathAnalysisPath) => Promise<MultipathPathExecutionResult>,
 	options: {
 		readonly timeoutMs?: number;
 		readonly projectId?: string;
@@ -256,10 +201,7 @@ export async function executeMultiPath(
 	} = {},
 ): Promise<MultipathAssessment> {
 	const timeoutMs = options.timeoutMs ?? 60_000;
-	assertValid(
-		boundedInteger(timeoutMs, 1, 86_400_000),
-		"multi-path timeout is invalid",
-	);
+	assertValid(boundedInteger(timeoutMs, 1, 86_400_000), "multi-path timeout is invalid");
 	const records: MultipathPathExecutionRecord[] = [];
 	for (const path of plan.paths) {
 		const started = Date.now();
@@ -271,10 +213,7 @@ export async function executeMultiPath(
 				"invalid path outcome",
 			);
 			assertValid(safeId(result.signature), "path signature is invalid");
-			assertValid(
-				nonEmptyText(result.summary, 20_000),
-				"path summary is invalid",
-			);
+			assertValid(nonEmptyText(result.summary, 20_000), "path summary is invalid");
 		} catch (error) {
 			result = {
 				outcome: "blocked",
@@ -308,22 +247,17 @@ export async function executeMultiPath(
 		};
 		records.push(record);
 		if (options.inquiry) {
-			assertValid(
-				options.projectId,
-				"projectId is required when recording multipath attempts",
-			);
+			assertValid(options.projectId, "projectId is required when recording multipath attempts");
 			await options.inquiry.recordAttempt(attempt);
 		}
 	}
 	const consistentCount = records.filter(
-		(record) =>
-			record.outcome === "succeeded" && record.consistentWithReference,
+		(record) => record.outcome === "succeeded" && record.consistentWithReference,
 	).length;
 	const consistency = records.length ? consistentCount / records.length : 0;
 	const grade =
-		records.some(
-			(record) => record.outcome === "blocked" || record.outcome === "unknown",
-		) && consistentCount === 0
+		records.some((record) => record.outcome === "blocked" || record.outcome === "unknown") &&
+		consistentCount === 0
 			? "unknown"
 			: consistency >= 0.8
 				? "robust"
@@ -350,10 +284,7 @@ export function findingRobustness(assessment: MultipathAssessment): {
 		grade: assessment.grade,
 	};
 }
-export function assertFindingLabel(
-	label: FindingRecord["label"],
-	intent: DiscoveryAnalysisIntent,
-): void {
+export function assertFindingLabel(label: FindingRecord["label"], intent: DiscoveryAnalysisIntent): void {
 	assertValid(
 		(label === "exploratory" && intent === "exploratory") ||
 			(label === "confirmatory" && intent === "confirmatory"),
@@ -365,7 +296,5 @@ export function criticQuestionsForFinding(
 	findingId: string,
 ): readonly QuestionRecord[] {
 	assertValid(safeId(findingId), "finding id is invalid");
-	return snapshot.questions.filter((question) =>
-		question.id.startsWith(`critic:${findingId}:`),
-	);
+	return snapshot.questions.filter((question) => question.id.startsWith(`critic:${findingId}:`));
 }

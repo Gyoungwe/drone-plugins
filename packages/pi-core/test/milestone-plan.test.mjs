@@ -1,6 +1,6 @@
-import { createEventBus } from "@earendil-works/pi-coding-agent";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createEventBus } from "@earendil-works/pi-coding-agent";
 import { normalizeTaskMilestones, taskHostLoader } from "../dist/host.mjs";
 
 const catalog = {
@@ -52,29 +52,18 @@ test("rejects invalid milestone counts, identifiers, duplicates and forward depe
 			),
 		/Plan needs/,
 	);
+	assert.throws(() => normalizeTaskMilestones([milestone("bad id!")], catalog), /invalid: use/);
 	assert.throws(
-		() => normalizeTaskMilestones([milestone("bad id!")], catalog),
-		/invalid: use/,
-	);
-	assert.throws(
-		() =>
-			normalizeTaskMilestones([milestone("same"), milestone("same")], catalog),
+		() => normalizeTaskMilestones([milestone("same"), milestone("same")], catalog),
 		/must be unique/,
 	);
 	assert.throws(
 		() =>
-			normalizeTaskMilestones(
-				[milestone("first", { dependsOn: ["second"] }), milestone("second")],
-				catalog,
-			),
+			normalizeTaskMilestones([milestone("first", { dependsOn: ["second"] }), milestone("second")], catalog),
 		/Dependencies/,
 	);
 	assert.throws(
-		() =>
-			normalizeTaskMilestones(
-				[milestone("first", { dependsOn: ["first"] })],
-				catalog,
-			),
+		() => normalizeTaskMilestones([milestone("first", { dependsOn: ["first"] })], catalog),
 		/Dependencies/,
 	);
 });
@@ -108,19 +97,10 @@ test("acceptance comes from the extension catalog and never from model completio
 	);
 });
 
-for (const path of [
-	".pi/mcp.json",
-	"C:\\proj\\.mcp.json",
-	"mcp.json",
-	".pi/mcp-adapter.json",
-]) {
+for (const path of [".pi/mcp.json", "C:\\proj\\.mcp.json", "mcp.json", ".pi/mcp-adapter.json"]) {
 	test(`configuration write ${path} cannot prove tools loaded`, () => {
 		assert.throws(
-			() =>
-				normalizeTaskMilestones(
-					[milestone("one", { acceptance: { kind: "file", path } })],
-					catalog,
-				),
+			() => normalizeTaskMilestones([milestone("one", { acceptance: { kind: "file", path } })], catalog),
 			/does not load MCP tools/,
 		);
 	});
@@ -159,7 +139,8 @@ test("native task_plan executes the plugin policy before appending task state", 
 	const ctx = {
 		cwd: tmpdir(),
 		sessionManager: {
-			getSessionFile: () => undefined, getSessionId: () => "native-plan-policy",
+			getSessionFile: () => undefined,
+			getSessionId: () => "native-plan-policy",
 			getBranch: () => [],
 		},
 	};
@@ -178,16 +159,9 @@ test("native task_plan executes the plugin policy before appending task state", 
 	assert.equal(checkpoints.length, 0);
 	await tools
 		.get("task_plan")
-		.execute(
-			"valid-plan",
-			{ goal: "Report", milestones: [milestone("report")] },
-			undefined,
-			undefined,
-			ctx,
-		);
-	const task = checkpoints.findLast(
-		(entry) => entry.customType === "drone-task-session-v1",
-	).data.workbench.tasks[0];
+		.execute("valid-plan", { goal: "Report", milestones: [milestone("report")] }, undefined, undefined, ctx);
+	const task = checkpoints.findLast((entry) => entry.customType === "drone-task-session-v1").data.workbench
+		.tasks[0];
 	assert.equal(task.milestones[0].id, "report");
 	assert.equal(task.state, "waiting_user");
 	assert.equal(task.planApproved, false);

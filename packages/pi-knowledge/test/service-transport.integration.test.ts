@@ -4,28 +4,23 @@ import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import { expect, it } from "vitest";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
-import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
-import { createKnowledgeServicePool } from "../src/core/service.js";
-import { createKnowledgeWorkerTransportFactory } from "../src/core/worker-transport.js";
-import { createKnowledgeUi } from "../src/core/ui-state.js";
-import { createSemanticSettingsApi } from "../src/core/semantic-settings.js";
 import { createKnowledgeReviewPolicy } from "../src/core/review-policy.js";
+import { createKnowledgeRuntimeHost } from "../src/core/runtime-host.js";
+import { createSemanticSettingsApi } from "../src/core/semantic-settings.js";
+import { createKnowledgeServicePool } from "../src/core/service.js";
+import { createKnowledgeUi } from "../src/core/ui-state.js";
+import { createKnowledgeWorkerTransportFactory } from "../src/core/worker-transport.js";
 import { acquireKnowledgeWriterLease } from "../src/core/writer-lease.js";
 
 it("runs the existing ticket/read/evidence algorithm through an injected real transport without a domain Worker factory", async () => {
-	const root = await realpath(
-		await mkdtemp(join(tmpdir(), "knowledge-transport-domain-")),
-	);
+	const root = await realpath(await mkdtemp(join(tmpdir(), "knowledge-transport-domain-")));
 	const vault = join(root, "Vault");
 	const directory = join(root, "state");
 	await mkdir(join(vault, "Library/Methods"), { recursive: true });
 	await mkdir(join(vault, "Wiki"));
 	await writeFile(join(vault, "Home.md"), "# Home\n[[Wiki/Index]]\n");
 	await writeFile(join(vault, "Wiki/Index.md"), "# Wiki\n");
-	await writeFile(
-		join(vault, "Library/Methods/method.md"),
-		"# Method\nOrchid transport evidence.\n",
-	);
+	await writeFile(join(vault, "Library/Methods/method.md"), "# Method\nOrchid transport evidence.\n");
 	const config = createKnowledgeConfigApi(undefined, directory);
 	await config.saveKnowledgeBinding({
 		vault,
@@ -42,10 +37,7 @@ it("runs the existing ticket/read/evidence algorithm through an injected real tr
 	const live = new Set<Worker>();
 	adapter.configureKnowledgeWorker(
 		(_url, options) => {
-			const worker = new Worker(
-				new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url),
-				options,
-			);
+			const worker = new Worker(new URL("../lib/knowledge/runtime/worker.mjs", import.meta.url), options);
 			live.add(worker);
 			worker.once("exit", () => live.delete(worker));
 			return worker;
@@ -60,12 +52,7 @@ it("runs the existing ticket/read/evidence algorithm through an injected real tr
 		config,
 		createSemanticSettingsApi(undefined, directory),
 		createKnowledgeReviewPolicy(config),
-		createKnowledgeWorkerTransportFactory(
-			adapter,
-			config,
-			ui.invalidateKnowledgeUi,
-			acquire,
-		),
+		createKnowledgeWorkerTransportFactory(adapter, config, ui.invalidateKnowledgeUi, acquire),
 	);
 	try {
 		const service = await services.getKnowledgeService();
@@ -79,23 +66,17 @@ it("runs the existing ticket/read/evidence algorithm through an injected real tr
 			path: "Library/Methods/method.md",
 		});
 		expect(page.text).toContain("Orchid transport evidence");
-		expect(
-			(await service.check(prepared.ticket, root)).reads.get(page.path).hash,
-		).toBe(page.hash);
-		await expect(
-			service.check(prepared.ticket, join(root, "other")),
-		).rejects.toThrow("Read current navigation");
-		expect(
-			(await service.evidenceReceipts(prepared.ticket, root, [page.path]))
-				.sources[0].hash,
-		).toBe(page.hash);
-		await writeFile(
-			join(vault, page.path),
-			"# Changed method\nNew source revision.\n",
+		expect((await service.check(prepared.ticket, root)).reads.get(page.path).hash).toBe(page.hash);
+		await expect(service.check(prepared.ticket, join(root, "other"))).rejects.toThrow(
+			"Read current navigation",
 		);
-		await expect(
-			service.evidenceReceipts(prepared.ticket, root, [page.path]),
-		).rejects.toThrow("Source changed");
+		expect((await service.evidenceReceipts(prepared.ticket, root, [page.path])).sources[0].hash).toBe(
+			page.hash,
+		);
+		await writeFile(join(vault, page.path), "# Changed method\nNew source revision.\n");
+		await expect(service.evidenceReceipts(prepared.ticket, root, [page.path])).rejects.toThrow(
+			"Source changed",
+		);
 		expect(live.size).toBe(1);
 		const closing = service.close();
 		expect(service.close()).toBe(closing);
@@ -123,9 +104,7 @@ it("runs the existing ticket/read/evidence algorithm through an injected real tr
 			createKnowledgeWorkerTransportFactory(adapter, config, ui.invalidateKnowledgeUi, acquire),
 		);
 		try {
-			await expect(
-				(await defaultServices.getKnowledgeService()).request("status"),
-			).resolves.toBeDefined();
+			await expect((await defaultServices.getKnowledgeService()).request("status")).resolves.toBeDefined();
 		} finally {
 			await defaultServices.dispose();
 		}

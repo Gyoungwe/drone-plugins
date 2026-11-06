@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
+import { execFile } from "node:child_process";
 // Build the portable analysis boundary as one self-contained native Pi
 // extension. Host execution, authorization and persistence stay outside this
 // bundle; only the public plugin-api contract is embedded.
 import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -30,21 +30,31 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 function validateMetadata() {
 	if (packageJson.name !== "@gyoungwe/pi-analysis") throw new Error("unexpected package name");
 	if (packageJson.main !== "./dist/index.mjs") throw new Error("main must point at the bundled extension");
-	if (packageJson.pi?.extensions?.[0] !== "./dist/index.mjs") throw new Error("Pi extension metadata is incorrect");
+	if (packageJson.pi?.extensions?.[0] !== "./dist/index.mjs")
+		throw new Error("Pi extension metadata is incorrect");
 	if (packageJson.peerDependencies?.["@earendil-works/pi-coding-agent"] !== ">=1.1.0 <2.0.0")
 		throw new Error("Pi coding-agent must remain a peer dependency >=1.1.0 <2.0.0");
 	if (manifest.schemaVersion !== 1) throw new Error("plugin manifest schemaVersion must be 1");
 	if (manifest.id !== "drone-pi-analysis") throw new Error("plugin manifest id is incorrect");
 	if (manifest.version !== packageJson.version) throw new Error("manifest version must match package.json");
 	if (manifest.drone?.pluginApi !== 1) throw new Error("manifest plugin API must be 1");
-	if (manifest.drone?.resultContract !== "drone-result/v3") throw new Error("manifest result contract is incorrect");
-	if (manifest.entrypoints?.extension !== "./dist/index.mjs") throw new Error("extension entrypoint is incorrect");
+	if (manifest.drone?.resultContract !== "drone-result/v3")
+		throw new Error("manifest result contract is incorrect");
+	if (manifest.entrypoints?.extension !== "./dist/index.mjs")
+		throw new Error("extension entrypoint is incorrect");
 	if (manifest.entrypoints?.host !== "./dist/host.mjs") throw new Error("host entrypoint is incorrect");
 	if (!manifest.hosts?.includes("native-pi")) throw new Error("native-pi host is missing");
 }
 
 function validateSource() {
-	for (const file of ["assembly.ts", "bulk-rnaseq.ts", "evidence-plan.ts", "host.ts", "index.ts", "registry.ts"]) {
+	for (const file of [
+		"assembly.ts",
+		"bulk-rnaseq.ts",
+		"evidence-plan.ts",
+		"host.ts",
+		"index.ts",
+		"registry.ts",
+	]) {
 		if (!existsSync(join(sourceRoot, file))) throw new Error(`source file is missing: ${file}`);
 	}
 }
@@ -74,7 +84,7 @@ function validateBundle(output, kind) {
 	}
 	const markers =
 		kind === "extension"
-		? ["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"]
+			? ["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"]
 			: ["contractVersion", "bulk-rnaseq", "assembly"];
 	for (const marker of markers) {
 		if (!output.includes(kind === "extension" ? JSON.stringify(marker) : marker))

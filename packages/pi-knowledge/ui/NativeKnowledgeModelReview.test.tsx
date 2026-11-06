@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { PluginUiRuntimeClient } from "@gyoungwe/plugin-api/ui";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { KnowledgePreviewReviewResult } from "../src/desktop/contract";
 import { settings } from "../test/setup";

@@ -1,4 +1,5 @@
 import { runKnowledgeSpecialist } from "./specialist-model-loop.js";
+
 /**
  * Stable host entry point for the knowledge capability.
  *
@@ -16,6 +17,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { planMaintenance } from "../maintenance/plan.js";
 import { runMaintenance } from "../maintenance/run.js";
 import { readKnowledgeBinding } from "./config.js";
+import {
+	buildDailyDiscoveryMessage,
+	DAILY_DISCOVERY_SYSTEM,
+	parseDailyIdeas,
+} from "./daily-discovery-prompt.js";
+import { BackgroundReviewer, type BackgroundReviewerOptions } from "./deliverable-review.js";
+import { recordTerminalJobExperience } from "./experience-store.js";
 import { readNoteFile } from "./files.js";
 import {
 	containedVaultFile,
@@ -23,17 +31,11 @@ import {
 	replaceVaultFile,
 	VaultFileConflictError,
 } from "./layout.js";
-import { DAILY_DISCOVERY_SYSTEM, buildDailyDiscoveryMessage, parseDailyIdeas } from "./daily-discovery-prompt.js";
-import { recordTerminalJobExperience } from "./experience-store.js";
-import { notifyKnowledgeUi, subscribeKnowledgeUi } from "./ui-state.js";
 import { registerAnswerPublication } from "./publication.js";
 import { ingestKnowledgeSnapshot, resolveKnowledgeContext } from "./reuse.js";
+import { configureKnowledgeWorker, type KnowledgeWorkerMetadata } from "./runtime-host.js";
+import { notifyKnowledgeUi, subscribeKnowledgeUi } from "./ui-state.js";
 import { reviewWikiWithModel } from "./wiki-model-review.js";
-import { BackgroundReviewer, type BackgroundReviewerOptions } from "./deliverable-review.js";
-import {
-	configureKnowledgeWorker,
-	type KnowledgeWorkerMetadata,
-} from "./runtime-host.js";
 
 export interface KnowledgeDiscoveryNote {
 	path: string;
@@ -60,7 +62,10 @@ export interface KnowledgeHostPort {
 	openTarget?(input: unknown): Promise<unknown>;
 	dailyDiscovery?: {
 		systemPrompt: string;
-		buildMessage(fresh: readonly KnowledgeDiscoveryNote[], related: readonly KnowledgeDiscoveryNote[]): string;
+		buildMessage(
+			fresh: readonly KnowledgeDiscoveryNote[],
+			related: readonly KnowledgeDiscoveryNote[],
+		): string;
 		parseIdeas(text: string, allowedPaths: Iterable<string>, freshPaths: Iterable<string>): unknown;
 	};
 	vault?: {
@@ -140,12 +145,17 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 	load: () => ({
 		contractVersion: 1,
 		runSpecialistModelLoop: runKnowledgeSpecialist,
-		overview: (input) => import("./ui-service.js").then(({ knowledgeOverview }) => knowledgeOverview(input as never)),
-		search: (input) => import("./ui-service.js").then(({ searchKnowledge }) => searchKnowledge(input as never)),
-		read: (input) => import("./ui-service.js").then(({ knowledgeReadNote }) => knowledgeReadNote(input as never)),
-		noteLinks: (input) => import("./ui-service.js").then(({ knowledgeNoteLinks }) => knowledgeNoteLinks(input as never)),
+		overview: (input) =>
+			import("./ui-service.js").then(({ knowledgeOverview }) => knowledgeOverview(input as never)),
+		search: (input) =>
+			import("./ui-service.js").then(({ searchKnowledge }) => searchKnowledge(input as never)),
+		read: (input) =>
+			import("./ui-service.js").then(({ knowledgeReadNote }) => knowledgeReadNote(input as never)),
+		noteLinks: (input) =>
+			import("./ui-service.js").then(({ knowledgeNoteLinks }) => knowledgeNoteLinks(input as never)),
 		graph: (input) => import("./ui-service.js").then(({ knowledgeGraph }) => knowledgeGraph(input as never)),
-		reviews: (input) => import("./ui-service.js").then(({ knowledgeReviews }) => knowledgeReviews(input as never)),
+		reviews: (input) =>
+			import("./ui-service.js").then(({ knowledgeReviews }) => knowledgeReviews(input as never)),
 		preview: (input) =>
 			import("./ui-service.js").then(({ knowledgePreviewReview }) => knowledgePreviewReview(input as never)),
 		decide: (input) =>
@@ -153,7 +163,9 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 		setupPreview: (input) =>
 			import("./ui-service.js").then(({ knowledgeSetupPreview }) => knowledgeSetupPreview(input as never)),
 		specialistSettings: (input) =>
-			import("./ui-service.js").then(({ knowledgeSpecialistSettings }) => knowledgeSpecialistSettings(input as never)),
+			import("./ui-service.js").then(({ knowledgeSpecialistSettings }) =>
+				knowledgeSpecialistSettings(input as never),
+			),
 		openTarget: (input) =>
 			import("./ui-service.js").then(({ knowledgeOpenTarget }) => knowledgeOpenTarget(input as never)),
 		dailyDiscovery: {
@@ -171,33 +183,55 @@ export const knowledgeHostLoader: KnowledgeHostLoader = {
 		},
 		semantic: {
 			status: (input) =>
-				import("./ui-service.js").then(({ knowledgeSemanticStatus }) => knowledgeSemanticStatus(input as never)),
+				import("./ui-service.js").then(({ knowledgeSemanticStatus }) =>
+					knowledgeSemanticStatus(input as never),
+				),
 			saveSettings: (input) =>
-				import("./ui-service.js").then(({ saveKnowledgeSemanticSettings }) => saveKnowledgeSemanticSettings(input as never)),
+				import("./ui-service.js").then(({ saveKnowledgeSemanticSettings }) =>
+					saveKnowledgeSemanticSettings(input as never),
+				),
 			testProvider: (input) =>
-				import("./ui-service.js").then(({ testKnowledgeSemanticProvider }) => testKnowledgeSemanticProvider(input as never)),
+				import("./ui-service.js").then(({ testKnowledgeSemanticProvider }) =>
+					testKnowledgeSemanticProvider(input as never),
+				),
 			index: (input) =>
-				import("./ui-service.js").then(({ indexKnowledgeSemantic }) => indexKnowledgeSemantic(input as never)),
+				import("./ui-service.js").then(({ indexKnowledgeSemantic }) =>
+					indexKnowledgeSemantic(input as never),
+				),
 			cancelIndex: (input) =>
-				import("./ui-service.js").then(({ cancelKnowledgeSemanticIndex }) => cancelKnowledgeSemanticIndex(input as never)),
+				import("./ui-service.js").then(({ cancelKnowledgeSemanticIndex }) =>
+					cancelKnowledgeSemanticIndex(input as never),
+				),
 		},
 		topics: {
-			list: (input) => import("./ui-service.js").then(({ getKnowledgeTopics }) => getKnowledgeTopics(input as never)),
+			list: (input) =>
+				import("./ui-service.js").then(({ getKnowledgeTopics }) => getKnowledgeTopics(input as never)),
 			archive: (input) =>
 				import("./ui-service.js").then(({ archiveKnowledgeTopic }) => archiveKnowledgeTopic(input as never)),
 		},
 		planMaintenance,
 		runMaintenance,
 		maintenanceTopic: {
-			setTopic: (input) => import("./ui-service.js").then(({ knowledgeMaintenanceTopic }) => knowledgeMaintenanceTopic(input as never)),
-			proposeWiki: (input) => import("./ui-service.js").then(({ knowledgeMaintenanceWiki }) => knowledgeMaintenanceWiki(input as never)),
+			setTopic: (input) =>
+				import("./ui-service.js").then(({ knowledgeMaintenanceTopic }) =>
+					knowledgeMaintenanceTopic(input as never),
+				),
+			proposeWiki: (input) =>
+				import("./ui-service.js").then(({ knowledgeMaintenanceWiki }) =>
+					knowledgeMaintenanceWiki(input as never),
+				),
 		},
 		memory: {
-			dailyContext: (input) => import("./ui-service.js").then(({ dailyDiscoveryContext }) => dailyDiscoveryContext(input as never)),
-			saveIdea: (input) => import("./ui-service.js").then(({ saveDiscoveryIdea }) => saveDiscoveryIdea(input as never)),
+			dailyContext: (input) =>
+				import("./ui-service.js").then(({ dailyDiscoveryContext }) => dailyDiscoveryContext(input as never)),
+			saveIdea: (input) =>
+				import("./ui-service.js").then(({ saveDiscoveryIdea }) => saveDiscoveryIdea(input as never)),
 			relatedForMemory: (input) =>
-				import("./ui-service.js").then(({ memoryRelatedKnowledge }) => memoryRelatedKnowledge(input as never)),
-			saveMemory: (input) => import("./ui-service.js").then(({ saveMemoryNote }) => saveMemoryNote(input as never)),
+				import("./ui-service.js").then(({ memoryRelatedKnowledge }) =>
+					memoryRelatedKnowledge(input as never),
+				),
+			saveMemory: (input) =>
+				import("./ui-service.js").then(({ saveMemoryNote }) => saveMemoryNote(input as never)),
 		},
 		researchResource: {
 			resolveContext: (input) => resolveKnowledgeContext(input as never),
@@ -232,14 +266,16 @@ function packageKnowledgeWorkerUrl(): URL {
 						),
 					),
 				]
-				: []),
+			: []),
 		...new Set(
 			[process.cwd(), process.env.PWD, process.env.INIT_CWD]
 				.filter((directory): directory is string => Boolean(directory))
-			.flatMap((directory) => ancestorNodeModuleWorkerCandidates(directory)),
+				.flatMap((directory) => ancestorNodeModuleWorkerCandidates(directory)),
 		),
 	];
-	const found = candidates.find((candidate) => candidate.protocol === "file:" && existsSync(fileURLToPath(candidate)));
+	const found = candidates.find(
+		(candidate) => candidate.protocol === "file:" && existsSync(fileURLToPath(candidate)),
+	);
 	if (!found) throw new Error("Knowledge worker resource is missing from the installed pi-knowledge package");
 	return found;
 }
@@ -248,7 +284,9 @@ function ancestorNodeModuleWorkerCandidates(startDirectory: string): URL[] {
 	const candidates: URL[] = [];
 	let directory = startDirectory;
 	while (true) {
-		candidates.push(pathToFileURL(join(directory, "node_modules/@gyoungwe/pi-knowledge/lib/knowledge/runtime/worker.mjs")));
+		candidates.push(
+			pathToFileURL(join(directory, "node_modules/@gyoungwe/pi-knowledge/lib/knowledge/runtime/worker.mjs")),
+		);
 		const parent = dirname(directory);
 		if (parent === directory) return candidates;
 		directory = parent;
@@ -272,7 +310,8 @@ function resolvePackageWorkerResource(url: URL): {
 	const path = fileURLToPath(url);
 	const manifestPath = join(dirname(path), ".knowledge-worker-manifest.json");
 	if (!existsSync(path)) throw new Error(`Knowledge worker resource is missing from the package: ${path}`);
-	if (!existsSync(manifestPath)) throw new Error(`Knowledge worker manifest is missing from the package: ${manifestPath}`);
+	if (!existsSync(manifestPath))
+		throw new Error(`Knowledge worker manifest is missing from the package: ${manifestPath}`);
 	let manifest: Record<string, unknown>;
 	try {
 		manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;

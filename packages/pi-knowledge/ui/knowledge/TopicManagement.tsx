@@ -1,10 +1,6 @@
 import type { KnowledgeTopic, KnowledgeTopicListResult } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getKnowledgeApi } from "../api";
-import { useSessionsStore } from "../api";
-import { useAgentActive } from "../api";
-import { Button } from "../api";
-import { StatePanel } from "../api";
+import { Button, getKnowledgeApi, StatePanel, useAgentActive, useSessionsStore } from "../api";
 import { useKnowledgeText } from "./copy";
 
 export function TopicManagement({

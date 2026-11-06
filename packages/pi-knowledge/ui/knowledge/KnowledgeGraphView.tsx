@@ -1,10 +1,10 @@
-import { Button, useLanguage } from "../runtime-api";
 import type {
-	KnowledgeUiPort,
 	KnowledgeGraph as GraphData,
 	KnowledgeNoteLinks,
+	KnowledgeUiPort,
 } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, useLanguage } from "../runtime-api";
 import { useKnowledgeText } from "./copy";
 import {
 	declutterLayout,
@@ -103,16 +103,8 @@ const CATEGORY_LABELS_EN: Record<GraphCategory, string> = {
 };
 
 function categoryOf(node: GraphData["nodes"][number]): GraphCategory {
-	const value = (
-		node.contentType ??
-		node.type ??
-		"other"
-	).toLowerCase() as GraphCategory;
-	return value in CATEGORY_COLORS
-		? value
-		: node.kind === "wiki"
-			? "wiki"
-			: "other";
+	const value = (node.contentType ?? node.type ?? "other").toLowerCase() as GraphCategory;
+	return value in CATEGORY_COLORS ? value : node.kind === "wiki" ? "wiki" : "other";
 }
 
 function clampZoom(scale: number): number {
@@ -145,8 +137,7 @@ function graphEdges(data: GraphData) {
 }
 
 function nodeColor(node: GraphData["nodes"][number]): string {
-	if (node.isInfrastructure || node.nodeType === "infrastructure")
-		return "#9aa4b8";
+	if (node.isInfrastructure || node.nodeType === "infrastructure") return "#9aa4b8";
 	return CATEGORY_COLORS[categoryOf(node)];
 }
 
@@ -182,10 +173,7 @@ const HEALTH_COPY = {
 		hint: "graphHealthWarningHint",
 		prompt: "handOffPrompt",
 	},
-} as const satisfies Record<
-	HealthKind,
-	{ label: string; hint: string; prompt: string }
->;
+} as const satisfies Record<HealthKind, { label: string; hint: string; prompt: string }>;
 const LOCAL_LABEL_LIMIT = 24;
 
 function NodeMark({
@@ -212,25 +200,11 @@ function NodeMark({
 	const common = { fill, stroke, strokeWidth, strokeDasharray, fillOpacity };
 	if (shape === "square") {
 		const side = r * 1.75;
-		return (
-			<rect
-				x={x - side / 2}
-				y={y - side / 2}
-				width={side}
-				height={side}
-				rx={r * 0.35}
-				{...common}
-			/>
-		);
+		return <rect x={x - side / 2} y={y - side / 2} width={side} height={side} rx={r * 0.35} {...common} />;
 	}
 	if (shape === "diamond") {
 		const d = r * 1.3;
-		return (
-			<polygon
-				points={`${x},${y - d} ${x + d},${y} ${x},${y + d} ${x - d},${y}`}
-				{...common}
-			/>
-		);
+		return <polygon points={`${x},${y - d} ${x + d},${y} ${x},${y + d} ${x - d},${y}`} {...common} />;
 	}
 	return <circle cx={x} cy={y} r={r} {...common} />;
 }
@@ -255,17 +229,14 @@ export function KnowledgeGraphView({
 }) {
 	const t = useKnowledgeText();
 	const language = useLanguage();
-	const categoryLabels =
-		language === "zh" ? CATEGORY_LABELS_ZH : CATEGORY_LABELS_EN;
+	const categoryLabels = language === "zh" ? CATEGORY_LABELS_ZH : CATEGORY_LABELS_EN;
 	const [data, setData] = useState<GraphData | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
 	const [view, setView] = useState<"semantic" | "all">("semantic");
 	const [mergeMirrors, setMergeMirrors] = useState(true);
 	const [relationFilter, setRelationFilter] = useState<RelationFilter>("all");
-	const [categoryFilter, setCategoryFilter] = useState<GraphCategory | null>(
-		null,
-	);
+	const [categoryFilter, setCategoryFilter] = useState<GraphCategory | null>(null);
 	const [links, setLinks] = useState<KnowledgeNoteLinks | null>(null);
 	const [hovered, setHovered] = useState<string | null>(null);
 	const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, scale: 1 });
@@ -278,15 +249,11 @@ export function KnowledgeGraphView({
 	const dragRef = useRef<{ x: number; y: number; camera: Camera } | null>(null);
 	const dragFrameRef = useRef<number | null>(null);
 	const pendingCameraRef = useRef<Camera | null>(null);
-	const previousGraphRef = useRef<Map<
-		string,
-		{ title: string; degree: number }
-	> | null>(null);
+	const previousGraphRef = useRef<Map<string, { title: string; degree: number }> | null>(null);
 	const graphSignatureRef = useRef<string | null>(null);
 	useEffect(
 		() => () => {
-			if (dragFrameRef.current !== null)
-				cancelAnimationFrame(dragFrameRef.current);
+			if (dragFrameRef.current !== null) cancelAnimationFrame(dragFrameRef.current);
 		},
 		[],
 	);
@@ -305,10 +272,7 @@ export function KnowledgeGraphView({
 			setPendingEvents((count) => count + 1);
 			return;
 		}
-		const timer = window.setTimeout(
-			() => setAppliedKey(liveKey),
-			LIVE_BATCH_MS,
-		);
+		const timer = window.setTimeout(() => setAppliedKey(liveKey), LIVE_BATCH_MS);
 		return () => window.clearTimeout(timer);
 	}, [liveKey, paused]);
 	const togglePaused = () => {
@@ -322,12 +286,10 @@ export function KnowledgeGraphView({
 	useEffect(() => {
 		let live = true;
 		setError(null);
-		void api
-			.getKnowledgeGraph({ revision, limit: GRAPH_LIMIT, view, mergeMirrors })
-			.then(
-				(value) => live && setData(value),
-				(e) => live && setError(String((e as Error).message || e)),
-			);
+		void api.getKnowledgeGraph({ revision, limit: GRAPH_LIMIT, view, mergeMirrors }).then(
+			(value) => live && setData(value),
+			(e) => live && setError(String((e as Error).message || e)),
+		);
 		return () => {
 			live = false;
 		};
@@ -339,26 +301,19 @@ export function KnowledgeGraphView({
 	const clusters = useMemo(() => graphClusters(nodes, edges), [nodes, edges]);
 	const clusterSizes = useMemo(() => {
 		const sizes = new Map<number, number>();
-		for (const value of clusters.values())
-			sizes.set(value, (sizes.get(value) ?? 0) + 1);
+		for (const value of clusters.values()) sizes.set(value, (sizes.get(value) ?? 0) + 1);
 		return sizes;
 	}, [clusters]);
-	const findings = useMemo(
-		() => graphHealth(nodes, edges, incoming),
-		[nodes, edges, incoming],
-	);
+	const findings = useMemo(() => graphHealth(nodes, edges, incoming), [nodes, edges, incoming]);
 	const findingsByPath = useMemo(() => {
 		const map = new Map<string, HealthKind[]>();
-		for (const finding of findings)
-			map.set(finding.path, [...(map.get(finding.path) ?? []), finding.kind]);
+		for (const finding of findings) map.set(finding.path, [...(map.get(finding.path) ?? []), finding.kind]);
 		return map;
 	}, [findings]);
 	const radiusOf = (node: GraphData["nodes"][number]) =>
-		hubRadius(incoming.get(node.path) ?? 0, node.degree) +
-		(node.isMain ? 3 : 0);
+		hubRadius(incoming.get(node.path) ?? 0, node.degree) + (node.isMain ? 3 : 0);
 	useEffect(() => {
-		if (!selected || !nodes.some((node) => node.path === selected))
-			setSelected(null);
+		if (!selected || !nodes.some((node) => node.path === selected)) setSelected(null);
 	}, [nodes, selected]);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: nonce refreshes link counts after index changes
 	useEffect(() => {
@@ -381,9 +336,7 @@ export function KnowledgeGraphView({
 		};
 	}, [api, selected, revision, nonce]);
 
-	const layoutRef = useRef<{ key: string; points: Map<string, Point> } | null>(
-		null,
-	);
+	const layoutRef = useRef<{ key: string; points: Map<string, Point> } | null>(null);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: view/mergeMirrors reset the retained layout
 	const points = useMemo(() => {
 		if (!data) return new Map<string, Point>();
@@ -406,23 +359,11 @@ export function KnowledgeGraphView({
 				graphNodeList,
 				graphEdgeList,
 				graphClusters(graphNodeList, graphEdgeList),
-				new Map(
-					graphNodeList.map((node) => [
-						node.path,
-						graphNodeRadius(sizes.get(node.path) ?? 0),
-					]),
-				),
+				new Map(graphNodeList.map((node) => [node.path, graphNodeRadius(sizes.get(node.path) ?? 0)])),
 			);
 		else if (graph.layout)
-			base = new Map(
-				Object.entries(graph.layout).map(([path, point]) => [
-					path,
-					{ ...point, vx: 0, vy: 0 },
-				]),
-			);
-		else if (
-			graph.nodes.some((node) => node.x !== undefined && node.y !== undefined)
-		)
+			base = new Map(Object.entries(graph.layout).map(([path, point]) => [path, { ...point, vx: 0, vy: 0 }]));
+		else if (graph.nodes.some((node) => node.x !== undefined && node.y !== undefined))
 			base = new Map(
 				graph.nodes.map((node) => [
 					node.path,
@@ -433,8 +374,7 @@ export function KnowledgeGraphView({
 		// Spread overlapping nodes (paper-heavy vaults pile up around one anchor in the worker layout).
 		base = declutterLayout(base, sizes);
 		const key = `${view}:${mergeMirrors}`;
-		const previous =
-			layoutRef.current?.key === key ? layoutRef.current.points : null;
+		const previous = layoutRef.current?.key === key ? layoutRef.current.points : null;
 		const merged = mergeIncrementalLayout(previous, base, graph);
 		layoutRef.current = { key, points: merged };
 		return merged;
@@ -442,10 +382,7 @@ export function KnowledgeGraphView({
 	// Local view (Obsidian-style): only the selected note and its 1–2 hop neighbourhood,
 	// re-laid out around the centre so a dense vault can still be read note by note.
 	const localSet = useMemo(
-		() =>
-			scope === "local" && selected
-				? localNeighbourhood(selected, nodes, edges, hops)
-				: null,
+		() => (scope === "local" && selected ? localNeighbourhood(selected, nodes, edges, hops) : null),
 		[scope, selected, nodes, edges, hops],
 	);
 	const viewNodes = useMemo(
@@ -454,20 +391,13 @@ export function KnowledgeGraphView({
 	);
 	const localPoints = useMemo(() => {
 		if (!localSet || !selected) return null;
-		const subEdges = edges.filter(
-			(edge) => localSet.has(edge.source) && localSet.has(edge.target),
-		);
+		const subEdges = edges.filter((edge) => localSet.has(edge.source) && localSet.has(edge.target));
 		const sub = nodes.filter((node) => localSet.has(node.path));
 		const placed = clusterLayout(
 			sub,
 			subEdges,
 			new Map(sub.map((node) => [node.path, 0])),
-			new Map(
-				sub.map((node) => [
-					node.path,
-					hubRadius(incoming.get(node.path) ?? 0, node.degree) + 4,
-				]),
-			),
+			new Map(sub.map((node) => [node.path, hubRadius(incoming.get(node.path) ?? 0, node.degree) + 4])),
 			160,
 		);
 		const centre = placed.get(selected);
@@ -488,13 +418,8 @@ export function KnowledgeGraphView({
 			if ((clusterSizes.get(cluster) ?? 0) < 3) continue;
 			const current = best.get(cluster);
 			const score = (incoming.get(node.path) ?? 0) * 2 + node.degree;
-			const currentScore = current
-				? (incoming.get(current.path) ?? 0) * 2 + current.degree
-				: -1;
-			if (
-				score > currentScore ||
-				(score === currentScore && current && node.path < current.path)
-			)
+			const currentScore = current ? (incoming.get(current.path) ?? 0) * 2 + current.degree : -1;
+			if (score > currentScore || (score === currentScore && current && node.path < current.path))
 				best.set(cluster, node);
 		}
 		return best;
@@ -525,11 +450,7 @@ export function KnowledgeGraphView({
 							.slice(0, LABEL_LIMIT)
 							.concat([...clusterHeads.values()])
 							.concat(nodes.filter((node) => node.isMain))
-							.concat(
-								nodes.filter(
-									(node) => node.path === selected || node.path === hovered,
-								),
-							)
+							.concat(nodes.filter((node) => node.path === selected || node.path === hovered))
 							.map((node) => node.path),
 			),
 		[nodes, viewNodes, localSet, selected, hovered, incoming, clusterHeads],
@@ -537,20 +458,14 @@ export function KnowledgeGraphView({
 	const labels = useMemo(
 		() =>
 			data
-				? placeGraphLabels(
-						{ nodes: viewNodes },
-						viewPoints,
-						labelled,
-						selected,
-						{
-							avoidZones: [
-								// The controls are absolutely positioned over the SVG's bottom-right corner.
-								{ x: WIDTH - 224, y: HEIGHT - 72, width: 224, height: 72 },
-								// The legend occupies the lower-left corner of the canvas.
-								{ x: 0, y: HEIGHT - 82, width: 270, height: 82 },
-							],
-						},
-					)
+				? placeGraphLabels({ nodes: viewNodes }, viewPoints, labelled, selected, {
+						avoidZones: [
+							// The controls are absolutely positioned over the SVG's bottom-right corner.
+							{ x: WIDTH - 224, y: HEIGHT - 72, width: 224, height: 72 },
+							// The legend occupies the lower-left corner of the canvas.
+							{ x: 0, y: HEIGHT - 82, width: 270, height: 82 },
+						],
+					})
 				: new Map<string, LabelPlacement>(),
 		[data, viewNodes, viewPoints, labelled, selected],
 	);
@@ -560,11 +475,7 @@ export function KnowledgeGraphView({
 	}, [scope, hops, scope === "local" ? selected : null]);
 	const fillOf = (node: GraphData["nodes"][number]) => {
 		if (freshPaths.has(node.path)) return LIVE_COLOR;
-		if (
-			colorMode === "type" ||
-			node.isInfrastructure ||
-			node.nodeType === "infrastructure"
-		)
+		if (colorMode === "type" || node.isInfrastructure || node.nodeType === "infrastructure")
 			return nodeColor(node);
 		const cluster = clusters.get(node.path) ?? 0;
 		return clusterColor(cluster, clusterSizes.get(cluster) ?? 0);
@@ -573,12 +484,7 @@ export function KnowledgeGraphView({
 		onHandoff?.(path, t(HEALTH_COPY[kind].prompt).replace("{path}", path));
 	useEffect(() => {
 		if (!data) return;
-		const current = new Map(
-			nodes.map((node) => [
-				node.path,
-				{ title: node.title, degree: node.degree },
-			]),
-		);
+		const current = new Map(nodes.map((node) => [node.path, { title: node.title, degree: node.degree }]));
 		const graphSignature = `${view}:${mergeMirrors}:${[...current]
 			.map(([path, value]) => `${path}:${value.title}:${value.degree}`)
 			.join("|")}`;
@@ -590,8 +496,7 @@ export function KnowledgeGraphView({
 			const changed = new Set<string>();
 			for (const [path, value] of current) {
 				const old = previous.get(path);
-				if (!old || old.title !== value.title || old.degree !== value.degree)
-					changed.add(path);
+				if (!old || old.title !== value.title || old.degree !== value.degree) changed.add(path);
 			}
 			if (changed.size > 0) {
 				setFreshPaths(changed);
@@ -611,9 +516,7 @@ export function KnowledgeGraphView({
 		return map;
 	}, [edges]);
 	const focusPath = selected ?? hovered;
-	const active = focusPath
-		? new Set([focusPath, ...(neighbours.get(focusPath) ?? [])])
-		: null;
+	const active = focusPath ? new Set([focusPath, ...(neighbours.get(focusPath) ?? [])]) : null;
 	const visibleEdges = edges.filter(
 		(edge) =>
 			(relationFilter === "all" || edge.type === relationFilter) &&
@@ -622,15 +525,11 @@ export function KnowledgeGraphView({
 	const nodeByPath = new Map(nodes.map((node) => [node.path, node]));
 	const selectedNode = selected ? nodeByPath.get(selected) : undefined;
 	const graph = data?.semantic ?? data;
-	const isolated =
-		graph?.health?.isolated ?? nodes.filter((node) => node.degree === 0).length;
-	const duplicates =
-		graph?.health?.duplicates ?? graph?.duplicates?.length ?? 0;
+	const isolated = graph?.health?.isolated ?? nodes.filter((node) => node.degree === 0).length;
+	const duplicates = graph?.health?.duplicates ?? graph?.duplicates?.length ?? 0;
 	const resetCamera = () => setCamera({ x: 0, y: 0, scale: 1 });
 	const zoomBy = (factor: number) =>
-		setCamera((current) =>
-			clampCamera({ ...current, scale: current.scale * factor }),
-		);
+		setCamera((current) => clampCamera({ ...current, scale: current.scale * factor }));
 	const fitCamera = () => {
 		if (!viewPoints.size) return resetCamera();
 		const values = [...viewPoints.values()];
@@ -758,9 +657,7 @@ export function KnowledgeGraphView({
 		);
 	if (!data || !graph)
 		return (
-			<p className="knowledge-state-card rounded-lg border p-3 text-[11px] text-ink-faint">
-				{t("loading")}
-			</p>
+			<p className="knowledge-state-card rounded-lg border p-3 text-[11px] text-ink-faint">{t("loading")}</p>
 		);
 	if (nodes.length === 0)
 		return (
@@ -776,10 +673,7 @@ export function KnowledgeGraphView({
 			className="knowledge-observatory space-y-3"
 			aria-describedby="knowledge-graph-summary knowledge-graph-keyboard-help"
 		>
-			<header
-				className="knowledge-network-header"
-				data-testid="knowledge-network-header"
-			>
+			<header className="knowledge-network-header" data-testid="knowledge-network-header">
 				{/* The page header already says 知识库; the usage hint lives under the canvas. */}
 				<h3 className="sr-only">{t("graphTitle")}</h3>
 				<div className="knowledge-network-stats">
@@ -787,28 +681,18 @@ export function KnowledgeGraphView({
 						<strong>{nodes.length}</strong> {t("graphLegendNote")}
 					</span>
 					<span>
-						<strong>{edges.length}</strong>{" "}
-						{t("graphLinks").replace("{count}", "")}
+						<strong>{edges.length}</strong> {t("graphLinks").replace("{count}", "")}
 					</span>
 					<span>
-						<strong>{isolated}</strong>{" "}
-						{t("graphHealthIsolated").replace("{count}", "")}
+						<strong>{isolated}</strong> {t("graphHealthIsolated").replace("{count}", "")}
 					</span>
 				</div>
 			</header>
 			<div className="knowledge-graph-toolbar flex flex-wrap items-center gap-2">
-				<Button
-					size="sm"
-					aria-pressed={view === "semantic"}
-					onClick={() => setView("semantic")}
-				>
+				<Button size="sm" aria-pressed={view === "semantic"} onClick={() => setView("semantic")}>
 					{t("graphSemantic")}
 				</Button>
-				<Button
-					size="sm"
-					aria-pressed={view === "all"}
-					onClick={() => setView("all")}
-				>
+				<Button size="sm" aria-pressed={view === "all"} onClick={() => setView("all")}>
 					{t("graphAllFiles")}
 				</Button>
 				<label className="ml-1 flex items-center gap-1 text-xs text-ink-dim">
@@ -841,44 +725,23 @@ export function KnowledgeGraphView({
 				data-testid="knowledge-graph-modes"
 			>
 				<span className="flex gap-1">
-					<Button
-						size="sm"
-						aria-pressed={colorMode === "cluster"}
-						onClick={() => setColorMode("cluster")}
-					>
+					<Button size="sm" aria-pressed={colorMode === "cluster"} onClick={() => setColorMode("cluster")}>
 						{t("graphColorCluster")}
 					</Button>
-					<Button
-						size="sm"
-						aria-pressed={colorMode === "type"}
-						onClick={() => setColorMode("type")}
-					>
+					<Button size="sm" aria-pressed={colorMode === "type"} onClick={() => setColorMode("type")}>
 						{t("graphColorType")}
 					</Button>
 				</span>
 				<span className="flex gap-1">
-					<Button
-						size="sm"
-						aria-pressed={scope === "global"}
-						onClick={() => setScope("global")}
-					>
+					<Button size="sm" aria-pressed={scope === "global"} onClick={() => setScope("global")}>
 						{t("graphScopeGlobal")}
 					</Button>
-					<Button
-						size="sm"
-						aria-pressed={scope === "local"}
-						onClick={() => setScope("local")}
-					>
+					<Button size="sm" aria-pressed={scope === "local"} onClick={() => setScope("local")}>
 						{t("graphScopeLocal")}
 					</Button>
 					{scope === "local" &&
 						([1, 2] as const).map((count) => (
-							<Button
-								key={count}
-								size="sm"
-								aria-pressed={hops === count}
-								onClick={() => setHops(count)}
-							>
+							<Button key={count} size="sm" aria-pressed={hops === count} onClick={() => setHops(count)}>
 								{t("graphHopCount").replace("{count}", String(count))}
 							</Button>
 						))}
@@ -893,39 +756,26 @@ export function KnowledgeGraphView({
 					{findings.length ? ` · ${findings.length}` : ""}
 				</Button>
 				{scope === "local" && !selected && (
-					<span className="text-[11px] text-ink-faint">
-						{t("graphLocalHint")}
-					</span>
+					<span className="text-[11px] text-ink-faint">{t("graphLocalHint")}</span>
 				)}
 			</div>
 			<div className="flex flex-wrap items-center gap-1 text-[11px] text-ink-faint">
-				<span className="mr-1 uppercase tracking-[0.12em]">
-					{t("graphCategory")}
-				</span>
-				{([...new Set(nodes.map(categoryOf))] as GraphCategory[]).map(
-					(category) => (
-						<button
-							key={category}
-							type="button"
-							className={`knowledge-graph-category-filter ${categoryFilter === category ? "is-active" : ""}`}
-							aria-pressed={categoryFilter === category}
-							onClick={() =>
-								setCategoryFilter((current) =>
-									current === category ? null : category,
-								)
-							}
-						>
-							<i style={{ backgroundColor: CATEGORY_COLORS[category] }} />
-							{categoryLabels[category]}
-						</button>
-					),
-				)}
+				<span className="mr-1 uppercase tracking-[0.12em]">{t("graphCategory")}</span>
+				{([...new Set(nodes.map(categoryOf))] as GraphCategory[]).map((category) => (
+					<button
+						key={category}
+						type="button"
+						className={`knowledge-graph-category-filter ${categoryFilter === category ? "is-active" : ""}`}
+						aria-pressed={categoryFilter === category}
+						onClick={() => setCategoryFilter((current) => (current === category ? null : category))}
+					>
+						<i style={{ backgroundColor: CATEGORY_COLORS[category] }} />
+						{categoryLabels[category]}
+					</button>
+				))}
 			</div>
 			<div className="flex flex-wrap gap-1 text-[11px] text-ink-faint">
-				<span
-					id="knowledge-graph-summary"
-					className="rounded-full border border-border px-2 py-0.5"
-				>
+				<span id="knowledge-graph-summary" className="rounded-full border border-border px-2 py-0.5">
 					{t("graphSummary")
 						.replace("{nodes}", String(nodes.length))
 						.replace("{edges}", String(edges.length))
@@ -957,9 +807,7 @@ export function KnowledgeGraphView({
 								aria-hidden="true"
 								className={`knowledge-graph-live-dot${paused ? " knowledge-graph-live-dot--paused" : ""}`}
 							/>
-							{paused
-								? t("graphPaused").replace("{count}", String(pendingEvents))
-								: t("graphLive")}
+							{paused ? t("graphPaused").replace("{count}", String(pendingEvents)) : t("graphLive")}
 						</button>
 						<div className="knowledge-graph-controls absolute bottom-0 right-0 flex items-center gap-1 rounded-lg p-1">
 							<button
@@ -1016,12 +864,7 @@ export function KnowledgeGraphView({
 					>
 						<title id="knowledge-graph-title">{t("graphTitle")}</title>
 						<defs>
-							<pattern
-								id="knowledge-grid"
-								width="32"
-								height="32"
-								patternUnits="userSpaceOnUse"
-							>
+							<pattern id="knowledge-grid" width="32" height="32" patternUnits="userSpaceOnUse">
 								<path
 									d="M 32 0 L 0 0 0 32"
 									fill="none"
@@ -1031,26 +874,12 @@ export function KnowledgeGraphView({
 								/>
 							</pattern>
 							<radialGradient id="knowledge-glow">
-								<stop
-									offset="0"
-									stopColor="var(--knowledge-accent)"
-									stopOpacity=".2"
-								/>
-								<stop
-									offset="1"
-									stopColor="var(--knowledge-canvas)"
-									stopOpacity="0"
-								/>
+								<stop offset="0" stopColor="var(--knowledge-accent)" stopOpacity=".2" />
+								<stop offset="1" stopColor="var(--knowledge-canvas)" stopOpacity="0" />
 							</radialGradient>
 						</defs>
 						<rect width={WIDTH} height={HEIGHT} fill="url(#knowledge-grid)" />
-						<ellipse
-							cx={WIDTH / 2}
-							cy={HEIGHT / 2}
-							rx="300"
-							ry="210"
-							fill="url(#knowledge-glow)"
-						/>
+						<ellipse cx={WIDTH / 2} cy={HEIGHT / 2} rx="300" ry="210" fill="url(#knowledge-glow)" />
 						<g
 							className="knowledge-graph-scene"
 							transform={`translate(${camera.x} ${camera.y}) scale(${camera.scale})`}
@@ -1081,19 +910,13 @@ export function KnowledgeGraphView({
 									const categoryOn =
 										!categoryFilter ||
 										categoryOf(
-											nodeByPath.get(edge.source) ??
-												({ kind: "note" } as GraphData["nodes"][number]),
+											nodeByPath.get(edge.source) ?? ({ kind: "note" } as GraphData["nodes"][number]),
 										) === categoryFilter ||
 										categoryOf(
-											nodeByPath.get(edge.target) ??
-												({ kind: "note" } as GraphData["nodes"][number]),
+											nodeByPath.get(edge.target) ?? ({ kind: "note" } as GraphData["nodes"][number]),
 										) === categoryFilter;
-									const on =
-										categoryOn &&
-										(!active ||
-											(active.has(edge.source) && active.has(edge.target)));
-									const fresh =
-										freshPaths.has(edge.source) || freshPaths.has(edge.target);
+									const on = categoryOn && (!active || (active.has(edge.source) && active.has(edge.target)));
+									const fresh = freshPaths.has(edge.source) || freshPaths.has(edge.target);
 									return (
 										<line
 											key={`${edge.source}|${edge.target}|${edge.type}`}
@@ -1109,21 +932,9 @@ export function KnowledgeGraphView({
 														? "var(--knowledge-directory)"
 														: "var(--knowledge-edge)"
 											}
-											strokeOpacity={
-												on
-													? edge.type === "directory"
-														? 0.6
-														: 0.5
-													: categoryOn
-														? 0.08
-														: 0.025
-											}
-											strokeWidth={
-												fresh ? 2 : edge.type === "directory" ? 1 : 1.4
-											}
-											strokeDasharray={
-												edge.type === "directory" ? "4 4" : undefined
-											}
+											strokeOpacity={on ? (edge.type === "directory" ? 0.6 : 0.5) : categoryOn ? 0.08 : 0.025}
+											strokeWidth={fresh ? 2 : edge.type === "directory" ? 1 : 1.4}
+											strokeDasharray={edge.type === "directory" ? "4 4" : undefined}
 										/>
 									);
 								})}
@@ -1131,28 +942,16 @@ export function KnowledgeGraphView({
 							{viewNodes.map((node) => {
 								const point = viewPoints.get(node.path);
 								if (!point) return null;
-								const categoryOn =
-									!categoryFilter || categoryOf(node) === categoryFilter;
-								const nodeFindings = healthOn
-									? findingsByPath.get(node.path)
-									: undefined;
-								const healthDim =
-									healthOn &&
-									!nodeFindings &&
-									!(active?.has(node.path) ?? false);
-								const on =
-									categoryOn &&
-									(!active || active.has(node.path)) &&
-									!healthDim;
+								const categoryOn = !categoryFilter || categoryOf(node) === categoryFilter;
+								const nodeFindings = healthOn ? findingsByPath.get(node.path) : undefined;
+								const healthDim = healthOn && !nodeFindings && !(active?.has(node.path) ?? false);
+								const on = categoryOn && (!active || active.has(node.path)) && !healthDim;
 								const fresh = freshPaths.has(node.path);
 								const radius = radiusOf(node);
 								const shape = shapeFor(categoryOf(node));
 								const placement = labels.get(node.path);
 								const showLabel = Boolean(placement);
-								const showMetadata =
-									camera.scale >= 1.15 ||
-									selected === node.path ||
-									hovered === node.path;
+								const showMetadata = camera.scale >= 1.15 || selected === node.path || hovered === node.path;
 								return (
 									// biome-ignore lint/a11y/useSemanticElements: SVG nodes do not support native button elements
 									<g
@@ -1162,9 +961,7 @@ export function KnowledgeGraphView({
 										aria-label={`${node.title} · ${categoryLabels[categoryOf(node)]} · ${t("graphLinks").replace("{count}", String(node.degree))}`}
 										aria-pressed={selected === node.path}
 										aria-keyshortcuts="Enter Space"
-										opacity={
-											on ? 1 : healthDim ? 0.28 : categoryOn ? 0.2 : 0.14
-										}
+										opacity={on ? 1 : healthDim ? 0.28 : categoryOn ? 0.2 : 0.14}
 										style={{ cursor: "pointer" }}
 										onClick={() => setSelected(node.path)}
 										onMouseEnter={() => setHovered(node.path)}
@@ -1209,13 +1006,7 @@ export function KnowledgeGraphView({
 												fill="none"
 												stroke={HEALTH_COLORS[kind]}
 												strokeWidth="1.6"
-												strokeDasharray={
-													kind === "warning"
-														? undefined
-														: kind === "orphan"
-															? "2 2"
-															: "5 3"
-												}
+												strokeDasharray={kind === "warning" ? undefined : kind === "orphan" ? "2 2" : "5 3"}
 											/>
 										))}
 										{node.isMain && (
@@ -1254,11 +1045,7 @@ export function KnowledgeGraphView({
 										{showLabel && placement && (
 											<>
 												<rect
-													x={
-														placement.anchor === "end"
-															? placement.x - placement.width - 4
-															: placement.x - 4
-													}
+													x={placement.anchor === "end" ? placement.x - placement.width - 4 : placement.x - 4}
 													y={placement.y - 11}
 													width={placement.width + 8}
 													height={showMetadata ? 27 : 16}
@@ -1277,17 +1064,9 @@ export function KnowledgeGraphView({
 												>
 													<tspan>{labelText(node)}</tspan>
 													{showMetadata && (
-														<tspan
-															x={placement.x}
-															dy="12"
-															fontSize="8"
-															fill="var(--knowledge-ink-muted)"
-														>
-															{t("graphInDegree").replace(
-																"{count}",
-																String(incoming.get(node.path) ?? 0),
-															)}{" "}
-															· {categoryLabels[categoryOf(node)]}
+														<tspan x={placement.x} dy="12" fontSize="8" fill="var(--knowledge-ink-muted)">
+															{t("graphInDegree").replace("{count}", String(incoming.get(node.path) ?? 0))} ·{" "}
+															{categoryLabels[categoryOf(node)]}
 														</tspan>
 													)}
 												</text>
@@ -1312,10 +1091,7 @@ export function KnowledgeGraphView({
 											<i
 												className="mr-1 inline-block h-2 w-2 rounded-full"
 												style={{
-													backgroundColor: clusterColor(
-														cluster,
-														clusterSizes.get(cluster) ?? 0,
-													),
+													backgroundColor: clusterColor(cluster, clusterSizes.get(cluster) ?? 0),
 												}}
 											/>
 											{labelText(head)}
@@ -1325,17 +1101,15 @@ export function KnowledgeGraphView({
 							</>
 						)}
 						{colorMode === "type" &&
-							([...new Set(nodes.map(categoryOf))] as GraphCategory[]).map(
-								(category) => (
-									<span key={`legend-${category}`}>
-										<i
-											className="mr-1 inline-block h-2 w-2 rounded-full"
-											style={{ backgroundColor: CATEGORY_COLORS[category] }}
-										/>
-										{categoryLabels[category]}
-									</span>
-								),
-							)}
+							([...new Set(nodes.map(categoryOf))] as GraphCategory[]).map((category) => (
+								<span key={`legend-${category}`}>
+									<i
+										className="mr-1 inline-block h-2 w-2 rounded-full"
+										style={{ backgroundColor: CATEGORY_COLORS[category] }}
+									/>
+									{categoryLabels[category]}
+								</span>
+							))}
 						<span>
 							<i className="knowledge-graph-legend-main mr-1 inline-block h-2 w-2 rounded-full border" />
 							{t("graphLegendMain")}
@@ -1356,9 +1130,7 @@ export function KnowledgeGraphView({
 				</div>
 				<aside
 					className={`knowledge-node-drawer absolute right-3 top-16 bottom-12 z-20 w-[min(360px,calc(100%-24px))] overflow-y-auto rounded-xl p-4 transition duration-200 ${selectedNode || healthOn ? "is-open" : ""}`}
-					aria-label={
-						selectedNode || !healthOn ? t("graphNodeCard") : t("graphHealth")
-					}
+					aria-label={selectedNode || !healthOn ? t("graphNodeCard") : t("graphHealth")}
 					aria-hidden={!selectedNode && !healthOn}
 				>
 					{selectedNode ? (
@@ -1375,46 +1147,30 @@ export function KnowledgeGraphView({
 							<p className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
 								{t("graphSelectedNode")}
 							</p>
-							<h4 className="mt-1 truncate text-xs font-semibold">
-								{selectedNode.title}
-							</h4>
-							<p className="mt-1 break-all font-mono text-[11px] text-ink-faint">
-								{selectedNode.path}
-							</p>
+							<h4 className="mt-1 truncate text-xs font-semibold">{selectedNode.title}</h4>
+							<p className="mt-1 break-all font-mono text-[11px] text-ink-faint">{selectedNode.path}</p>
 							<div className="mt-2 flex flex-wrap gap-1">
 								<span className="rounded border border-border px-2 py-0.5 text-xs text-ink-dim">
 									{categoryLabels[categoryOf(selectedNode)]}
 								</span>
 								<span className="rounded border border-border px-2 py-0.5 text-xs text-ink-dim">
-									{t("graphLinks").replace(
-										"{count}",
-										String(selectedNode.degree),
-									)}
+									{t("graphLinks").replace("{count}", String(selectedNode.degree))}
 								</span>
 								<span className="rounded border border-border px-2 py-0.5 text-xs text-ink-dim">
-									{t("graphInDegree").replace(
-										"{count}",
-										String(incoming.get(selectedNode.path) ?? 0),
-									)}
+									{t("graphInDegree").replace("{count}", String(incoming.get(selectedNode.path) ?? 0))}
 								</span>
-								{(clusterSizes.get(clusters.get(selectedNode.path) ?? 0) ?? 0) >
-									1 && (
+								{(clusterSizes.get(clusters.get(selectedNode.path) ?? 0) ?? 0) > 1 && (
 									<span className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-ink-dim">
 										<i
 											className="inline-block h-2 w-2 rounded-full"
 											style={{
 												backgroundColor: clusterColor(
 													clusters.get(selectedNode.path) ?? 0,
-													clusterSizes.get(
-														clusters.get(selectedNode.path) ?? 0,
-													) ?? 0,
+													clusterSizes.get(clusters.get(selectedNode.path) ?? 0) ?? 0,
 												),
 											}}
 										/>
-										{t("graphCluster").replace(
-											"{count}",
-											String((clusters.get(selectedNode.path) ?? 0) + 1),
-										)}
+										{t("graphCluster").replace("{count}", String((clusters.get(selectedNode.path) ?? 0) + 1))}
 									</span>
 								)}
 							</div>
@@ -1424,15 +1180,10 @@ export function KnowledgeGraphView({
 									className="mt-3 rounded border border-border px-2 py-2 text-xs"
 									style={{ borderColor: HEALTH_COLORS[kind] }}
 								>
-									<p
-										className="font-semibold"
-										style={{ color: HEALTH_COLORS[kind] }}
-									>
+									<p className="font-semibold" style={{ color: HEALTH_COLORS[kind] }}>
 										{t(HEALTH_COPY[kind].label)}
 									</p>
-									<p className="mt-1 text-ink-dim">
-										{t(HEALTH_COPY[kind].hint)}
-									</p>
+									<p className="mt-1 text-ink-dim">{t(HEALTH_COPY[kind].hint)}</p>
 									<Button
 										className="mt-2"
 										size="sm"
@@ -1461,36 +1212,25 @@ export function KnowledgeGraphView({
 							</dl>
 							{selectedNode.warnings?.length || selectedNode.mirrors?.length ? (
 								<p className="mt-3 rounded bg-hover px-2 py-2 text-xs text-warn">
-									{t("graphMirrorWarning").replace(
-										"{count}",
-										String(selectedNode.mirrors?.length ?? 0),
-									)}
+									{t("graphMirrorWarning").replace("{count}", String(selectedNode.mirrors?.length ?? 0))}
 								</p>
 							) : null}
 							{links && (
 								<div className="mt-3 border-t border-border pt-2">
-									<p className="text-xs font-semibold text-ink-dim">
-										{t("graphRelatedNotes")}
-									</p>
-									{[...links.outgoing, ...links.incoming]
-										.slice(0, 4)
-										.map((link) => (
-											<button
-												key={`${link.path}-${link.exists}`}
-												type="button"
-												className="mt-1 block w-full truncate text-left text-[11px] text-ink-faint hover:text-ink"
-												onClick={() => setSelected(link.path)}
-											>
-												{link.exists ? "↗" : "＋"} {link.title}
-											</button>
-										))}
+									<p className="text-xs font-semibold text-ink-dim">{t("graphRelatedNotes")}</p>
+									{[...links.outgoing, ...links.incoming].slice(0, 4).map((link) => (
+										<button
+											key={`${link.path}-${link.exists}`}
+											type="button"
+											className="mt-1 block w-full truncate text-left text-[11px] text-ink-faint hover:text-ink"
+											onClick={() => setSelected(link.path)}
+										>
+											{link.exists ? "↗" : "＋"} {link.title}
+										</button>
+									))}
 								</div>
 							)}
-							<Button
-								className="mt-3 w-full"
-								size="sm"
-								onClick={() => onOpenNote(selectedNode.path)}
-							>
+							<Button className="mt-3 w-full" size="sm" onClick={() => onOpenNote(selectedNode.path)}>
 								{t("graphOpenNote")}
 							</Button>
 						</>
@@ -1505,36 +1245,21 @@ export function KnowledgeGraphView({
 							>
 								×
 							</button>
-							<p className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-								{t("graphHealth")}
-							</p>
-							<p className="mt-1 text-[11px] leading-relaxed text-ink-faint">
-								{t("graphHealthIntro")}
-							</p>
-							{findings.length === 0 && (
-								<p className="mt-3 text-xs text-ink-dim">
-									{t("graphHealthEmpty")}
-								</p>
-							)}
+							<p className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">{t("graphHealth")}</p>
+							<p className="mt-1 text-[11px] leading-relaxed text-ink-faint">{t("graphHealthIntro")}</p>
+							{findings.length === 0 && <p className="mt-3 text-xs text-ink-dim">{t("graphHealthEmpty")}</p>}
 							{HEALTH_ORDER.map((kind) => {
-								const rows = findings.filter(
-									(finding) => finding.kind === kind,
-								);
+								const rows = findings.filter((finding) => finding.kind === kind);
 								if (rows.length === 0) return null;
 								return (
-									<section
-										key={`health-${kind}`}
-										className="mt-3 border-t border-border pt-2"
-									>
+									<section key={`health-${kind}`} className="mt-3 border-t border-border pt-2">
 										<p className="flex items-center gap-2 text-xs font-semibold text-ink-dim">
 											<i
 												className="inline-block h-2 w-2 rounded-full"
 												style={{ backgroundColor: HEALTH_COLORS[kind] }}
 											/>
 											{t(HEALTH_COPY[kind].label)}
-											<span className="font-normal text-ink-faint">
-												{rows.length}
-											</span>
+											<span className="font-normal text-ink-faint">{rows.length}</span>
 										</p>
 										{rows.slice(0, 12).map((finding) => (
 											<button
@@ -1552,10 +1277,7 @@ export function KnowledgeGraphView({
 										))}
 										{rows.length > 12 && (
 											<p className="mt-1 text-[11px] text-ink-faint">
-												{t("graphMore").replace(
-													"{count}",
-													String(rows.length - 12),
-												)}
+												{t("graphMore").replace("{count}", String(rows.length - 12))}
 											</p>
 										)}
 									</section>
@@ -1567,12 +1289,8 @@ export function KnowledgeGraphView({
 							<p className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
 								{t("graphSelectedNode")}
 							</p>
-							<p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
-								{t("graphSelectHint")}
-							</p>
-							<p className="text-[11px] leading-relaxed text-ink-faint">
-								{t("graphCollisionHint")}
-							</p>
+							<p className="mt-3 text-[11px] leading-relaxed text-ink-faint">{t("graphSelectHint")}</p>
+							<p className="text-[11px] leading-relaxed text-ink-faint">{t("graphCollisionHint")}</p>
 						</div>
 					)}
 				</aside>

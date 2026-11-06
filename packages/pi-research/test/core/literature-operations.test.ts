@@ -31,7 +31,10 @@ describe("literature destination recovery", () => {
 
 describe("literature operation host adapter boundary", () => {
 	function makePorts(receipts: Array<Record<string, unknown>>) {
-		const journals = new Map<string, import("../../src/core/literature-operations.js").LiteratureOperationJournal>();
+		const journals = new Map<
+			string,
+			import("../../src/core/literature-operations.js").LiteratureOperationJournal
+		>();
 		return {
 			journals,
 			ports: {

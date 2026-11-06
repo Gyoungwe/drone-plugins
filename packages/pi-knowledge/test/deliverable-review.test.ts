@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { BackgroundReviewer, reviewDeliverable, selectReviewerProvider } from "../src/core/deliverable-review.js";
+import {
+	BackgroundReviewer,
+	reviewDeliverable,
+	selectReviewerProvider,
+} from "../src/core/deliverable-review.js";
 
 const hash = "a".repeat(64);
 

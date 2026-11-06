@@ -11,14 +11,18 @@ import {
 
 const manifest = JSON.parse(readFileSync(new URL("../plugin.manifest.json", import.meta.url), "utf8"));
 const DOI = "10.1000/gut.2021.001";
-const ITEM = { key: "ABCD2345", data: { DOI, title: "Gut signatures", itemType: "journalArticle", collections: [] } };
+const ITEM = {
+	key: "ABCD2345",
+	data: { DOI, title: "Gut signatures", itemType: "journalArticle", collections: [] },
+};
 
 /** The host's network.read in front of a Zotero desktop local API; anything else fails the test. */
 function localApi(items: unknown[]) {
 	const sent: string[] = [];
 	const call = async (name: string, input: any) => {
 		const url = new URL(input.url);
-		if (name !== "network.read" || input.method !== "GET") throw new Error(`Unexpected ${name} ${input.method}`);
+		if (name !== "network.read" || input.method !== "GET")
+			throw new Error(`Unexpected ${name} ${input.method}`);
 		if (!manifest.permissions.network.includes(url.host)) throw new Error("Network host is not declared");
 		sent.push(url.pathname);
 		const body = url.pathname.endsWith("/children") ? [] : items;
@@ -71,7 +75,9 @@ it("verifies read-only through network.read and reports a found item with an ope
 	expect((await verifyZoteroAcceptance(localApi([]).call, { kind: "zotero_item", doi: DOI })).state).toBe(
 		"not-found",
 	);
-	expect(await verifyZoteroAcceptance(host.call, { kind: "zotero_item" })).toMatchObject({ state: "pending" });
+	expect(await verifyZoteroAcceptance(host.call, { kind: "zotero_item" })).toMatchObject({
+		state: "pending",
+	});
 });
 
 it("identifies only a read-back save receipt from the actual tool event", () => {
@@ -82,8 +88,12 @@ it("identifies only a read-back save receipt from the actual tool event", () => 
 		isError: false,
 		...extra,
 	});
-	expect(identifyZoteroReceipt(event({ status: "saved", zoteroKey: "ABCD2345", doi: DOI }))).toEqual({ doi: DOI });
-	expect(identifyZoteroReceipt(event({ status: "reused", zoteroKey: "ABCD2345", doi: DOI }))).toEqual({ doi: DOI });
+	expect(identifyZoteroReceipt(event({ status: "saved", zoteroKey: "ABCD2345", doi: DOI }))).toEqual({
+		doi: DOI,
+	});
+	expect(identifyZoteroReceipt(event({ status: "reused", zoteroKey: "ABCD2345", doi: DOI }))).toEqual({
+		doi: DOI,
+	});
 	for (const wrong of [
 		event({ status: "cancelled", zoteroKey: null, doi: DOI }),
 		event({ status: "saved", zoteroKey: "short", doi: DOI }),

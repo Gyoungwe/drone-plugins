@@ -1,11 +1,8 @@
 import { basename } from "node:path";
 import type { PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
 import { createStoredKnowledgeReviewPolicy } from "../core/review-policy.js";
+import type { KnowledgePreferences, KnowledgeSetReviewPolicyInput } from "./contract.js";
 import type { KnowledgeReadOwner } from "./read-model.js";
-import type {
-	KnowledgePreferences,
-	KnowledgeSetReviewPolicyInput,
-} from "./contract.js";
 import { createBrokerReviewPolicyStorage } from "./state-policy.js";
 
 /** The policy algorithm is shared with CLI; Desktop authority comes from its state handle. */
@@ -42,8 +39,7 @@ export function createKnowledgePreferences(
 		read: () => owner.run(snapshot),
 		write: (input: KnowledgeSetReviewPolicyInput) =>
 			owner.run(async () => {
-				if (!canWriteState)
-					throw new Error("Application-state write permission is required");
+				if (!canWriteState) throw new Error("Application-state write permission is required");
 				const binding = await owner.config.readKnowledgeBinding({
 					fresh: true,
 				});
