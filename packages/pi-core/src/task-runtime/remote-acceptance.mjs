@@ -40,7 +40,7 @@ export function createRemoteAcceptance(call) {
   };
   return {
     /** Kinds and their fields, for the task context the model reads. */
-    describe: () => [...kinds].map(([kind, { fields }]) => ({ kind, fields })),
+    kinds: () => [...kinds].map(([kind, { fields }]) => ({ kind, fields })),
     /** Registers every available provider once. Needs a live hook: provider.read is not a bootstrap call. */
     async load(signal) {
       let listed;
@@ -54,6 +54,22 @@ export function createRemoteAcceptance(call) {
       for (const { member, state } of listed.members)
         if (state === "available" && !kinds.has(member))
           register(member, await call("provider.read", address(member, "describe", null), signal));
+    },
+    /** The provider's text for one acceptance, fetched now (a rebind names an acceptance not planned). */
+    async describeNow(acceptance, signal) {
+      const kind = acceptance?.kind;
+      if (!kinds.has(kind)) return null;
+      return call("provider.read", address(kind, "describe", acceptance), signal);
+    },
+    /** Write allowances for the host's task authorization: one per milestone whose provider names a consent entry. */
+    allowances(milestones) {
+      return milestones.flatMap((milestone) => {
+        const kind = milestone.acceptance?.kind;
+        const described = kinds.get(kind)?.cache.get(keyOf(effectiveAcceptance(milestone)));
+        return described?.consent
+          ? [{ id: milestone.id, role: ROLE, member: kind, label: String(described.label || kind).slice(0, 300), consent: described.consent }]
+          : [];
+      });
     },
     /** Fetches the provider's text for milestones not seen yet. */
     async prepare(tasks, signal) {

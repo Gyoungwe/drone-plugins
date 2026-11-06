@@ -100,3 +100,24 @@ describe("managed Zotero tools", () => {
 		expect(Object.values(session.toolEffects ?? {})).toEqual(["read", "read", "read"]);
 	});
 });
+
+it("a save inside a task authorization names the allowance it was given, on the one write only", async () => {
+	const host = managedHost();
+	const sentAllowances: unknown[] = [];
+	const call = async (name: string, input: any) => {
+		if (name === "task.grant.allowances")
+			return {
+				taskId: "t",
+				allowances: [
+					{ id: "other", role: "acceptance", member: "zotero_item", consent: { doi: "10.1000/other" }, used: false },
+					{ id: "slot", role: "acceptance", member: "zotero_item", consent: { slot: true }, used: false },
+				],
+			};
+		if (name.startsWith("network.")) sentAllowances.push(`${name}:${input.allowance ?? "-"}`);
+		return host.call(name, input);
+	};
+	const receipt = await saveToZotero(call, { doi: DOI, title: "Gut signatures" });
+	expect(receipt).toMatchObject({ status: "saved", consent: { via: "task-grant", milestoneId: "slot" } });
+	expect(sentAllowances.filter((entry) => String(entry).startsWith("network.write"))).toEqual(["network.write:slot"]);
+	expect(sentAllowances.filter((entry) => String(entry).startsWith("network.read")).every((entry) => String(entry).endsWith(":-"))).toBe(true);
+});

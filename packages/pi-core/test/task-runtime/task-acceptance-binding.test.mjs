@@ -258,3 +258,31 @@ it("the rebind confirmation card shows old and new DOI and only the exact approv
 	expect(j.snapshot().milestones[0].bound).toMatchObject({ fields: { doi: "10.1/real" }, via: "rebind" });
 	expect(j.snapshot().actions[0].state).toBe("acknowledged");
 });
+
+it("a host that keeps the authorization renders a rebind through amendAllowance; only its yes applies", async () => {
+	const { j } = setup([zoteroMilestone("p1", { doi: "10.1/planned-wrong" })]);
+	const action = j.wait({ kind: "rebind", title: "换", reason: "r", milestoneId: "p1", doi: "10.1/real" });
+	const amended = [];
+	let answer = false;
+	const ui = {
+		hasUI: () => true,
+		select: async () => {
+			throw new Error("The plugin's own card must not open when the host renders the rebind");
+		},
+		amendAllowance: async (_ctx, task, milestone, next) => {
+			amended.push({ taskId: task.id, milestoneId: milestone.id, doi: next.doi, kind: next.kind });
+			return answer;
+		},
+	};
+	const ask = createTaskAuthorization(j, async () => null, ui);
+	const request = () => ({ taskId: j.snapshot().id, revision: j.view().revision, action: "ask-authorization", actionId: action.id });
+	expect(await ask(request(), {})).toBe(false);
+	expect(j.snapshot().milestones[0].bound).toBeUndefined();
+	answer = true;
+	expect(await ask(request(), {})).toBe(true);
+	expect(amended).toEqual([
+		{ taskId: j.snapshot().id, milestoneId: "p1", doi: "10.1/real", kind: "zotero_item" },
+		{ taskId: j.snapshot().id, milestoneId: "p1", doi: "10.1/real", kind: "zotero_item" },
+	]);
+	expect(j.snapshot().milestones[0].bound).toMatchObject({ fields: { doi: "10.1/real" }, via: "rebind" });
+});

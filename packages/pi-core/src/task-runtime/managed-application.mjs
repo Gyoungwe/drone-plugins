@@ -22,6 +22,7 @@ const fileError = (code, message) => Object.assign(new Error(message), { code })
 
 /** Host capabilities as the workbench adapter's ports (Drone Desktop managed runtime). */
 function managedPorts(call, cache) {
+  const acceptance = createRemoteAcceptance(call);
   const readFile = async (ctx, path) => {
     const read = await call("workspace.readFile", { path }, ctx?.signal);
     return { ...read, bytes: Buffer.from(read.base64, "base64") };
@@ -53,7 +54,7 @@ function managedPorts(call, cache) {
     return answer.kind === "cancelled" ? undefined : answer.value;
   };
   return {
-    acceptance: createRemoteAcceptance(call),
+    acceptance,
     // Knowledge-bound (Vault) acceptance needs the knowledge service; not wired yet.
     readKnowledgeBinding: async () => null,
     readOnlyHint: name => cache.tools.get(name),
@@ -101,9 +102,26 @@ function managedPorts(call, cache) {
           writeDirectories: [...(task.writeRoots || [])],
           acceptance: task.milestones.map(milestone => milestone.title).slice(0, 32),
           ...(contract.compute ? { compute: contract.compute.slice(0, 2000) } : {}),
+          // External writes the providers will make for these milestones; the host shows each and admits it once.
+          ...(() => {
+            const allowances = acceptance.allowances(task.milestones);
+            return allowances.length ? { allowances } : {};
+          })(),
           maxCalls: contract.maxCalls,
           maxAutoResumes: contract.maxAutoResumes,
         }, signal);
+        return true;
+      } catch (error) {
+        if (/denied/i.test(error.message)) return false;
+        throw error;
+      }
+    },
+    // Changing which item a milestone names changes what the grant allows; the host asks.
+    amendAllowance: async (ctx, task, milestone, next, signal) => {
+      const described = await acceptance.describeNow(next, signal);
+      if (!described?.consent) throw new Error("The acceptance provider cannot name this item.");
+      try {
+        await call("task.grant.amend", { taskId: task.id, id: milestone.id, label: String(described.label || next.kind).slice(0, 300), consent: described.consent }, signal);
         return true;
       } catch (error) {
         if (/denied/i.test(error.message)) return false;

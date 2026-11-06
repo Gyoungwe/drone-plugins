@@ -8,6 +8,7 @@ import {
 	receiptWithoutUpdate,
 	receiptWithoutWrite,
 } from "../core/zotero-write-runtime.js";
+import { normalizeZoteroDoi } from "../core/zotero-identity.js";
 import { type CapabilityCall, capabilityFetch } from "./capability-fetch.js";
 
 /**
@@ -47,6 +48,22 @@ function observedWrites(call: CapabilityCall) {
 	return { call: observed, declinedBeforeAnyWrite: () => state.declined && !state.wrote };
 }
 
+/**
+ * The allowance the user's task authorization gave this package for a DOI: the milestone naming it, else an
+ * unused "one paper after close reading" slot. Without one the host asks as usual.
+ */
+async function allowanceFor(call: CapabilityCall, doi: string, signal?: AbortSignal): Promise<string | undefined> {
+	let held: { allowances?: { id: string; member: string; consent: any; used: boolean }[] } | null;
+	try {
+		held = (await call("task.grant.allowances", null, signal)) as typeof held;
+	} catch {
+		return undefined;
+	}
+	const open = (held?.allowances ?? []).filter((item) => item.member === "zotero_item" && !item.used);
+	const named = open.find((item) => normalizeZoteroDoi(item.consent?.doi) === doi);
+	return (named ?? open.find((item) => item.consent?.slot === true && !item.consent?.doi))?.id;
+}
+
 export async function saveToZotero(call: CapabilityCall, params: Record<string, any>, signal?: AbortSignal) {
 	const plan = await prepareZoteroSave(params, {
 		fetchImpl: capabilityFetch(call, { reads: ZOTERO_NETWORK_READS }),
@@ -54,13 +71,16 @@ export async function saveToZotero(call: CapabilityCall, params: Record<string, 
 		signal,
 	});
 	let receipt: Record<string, any>;
+	let allowance: string | undefined;
 	if (plan.action !== "create") receipt = receiptWithoutWrite(plan);
 	else {
 		const writes = observedWrites(call);
+		allowance = await allowanceFor(call, plan.doi, signal);
 		receipt = await executeZoteroSave(plan, {
 			fetchImpl: capabilityFetch(writes.call, {
 				reads: ZOTERO_NETWORK_READS,
 				summary: `写入 Zotero 文献库：《${plan.item.title}》（DOI ${plan.doi}）`,
+				allowance,
 			}),
 			env: NO_CREDENTIALS,
 			signal,
@@ -68,7 +88,7 @@ export async function saveToZotero(call: CapabilityCall, params: Record<string, 
 		if (writes.declinedBeforeAnyWrite())
 			receipt = receiptWithoutWrite({ ...plan, action: "cancelled", reason: "user-declined" });
 	}
-	receipt.consent = { via: "host-dialog" };
+	receipt.consent = allowance ? { via: "task-grant", milestoneId: allowance } : { via: "host-dialog" };
 	if (receipt.status === "reused" && params.attachment_url)
 		receipt.update = "The item already exists, so nothing was changed.";
 	receipt.next = receipt.zoteroKey

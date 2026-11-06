@@ -11,6 +11,8 @@ export interface CapabilityFetchOptions {
 	readonly reads?: readonly string[];
 	/** Shown in the host's write dialog as this plugin's description of the write. */
 	readonly summary?: string;
+	/** A task grant allowance this write uses instead of the host's dialog (each is admitted once). */
+	readonly allowance?: string;
 }
 
 interface NetworkResult {
@@ -23,7 +25,10 @@ const READ_METHODS = new Set(["GET", "HEAD"]);
 /** Statuses whose Response must not carry a body. */
 const NO_BODY = new Set([101, 204, 205, 304]);
 
-export function capabilityFetch(call: CapabilityCall, { reads = [], summary }: CapabilityFetchOptions = {}): typeof fetch {
+export function capabilityFetch(
+	call: CapabilityCall,
+	{ reads = [], summary, allowance }: CapabilityFetchOptions = {},
+): typeof fetch {
 	return async (input, init) => {
 		// Request normalizes every body type (string, URLSearchParams, Buffer) and its content type.
 		const request = new Request(input, init);
@@ -43,6 +48,7 @@ export function capabilityFetch(call: CapabilityCall, { reads = [], summary }: C
 				headers,
 				...(body?.length ? { bodyBase64: body.toString("base64") } : {}),
 				...(!read && summary ? { summary } : {}),
+				...(!read && allowance ? { allowance } : {}),
 			},
 			request.signal,
 		)) as NetworkResult;
