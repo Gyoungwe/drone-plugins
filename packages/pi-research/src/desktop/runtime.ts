@@ -1,6 +1,7 @@
 import type { PluginNativeRuntimeFactory } from "@gyoungwe/plugin-api/native";
 import type { PluginRuntimeOperation, PluginRuntimeScope } from "@gyoungwe/plugin-api/runtime";
 import { createResearchHost, type ResearchHostPort } from "../research-host.js";
+import { zoteroAcceptanceOperations, zoteroIdentifyNativeOperation } from "./zotero-acceptance.js";
 import { registerManagedZoteroTools, ZOTERO_TOOL_EFFECTS } from "./zotero-tools.js";
 
 function scopeWorkspace(scope: PluginRuntimeScope): string {
@@ -73,9 +74,15 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async context => {
 		},
 	});
 	return {
-		operations: { status: operation("status"), listRuns: operation("listRuns"), detail: operation("detail") },
+		operations: {
+			status: operation("status"),
+			listRuns: operation("listRuns"),
+			detail: operation("detail"),
+			...zoteroAcceptanceOperations(),
+		},
 		createNativeSession: async () => ({
 			toolEffects: ZOTERO_TOOL_EFFECTS,
+			nativeOperations: { identify: zoteroIdentifyNativeOperation },
 			extension: (pi: { registerTool(tool: unknown): void }) =>
 				registerManagedZoteroTools(pi, (name, input, signal) => context.capabilities.call(name, input, signal)),
 			dispose: async () => {},

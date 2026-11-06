@@ -125,6 +125,21 @@ function acceptanceSchema() {
     additionalProperties: false
   };
 }
+/** Managed tool schemas are serialized when registered, before remote checkers load: any kind and extra
+ * string fields pass here, and task_plan validates them against the checkers actually loaded. */
+function openAcceptanceSchema() {
+  return {
+    type: "object",
+    properties: {
+      kind: { type: "string", minLength: 2, maxLength: 41 },
+      path: stringField,
+      sha256: stringField,
+      rootKind: { type: "string", enum: ["workspace", "vault", "research-run"], minLength: 1, maxLength: 32 }
+    },
+    required: ["kind"],
+    additionalProperties: stringField
+  };
+}
 function normalizeAcceptance(input, clean, verifiers) {
   ensureRegistryShape();
   const kind = input?.kind;
@@ -168,6 +183,7 @@ export {
   describeAcceptance,
   effectiveAcceptance,
   normalizeAcceptance,
+  openAcceptanceSchema,
   registerAcceptanceVerifier,
   resetAcceptanceVerifiers
 };

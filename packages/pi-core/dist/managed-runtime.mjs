@@ -253,14 +253,11 @@ function runtimeSlot(domain, slot, create2) {
 }
 var RUNTIME_BRIDGE_VERSION = 1;
 
-// src/task-runtime/workbench-adapter.mjs
-import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
-import { createHash as createHash4, randomUUID as randomUUID2 } from "node:crypto";
-import { resolve as resolve3 } from "node:path";
-
 // src/task-runtime/acceptance.mjs
 var CORE_ACCEPTANCE_KINDS = Object.freeze(["file", "human_review"]);
 var CORE_FIELDS = Object.freeze(["kind", "path", "sha256", "rootKind"]);
+var KIND = /^[a-z][a-z0-9_]{1,40}$/;
+var FIELD = /^[a-zA-Z][a-zA-Z0-9]{0,40}$/;
 var stringField = { type: "string", minLength: 1, maxLength: 512 };
 var eventBridges = runtimeSlot("tasks", "acceptanceEventBridges", () => /* @__PURE__ */ new WeakSet());
 var createRegistry = () => {
@@ -291,6 +288,36 @@ function ensureRegistryShape() {
     maxLength: 32
   };
 }
+function registerAcceptanceVerifier(kind, definition = {}) {
+  ensureRegistryShape();
+  if (!KIND.test(kind || "")) throw new Error(`Acceptance kind "${kind}" must match ${KIND}`);
+  if (CORE_ACCEPTANCE_KINDS.includes(kind)) throw new Error(`Acceptance kind "${kind}" is owned by the host`);
+  for (const fn of ["label", "verify", "observe", "resolve", "identify", "consent", "pending"])
+    if (definition[fn] !== void 0 && typeof definition[fn] !== "function")
+      throw new Error(`Acceptance verifier ${kind}.${fn} must be a function`);
+  const fields = [...new Set(definition.fields || [])];
+  for (const field of fields)
+    if (!FIELD.test(field) || CORE_FIELDS.includes(field))
+      throw new Error(`Acceptance verifier ${kind}: invalid field "${field}"`);
+  const verifier = Object.freeze({
+    kind,
+    fields: Object.freeze(fields),
+    evidenceKind: definition.evidenceKind || `${kind}-verified`,
+    operationVerifier: definition.operationVerifier || `${kind}-record-not-scientific-proof`,
+    label: definition.label || (() => kind),
+    verify: definition.verify || null,
+    observe: definition.observe || null,
+    resolve: definition.resolve || null,
+    identify: definition.identify || null,
+    consent: definition.consent || null,
+    pending: definition.pending || null,
+    acknowledgeError: definition.acknowledgeError || null
+  });
+  registry.verifiers.set(kind, verifier);
+  if (!registry.kinds.includes(kind)) registry.kinds.push(kind);
+  for (const field of fields) registry.properties[field] ??= stringField;
+  return verifier;
+}
 function acceptanceVerifier(kind) {
   ensureRegistryShape();
   return registry.verifiers.get(kind) || null;
@@ -312,6 +339,19 @@ function acceptanceSchema() {
     additionalProperties: false
   };
 }
+function openAcceptanceSchema() {
+  return {
+    type: "object",
+    properties: {
+      kind: { type: "string", minLength: 2, maxLength: 41 },
+      path: stringField,
+      sha256: stringField,
+      rootKind: { type: "string", enum: ["workspace", "vault", "research-run"], minLength: 1, maxLength: 32 }
+    },
+    required: ["kind"],
+    additionalProperties: stringField
+  };
+}
 function effectiveAcceptance(milestone) {
   const acceptance = milestone?.acceptance || {};
   const bound = milestone?.bound?.fields;
@@ -330,9 +370,93 @@ function describeAcceptance(acceptance, verifier = acceptanceVerifier(acceptance
   return `\u5B8C\u6210 ${acceptance?.kind || "\u672A\u77E5"} \u9A8C\u6536`;
 }
 
+// src/task-runtime/remote-acceptance.mjs
+var ROLE = "acceptance";
+var CACHE_LIMIT = 256;
+var keyOf = (acceptance) => JSON.stringify(Object.keys(acceptance || {}).sort().map((key) => [key, acceptance[key]]));
+function createRemoteAcceptance(call) {
+  const kinds = /* @__PURE__ */ new Map();
+  const address = (member, operation, input) => ({ role: ROLE, member, operation, input });
+  const register = (member, base) => {
+    const cache = /* @__PURE__ */ new Map();
+    kinds.set(member, { cache, fields: [...base.fields || []] });
+    const described = (acceptance) => cache.get(keyOf(acceptance));
+    registerAcceptanceVerifier(member, {
+      fields: base.fields,
+      evidenceKind: base.evidenceKind,
+      ...base.operationVerifier ? { operationVerifier: base.operationVerifier } : {},
+      label: (acceptance) => described(acceptance)?.label || member,
+      consent: (acceptance) => described(acceptance)?.consent || null,
+      pending: (milestone) => described(effectiveAcceptance(milestone))?.pending || null,
+      verify: async (acceptance) => {
+        try {
+          return await call("provider.read", address(member, "verify", acceptance));
+        } catch (error4) {
+          return { state: "unknown", reason: "verifier-unavailable", summary: String(error4?.message || error4).slice(0, 200) };
+        }
+      }
+    });
+  };
+  return {
+    /** Kinds and their fields, for the task context the model reads. */
+    describe: () => [...kinds].map(([kind, { fields }]) => ({ kind, fields })),
+    /** Registers every available provider once. Needs a live hook: provider.read is not a bootstrap call. */
+    async load(signal) {
+      let listed;
+      try {
+        listed = await call("provider.enumerate", { role: ROLE }, signal);
+      } catch (error4) {
+        if (/Undeclared provider role/.test(error4?.message)) return;
+        throw error4;
+      }
+      for (const { member, state } of listed.members)
+        if (state === "available" && !kinds.has(member))
+          register(member, await call("provider.read", address(member, "describe", null), signal));
+    },
+    /** Fetches the provider's text for milestones not seen yet. */
+    async prepare(tasks, signal) {
+      for (const task of tasks)
+        for (const milestone of task.milestones || []) {
+          const kind = milestone.acceptance?.kind, entry = kinds.get(kind);
+          if (!entry) continue;
+          for (const acceptance of [milestone.acceptance, effectiveAcceptance(milestone)]) {
+            const key = keyOf(acceptance);
+            if (entry.cache.has(key)) continue;
+            try {
+              entry.cache.set(key, await call("provider.read", address(kind, "describe", acceptance), signal));
+            } catch {
+              continue;
+            }
+            if (entry.cache.size > CACHE_LIMIT) entry.cache.delete(entry.cache.keys().next().value);
+          }
+        }
+    },
+    /** Inside tool_execution_end: each provider the task uses decides whether the actual event names an identity. */
+    async identify(milestones, signal) {
+      const used = new Set(milestones.map((m) => m.acceptance?.kind).filter((kind) => kinds.has(kind)));
+      const found = [];
+      for (const kind of used) {
+        let identity = null;
+        try {
+          identity = await call("provider.native", address(kind, "identify", null), signal);
+        } catch {
+          continue;
+        }
+        if (identity && typeof identity === "object") found.push({ kind, identity });
+      }
+      return found;
+    }
+  };
+}
+
+// src/task-runtime/workbench-adapter.mjs
+import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
+import { createHash as createHash4, randomUUID as randomUUID2 } from "node:crypto";
+import { resolve as resolve3 } from "node:path";
+
 // src/task-runtime/consent.mjs
 import { createHash as createHash2 } from "node:crypto";
-var MAX_AUTO_RESUMES = 3;
+var MAX_AUTO_RESUMES = 19;
 function contractHash(task) {
   const contract = [
     task.id,
@@ -1591,6 +1715,14 @@ function createTaskWorkbench({
     if (op) op.identityMilestoneId = slot.id;
     return slot;
   }
+  function identified({ toolCallId, toolName, kind, identity }) {
+    const t = active(), verifier = verifierFor(kind);
+    if (!t || !verifier) return null;
+    const op = t.operations.find((o) => o.id === toolCallId) || { id: null, tool: clean2(toolName, 80) };
+    const slot = bindIdentity(t, verifier, identity, op);
+    save();
+    return slot?.id ?? null;
+  }
   async function observe(event, cwd) {
     const t = active();
     if (!t) return;
@@ -1776,6 +1908,7 @@ function createTaskWorkbench({
     wait,
     guard,
     observe,
+    identified,
     command,
     acceptFile,
     reconcile,
@@ -1912,7 +2045,8 @@ function createTaskSession({
   readOnly,
   onChanged,
   readFailure,
-  onPersistenceFailed
+  onPersistenceFailed,
+  prepare
 }) {
   const lifetime = new AbortController();
   let tail = Promise.resolve(), closed = false, dirty = false, checkpointRequested = false, records = [], storage = null, lastDurable = null;
@@ -1969,6 +2103,7 @@ function createTaskSession({
         dirty = false;
         checkpointRequested = false;
         const result = await operation(journal, evidence, combined);
+        if (prepare) await prepare(journal.checkpoint().book.tasks, combined);
         evidence.attach(journal.scope(), journal.snapshot()?.id, records);
         combined.throwIfAborted();
         if (dirty) {
@@ -2074,6 +2209,7 @@ function createTaskSession({
         return journal2.guard(event.value);
       }
       if (event.kind === "result") return journal2.observe(event.value, event.cwd);
+      if (event.kind === "identity") return journal2.identified(event.value);
       if (event.kind === "capture")
         return evidence2.capture(event.value, event.cwd, event.binding);
       if (event.kind === "evicted") return evidence2.evict(event.ids);
@@ -2122,6 +2258,7 @@ function createTaskController(session, readSignal) {
     reconcile: (cwd) => session.action({ kind: "reconcile", cwd }, readSignal()),
     guard: (value) => session.observe({ kind: "call", value }, readSignal()),
     observe: (value, cwd) => session.observe({ kind: "result", value, cwd }, readSignal()),
+    identified: (value) => session.observe({ kind: "identity", value }, readSignal()),
     pause: (reason) => session.turn({ kind: "pause", reason }, readSignal()),
     settle: () => session.turn({ kind: "settle" }, readSignal()),
     reserveContinuation: (reason) => session.turn({ kind: "reserve-continuation", reason }, readSignal()),
@@ -2328,7 +2465,8 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
     persist: (record, signal) => ports.persist(currentContext(), record, signal),
     onChanged: () => send(),
     inspect,
-    authorize
+    authorize,
+    ...ports.acceptance ? { prepare: (tasks, signal) => ports.acceptance.prepare(tasks, signal) } : {}
   });
   const { journal, evidence } = createTaskController(session, () => invocation.getStore()?.signal);
   journal.status = () => session.status();
@@ -2468,6 +2606,7 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
     cancelHandoff();
     providerTurnOpen = false;
     pendingStatus = null;
+    await ports.acceptance?.load(ctx.signal);
     await attach(ctx, true);
     prepared = false;
     awaitingUser = false;
@@ -2512,6 +2651,8 @@ ${journal.render()}`);
   });
   on("before_agent_start", async (event, ctx) => {
     providerTurnOpen = true;
+    await ports.acceptance?.load(ctx.signal);
+    const remoteKinds = ports.acceptance?.describe() || [];
     if (!prepared) {
       try {
         await prepare(event.prompt, ctx);
@@ -2532,7 +2673,8 @@ ${TASK_HANDOFF_POLICY}`,
         customType: "drone-task-context",
         display: false,
         content: `${journal.render()}
-${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uFF0C\u5199\u7ED9\u7528\u6237\u770B\u7684\u5185\u5BB9\u4E00\u5F8B\u7528\u7B80\u4F53\u4E2D\u6587\u3002\uFF09\n" : ""}Host observations only. For substantial execution, first do read-only preparation, consolidate necessary choices/assumptions and call task_plan ONCE with the original user goal, a plain-language scope summary, existing write directories, and file-based deliverables. task_plan automatically opens the host ask_user form for task execution, directory writes, acceptance and automatic stage continuation. Task cards are status and request-entry UI, not consent. Do not duplicate the host question or treat free text as authorization. If declined, stop at the checkpoint. Additional authorization actions from task_wait also open ask_user. Within approved scope, perform routine steps and bounded recovery autonomously; only new risk/scope, credentials, genuinely unavailable user data or actual required human review need intervention. Never claim human/scientific review happened automatically. Prefer machine-checkable deliverables over unnecessary human-review milestones. Preserve prior refusals. File/command denies, sensitive files, unknown effects, total call budget and provenance checks remain binding. task_status delivers host-only results.`
+${remoteKinds.length ? `Acceptance kinds from installed plugins (task_plan acceptance.kind and fields): ${remoteKinds.map(({ kind, fields }) => `${kind} (${fields.join(", ") || "no fields"})`).join("; ")}.
+` : ""}${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uFF0C\u5199\u7ED9\u7528\u6237\u770B\u7684\u5185\u5BB9\u4E00\u5F8B\u7528\u7B80\u4F53\u4E2D\u6587\u3002\uFF09\n" : ""}Host observations only. For substantial execution, first do read-only preparation, consolidate necessary choices/assumptions and call task_plan ONCE with the original user goal, a plain-language scope summary, existing write directories, and file-based deliverables. task_plan automatically opens the host ask_user form for task execution, directory writes, acceptance and automatic stage continuation. Task cards are status and request-entry UI, not consent. Do not duplicate the host question or treat free text as authorization. If declined, stop at the checkpoint. Additional authorization actions from task_wait also open ask_user. Within approved scope, perform routine steps and bounded recovery autonomously; only new risk/scope, credentials, genuinely unavailable user data or actual required human review need intervention. Never claim human/scientific review happened automatically. Prefer machine-checkable deliverables over unnecessary human-review milestones. Preserve prior refusals. File/command denies, sensitive files, unknown effects, total call budget and provenance checks remain binding. task_status delivers host-only results.`
       }
     };
   });
@@ -2604,6 +2746,13 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       return { block: true, reason: clean2(e.message) };
     }
   });
+  if (ports.acceptance)
+    on("tool_execution_end", async (event, ctx) => {
+      const task = journal.snapshot();
+      if (!task) return;
+      for (const { kind, identity } of await ports.acceptance.identify(task.milestones, ctx.signal))
+        await journal.identified({ toolCallId: event.toolCallId, toolName: event.toolName, kind, identity });
+    });
   on("tool_result", async (event, ctx) => {
     await journal.observe(event, ctx.cwd);
     if (event.toolName === "read" && !event.isError)
@@ -2732,7 +2881,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
             title: str,
             dependsOn: { type: "array", maxItems: 24, items: str },
             // kind 枚举与扩展字段是活引用：后加载的扩展登记的验收种类也会出现在模型看到的 schema 里
-            acceptance: acceptanceSchema()
+            acceptance: ports.acceptance ? openAcceptanceSchema() : acceptanceSchema()
           },
           required: ["id", "title", "acceptance"],
           additionalProperties: false
@@ -2921,6 +3070,7 @@ var EVENT_EFFECTS = Object.fromEntries([
   "turn_end",
   "tool_call",
   "tool_result",
+  "tool_execution_end",
   "agent_end",
   "agent_settled"
 ].map((name) => [name, READ]));
@@ -2958,6 +3108,7 @@ function managedPorts(call, cache) {
     return answer.kind === "cancelled" ? void 0 : answer.value;
   };
   return {
+    acceptance: createRemoteAcceptance(call),
     // Knowledge-bound (Vault) acceptance needs the knowledge service; not wired yet.
     readKnowledgeBinding: async () => null,
     readOnlyHint: (name) => cache.tools.get(name),

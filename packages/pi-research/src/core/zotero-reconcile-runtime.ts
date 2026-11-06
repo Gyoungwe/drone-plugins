@@ -54,11 +54,12 @@ export function createLocalZoteroReconciler({
 	request,
 	timeoutMs = 4000,
 	userLibraryIds = [],
+	fetchImpl = fetch,
 }: Options = {}): Reconciler {
 	const get =
 		request ||
 		(async (path: string) => {
-			const response = await fetch(`${LOCAL_API}/${path}`, {
+			const response = await fetchImpl(`${LOCAL_API}/${path}`, {
 				headers: { Accept: "application/json" },
 				signal: AbortSignal.timeout(timeoutMs),
 				redirect: "error",

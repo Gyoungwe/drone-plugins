@@ -86,7 +86,7 @@ function isUiOnly(manifest) {
 }
 
 function validateServices(packageName, manifest, failures) {
-	for (const kind of ["provides", "requires"]) {
+	for (const kind of ["provides", "requires", "consumes"]) {
 		const declarations = manifest.drone?.[kind];
 		if (declarations === undefined) continue;
 		if (!manifest.entrypoints?.desktopRuntime)
@@ -103,7 +103,8 @@ function validateServices(packageName, manifest, failures) {
 				failure(failures, packageName, `${field} must be an object`);
 				continue;
 			}
-			const keys = kind === "provides" ? ["version", "operations"] : ["service", "version"];
+			const keys =
+				kind === "provides" ? ["version", "operations"] : kind === "consumes" ? ["servicePrefix", "version"] : ["service", "version"];
 			if (Object.keys(declaration).some(key => !keys.includes(key)))
 				failure(failures, packageName, `${field} only accepts ${keys.join(" and ")}`);
 			if (!Number.isSafeInteger(declaration.version) || declaration.version < 1)
@@ -114,6 +115,9 @@ function validateServices(packageName, manifest, failures) {
 					failure(failures, packageName, `${field}.operations must be a nonempty array of 1–128 character strings`);
 				else if (new Set(operations).size !== operations.length)
 					failure(failures, packageName, `${field}.operations must be unique`);
+			} else if (kind === "consumes") {
+				if (typeof declaration.servicePrefix !== "string" || declaration.servicePrefix.length === 0 || declaration.servicePrefix.length > 128)
+					failure(failures, packageName, `${field}.servicePrefix must have 1–128 characters`);
 			} else if (typeof declaration.service !== "string" || declaration.service.length === 0 || declaration.service.length > 128)
 				failure(failures, packageName, `${field}.service must have 1–128 characters`);
 		}

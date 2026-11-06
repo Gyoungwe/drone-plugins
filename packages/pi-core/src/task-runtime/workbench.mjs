@@ -891,6 +891,16 @@ function createTaskWorkbench({
     if (op) op.identityMilestoneId = slot.id;
     return slot;
   }
+  // A provider in another managed owner names the identity from the actual tool event. Tools a host
+  // declares read-only leave no operation, so the receipt binds without one.
+  function identified({ toolCallId, toolName, kind, identity }) {
+    const t = active(), verifier = verifierFor(kind);
+    if (!t || !verifier) return null;
+    const op = t.operations.find((o) => o.id === toolCallId) || { id: null, tool: clean(toolName, 80) };
+    const slot = bindIdentity(t, verifier, identity, op);
+    save();
+    return slot?.id ?? null;
+  }
   async function observe(event, cwd) {
     const t = active();
     if (!t) return;
@@ -1074,6 +1084,7 @@ function createTaskWorkbench({
     wait,
     guard,
     observe,
+    identified,
     command,
     acceptFile,
     reconcile,

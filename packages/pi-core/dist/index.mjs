@@ -282,6 +282,19 @@ function acceptanceSchema() {
     additionalProperties: false
   };
 }
+function openAcceptanceSchema() {
+  return {
+    type: "object",
+    properties: {
+      kind: { type: "string", minLength: 2, maxLength: 41 },
+      path: stringField,
+      sha256: stringField,
+      rootKind: { type: "string", enum: ["workspace", "vault", "research-run"], minLength: 1, maxLength: 32 }
+    },
+    required: ["kind"],
+    additionalProperties: stringField
+  };
+}
 function effectiveAcceptance(milestone) {
   const acceptance = milestone?.acceptance || {};
   const bound = milestone?.bound?.fields;
@@ -310,7 +323,7 @@ import { createHash } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, parse, relative, resolve } from "node:path";
-var MAX_AUTO_RESUMES = 3;
+var MAX_AUTO_RESUMES = 19;
 function contractHash(task) {
   const contract = [
     task.id,
@@ -1704,6 +1717,14 @@ function createTaskWorkbench({
     if (op) op.identityMilestoneId = slot.id;
     return slot;
   }
+  function identified({ toolCallId, toolName, kind, identity }) {
+    const t = active(), verifier = verifierFor(kind);
+    if (!t || !verifier) return null;
+    const op = t.operations.find((o) => o.id === toolCallId) || { id: null, tool: clean2(toolName, 80) };
+    const slot = bindIdentity(t, verifier, identity, op);
+    save();
+    return slot?.id ?? null;
+  }
   async function observe(event, cwd) {
     const t = active();
     if (!t) return;
@@ -1889,6 +1910,7 @@ function createTaskWorkbench({
     wait,
     guard,
     observe,
+    identified,
     command,
     acceptFile,
     reconcile,
@@ -2025,7 +2047,8 @@ function createTaskSession({
   readOnly,
   onChanged,
   readFailure,
-  onPersistenceFailed
+  onPersistenceFailed,
+  prepare
 }) {
   const lifetime = new AbortController();
   let tail = Promise.resolve(), closed = false, dirty = false, checkpointRequested = false, records = [], storage = null, lastDurable = null;
@@ -2082,6 +2105,7 @@ function createTaskSession({
         dirty = false;
         checkpointRequested = false;
         const result = await operation(journal, evidence, combined);
+        if (prepare) await prepare(journal.checkpoint().book.tasks, combined);
         evidence.attach(journal.scope(), journal.snapshot()?.id, records);
         combined.throwIfAborted();
         if (dirty) {
@@ -2187,6 +2211,7 @@ function createTaskSession({
         return journal2.guard(event.value);
       }
       if (event.kind === "result") return journal2.observe(event.value, event.cwd);
+      if (event.kind === "identity") return journal2.identified(event.value);
       if (event.kind === "capture")
         return evidence2.capture(event.value, event.cwd, event.binding);
       if (event.kind === "evicted") return evidence2.evict(event.ids);
@@ -2235,6 +2260,7 @@ function createTaskController(session, readSignal) {
     reconcile: (cwd) => session.action({ kind: "reconcile", cwd }, readSignal()),
     guard: (value) => session.observe({ kind: "call", value }, readSignal()),
     observe: (value, cwd) => session.observe({ kind: "result", value, cwd }, readSignal()),
+    identified: (value) => session.observe({ kind: "identity", value }, readSignal()),
     pause: (reason) => session.turn({ kind: "pause", reason }, readSignal()),
     settle: () => session.turn({ kind: "settle" }, readSignal()),
     reserveContinuation: (reason) => session.turn({ kind: "reserve-continuation", reason }, readSignal()),
@@ -2441,7 +2467,8 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
     persist: (record, signal) => ports.persist(currentContext(), record, signal),
     onChanged: () => send(),
     inspect,
-    authorize
+    authorize,
+    ...ports.acceptance ? { prepare: (tasks, signal) => ports.acceptance.prepare(tasks, signal) } : {}
   });
   const { journal, evidence } = createTaskController(session, () => invocation.getStore()?.signal);
   journal.status = () => session.status();
@@ -2581,6 +2608,7 @@ function registerWorkbenchAdapter(pi, ports, options = {}) {
     cancelHandoff();
     providerTurnOpen = false;
     pendingStatus = null;
+    await ports.acceptance?.load(ctx.signal);
     await attach(ctx, true);
     prepared = false;
     awaitingUser = false;
@@ -2625,6 +2653,8 @@ ${journal.render()}`);
   });
   on("before_agent_start", async (event, ctx) => {
     providerTurnOpen = true;
+    await ports.acceptance?.load(ctx.signal);
+    const remoteKinds = ports.acceptance?.describe() || [];
     if (!prepared) {
       try {
         await prepare(event.prompt, ctx);
@@ -2645,7 +2675,8 @@ ${TASK_HANDOFF_POLICY}`,
         customType: "drone-task-context",
         display: false,
         content: `${journal.render()}
-${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uFF0C\u5199\u7ED9\u7528\u6237\u770B\u7684\u5185\u5BB9\u4E00\u5F8B\u7528\u7B80\u4F53\u4E2D\u6587\u3002\uFF09\n" : ""}Host observations only. For substantial execution, first do read-only preparation, consolidate necessary choices/assumptions and call task_plan ONCE with the original user goal, a plain-language scope summary, existing write directories, and file-based deliverables. task_plan automatically opens the host ask_user form for task execution, directory writes, acceptance and automatic stage continuation. Task cards are status and request-entry UI, not consent. Do not duplicate the host question or treat free text as authorization. If declined, stop at the checkpoint. Additional authorization actions from task_wait also open ask_user. Within approved scope, perform routine steps and bounded recovery autonomously; only new risk/scope, credentials, genuinely unavailable user data or actual required human review need intervention. Never claim human/scientific review happened automatically. Prefer machine-checkable deliverables over unnecessary human-review milestones. Preserve prior refusals. File/command denies, sensitive files, unknown effects, total call budget and provenance checks remain binding. task_status delivers host-only results.`
+${remoteKinds.length ? `Acceptance kinds from installed plugins (task_plan acceptance.kind and fields): ${remoteKinds.map(({ kind, fields }) => `${kind} (${fields.join(", ") || "no fields"})`).join("; ")}.
+` : ""}${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uFF0C\u5199\u7ED9\u7528\u6237\u770B\u7684\u5185\u5BB9\u4E00\u5F8B\u7528\u7B80\u4F53\u4E2D\u6587\u3002\uFF09\n" : ""}Host observations only. For substantial execution, first do read-only preparation, consolidate necessary choices/assumptions and call task_plan ONCE with the original user goal, a plain-language scope summary, existing write directories, and file-based deliverables. task_plan automatically opens the host ask_user form for task execution, directory writes, acceptance and automatic stage continuation. Task cards are status and request-entry UI, not consent. Do not duplicate the host question or treat free text as authorization. If declined, stop at the checkpoint. Additional authorization actions from task_wait also open ask_user. Within approved scope, perform routine steps and bounded recovery autonomously; only new risk/scope, credentials, genuinely unavailable user data or actual required human review need intervention. Never claim human/scientific review happened automatically. Prefer machine-checkable deliverables over unnecessary human-review milestones. Preserve prior refusals. File/command denies, sensitive files, unknown effects, total call budget and provenance checks remain binding. task_status delivers host-only results.`
       }
     };
   });
@@ -2717,6 +2748,13 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
       return { block: true, reason: clean2(e.message) };
     }
   });
+  if (ports.acceptance)
+    on("tool_execution_end", async (event, ctx) => {
+      const task = journal.snapshot();
+      if (!task) return;
+      for (const { kind, identity } of await ports.acceptance.identify(task.milestones, ctx.signal))
+        await journal.identified({ toolCallId: event.toolCallId, toolName: event.toolName, kind, identity });
+    });
   on("tool_result", async (event, ctx) => {
     await journal.observe(event, ctx.cwd);
     if (event.toolName === "read" && !event.isError)
@@ -2845,7 +2883,7 @@ ${hostLanguage() === "zh" ? "\uFF08\u4EE5\u4E0B\u4E3A\u5BBF\u4E3B\u7EA6\u675F\uF
             title: str,
             dependsOn: { type: "array", maxItems: 24, items: str },
             // kind 枚举与扩展字段是活引用：后加载的扩展登记的验收种类也会出现在模型看到的 schema 里
-            acceptance: acceptanceSchema()
+            acceptance: ports.acceptance ? openAcceptanceSchema() : acceptanceSchema()
           },
           required: ["id", "title", "acceptance"],
           additionalProperties: false
