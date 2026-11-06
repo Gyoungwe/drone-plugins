@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, normalize, resolve } from "node:path";
+import { isMainModule } from "./is-main-module.mjs";
 
 export const CAPABILITIES = new Set([
 	"knowledge",
@@ -371,7 +372,7 @@ export async function checkManifests(root = PACKAGES_ROOT) {
 	return packages.length;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
+if (isMainModule(import.meta.url)) {
 	try {
 		console.log(`Plugin manifests checked: ${await checkManifests()}`);
 	} catch (error) {
