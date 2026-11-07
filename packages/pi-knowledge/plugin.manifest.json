@@ -18,6 +18,12 @@
 				"version": 1
 			}
 		},
+		"provides": {
+			"knowledge.binding": {
+				"version": 1,
+				"operations": ["binding"]
+			}
+		},
 		"recordAdoptions": {
 			"drone-knowledge-recovery-v1": {
 				"legacyType": "drone-knowledge-recovery-v1",

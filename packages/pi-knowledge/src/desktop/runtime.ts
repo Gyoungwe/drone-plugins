@@ -1,5 +1,9 @@
 import type { PluginNativeRuntimeFactory, PluginNativeSession } from "@gyoungwe/plugin-api/native";
-import type { PluginNativeSessionFacts, PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
+import type {
+	PluginNativeSessionFacts,
+	PluginRuntimeCapabilities,
+	PluginRuntimeContext,
+} from "@gyoungwe/plugin-api/runtime";
 import { type KnowledgeBinding, parseKnowledgeBinding, projectIdentity } from "../core/config.js";
 import { createKnowledgeOwnerLifecycle } from "../core/owner-lifecycle.js";
 import { createStoredKnowledgeReviewPolicy } from "../core/review-policy.js";
@@ -13,6 +17,7 @@ import { createKnowledgeUi } from "../core/ui-state.js";
 import { createKnowledgeModelReview } from "../core/wiki-model-review.js";
 import { createKnowledgeWikiReview } from "../core/wiki-review.js";
 import { createManagedNativeSession } from "../extension/knowledge-extension.js";
+import { bindingOperation } from "./binding-service.js";
 import {
 	applyReviewInputSchema,
 	applyReviewResultSchema,
@@ -83,6 +88,10 @@ import { createBrokerKnowledgeSpecialist } from "./specialist-model.js";
 import { createBrokerSpecialistSettingsStorage } from "./specialist-settings-storage.js";
 import { createBrokerReviewPolicyStorage } from "./state-policy.js";
 import { createBrokerTopicMemoryStorage } from "./topic-storage.js";
+
+/** The calling session's knowledge project; application-scoped calls have none. */
+const callerProject = (call: PluginRuntimeContext) =>
+	projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory);
 
 async function projectFor(
 	capabilities: PluginRuntimeCapabilities,
@@ -256,19 +265,13 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	);
 	return {
 		operations: {
+			binding: bindingOperation(readKnowledgeBinding),
 			modelReviewInfo: {
 				inputSchema: modelReviewInfoInputSchema,
 				resultSchema: modelReviewInfoResultSchema,
 				effect: "read",
 				execute: async (input, call) =>
-					modelReviews.info(
-						input as KnowledgeModelReviewInfoInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-						call,
-					),
+					modelReviews.info(input as KnowledgeModelReviewInfoInput, await callerProject(call), call),
 			},
 			modelReview: {
 				inputSchema: modelReviewInputSchema,
@@ -277,10 +280,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 				execute: async (input, call) => {
 					const result = await modelReviews.review(
 						input as KnowledgeModelReviewInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
+						await callerProject(call),
 						call,
 					);
 					context.events.changed();
@@ -292,26 +292,14 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 				resultSchema: reviewHistoryResultSchema,
 				effect: "read",
 				execute: async (input, call) =>
-					reviews.history(
-						input as KnowledgeReviewHistoryInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+					reviews.history(input as KnowledgeReviewHistoryInput, await callerProject(call)),
 			},
 			undoReview: {
 				inputSchema: undoReviewInputSchema,
 				resultSchema: undoReviewResultSchema,
 				effect: "write",
 				execute: async (input, call) =>
-					reviews.undoReview(
-						input as KnowledgeUndoReviewInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+					reviews.undoReview(input as KnowledgeUndoReviewInput, await callerProject(call)),
 			},
 			semanticSettings: {
 				inputSchema: semanticPreferencesInputSchema,
@@ -334,26 +322,14 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 				resultSchema: reviewsResultSchema,
 				effect: "read",
 				execute: async (input, call) =>
-					reviews.reviews(
-						input as KnowledgeReviewsInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+					reviews.reviews(input as KnowledgeReviewsInput, await callerProject(call)),
 			},
 			previewReview: {
 				inputSchema: previewReviewInputSchema,
 				resultSchema: previewReviewResultSchema,
 				effect: "read",
 				execute: async (input, call) =>
-					reviews.previewReview(
-						input as KnowledgePreviewReviewInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+					reviews.previewReview(input as KnowledgePreviewReviewInput, await callerProject(call)),
 			},
 			rejectReview: {
 				inputSchema: rejectReviewInputSchema,
@@ -362,10 +338,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 				execute: async (input, call) => {
 					const result = await reviews.rejectReview(
 						input as KnowledgeRejectReviewInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
+						await callerProject(call),
 					);
 					context.events.changed();
 					return result;
@@ -378,10 +351,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 				execute: async (input, call) => {
 					const result = await reviews.applyReview(
 						input as KnowledgeApplyReviewInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
+						await callerProject(call),
 					);
 					context.events.changed();
 					return result;
@@ -407,91 +377,46 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 				inputSchema: overviewInputSchema,
 				resultSchema: overviewResultSchema,
 				effect: "read",
-				execute: async (_input, call) =>
-					reads.overview(
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+				execute: async (_input, call) => reads.overview(await callerProject(call)),
 			},
 			search: {
 				inputSchema: searchInputSchema,
 				resultSchema: searchResultSchema,
 				effect: "read",
 				execute: async (input, call) =>
-					reads.search(
-						input as KnowledgeSearchInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+					reads.search(input as KnowledgeSearchInput, await callerProject(call)),
 			},
 			readNote: {
 				inputSchema: readNoteInputSchema,
 				resultSchema: readNoteResultSchema,
 				effect: "read",
 				execute: async (input, call) =>
-					reads.readNote(
-						input as KnowledgeReadNoteInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+					reads.readNote(input as KnowledgeReadNoteInput, await callerProject(call)),
 			},
 			links: {
 				inputSchema: linksInputSchema,
 				resultSchema: linksResultSchema,
 				effect: "read",
-				execute: async (input, call) =>
-					reads.links(
-						input as KnowledgeLinksInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+				execute: async (input, call) => reads.links(input as KnowledgeLinksInput, await callerProject(call)),
 			},
 			graph: {
 				inputSchema: graphInputSchema,
 				resultSchema: graphResultSchema,
 				effect: "read",
-				execute: async (input, call) =>
-					reads.graph(
-						input as KnowledgeGraphInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+				execute: async (input, call) => reads.graph(input as KnowledgeGraphInput, await callerProject(call)),
 			},
 			jobs: {
 				inputSchema: jobsInputSchema,
 				resultSchema: jobsResultSchema,
 				effect: "read",
-				execute: async (input, call) =>
-					reads.jobs(
-						input as KnowledgeJobsInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+				execute: async (input, call) => reads.jobs(input as KnowledgeJobsInput, await callerProject(call)),
 			},
 			recentByCategory: {
 				inputSchema: recentByCategoryInputSchema,
 				resultSchema: recentByCategoryResultSchema,
 				effect: "read",
 				execute: async (input, call) =>
-					reads.recentByCategory(
-						input as KnowledgeRecentByCategoryInput,
-						await projectFor(
-							call.capabilities,
-							call.scope.kind === "application" ? null : call.scope.workspaceDirectory,
-						),
-					),
+					reads.recentByCategory(input as KnowledgeRecentByCategoryInput, await callerProject(call)),
 			},
 		},
 		createNativeSession: async (facts?: PluginNativeSessionFacts) => {

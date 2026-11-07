@@ -1,7 +1,7 @@
 {
 	"version": 1,
 	"generator": "packages/pi-core/scripts/build.mjs",
-	"inputsSha256": "0438843be65fa7e9dfab5f0b9b2392d50f099f8e463d00ca5b976a871ae5416f",
+	"inputsSha256": "49819cb1ac3be83a34d99e19c46b64e1ff65b4db1f2c876dfc197527824bda9f",
 	"outputs": {
 		"dist/contracts.d.ts": "4977ed343b53826c3be9ff1ea5e064585043c017753ae917eebba189bab2b4cf",
 		"dist/drone-commands.d.ts": "35a67f4528292a38d5de6ec7321e5668dfbecbc9001a7d72132412346998828f",
@@ -10,7 +10,7 @@
 		"dist/index.d.ts": "1de8e1af750ae0c4bf71182c6f315e558644ab984b75a453b2ad09cc3752d89b",
 		"dist/index.mjs": "9addad6b780b600a61b4ae52817d633bb357d3bc048d44dd501c003791f4cd8b",
 		"dist/managed-runtime.d.ts": "5083447247d3d40cdc0bc04e9e7742088244e1ea6d44a02a270be7e6a5df8d74",
-		"dist/managed-runtime.mjs": "b5b7751d33b57a74c6c12acfab68ecb69850d1268788ad2ff725fe37b5240030",
+		"dist/managed-runtime.mjs": "c7562e6912c546b41de3dcdf6ec075d6fd13e89fb8bb30345435a6312c310209",
 		"dist/memory.d.ts": "6da36d508d0ade856e7e56e5f4ab5b7ea8153db0d1f7319bc3c6ee33193a6d38",
 		"dist/memory.mjs": "7019a1647fd40b2f446db8f0f20c5f41848dbca92ca8f38964f26a8b050260cf",
 		"dist/milestone-plan.d.ts": "39008645954d801aeefdfef9cde0a0737d679cf7ab02154bc8d25836a8c4fafb",

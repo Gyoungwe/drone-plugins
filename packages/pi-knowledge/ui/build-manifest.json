@@ -2,7 +2,7 @@
   "artifactSource": "ui/src/index.ts",
   "inputs": {
     "package.json": "b22a23f677a74ba9c373fa9d197959d8f53c8e5faabf70d1e40160d46a3c9331",
-    "plugin.manifest.json": "2b82bb513864c6da20e87d1e6acdaf2b85d9fa615d0b92e0257d61ee91ef4f97",
+    "plugin.manifest.json": "591accc441c05aaaa9292fef8a9702dfe37e72b836ebc376fe314adf00cd583b",
     "scripts/build-ui.mjs": "1e6e3a91c4907156f3adf905e2752b188f524395ec7cc130f7879c0f077d976e",
     "ui/NativeKnowledgeHistory.tsx": "70640e035c4cdf544cc6e4245af6155ab56b0adebb5cc0481be939c6831adf5b",
     "ui/NativeKnowledgeModelReview.tsx": "95771a5c62322e75828b74f3b98804f1097296beaa2092f898350f68e585ece3",
