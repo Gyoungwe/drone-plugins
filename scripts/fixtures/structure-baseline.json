@@ -5,7 +5,6 @@
 	"file-lines\tpackages/pi-core/src/task-runtime/workbench-adapter.mjs": 802,
 	"file-lines\tpackages/pi-core/src/task-runtime/workbench.mjs": 1346,
 	"file-lines\tpackages/pi-core/test/task-runtime/task-consent.test.mjs": 592,
-	"file-lines\tpackages/pi-core/test/task-runtime/task-managed-adapter.test.mjs": 509,
 	"file-lines\tpackages/pi-core/test/task-runtime/task-workbench.test.mjs": 492,
 	"file-lines\tpackages/pi-discovery/src/domain/evaluation.ts": 426,
 	"file-lines\tpackages/pi-discovery/src/domain/kernel.ts": 573,
