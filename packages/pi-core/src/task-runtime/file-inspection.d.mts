@@ -14,6 +14,9 @@ export function inspectTaskBytes(
 	bytes: Buffer,
 	descriptor: TaskFileDescriptor,
 	expected?: TaskFileExpectation,
+	options?: {
+		readonly readPdfText?: (bytes: Buffer) => Promise<{ text: string; pages: number; partial: boolean }>;
+	},
 ): Promise<
 	TaskFileDescriptor & {
 		bytes: number;
