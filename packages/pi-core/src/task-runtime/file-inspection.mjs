@@ -5,8 +5,14 @@ const error = (code, message) => Object.assign(new Error(message), { code });
 
 /** Pure acceptance algorithm. The adapter supplies bytes and its actual scope/version descriptor.
  * Native Pi reads the bounded file itself; managed adapters must obtain a stable approved snapshot.
+ * `readPdfText` returns the first pages' text; managed adapters pass the host's isolated parser.
  */
-export async function inspectTaskBytes(bytes, descriptor, expected = {}) {
+export async function inspectTaskBytes(
+	bytes,
+	descriptor,
+	expected = {},
+	{ readPdfText = readPdfIdentity } = {},
+) {
 	const identity = {
 		path: descriptor.path,
 		absolutePath: descriptor.absolutePath,
@@ -22,7 +28,7 @@ export async function inspectTaskBytes(bytes, descriptor, expected = {}) {
 			throw error("not-pdf", "Not a PDF: HTML landing pages and renamed downloads are not accepted.");
 		identity.kind = "pdf";
 		if (expected.doi || expected.title) {
-			const found = await readPdfIdentity(bytes);
+			const found = await readPdfText(bytes);
 			const normalize = (value) =>
 				String(value || "")
 					.toLowerCase()

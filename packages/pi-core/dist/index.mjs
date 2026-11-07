@@ -882,7 +882,7 @@ async function readPdfIdentity(bytes) {
 
 // src/task-runtime/file-inspection.mjs
 var error2 = (code, message) => Object.assign(new Error(message), { code });
-async function inspectTaskBytes(bytes, descriptor, expected = {}) {
+async function inspectTaskBytes(bytes, descriptor, expected = {}, { readPdfText = readPdfIdentity } = {}) {
   const identity = {
     path: descriptor.path,
     absolutePath: descriptor.absolutePath,
@@ -898,7 +898,7 @@ async function inspectTaskBytes(bytes, descriptor, expected = {}) {
       throw error2("not-pdf", "Not a PDF: HTML landing pages and renamed downloads are not accepted.");
     identity.kind = "pdf";
     if (expected.doi || expected.title) {
-      const found = await readPdfIdentity(bytes);
+      const found = await readPdfText(bytes);
       const normalize = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]/g, "");
       const doi = String(expected.doi || "").toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "");
       const title = normalize(expected.title);

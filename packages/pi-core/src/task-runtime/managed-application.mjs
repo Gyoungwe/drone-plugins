@@ -64,6 +64,8 @@ function managedPorts(call, cache) {
 			read.bytes,
 			{ path: read.workspacePath, absolutePath: read.path, rootKind: "workspace" },
 			expected,
+			// No worker threads in the managed process: the host parses the PDF in its own sandbox.
+			{ readPdfText: (pdf) => call("document.pdfText", { base64: pdf.toString("base64") }, ctx?.signal) },
 		);
 		return { ...artifact, path: isAbsolute(path) ? read.path : read.workspacePath };
 	};
