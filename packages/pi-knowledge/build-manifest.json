@@ -78,6 +78,7 @@
 		"src/core/worker.ts": "d1d1a8ca8a60aae29e93c324df4c4fdd60f3690d4dc618463287349e695e51d7",
 		"src/core/writer-lease-group.ts": "fcdc8b778198830217435c57d1e1ff2326669f10f2654c1c8d79f9c7f43a21e4",
 		"src/core/writer-lease.ts": "abb723298994aebe779d25552f1b77c3da8d55902ae562a51702179eb09917cb",
+		"src/desktop/binding-service.ts": "1af95bf5ad7939e40b6d1d22667c15d398d57fcec9c639ea8f71fd8b042b2c7c",
 		"src/desktop/contract.ts": "810834beaabe91bb9bc873937e487e61dafb303293501a0f8e7508324409ba2a",
 		"src/desktop/index-resource.ts": "49abef7646b5bc3112f8e4c343ab066dd7352c3b12ad9c23b73b824a699a300a",
 		"src/desktop/model-review.ts": "0a7408c391adb95bc5fede3014c1199d9b6a5f0cb11fbd4dd6398cb5ea72d180",
@@ -88,7 +89,7 @@
 		"src/desktop/recovery-migration.ts": "c6afebcc2bae2bd6218c7c2c67ada395fe1a80d298609d5611daff1cdc2c9177",
 		"src/desktop/review-storage.ts": "4fe9cda93abed96580f40243afb0f75d1808aff34eb84137bfe5ef5d9e7b1844",
 		"src/desktop/reviews.ts": "dbfad852f58bc0dcb3af232c03d1ba0758c25482a365a6f5958756deb41b422b",
-		"src/desktop/runtime.ts": "7eff54bc76a6dd2a66c7cf5394cdb61d61234028ac0be185cdbcf532f8750457",
+		"src/desktop/runtime.ts": "3164e1737bc79b2b1f5a646d73fb0cc6df0c5005f541857140cbbf9bad6a5873",
 		"src/desktop/semantic-preferences.ts": "8d4eb9df5bad2e2917ccae4267eaa386eb8ff34f6b014498f9625d95ba3bc273",
 		"src/desktop/semantic-settings.ts": "36cc7d8b6974d4eba8bf3bc8181be8cb0caed3e897b354d6618700e5f751b0b9",
 		"src/desktop/service-transport.ts": "c703e92aaf086c674358ded26453b1034fcdd00718f8fa278d1edce938892200",
@@ -111,12 +112,12 @@
 		"dist/index.mjs": "e2408d31be9ffd5afd080c210d37543986e3cf08dad5e6baa8a7c9bfa9de4621",
 		"dist/host.mjs": "754b8a399c006b2a6483dbf000408768021cb47c8ed0bfabd7263514581e1ee4",
 		"dist/host.d.ts": "fb78750585e1ad9c438741f6cfd689cc709c1d30bb86b07109a5fd487882b115",
-		"dist/desktop-runtime.mjs": "a91fcfd8189879c0fc1935dcf9dd6fabc186876eb3bfdcebfbdd84336e996ae3",
+		"dist/desktop-runtime.mjs": "8f8a25acbbaed950a4b3eec62f224f83e713affc273f80461bfceb2e04550dee",
 		"lib/knowledge/runtime/desktop-index.mjs": "87225858bd27bd5a038723ee29eca421cd9f05fb1764e3984d8a28df84f73ba0",
 		"lib/knowledge/runtime/worker.mjs": "eb524114e9a1ac23c8049ba66e52f55fc24ca6565d83410d2acab801da5a89d8",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "1bcd42fe9ab581217911ae7adf7cb8872cae330245411b82df738bf79334c348",
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "d070e619c5f23f4a569ab7cfd3ea60052349a5f9a6a946f23f7b6978aee919a4",
 		"ui/bundle.js": "bc470a92cf93463a83cb5c6216b800cb23f6134182abbd68d8fc5262c506725c",
-		"ui/build-manifest.json": "5779c5d3991a1d3a6e623becc562340a1419b6a5348aba47b13c26dc8c9a7198"
+		"ui/build-manifest.json": "54c81616a43c15c1c173c5e34e9dde1bf735ac0691e00b75355b99087054991d"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",

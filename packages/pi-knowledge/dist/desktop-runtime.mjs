@@ -18155,6 +18155,33 @@ function createManagedNativeSession(owner, composition) {
   return composeNativeSession(owner, composition);
 }
 
+// src/desktop/binding-service.ts
+function bindingOperation(read) {
+  return {
+    inputSchema: { type: "null" },
+    resultSchema: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          properties: {
+            vaultId: { type: "string", pattern: "^[a-f0-9]{24}$" },
+            revision: { type: "integer", minimum: 1 },
+            vault: { type: "string" }
+          },
+          required: ["vaultId", "revision", "vault"],
+          additionalProperties: false
+        }
+      ]
+    },
+    effect: "read",
+    execute: async () => {
+      const binding = await read();
+      return binding && { vaultId: binding.vaultId, revision: binding.revision, vault: binding.vault };
+    }
+  };
+}
+
 // src/desktop/contract.ts
 var string = { type: "string" };
 var integer = { type: "integer", minimum: 0 };
@@ -19873,6 +19900,7 @@ function createBrokerTopicMemoryStorage(io) {
 }
 
 // src/desktop/runtime.ts
+var callerProject = (call) => projectFor(call.capabilities, call.scope.kind === "application" ? null : call.scope.workspaceDirectory);
 async function projectFor(capabilities, workspace) {
   if (workspace === null) return null;
   const { handle } = await capabilities.call("roots.resolve", {
@@ -20032,18 +20060,12 @@ var createDesktopRuntime = async (context) => {
   );
   return {
     operations: {
+      binding: bindingOperation(readKnowledgeBinding2),
       modelReviewInfo: {
         inputSchema: modelReviewInfoInputSchema,
         resultSchema: modelReviewInfoResultSchema,
         effect: "read",
-        execute: async (input, call) => modelReviews.info(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          ),
-          call
-        )
+        execute: async (input, call) => modelReviews.info(input, await callerProject(call), call)
       },
       modelReview: {
         inputSchema: modelReviewInputSchema,
@@ -20052,10 +20074,7 @@ var createDesktopRuntime = async (context) => {
         execute: async (input, call) => {
           const result2 = await modelReviews.review(
             input,
-            await projectFor(
-              call.capabilities,
-              call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-            ),
+            await callerProject(call),
             call
           );
           context.events.changed();
@@ -20066,25 +20085,13 @@ var createDesktopRuntime = async (context) => {
         inputSchema: reviewHistoryInputSchema,
         resultSchema: reviewHistoryResultSchema,
         effect: "read",
-        execute: async (input, call) => reviews.history(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (input, call) => reviews.history(input, await callerProject(call))
       },
       undoReview: {
         inputSchema: undoReviewInputSchema,
         resultSchema: undoReviewResultSchema,
         effect: "write",
-        execute: async (input, call) => reviews.undoReview(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (input, call) => reviews.undoReview(input, await callerProject(call))
       },
       semanticSettings: {
         inputSchema: semanticPreferencesInputSchema,
@@ -20106,25 +20113,13 @@ var createDesktopRuntime = async (context) => {
         inputSchema: reviewsInputSchema,
         resultSchema: reviewsResultSchema,
         effect: "read",
-        execute: async (input, call) => reviews.reviews(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (input, call) => reviews.reviews(input, await callerProject(call))
       },
       previewReview: {
         inputSchema: previewReviewInputSchema,
         resultSchema: previewReviewResultSchema,
         effect: "read",
-        execute: async (input, call) => reviews.previewReview(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (input, call) => reviews.previewReview(input, await callerProject(call))
       },
       rejectReview: {
         inputSchema: rejectReviewInputSchema,
@@ -20133,10 +20128,7 @@ var createDesktopRuntime = async (context) => {
         execute: async (input, call) => {
           const result2 = await reviews.rejectReview(
             input,
-            await projectFor(
-              call.capabilities,
-              call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-            )
+            await callerProject(call)
           );
           context.events.changed();
           return result2;
@@ -20149,10 +20141,7 @@ var createDesktopRuntime = async (context) => {
         execute: async (input, call) => {
           const result2 = await reviews.applyReview(
             input,
-            await projectFor(
-              call.capabilities,
-              call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-            )
+            await callerProject(call)
           );
           context.events.changed();
           return result2;
@@ -20178,84 +20167,43 @@ var createDesktopRuntime = async (context) => {
         inputSchema: overviewInputSchema,
         resultSchema: overviewResultSchema,
         effect: "read",
-        execute: async (_input, call) => reads.overview(
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (_input, call) => reads.overview(await callerProject(call))
       },
       search: {
         inputSchema: searchInputSchema,
         resultSchema: searchResultSchema,
         effect: "read",
-        execute: async (input, call) => reads.search(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (input, call) => reads.search(input, await callerProject(call))
       },
       readNote: {
         inputSchema: readNoteInputSchema,
         resultSchema: readNoteResultSchema,
         effect: "read",
-        execute: async (input, call) => reads.readNote(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (input, call) => reads.readNote(input, await callerProject(call))
       },
       links: {
         inputSchema: linksInputSchema,
         resultSchema: linksResultSchema,
         effect: "read",
-        execute: async (input, call) => reads.links(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (input, call) => reads.links(input, await callerProject(call))
       },
       graph: {
         inputSchema: graphInputSchema,
         resultSchema: graphResultSchema,
         effect: "read",
-        execute: async (input, call) => reads.graph(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (input, call) => reads.graph(input, await callerProject(call))
       },
       jobs: {
         inputSchema: jobsInputSchema,
         resultSchema: jobsResultSchema,
         effect: "read",
-        execute: async (input, call) => reads.jobs(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (input, call) => reads.jobs(input, await callerProject(call))
       },
       recentByCategory: {
         inputSchema: recentByCategoryInputSchema,
         resultSchema: recentByCategoryResultSchema,
         effect: "read",
-        execute: async (input, call) => reads.recentByCategory(
-          input,
-          await projectFor(
-            call.capabilities,
-            call.scope.kind === "application" ? null : call.scope.workspaceDirectory
-          )
-        )
+        execute: async (input, call) => reads.recentByCategory(input, await callerProject(call))
       }
     },
     createNativeSession: async (facts) => {
