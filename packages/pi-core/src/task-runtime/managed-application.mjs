@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { createTaskApplicationState } from "./application-state.mjs";
 import { inspectTaskBytes } from "./file-inspection.mjs";
 import { createRemoteAcceptance } from "./remote-acceptance.mjs";
@@ -51,23 +51,61 @@ function managedPorts(call, cache) {
 		const read = await call("workspace.readFile", { path }, ctx?.signal);
 		return { ...read, bytes: Buffer.from(read.base64, "base64") };
 	};
+	// The knowledge plugin's knowledge.binding service names the bound Vault; no plugin installed is no binding.
+	const readKnowledgeBinding = async (signal) => {
+		const found = await call("provider.inspect", { alias: "knowledge" }, signal);
+		if (found.state !== "available") return null;
+		return call("provider.read", { alias: "knowledge", operation: "binding", input: null }, signal);
+	};
+	const within = (root, path) => {
+		const rel = relative(root, path);
+		return rel && !isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`) ? rel : null;
+	};
+	const privatePath = (rel) =>
+		rel.split(/[\\/]/).some((part) => part.startsWith(".") || PRIVATE_SEGMENT.test(part));
+	const inspectBytes = (ctx, read, descriptor, expected) =>
+		inspectTaskBytes(read.bytes, descriptor, expected, {
+			// No worker threads in the managed process: the host parses the PDF in its own sandbox.
+			readPdfText: (pdf) => call("document.pdfText", { base64: pdf.toString("base64") }, ctx?.signal),
+		});
 	const inspectWorkspace = async (ctx, cwd, path, expected = {}) => {
 		if (expected.rootKind === "vault")
 			throw new Error("Vault file acceptance requires a current knowledge binding.");
 		const read = await readFile(ctx, resolve(cwd, path));
-		if (
-			!read.workspacePath ||
-			read.workspacePath.split("/").some((part) => part.startsWith(".") || PRIVATE_SEGMENT.test(part))
-		)
+		if (!read.workspacePath || privatePath(read.workspacePath))
 			throw fileError("file-scope", "Choose an explicit non-private file within this task workspace.");
-		const artifact = await inspectTaskBytes(
-			read.bytes,
+		const artifact = await inspectBytes(
+			ctx,
+			read,
 			{ path: read.workspacePath, absolutePath: read.path, rootKind: "workspace" },
 			expected,
-			// No worker threads in the managed process: the host parses the PDF in its own sandbox.
-			{ readPdfText: (pdf) => call("document.pdfText", { base64: pdf.toString("base64") }, ctx?.signal) },
 		);
 		return { ...artifact, path: isAbsolute(path) ? read.path : read.workspacePath };
+	};
+	/** As the native adapter: the task's binding must still hold; Vault files resolve against the bound Vault. */
+	const inspect = async (ctx, cwd, path, expected = {}, { journal }) => {
+		const binding = await readKnowledgeBinding(ctx?.signal);
+		const declared = journal.snapshot()?.binding;
+		if (
+			journal.snapshot()?.reason === "binding-changed" ||
+			(declared !== undefined && declared !== (binding ? `${binding.vaultId}:${binding.revision}` : null))
+		)
+			throw new Error("Knowledge binding changed; reconcile the original task scope first.");
+		if (expected.rootKind !== "vault") return inspectWorkspace(ctx, cwd, path, expected);
+		if (!binding) throw new Error("Vault file acceptance requires a current knowledge binding.");
+		// The host reads under the session's current read permissions and returns the real path.
+		const read = await readFile(ctx, resolve(binding.vault, path));
+		const rel = within(binding.vault, read.path);
+		if (!rel || privatePath(rel))
+			throw fileError("file-scope", "Vault artifact must remain inside the bound Vault.");
+		const vaultPath = rel.split(sep).join("/");
+		const artifact = await inspectBytes(
+			ctx,
+			read,
+			{ path: vaultPath, absolutePath: read.path, rootKind: "vault" },
+			expected,
+		);
+		return { ...artifact, path: vaultPath };
 	};
 	const refreshTools = async (signal) => {
 		cache.tools = new Map(
@@ -95,8 +133,7 @@ function managedPorts(call, cache) {
 	};
 	return {
 		acceptance,
-		// Knowledge-bound (Vault) acceptance needs the knowledge service; not wired yet.
-		readKnowledgeBinding: async () => null,
+		readKnowledgeBinding: () => readKnowledgeBinding(),
 		readOnlyHint: (name) => cache.tools.get(name),
 		storage,
 		persist: async (ctx, record, signal) => {
@@ -190,7 +227,7 @@ function managedPorts(call, cache) {
 		},
 		// Reads are decided by the host's current permission policy inside workspace.readFile.
 		authorizeRead: async () => {},
-		inspect: (ctx, cwd, path, expected) => inspectWorkspace(ctx, cwd, path, expected),
+		inspect,
 		evidenceFiles: {
 			inspect: (cwd, path, expected) => inspectWorkspace(undefined, cwd, path, expected),
 			readText: async (path) => (await readFile(undefined, path)).bytes.toString("utf8"),

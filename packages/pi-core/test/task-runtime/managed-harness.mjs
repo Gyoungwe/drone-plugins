@@ -51,6 +51,13 @@ export async function harness({
 		"provider.enumerate": ({ role }) => {
 			throw new Error(`Undeclared provider role: ${role}`);
 		},
+		// No knowledge plugin installed: the declared knowledge.binding service is absent.
+		"provider.inspect": () => ({
+			state: "absent",
+			service: "knowledge.binding",
+			requestedVersion: 1,
+			provider: null,
+		}),
 		"session.records.read": () => ({
 			mode: "persistent",
 			state: "durable",
@@ -105,11 +112,13 @@ export async function harness({
 			host.continues.push(input);
 			return { continuationId: `c${host.continues.length}`, remaining: 3 - host.continues.length };
 		},
-		"workspace.readFile": async ({ path }) => {
+		"workspace.readFile": async ({ path: requested }) => {
+			const path = await realpath(requested);
 			const bytes = await readFile(path);
+			const inside = relative(cwd, path);
 			return {
 				path,
-				workspacePath: relative(cwd, path).split("\\").join("/"),
+				workspacePath: inside.startsWith("..") ? null : inside.split("\\").join("/"),
 				base64: bytes.toString("base64"),
 				sha256: "0".repeat(64),
 				bytes: bytes.length,
