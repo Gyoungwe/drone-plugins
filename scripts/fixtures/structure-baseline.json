@@ -34,7 +34,7 @@
 	"file-lines\tpackages/pi-knowledge/src/core/ui-state.ts": 490,
 	"file-lines\tpackages/pi-knowledge/src/core/wiki-review.ts": 522,
 	"file-lines\tpackages/pi-knowledge/src/desktop/contract.ts": 833,
-	"file-lines\tpackages/pi-knowledge/src/desktop/runtime.ts": 602,
+	"file-lines\tpackages/pi-knowledge/src/desktop/runtime.ts": 527,
 	"file-lines\tpackages/pi-knowledge/src/extension/internal-knowledge-extension.ts": 1718,
 	"file-lines\tpackages/pi-knowledge/test/desktop-review-owner.integration.test.ts": 486,
 	"file-lines\tpackages/pi-knowledge/ui/knowledge/copy.ts": 1123,
