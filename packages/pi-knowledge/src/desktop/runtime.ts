@@ -17,6 +17,7 @@ import { createKnowledgeUi } from "../core/ui-state.js";
 import { createKnowledgeModelReview } from "../core/wiki-model-review.js";
 import { createKnowledgeWikiReview } from "../core/wiki-review.js";
 import { createManagedNativeSession } from "../extension/knowledge-extension.js";
+import { bindingOperation } from "./binding-service.js";
 import {
 	applyReviewInputSchema,
 	applyReviewResultSchema,
@@ -264,6 +265,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	);
 	return {
 		operations: {
+			binding: bindingOperation(readKnowledgeBinding),
 			modelReviewInfo: {
 				inputSchema: modelReviewInfoInputSchema,
 				resultSchema: modelReviewInfoResultSchema,
