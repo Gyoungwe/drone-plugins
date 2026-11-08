@@ -200,6 +200,21 @@ function validateNativeChildSessions(packageName, manifest, failures) {
 		failure(failures, packageName, "drone.nativeChildSessions requires desktopRuntime ownership");
 }
 
+/** Host-issued task authorization and session-scoped workspace reads are managed-owner declarations. */
+function validateManagedReads(packageName, manifest, failures) {
+	for (const [key, expected] of [
+		["taskGrants", "request"],
+		["workspaceRead", "session"],
+	]) {
+		const declared = manifest.drone?.[key];
+		if (declared === undefined) continue;
+		if (declared !== expected)
+			failure(failures, packageName, `drone.${key} must be "${expected}" when declared`);
+		if (!manifest.entrypoints?.desktopRuntime)
+			failure(failures, packageName, `drone.${key} requires desktopRuntime ownership`);
+	}
+}
+
 function validateNetworkReads(packageName, manifest, failures) {
 	const reads = manifest.drone?.networkReads;
 	if (reads === undefined) return;
@@ -341,6 +356,7 @@ export function validatePackageManifest(packageJson, manifest, packageRoot) {
 	validateServices(packageName, manifest, failures);
 	validateRecordAdoptions(packageName, packageJson.version, manifest, failures);
 	validateNativeChildSessions(packageName, manifest, failures);
+	validateManagedReads(packageName, manifest, failures);
 	validateNetworkReads(packageName, manifest, failures);
 	const droneDependencies = Object.keys(packageJson.dependencies ?? {}).filter((name) =>
 		name.startsWith("@gyoungwe/"),

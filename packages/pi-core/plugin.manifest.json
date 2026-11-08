@@ -9,10 +9,25 @@
 	},
 	"drone": {
 		"pluginApi": 1,
-		"resultContract": "drone-result/v3"
+		"resultContract": "drone-result/v3",
+		"taskGrants": "request",
+		"workspaceRead": "session",
+		"requires": {
+			"knowledge": {
+				"service": "knowledge.binding",
+				"version": 1
+			}
+		},
+		"consumes": {
+			"acceptance": {
+				"servicePrefix": "task.acceptance:",
+				"version": 1
+			}
+		}
 	},
 	"entrypoints": {
 		"extension": "./dist/index.mjs",
+		"desktopRuntime": "./dist/managed-runtime.mjs",
 		"host": "./dist/host.mjs",
 		"ui": "./ui/plugin.json"
 	},
