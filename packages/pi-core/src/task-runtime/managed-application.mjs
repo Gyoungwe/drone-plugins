@@ -39,13 +39,14 @@ const EVENT_EFFECTS = Object.fromEntries(
 		"tool_execution_end",
 		"agent_end",
 		"agent_settled",
+		"drone:context-evicted",
 	].map((name) => [name, READ]),
 );
 const PRIVATE_SEGMENT = /^(?:auth|credentials|secrets?|tokens?|password)(?:\.|$)/i;
 const fileError = (code, message) => Object.assign(new Error(message), { code });
 
 /** Host capabilities as the workbench adapter's ports (Drone Desktop managed runtime). */
-function managedPorts(call, cache) {
+function managedPorts(call, cache, on) {
 	const acceptance = createRemoteAcceptance(call);
 	const readFile = async (ctx, path) => {
 		const read = await call("workspace.readFile", { path }, ctx?.signal);
@@ -157,8 +158,12 @@ function managedPorts(call, cache) {
 		select: (ctx, text, options, signal) => question("session.select", { title: text, options }, signal),
 		input: (ctx, title, placeholder, signal) => question("session.input", { title, placeholder }, signal),
 		idle: async (ctx) => !(await call("session.inspect", null, ctx?.signal)).agentActive,
-		// Host capability checkpoints are host records, not visible to a plugin.
-		capabilities: async () => [],
+		capabilities: (ctx) => call("session.capabilities", null, ctx?.signal),
+		// The host forwards this session's context evictions; its other in-process events have no managed form.
+		onHostEvent: (name, handler) => (name === "drone:context-evicted" ? on(name, handler) : undefined),
+		// The host files the record under this plugin, in the caller's project, at its own time.
+		decision: ({ id, kind, summary, basis }) =>
+			call("session.decision.record", { id, kind, summary: summary.slice(0, 2000), basis }),
 		inlineHandoff: true,
 		continueTask: async (ctx, { taskId, prompt }) =>
 			(await call("task.continue", { taskId, prompt }, ctx?.signal)).continuationId,
@@ -360,7 +365,9 @@ export function createManagedTaskApplication(context) {
 				};
 				bindRuntime(facade, runtime);
 				withRuntime(runtime, () => {
-					const journal = registerWorkbenchAdapter(facade, managedPorts(call, cache), { application });
+					const journal = registerWorkbenchAdapter(facade, managedPorts(call, cache, facade.on), {
+						application,
+					});
 					entry = { journal, runtime };
 					journals.add(entry);
 				});
