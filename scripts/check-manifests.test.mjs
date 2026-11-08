@@ -300,3 +300,19 @@ test("rejects child session support that is writable or has no managed owner", (
 		/requires desktopRuntime ownership/,
 	);
 });
+test("task grants and session workspace reads are exact managed-owner declarations", () => {
+	const owned = { ...valid, entrypoints: { ...valid.entrypoints, desktopRuntime: "./dist/index.mjs" } };
+	const drone = { ...valid.drone, taskGrants: "request", workspaceRead: "session" };
+	assert.equal(errors({ ...owned, drone }), "");
+	assert.match(
+		errors({ ...owned, drone: { ...drone, taskGrants: "always" } }),
+		/drone.taskGrants must be "request"/,
+	);
+	assert.match(
+		errors({ ...owned, drone: { ...drone, workspaceRead: "any" } }),
+		/drone.workspaceRead must be "session"/,
+	);
+	const unowned = errors({ ...valid, drone });
+	assert.match(unowned, /drone.taskGrants requires desktopRuntime ownership/);
+	assert.match(unowned, /drone.workspaceRead requires desktopRuntime ownership/);
+});

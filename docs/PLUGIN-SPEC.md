@@ -106,6 +106,9 @@ packages/<name>/
 | `drone.recordAdoptions` | 临时 API 1.3 候选：`{logicalType:{legacyType,fromVersions:[精确稳定版本],removeBeforeVersion:删除版本}}`；须有 `desktopRuntime`，到删除版本清单即不合格 |
 | `drone.nativeChildSessions` | 只接受 `"read-only"`，须有 `desktopRuntime`。声明后宿主才把本包 native 入口加载进子代理子会话，并以 `{kind:"child",readOnly:true,files:"none"\|"read"}` 调用 `createNativeSession`；`files` 只是宿主事实，不授根或权限，插件须据此只注册只读能力。未声明的包不进入子会话 |
 | `drone.networkReads` | 可选：`["主机[:端口]/路径"]`，列出只读的 POST 接口（例如 Zotero connector 的 `ping`）。主机必须已在 `permissions.network` 声明，须有 `desktopRuntime`。受管运行时里 POST 默认是写入、每次由宿主询问；列在这里的才能走 `network.read`。不列等于更严格，不会出错。受管运行时没有直接联网能力，`permissions.network` 的主机按 `主机[:端口]` 精确匹配，本机服务必须写端口 |
+| `drone.consumes` | API 1.3 候选：`{role:{servicePrefix:服务名前缀,version:正整数}}`；按前缀枚举所有已安装提供方（例如 `task.acceptance:` 验收器），须有 `desktopRuntime` |
+| `drone.taskGrants` | 只接受 `"request"`，须有 `desktopRuntime`。声明后插件可经 `task.grant.request` 请宿主为当前任务签发一次授权；授权只由宿主弹窗创建，插件返回值或 JSON 记录不能伪造 |
+| `drone.workspaceRead` | 只接受 `"session"`，须有 `desktopRuntime`。声明后宿主按当前会话的读权限提供工作区读取；此时 `permissions.filesystem` 里的 `workspace-read`/`workspace` 由会话满足，不再在启用时单独选择目录 |
 | `entrypoints` | 至少一项；每个路径必须存在，并且包含在 `files` 里。`host` 只供宿主组合根使用（§6.1） |
 | `capabilities` | 来自固定词表（§4.1）；不在词表内的值视为错误 |
 | `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
@@ -246,7 +249,7 @@ commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpo
 
 ### 候选 canonical task 数据服务（尚未登记生产清单）
 
-`pi-core` 的候选 `dist/managed-runtime.mjs` 复用同一 TaskSession/TaskController；生产清单尚未设置 desktopRuntime/provides。候选 `task.runtime@1` 数据操作为 status(null)、pause({reason})、advanceStage(null)、takeReport(null)；status 返回 `{snapshot,render,storage}`，其他操作 await 同一 actor，advanceStage 另返回真实 advanced，takeReport 另返回一次性的 report。snapshot 只投影任务/里程碑/预算/待处理操作的可展示字段，不输出 executionConsent、writeRoots、compute、planApproved 或 proof。
+`pi-core` 的 `dist/managed-runtime.mjs` 复用同一 TaskSession/TaskController；清单已设置 `entrypoints.desktopRuntime`、`drone.taskGrants: "request"`、`drone.workspaceRead: "session"`、`drone.requires.knowledge`（`knowledge.binding@1`）与 `drone.consumes.acceptance`（`task.acceptance:` 前缀），尚未声明 `provides`。原生 Pi 仍只使用 `entrypoints.extension`。候选 `task.runtime@1` 数据操作为 status(null)、pause({reason})、advanceStage(null)、takeReport(null)；status 返回 `{snapshot,render,storage}`，其他操作 await 同一 actor，advanceStage 另返回真实 advanced，takeReport 另返回一次性的 report。snapshot 只投影任务/里程碑/预算/待处理操作的可展示字段，不输出 executionConsent、writeRoots、compute、planApproved 或 proof。
 
 状态仅由实际 SDK native attachment 建立，app 无选定会话或该 SDK entry 未 attach 时明确不可用，不猜测焦点会话。own namespace/current branch 的 records 经过真实回读，memory/deferred 不伪装 durable，写失败/取消后的 needs-reopen 不能被 SDK reload 清掉。完整 native 工具、文件验收、一次实际任务授权、host-queued 自动续作和旧 startup 删除仍未完成；此数据切片不得作为完整插件切换或正式安装包 GUI 验收。
 
