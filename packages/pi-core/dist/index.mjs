@@ -3385,7 +3385,7 @@ ${remoteKinds.length ? `Acceptance kinds from installed plugins (task_plan accep
             return;
           }
           const authorizedTask = journal.view().tasks.find((task) => task.id === input.taskId);
-          ports.decision?.({
+          await ports.decision?.({
             id: `task-authorization:${input.taskId}:${input.revision}`,
             kind: "task-authorization",
             summary: authorizedTask?.authorizationSummary || authorizedTask?.goal || "Task authorization approved",
@@ -3420,7 +3420,7 @@ ${remoteKinds.length ? `Acceptance kinds from installed plugins (task_plan accep
             await send();
             if (accepted) {
               if (action?.kind === "rebind")
-                ports.decision?.({
+                await ports.decision?.({
                   id: `rebind:${input.taskId}:${input.actionId}`,
                   kind: "rebind",
                   summary: action.title || "Rebind approved",

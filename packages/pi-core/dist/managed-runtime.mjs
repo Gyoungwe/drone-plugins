@@ -3123,7 +3123,7 @@ ${remoteKinds.length ? `Acceptance kinds from installed plugins (task_plan accep
             return;
           }
           const authorizedTask = journal.view().tasks.find((task) => task.id === input.taskId);
-          ports.decision?.({
+          await ports.decision?.({
             id: `task-authorization:${input.taskId}:${input.revision}`,
             kind: "task-authorization",
             summary: authorizedTask?.authorizationSummary || authorizedTask?.goal || "Task authorization approved",
@@ -3158,7 +3158,7 @@ ${remoteKinds.length ? `Acceptance kinds from installed plugins (task_plan accep
             await send();
             if (accepted) {
               if (action?.kind === "rebind")
-                ports.decision?.({
+                await ports.decision?.({
                   id: `rebind:${input.taskId}:${input.actionId}`,
                   kind: "rebind",
                   summary: action.title || "Rebind approved",
@@ -3228,12 +3228,13 @@ var EVENT_EFFECTS = Object.fromEntries(
     "tool_result",
     "tool_execution_end",
     "agent_end",
-    "agent_settled"
+    "agent_settled",
+    "drone:context-evicted"
   ].map((name) => [name, READ])
 );
 var PRIVATE_SEGMENT = /^(?:auth|credentials|secrets?|tokens?|password)(?:\.|$)/i;
 var fileError = (code, message) => Object.assign(new Error(message), { code });
-function managedPorts(call, cache) {
+function managedPorts(call, cache, on) {
   const acceptance = createRemoteAcceptance(call);
   const readFile = async (ctx, path) => {
     const read = await call("workspace.readFile", { path }, ctx?.signal);
@@ -3337,8 +3338,11 @@ function managedPorts(call, cache) {
     select: (ctx, text2, options, signal) => question("session.select", { title: text2, options }, signal),
     input: (ctx, title, placeholder, signal) => question("session.input", { title, placeholder }, signal),
     idle: async (ctx) => !(await call("session.inspect", null, ctx?.signal)).agentActive,
-    // Host capability checkpoints are host records, not visible to a plugin.
-    capabilities: async () => [],
+    capabilities: (ctx) => call("session.capabilities", null, ctx?.signal),
+    // The host forwards this session's context evictions; its other in-process events have no managed form.
+    onHostEvent: (name, handler) => name === "drone:context-evicted" ? on(name, handler) : void 0,
+    // The host files the record under this plugin, in the caller's project, at its own time.
+    decision: ({ id, kind, summary, basis }) => call("session.decision.record", { id, kind, summary: summary.slice(0, 2e3), basis }),
     inlineHandoff: true,
     continueTask: async (ctx, { taskId, prompt }) => (await call("task.continue", { taskId, prompt }, ctx?.signal)).continuationId,
     // Only the host creates plugin-continue messages, and only under this plugin's grant.
@@ -3522,7 +3526,9 @@ function createManagedTaskApplication(context) {
         };
         bindRuntime(facade, runtime);
         withRuntime(runtime, () => {
-          const journal = registerWorkbenchAdapter(facade, managedPorts(call, cache), { application });
+          const journal = registerWorkbenchAdapter(facade, managedPorts(call, cache, facade.on), {
+            application
+          });
           entry = { journal, runtime };
           journals.add(entry);
         });

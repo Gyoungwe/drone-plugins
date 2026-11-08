@@ -34,6 +34,8 @@ export async function harness({
 		grant: null,
 		denyGrant: false,
 		streaming: false,
+		checkpoint: [],
+		decisions: [],
 	};
 	// Invocations (hooks, tools) currently running; the host lends capabilities only to them.
 	let live = 0;
@@ -85,6 +87,11 @@ export async function harness({
 			if (!live) throw new Error("Plugin capability caller completed");
 			host.notices.push(input);
 			return { durability: "durable" };
+		},
+		"session.capabilities": () => [...host.checkpoint],
+		"session.decision.record": (input) => {
+			host.decisions.push(input);
+			return null;
 		},
 		"session.inspect": () => ({ agentActive: host.streaming, projectTrusted: true, readOnly: false }),
 		"session.select": ({ title, options }) => {

@@ -137,6 +137,8 @@ managed native 新增 input、tool_call、turn_start、turn_end，复用 eventEf
 
 managed native 还可订阅 `agent_settled`：SDK 结束整次运行（含续作与重试）并清除流式状态后触发，返回值忽略。宿主在运行期间拒绝 `session.notify`（排队的会话消息会延长运行），所以受管插件的运行状态卡在运行中只暂存，到 `agent_settled` 再发；不能把拒绝当作存储失败。
 
+managed native 还可订阅宿主事件 `drone:context-evicted`（eventEffects 照常声明）：宿主只投递当前会话的淘汰事件，按已知字段重建为 `{sessionId, toolCallIds}`（最多 64 个字符串），上下文为该会话的实际 SDK ctx；其他进程内宿主事件（如 `drone:task-write-consent`）没有受管形式。`session.capabilities(null)` 是 read，返回实际分支上最新宿主能力检查点的能力 ID（最多 16 个，无检查点为空数组），不授予任何工具。`session.decision.record({id,kind,summary,basis})` 是 `approval: own` 的 write，`kind` 限 `task-authorization`/`rebind`/`zotero-write`；宿主把编号前缀为插件 ID，并填写调用会话的项目与当前时间后写入用户可撤销的决策日志，记录本身不产生任何授权。
+
 commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpoint，保存新 namespace 并真实持久化回读；原记录保留。hash 仅用于并发核对，不是授权/provenance token；已有 own-source checkpoint 后 inspect 不再暴露旧值。deferred/needs-reopen 不能称导入完成。迁移器必须按具体旧数据格式与真实 scope 验证，导入的 approved、roots、proof 等 JSON 不能变成 live 文件/模型/执行许可或科学验收 proof，必须重新获取当前真实授权与 opaque 执行回执。Core 目标支持 0.1.9/0.2.0 的旧全局检查点并在 0.3.0 前移除此临时声明，Knowledge 支持 0.2.0/0.2.1 并在 0.4.0 前移除；具体生产迁移器仍须单独验收，不能用通用端口 fixture 代替。
 
 宿主加载能力插件时，应把 manifest 的 `permissions` 传给
