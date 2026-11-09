@@ -86,7 +86,10 @@
 		],
 		"subprocess": ["uv", "uvx", "zotero-mcp", "sh", "curl", "powershell", "where.exe"],
 		"externalWrites": true,
-		"credentials": ["host-supplied Zotero environment or local API reference"],
+		"credentials": [
+			"host-kept Zotero Web API key (drone.credentials)",
+			"host-supplied Zotero environment or local API reference"
+		],
 		"externalSideEffects": [
 			"host-authorized Zotero item and attachment writes",
 			"host-authorized Zotero MCP and uv installation"
