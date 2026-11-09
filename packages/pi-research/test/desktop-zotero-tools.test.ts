@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import type { CapabilityCall } from "../src/desktop/capability-fetch.js";
 import createDesktopRuntime from "../src/desktop/runtime.js";
 import {
 	saveToZotero,
@@ -176,7 +177,7 @@ function webHost({ saved = true } = {}) {
 		headers: { "content-type": "application/json", ...headers },
 		base64: Buffer.from(JSON.stringify(value)).toString("base64"),
 	});
-	const call = async (name: string, input: any) => {
+	const call: CapabilityCall = async (name, request) => {
 		if (name === "credentials.status")
 			return {
 				slots: {
@@ -186,11 +187,20 @@ function webHost({ saved = true } = {}) {
 				},
 			};
 		if (!name.startsWith("network.")) throw new Error(`Plugin capability is unavailable: ${name}`);
+		const input = request as {
+			url: string;
+			method: string;
+			headers: Record<string, string>;
+			credential?: string;
+			summary?: string;
+		};
 		const url = new URL(input.url);
 		if (url.host === "127.0.0.1:23119") throw new Error("connect ECONNREFUSED 127.0.0.1:23119");
 		if (Object.keys(input.headers).some((header) => header.toLowerCase() === "zotero-api-key"))
 			throw new Error("Network header is reserved for the host: Zotero-API-Key");
-		const slot = manifest.drone.credentials.find((entry: any) => entry.slot === input.credential);
+		const slot = manifest.drone.credentials.find(
+			(entry: { slot: string; hosts: string[] }) => entry.slot === input.credential,
+		);
 		if (!slot?.hosts.includes(url.host)) throw new Error("Zotero rejects a request without a key");
 		if (name === "network.write") dialogs.push(input.summary);
 		sent.push(`${name === "network.write" ? "WRITE" : "read"} ${input.method} ${url.pathname}`);
