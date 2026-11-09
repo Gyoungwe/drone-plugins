@@ -106,6 +106,7 @@ packages/<name>/
 | `drone.recordAdoptions` | 临时 API 1.3 候选：`{logicalType:{legacyType,fromVersions:[精确稳定版本],removeBeforeVersion:删除版本}}`；须有 `desktopRuntime`，到删除版本清单即不合格 |
 | `drone.nativeChildSessions` | 只接受 `"read-only"`，须有 `desktopRuntime`。声明后宿主才把本包 native 入口加载进子代理子会话，并以 `{kind:"child",readOnly:true,files:"none"\|"read"}` 调用 `createNativeSession`；`files` 只是宿主事实，不授根或权限，插件须据此只注册只读能力。未声明的包不进入子会话 |
 | `drone.networkReads` | 可选：`["主机[:端口]/路径"]`，列出只读的 POST 接口（例如 Zotero connector 的 `ping`）。主机必须已在 `permissions.network` 声明，须有 `desktopRuntime`。受管运行时里 POST 默认是写入、每次由宿主询问；列在这里的才能走 `network.read`。不列等于更严格，不会出错。受管运行时没有直接联网能力，`permissions.network` 的主机按 `主机[:端口]` 精确匹配，本机服务必须写端口 |
+| `drone.credentials` | 可选：`[{ slot, label: { zh, en }, hosts, header, fields }]`，声明宿主保管的密钥槽位（须有 `desktopRuntime`）。用户在 Drone 设置「UI 插件 → 插件凭据」填写；`network.*` 请求写 `credential: "<slot>"` 且目标主机在 `hosts`（`permissions.network` 的子集）内时，宿主附加 `header`，插件代码不能自设这个头，也读不到密钥。`fields` 是非机密参数（如库 ID），经 `credentials.status` 可读。槽位定义变了旧密钥失效；只改版本号保留 |
 | `drone.consumes` | API 1.3 候选：`{role:{servicePrefix:服务名前缀,version:正整数}}`；按前缀枚举所有已安装提供方（例如 `task.acceptance:` 验收器），须有 `desktopRuntime` |
 | `drone.taskGrants` | 只接受 `"request"`，须有 `desktopRuntime`。声明后插件可经 `task.grant.request` 请宿主为当前任务签发一次授权；授权只由宿主弹窗创建，插件返回值或 JSON 记录不能伪造 |
 | `drone.workspaceRead` | 只接受 `"session"`，须有 `desktopRuntime`。声明后宿主按当前会话的读权限提供工作区读取；此时 `permissions.filesystem` 里的 `workspace-read`/`workspace` 由会话满足，不再在启用时单独选择目录 |

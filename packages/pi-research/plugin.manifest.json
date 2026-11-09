@@ -11,6 +11,15 @@
 		"pluginApi": 1,
 		"resultContract": "drone-result/v3",
 		"networkReads": ["127.0.0.1:23119/connector/ping", "127.0.0.1:23119/connector/getSelectedCollection"],
+		"credentials": [
+			{
+				"slot": "zotero-web",
+				"label": { "zh": "Zotero 网页 API 密钥", "en": "Zotero Web API key" },
+				"hosts": ["api.zotero.org"],
+				"header": "Zotero-API-Key",
+				"fields": ["libraryType", "libraryId"]
+			}
+		],
 		"provides": {
 			"task.acceptance:zotero_item": {
 				"version": 1,
@@ -56,7 +65,10 @@
 		],
 		"subprocess": ["uv", "uvx", "zotero-mcp", "sh", "curl", "powershell", "where.exe"],
 		"externalWrites": true,
-		"credentials": ["host-supplied Zotero environment or local API reference"],
+		"credentials": [
+			"host-kept Zotero Web API key (drone.credentials)",
+			"host-supplied Zotero environment or local API reference"
+		],
 		"externalSideEffects": [
 			"host-authorized Zotero item and attachment writes",
 			"host-authorized Zotero MCP and uv installation"

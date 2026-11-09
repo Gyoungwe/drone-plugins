@@ -13,6 +13,11 @@ export interface CapabilityFetchOptions {
 	readonly summary?: string;
 	/** A task grant allowance this write uses instead of the host's dialog (each is admitted once). */
 	readonly allowance?: string;
+	/**
+	 * A manifest `drone.credentials` slot. Toward its hosts the runtime's own copy of the header is dropped
+	 * and the slot is named instead, so the host attaches the secret the user saved in Drone settings.
+	 */
+	readonly credential?: { readonly slot: string; readonly header: string; readonly hosts: readonly string[] };
 }
 
 interface NetworkResult {
@@ -27,7 +32,7 @@ const NO_BODY = new Set([101, 204, 205, 304]);
 
 export function capabilityFetch(
 	call: CapabilityCall,
-	{ reads = [], summary, allowance }: CapabilityFetchOptions = {},
+	{ reads = [], summary, allowance, credential }: CapabilityFetchOptions = {},
 ): typeof fetch {
 	return async (input, init) => {
 		// Request normalizes every body type (string, URLSearchParams, Buffer) and its content type.
@@ -37,9 +42,10 @@ export function capabilityFetch(
 			READ_METHODS.has(request.method) ||
 			(request.method === "POST" && reads.includes(`${url.host}${url.pathname}`));
 		const body = READ_METHODS.has(request.method) ? undefined : Buffer.from(await request.arrayBuffer());
+		const slot = credential?.hosts.includes(url.host) ? credential : undefined;
 		const headers: Record<string, string> = {};
 		request.headers.forEach((value, name) => {
-			headers[name] = value;
+			if (name !== slot?.header.toLowerCase()) headers[name] = value;
 		});
 		const result = (await call(
 			read ? "network.read" : "network.write",
@@ -50,6 +56,7 @@ export function capabilityFetch(
 				...(body?.length ? { bodyBase64: body.toString("base64") } : {}),
 				...(!read && summary ? { summary } : {}),
 				...(!read && allowance ? { allowance } : {}),
+				...(slot ? { credential: slot.slot } : {}),
 			},
 			request.signal,
 		)) as NetworkResult;

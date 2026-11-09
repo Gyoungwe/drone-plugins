@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import type { CapabilityCall } from "../src/desktop/capability-fetch.js";
 import createDesktopRuntime from "../src/desktop/runtime.js";
 import {
 	saveToZotero,
@@ -160,4 +161,96 @@ it("a save inside a task authorization names the allowance it was given, on the 
 			.filter((entry) => String(entry).startsWith("network.read"))
 			.every((entry) => String(entry).endsWith(":-")),
 	).toBe(true);
+});
+
+/**
+ * Drone with a Web API key saved in settings and Zotero desktop closed. Like the real host it keeps the
+ * key: it refuses a request that sets the slot's header itself, and attaches the key only when the
+ * request names the slot toward one of its hosts.
+ */
+function webHost({ saved = true } = {}) {
+	const sent: string[] = [];
+	const dialogs: (string | undefined)[] = [];
+	let items: unknown[] = [];
+	const json = (value: unknown, status = 200, headers: Record<string, string> = {}) => ({
+		status,
+		headers: { "content-type": "application/json", ...headers },
+		base64: Buffer.from(JSON.stringify(value)).toString("base64"),
+	});
+	const call: CapabilityCall = async (name, request) => {
+		if (name === "credentials.status")
+			return {
+				slots: {
+					"zotero-web": saved
+						? { configured: true, fields: { libraryType: "users", libraryId: "42" } }
+						: { configured: false, fields: {} },
+				},
+			};
+		if (!name.startsWith("network.")) throw new Error(`Plugin capability is unavailable: ${name}`);
+		const input = request as {
+			url: string;
+			method: string;
+			headers: Record<string, string>;
+			credential?: string;
+			summary?: string;
+		};
+		const url = new URL(input.url);
+		if (url.host === "127.0.0.1:23119") throw new Error("connect ECONNREFUSED 127.0.0.1:23119");
+		if (Object.keys(input.headers).some((header) => header.toLowerCase() === "zotero-api-key"))
+			throw new Error("Network header is reserved for the host: Zotero-API-Key");
+		const slot = manifest.drone.credentials.find(
+			(entry: { slot: string; hosts: string[] }) => entry.slot === input.credential,
+		);
+		if (!slot?.hosts.includes(url.host)) throw new Error("Zotero rejects a request without a key");
+		if (name === "network.write") dialogs.push(input.summary);
+		sent.push(`${name === "network.write" ? "WRITE" : "read"} ${input.method} ${url.pathname}`);
+		if (url.pathname === "/keys/current")
+			return json({ userID: 42, username: "ada", access: { user: { library: true, write: true } } });
+		if (url.pathname === "/users/42/items" && input.method === "GET")
+			return json(items, 200, { "total-results": String(items.length) });
+		if (url.pathname === "/users/42/items" && input.method === "POST") {
+			items = [ITEM];
+			return json({ successful: { "0": ITEM }, failed: {} });
+		}
+		if (url.pathname.endsWith("/children")) return json([], 200, { "total-results": "0" });
+		if (url.pathname === `/users/42/items/${ITEM.key}`) return json(ITEM);
+		throw new Error(`Unexpected Zotero request ${input.method} ${url.pathname}`);
+	};
+	return { call, sent, dialogs };
+}
+
+describe("managed Zotero tools with the Web API key Drone keeps", () => {
+	it("saves through the Web API with one dialog while the key stays with the host", async () => {
+		const host = webHost();
+		const receipt = await saveToZotero(host.call, { doi: DOI, title: "Gut signatures" });
+		expect(receipt).toMatchObject({
+			status: "saved",
+			zoteroKey: "ABCD2345",
+			consent: { via: "host-dialog" },
+		});
+		expect(host.dialogs).toHaveLength(1);
+		expect(host.sent.filter((line) => line.startsWith("WRITE"))).toEqual(["WRITE POST /users/42/items"]);
+		expect(host.sent).toEqual([
+			"read GET /keys/current",
+			"read GET /users/42/items",
+			"WRITE POST /users/42/items",
+			"read GET /users/42/items",
+			"read GET /users/42/items/ABCD2345/children",
+		]);
+	});
+
+	it("reports the saved library and its write access, and stays blocked when nothing is saved", async () => {
+		expect(await zoteroStatus(webHost().call)).toMatchObject({
+			connector: { reachable: false },
+			webApi: { configured: true, libraryType: "users", libraryId: "42", write: true },
+		});
+		const empty = webHost({ saved: false });
+		expect(await zoteroStatus(empty.call)).toMatchObject({
+			webApi: { configured: false, reason: "not-saved-in-drone-settings" },
+		});
+		await expect(saveToZotero(empty.call, { doi: DOI, title: "Gut signatures" })).rejects.toThrow(
+			"No Zotero write channel",
+		);
+		expect(empty.sent).toEqual([]);
+	});
 });

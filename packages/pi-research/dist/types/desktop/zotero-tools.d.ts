@@ -6,6 +6,12 @@ import { type CapabilityCall } from "./capability-fetch.js";
  */
 /** Zotero desktop connector endpoints that only read. Must equal the manifest's `drone.networkReads`. */
 export declare const ZOTERO_NETWORK_READS: readonly string[];
+/** The manifest's `drone.credentials` slot: the host keeps the Web API key and attaches it toward these hosts. */
+export declare const ZOTERO_WEB_CREDENTIAL: Readonly<{
+    slot: "zotero-web";
+    header: "Zotero-API-Key";
+    hosts: readonly string[];
+}>;
 export declare function saveToZotero(call: CapabilityCall, params: Record<string, any>, signal?: AbortSignal): Promise<Record<string, any>>;
 export declare function updateInZotero(call: CapabilityCall, params: Record<string, any>, cwd: string, signal?: AbortSignal): Promise<{
     consent: {
@@ -68,6 +74,19 @@ export declare function zoteroStatus(call: CapabilityCall, signal?: AbortSignal)
     webApi: {
         configured: boolean;
         reason: string;
+    } | {
+        library: boolean;
+        write: boolean;
+        libraryType: string;
+        libraryId: string;
+        configured: boolean;
+        reason?: undefined;
+    } | {
+        error: string;
+        libraryType: string;
+        libraryId: string;
+        configured: boolean;
+        reason?: undefined;
     };
     localWrite: {
         configured: boolean;
