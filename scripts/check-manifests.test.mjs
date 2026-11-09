@@ -316,3 +316,31 @@ test("task grants and session workspace reads are exact managed-owner declaratio
 	assert.match(unowned, /drone.taskGrants requires desktopRuntime ownership/);
 	assert.match(unowned, /drone.workspaceRead requires desktopRuntime ownership/);
 });
+test("credential slots name declared hosts, a non-reserved header and need a managed owner", () => {
+	const slot = {
+		slot: "zotero-web",
+		label: { zh: "密钥", en: "Key" },
+		hosts: ["api.zotero.org"],
+		header: "Zotero-API-Key",
+		fields: ["libraryId"],
+	};
+	const owned = {
+		...valid,
+		entrypoints: { ...valid.entrypoints, desktopRuntime: "./dist/index.mjs" },
+		permissions: { ...valid.permissions, network: ["api.zotero.org"] },
+	};
+	const withSlots = (manifest, credentials) => ({ ...manifest, drone: { ...valid.drone, credentials } });
+	assert.equal(errors(withSlots(owned, [slot])), "");
+	for (const bad of [
+		[{ ...slot, hosts: ["evil.example.org"] }],
+		[{ ...slot, header: "Cookie" }],
+		[{ ...slot, label: { zh: "密钥" } }],
+		[slot, slot],
+		[],
+	])
+		assert.match(errors(withSlots(owned, bad)), /drone.credentials must list unique slots/);
+	assert.match(
+		errors(withSlots({ ...valid, permissions: owned.permissions }, [slot])),
+		/requires desktopRuntime/,
+	);
+});

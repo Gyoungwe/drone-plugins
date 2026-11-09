@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, normalize, resolve } from "node:path";
 import { isMainModule } from "./is-main-module.mjs";
+import { credentialFailures } from "./manifest-credentials.mjs";
 
 export const CAPABILITIES = new Set([
 	"knowledge",
@@ -358,6 +359,7 @@ export function validatePackageManifest(packageJson, manifest, packageRoot) {
 	validateNativeChildSessions(packageName, manifest, failures);
 	validateManagedReads(packageName, manifest, failures);
 	validateNetworkReads(packageName, manifest, failures);
+	for (const message of credentialFailures(manifest)) failure(failures, packageName, message);
 	const droneDependencies = Object.keys(packageJson.dependencies ?? {}).filter((name) =>
 		name.startsWith("@gyoungwe/"),
 	);

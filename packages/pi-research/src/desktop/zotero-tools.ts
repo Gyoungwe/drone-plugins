@@ -8,8 +8,10 @@ import {
 	probeZoteroConnector,
 	receiptWithoutUpdate,
 	receiptWithoutWrite,
+	webKeyAccess,
+	zoteroWebApiConfig,
 } from "../core/zotero-write-runtime.js";
-import { type CapabilityCall, capabilityFetch } from "./capability-fetch.js";
+import { type CapabilityCall, type CapabilityFetchOptions, capabilityFetch } from "./capability-fetch.js";
 
 /**
  * Zotero tools in the Drone Desktop managed runtime. Every request goes through the host's network
@@ -22,10 +24,36 @@ export const ZOTERO_NETWORK_READS = Object.freeze([
 	"127.0.0.1:23119/connector/ping",
 	"127.0.0.1:23119/connector/getSelectedCollection",
 ]);
-/** The managed runtime holds no Zotero credentials yet: Web API and Zotero 10 local writes stay blocked. */
-const NO_CREDENTIALS = Object.freeze({});
+/** The manifest's `drone.credentials` slot: the host keeps the Web API key and attaches it toward these hosts. */
+export const ZOTERO_WEB_CREDENTIAL = Object.freeze({
+	slot: "zotero-web",
+	header: "Zotero-API-Key",
+	hosts: Object.freeze(["api.zotero.org"]),
+});
+/** Stands in for the key in the runtime's Web API config; the host replaces the header with the saved key. */
+const HOST_ATTACHED_KEY = "attached-by-drone";
 const MANAGED_LIMITS =
-	"In Drone Desktop this tool has no Zotero credentials yet: saving goes through Zotero desktop (the connector) and is read back through its local API; the Web API and changing existing items are unavailable.";
+	"In Drone Desktop, saving goes through Zotero desktop (the connector) when it is running, otherwise through the Zotero Web API with the key the user saved in Drone Settings → UI plugins → Plugin credentials; Drone attaches the key, so never ask for it in chat. Changing an existing item needs that Web API key; Zotero 10 local writes are unavailable here.";
+
+const zoteroFetch = (call: CapabilityCall, options: CapabilityFetchOptions = {}) =>
+	capabilityFetch(call, { reads: ZOTERO_NETWORK_READS, credential: ZOTERO_WEB_CREDENTIAL, ...options });
+
+/** Web API settings from the host's credential status; the key itself never reaches this process. */
+async function webEnv(call: CapabilityCall, signal?: AbortSignal): Promise<Record<string, string>> {
+	let status: { slots?: Record<string, { configured: boolean; fields: Record<string, string> }> } | null;
+	try {
+		status = (await call("credentials.status", null, signal)) as typeof status;
+	} catch {
+		return {}; // a host without plugin credentials
+	}
+	const saved = status?.slots?.[ZOTERO_WEB_CREDENTIAL.slot];
+	if (!saved?.configured) return {};
+	return {
+		ZOTERO_API_KEY: HOST_ATTACHED_KEY,
+		ZOTERO_LIBRARY_TYPE: saved.fields.libraryType ?? "",
+		ZOTERO_LIBRARY_ID: saved.fields.libraryId ?? "",
+	};
+}
 
 const text = (value: unknown) => ({
 	content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
@@ -69,9 +97,10 @@ async function allowanceFor(
 }
 
 export async function saveToZotero(call: CapabilityCall, params: Record<string, any>, signal?: AbortSignal) {
+	const env = await webEnv(call, signal);
 	const plan = await prepareZoteroSave(params, {
-		fetchImpl: capabilityFetch(call, { reads: ZOTERO_NETWORK_READS }),
-		env: NO_CREDENTIALS,
+		fetchImpl: zoteroFetch(call),
+		env,
 		signal,
 	});
 	let receipt: Record<string, any>;
@@ -81,12 +110,11 @@ export async function saveToZotero(call: CapabilityCall, params: Record<string, 
 		const writes = observedWrites(call);
 		allowance = await allowanceFor(call, plan.doi, signal);
 		receipt = await executeZoteroSave(plan, {
-			fetchImpl: capabilityFetch(writes.call, {
-				reads: ZOTERO_NETWORK_READS,
+			fetchImpl: zoteroFetch(writes.call, {
 				summary: `写入 Zotero 文献库：《${plan.item.title}》（DOI ${plan.doi}）`,
 				allowance,
 			}),
-			env: NO_CREDENTIALS,
+			env,
 			signal,
 		});
 		if (writes.declinedBeforeAnyWrite())
@@ -107,20 +135,20 @@ export async function updateInZotero(
 	cwd: string,
 	signal?: AbortSignal,
 ) {
+	const env = await webEnv(call, signal);
 	const plan = await prepareZoteroUpdate(params, {
-		fetchImpl: capabilityFetch(call, { reads: ZOTERO_NETWORK_READS }),
-		env: NO_CREDENTIALS,
+		fetchImpl: zoteroFetch(call),
+		env,
 		cwd,
 		signal,
 	});
 	if (plan.action !== "update") return { ...receiptWithoutUpdate(plan), consent: { via: "not-needed" } };
 	const writes = observedWrites(call);
 	const receipt = await executeZoteroUpdate(plan, {
-		fetchImpl: capabilityFetch(writes.call, {
-			reads: ZOTERO_NETWORK_READS,
+		fetchImpl: zoteroFetch(writes.call, {
 			summary: `修改 Zotero 条目 ${plan.item.key}`,
 		}),
-		env: NO_CREDENTIALS,
+		env,
 		signal,
 	});
 	if (writes.declinedBeforeAnyWrite())
@@ -131,15 +159,28 @@ export async function updateInZotero(
 	return { ...receipt, consent: { via: "host-dialog" } };
 }
 
+/** Whether the saved Web API key works for its library and may write there; never the key. */
+async function webApiStatus(call: CapabilityCall, signal?: AbortSignal) {
+	const config = zoteroWebApiConfig(await webEnv(call, signal));
+	if (!config.configured) return { configured: false, reason: "not-saved-in-drone-settings" };
+	const library = { libraryType: config.libraryType, libraryId: config.libraryId };
+	try {
+		const access = await webKeyAccess({ fetchImpl: zoteroFetch(call), config, signal });
+		return { configured: true, ...library, library: access.library, write: access.write };
+	} catch (error) {
+		return { configured: true, ...library, error: (error as Error).message };
+	}
+}
+
 export async function zoteroStatus(call: CapabilityCall, signal?: AbortSignal) {
 	return {
 		runtime: "drone-desktop-managed",
 		connector: await probeZoteroConnector({
-			fetchImpl: capabilityFetch(call, { reads: ZOTERO_NETWORK_READS }),
+			fetchImpl: zoteroFetch(call),
 			signal,
 		}),
-		webApi: { configured: false, reason: "managed-runtime-has-no-credentials" },
-		localWrite: { configured: false, reason: "managed-runtime-has-no-credentials" },
+		webApi: await webApiStatus(call, signal),
+		localWrite: { configured: false, reason: "managed-runtime-has-no-local-key" },
 		note: MANAGED_LIMITS,
 	};
 }
@@ -210,7 +251,7 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 			},
 		},
 		execute: async (_id: string, params: Record<string, any>, signal?: AbortSignal) =>
-			text(await saveToZotero(call, { ...(params || {}), channel: "connector" }, signal)),
+			text(await saveToZotero(call, params || {}, signal)),
 	});
 	pi.registerTool({
 		name: "research_zotero_update",
