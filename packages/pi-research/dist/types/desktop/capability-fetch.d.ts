@@ -12,5 +12,14 @@ export interface CapabilityFetchOptions {
     readonly summary?: string;
     /** A task grant allowance this write uses instead of the host's dialog (each is admitted once). */
     readonly allowance?: string;
+    /**
+     * A manifest `drone.credentials` slot. Toward its hosts the runtime's own copy of the header is dropped
+     * and the slot is named instead, so the host attaches the secret the user saved in Drone settings.
+     */
+    readonly credential?: {
+        readonly slot: string;
+        readonly header: string;
+        readonly hosts: readonly string[];
+    };
 }
-export declare function capabilityFetch(call: CapabilityCall, { reads, summary, allowance }?: CapabilityFetchOptions): typeof fetch;
+export declare function capabilityFetch(call: CapabilityCall, { reads, summary, allowance, credential }?: CapabilityFetchOptions): typeof fetch;

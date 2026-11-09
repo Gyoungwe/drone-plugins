@@ -707,15 +707,16 @@ function createLocalZoteroReconciler({
 // src/desktop/capability-fetch.ts
 var READ_METHODS = /* @__PURE__ */ new Set(["GET", "HEAD"]);
 var NO_BODY = /* @__PURE__ */ new Set([101, 204, 205, 304]);
-function capabilityFetch(call, { reads = [], summary: summary2, allowance } = {}) {
+function capabilityFetch(call, { reads = [], summary: summary2, allowance, credential } = {}) {
   return async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
     const read = READ_METHODS.has(request.method) || request.method === "POST" && reads.includes(`${url.host}${url.pathname}`);
     const body = READ_METHODS.has(request.method) ? void 0 : Buffer.from(await request.arrayBuffer());
+    const slot = credential?.hosts.includes(url.host) ? credential : void 0;
     const headers = {};
     request.headers.forEach((value, name) => {
-      headers[name] = value;
+      if (name !== slot?.header.toLowerCase()) headers[name] = value;
     });
     const result = await call(
       read ? "network.read" : "network.write",
@@ -725,7 +726,8 @@ function capabilityFetch(call, { reads = [], summary: summary2, allowance } = {}
         headers,
         ...body?.length ? { bodyBase64: body.toString("base64") } : {},
         ...!read && summary2 ? { summary: summary2 } : {},
-        ...!read && allowance ? { allowance } : {}
+        ...!read && allowance ? { allowance } : {},
+        ...slot ? { credential: slot.slot } : {}
       },
       request.signal
     );
@@ -1882,8 +1884,29 @@ var ZOTERO_NETWORK_READS = Object.freeze([
   "127.0.0.1:23119/connector/ping",
   "127.0.0.1:23119/connector/getSelectedCollection"
 ]);
-var NO_CREDENTIALS = Object.freeze({});
-var MANAGED_LIMITS = "In Drone Desktop this tool has no Zotero credentials yet: saving goes through Zotero desktop (the connector) and is read back through its local API; the Web API and changing existing items are unavailable.";
+var ZOTERO_WEB_CREDENTIAL = Object.freeze({
+  slot: "zotero-web",
+  header: "Zotero-API-Key",
+  hosts: Object.freeze(["api.zotero.org"])
+});
+var HOST_ATTACHED_KEY = "attached-by-drone";
+var MANAGED_LIMITS = "In Drone Desktop, saving goes through Zotero desktop (the connector) when it is running, otherwise through the Zotero Web API with the key the user saved in Drone Settings \u2192 UI plugins \u2192 Plugin credentials; Drone attaches the key, so never ask for it in chat. Changing an existing item needs that Web API key; Zotero 10 local writes are unavailable here.";
+var zoteroFetch = (call, options = {}) => capabilityFetch(call, { reads: ZOTERO_NETWORK_READS, credential: ZOTERO_WEB_CREDENTIAL, ...options });
+async function webEnv(call, signal) {
+  let status;
+  try {
+    status = await call("credentials.status", null, signal);
+  } catch {
+    return {};
+  }
+  const saved = status?.slots?.[ZOTERO_WEB_CREDENTIAL.slot];
+  if (!saved?.configured) return {};
+  return {
+    ZOTERO_API_KEY: HOST_ATTACHED_KEY,
+    ZOTERO_LIBRARY_TYPE: saved.fields.libraryType ?? "",
+    ZOTERO_LIBRARY_ID: saved.fields.libraryId ?? ""
+  };
+}
 var text4 = (value) => ({
   content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
   details: value
@@ -1914,9 +1937,10 @@ async function allowanceFor(call, doi, signal) {
   return (named ?? open2.find((item) => item.consent?.slot === true && !item.consent?.doi))?.id;
 }
 async function saveToZotero(call, params, signal) {
+  const env = await webEnv(call, signal);
   const plan = await prepareZoteroSave(params, {
-    fetchImpl: capabilityFetch(call, { reads: ZOTERO_NETWORK_READS }),
-    env: NO_CREDENTIALS,
+    fetchImpl: zoteroFetch(call),
+    env,
     signal
   });
   let receipt2;
@@ -1926,12 +1950,11 @@ async function saveToZotero(call, params, signal) {
     const writes = observedWrites(call);
     allowance = await allowanceFor(call, plan.doi, signal);
     receipt2 = await executeZoteroSave(plan, {
-      fetchImpl: capabilityFetch(writes.call, {
-        reads: ZOTERO_NETWORK_READS,
+      fetchImpl: zoteroFetch(writes.call, {
         summary: `\u5199\u5165 Zotero \u6587\u732E\u5E93\uFF1A\u300A${plan.item.title}\u300B\uFF08DOI ${plan.doi}\uFF09`,
         allowance
       }),
-      env: NO_CREDENTIALS,
+      env,
       signal
     });
     if (writes.declinedBeforeAnyWrite())
@@ -1944,20 +1967,20 @@ async function saveToZotero(call, params, signal) {
   return receipt2;
 }
 async function updateInZotero(call, params, cwd, signal) {
+  const env = await webEnv(call, signal);
   const plan = await prepareZoteroUpdate(params, {
-    fetchImpl: capabilityFetch(call, { reads: ZOTERO_NETWORK_READS }),
-    env: NO_CREDENTIALS,
+    fetchImpl: zoteroFetch(call),
+    env,
     cwd,
     signal
   });
   if (plan.action !== "update") return { ...receiptWithoutUpdate(plan), consent: { via: "not-needed" } };
   const writes = observedWrites(call);
   const receipt2 = await executeZoteroUpdate(plan, {
-    fetchImpl: capabilityFetch(writes.call, {
-      reads: ZOTERO_NETWORK_READS,
+    fetchImpl: zoteroFetch(writes.call, {
       summary: `\u4FEE\u6539 Zotero \u6761\u76EE ${plan.item.key}`
     }),
-    env: NO_CREDENTIALS,
+    env,
     signal
   });
   if (writes.declinedBeforeAnyWrite())
@@ -1967,15 +1990,26 @@ async function updateInZotero(call, params, cwd, signal) {
     };
   return { ...receipt2, consent: { via: "host-dialog" } };
 }
+async function webApiStatus(call, signal) {
+  const config = zoteroWebApiConfig(await webEnv(call, signal));
+  if (!config.configured) return { configured: false, reason: "not-saved-in-drone-settings" };
+  const library = { libraryType: config.libraryType, libraryId: config.libraryId };
+  try {
+    const access = await webKeyAccess({ fetchImpl: zoteroFetch(call), config, signal });
+    return { configured: true, ...library, library: access.library, write: access.write };
+  } catch (error) {
+    return { configured: true, ...library, error: error.message };
+  }
+}
 async function zoteroStatus(call, signal) {
   return {
     runtime: "drone-desktop-managed",
     connector: await probeZoteroConnector({
-      fetchImpl: capabilityFetch(call, { reads: ZOTERO_NETWORK_READS }),
+      fetchImpl: zoteroFetch(call),
       signal
     }),
-    webApi: { configured: false, reason: "managed-runtime-has-no-credentials" },
-    localWrite: { configured: false, reason: "managed-runtime-has-no-credentials" },
+    webApi: await webApiStatus(call, signal),
+    localWrite: { configured: false, reason: "managed-runtime-has-no-local-key" },
     note: MANAGED_LIMITS
   };
 }
@@ -2039,7 +2073,7 @@ function registerManagedZoteroTools(pi, call) {
         }
       }
     },
-    execute: async (_id, params, signal) => text4(await saveToZotero(call, { ...params || {}, channel: "connector" }, signal))
+    execute: async (_id, params, signal) => text4(await saveToZotero(call, params || {}, signal))
   });
   pi.registerTool({
     name: "research_zotero_update",
