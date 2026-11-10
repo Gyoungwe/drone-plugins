@@ -3,6 +3,46 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 import { harness, plan, taskAction } from "./managed-harness.mjs";
 
+it("null host hints allow reads but still block writes before a task is approved", async () => {
+	const t = await harness({
+		extra: {
+			"session.tools": () => [
+				{ name: "read", readOnlyHint: null },
+				{ name: "write", readOnlyHint: null },
+			],
+		},
+	});
+	const read = await t.hooks.tool_call(
+		{ type: "tool_call", toolName: "read", toolCallId: "r1", input: { path: "notes.md" } },
+		t.ctx,
+	);
+	const write = await t.hooks.tool_call(
+		{ type: "tool_call", toolName: "write", toolCallId: "w1", input: { path: "out/a.md", content: "A" } },
+		t.ctx,
+	);
+	await t.close();
+	expect(read).toBeUndefined();
+	expect(write).toMatchObject({
+		block: true,
+		reason: expect.stringContaining("No approved task plan"),
+	});
+});
+
+it("an explicit false host hint blocks read before a task is approved", async () => {
+	const t = await harness({
+		extra: { "session.tools": () => [{ name: "read", readOnlyHint: false }] },
+	});
+	const blocked = await t.hooks.tool_call(
+		{ type: "tool_call", toolName: "read", toolCallId: "r1", input: { path: "notes.md" } },
+		t.ctx,
+	);
+	await t.close();
+	expect(blocked).toMatchObject({
+		block: true,
+		reason: expect.stringContaining("No approved task plan"),
+	});
+});
+
 it("declares every hook, tool and command read so ordinary chat raises no plugin dialog", async () => {
 	const t = await harness();
 	expect(Object.values(t.native.eventEffects)).toEqual(

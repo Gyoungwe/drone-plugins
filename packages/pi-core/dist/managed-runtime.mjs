@@ -3315,7 +3315,7 @@ function managedPorts(call, cache, on) {
   return {
     acceptance,
     readKnowledgeBinding: () => readKnowledgeBinding(),
-    readOnlyHint: (name) => cache.tools.get(name),
+    readOnlyHint: (name) => cache.tools.get(name) ?? void 0,
     storage,
     persist: async (ctx, record, signal) => {
       const receipt = await call(
