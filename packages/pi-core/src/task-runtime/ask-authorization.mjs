@@ -30,6 +30,41 @@ function computeAuthorizationDetails(compute) {
 		return null;
 	return `\u8BA1\u7B97\u8303\u56F4\uFF1A\u4E3B\u673A ${hosts.join(", ")}\uFF1B\u8FDC\u7A0B\u8BFB\u53D6 ${remoteRead.join(", ") || "\u672A\u58F0\u660E"}\uFF1B\u8FDC\u7A0B\u5199\u5165 ${remoteWrite.join(", ") || "\u672A\u58F0\u660E"}\uFF1B\u6700\u591A ${budget.maxCoreHours} \u6838\u65F6\u3001\u5355\u4F5C\u4E1A ${budget.maxWalltimeMinutes} \u5206\u949F\u3001${budget.maxConcurrentJobs} \u4E2A\u5E76\u53D1\u4F5C\u4E1A\u3001${budget.maxDiskGb} GiB\u3002${compute.agentCode === true ? "\u5141\u8BB8\u6C99\u7BB1\u4E2D\u7684 Agent \u6A21\u5757\u3002" : "\u4E0D\u5141\u8BB8 Agent \u7F16\u5199\u6A21\u5757\u3002"}`;
 }
+async function authorizeTask(journal, task, ctx, signal, { checkBinding, ui }) {
+	const scope = journal.scope();
+	const approvedHash = contractHash(task);
+	const binding = await checkBinding();
+	if ((binding ?? null) !== (task.binding ?? null))
+		throw new Error("Task context or knowledge binding changed; ask again in the current context.");
+	const granted = await ui.authorizeTask(
+		ctx,
+		task,
+		{
+			contractHash: approvedHash,
+			maxCalls: TASK_TOTAL_CALLS,
+			maxAutoResumes: MAX_AUTO_RESUMES,
+			compute: computeAuthorizationDetails(task.compute),
+		},
+		signal,
+	);
+	if (!granted || signal?.aborted) return false;
+	const currentBinding = await checkBinding();
+	if (signal?.aborted) return false;
+	// Result accounting can advance the revision while the user reviews the same contract.
+	const view = journal.view();
+	const currentTask = view.tasks.find((t) => t.id === task.id);
+	if (
+		journal.scope() !== scope ||
+		!currentTask ||
+		["completed", "cancelled", "archived"].includes(currentTask.state) ||
+		contractHash(currentTask) !== approvedHash ||
+		(currentBinding ?? null) !== (currentTask.binding ?? null)
+	)
+		throw new Error("Task changed. Refresh before acting.");
+	if (!hasTaskConsent(currentTask, TASK_TOTAL_CALLS))
+		await journal.command({ taskId: task.id, revision: view.revision, action: "authorize-task" });
+	return true;
+}
 /**
  * `ui.select(ctx, text, options, signal)` asks the user. `ui.authorizeTask(ctx, task, request, signal)`,
  * when the host provides it, owns the one task authorization (the host renders and keeps it); the
@@ -44,26 +79,8 @@ function createTaskAuthorization(journal, checkBinding = async () => null, ui = 
 			throw new Error("Task changed. Refresh before requesting authorization.");
 		if (["completed", "cancelled", "archived"].includes(task.state))
 			throw new Error("Task is no longer awaiting authorization.");
-		if (input.action === "authorize-task" && ui.authorizeTask) {
-			const binding = await checkBinding();
-			if ((binding ?? null) !== (task.binding ?? null))
-				throw new Error("Task context or knowledge binding changed; ask again in the current context.");
-			const granted = await ui.authorizeTask(
-				ctx,
-				task,
-				{
-					contractHash: contractHash(task),
-					maxCalls: TASK_TOTAL_CALLS,
-					maxAutoResumes: MAX_AUTO_RESUMES,
-					compute: computeAuthorizationDetails(task.compute),
-				},
-				signal,
-			);
-			if (!granted || signal?.aborted) return false;
-			if (!hasTaskConsent(task, TASK_TOTAL_CALLS))
-				await journal.command({ ...input, action: "authorize-task" });
-			return true;
-		}
+		if (input.action === "authorize-task" && ui.authorizeTask)
+			return authorizeTask(journal, task, ctx, signal, { checkBinding, ui });
 		if (
 			input.action === "authorize-task" &&
 			hasTaskConsent(task, TASK_TOTAL_CALLS) &&
