@@ -20,6 +20,7 @@ export async function harness({
 	workspace,
 	extra = {},
 	beforeGrant,
+	beforeAppend,
 } = {}) {
 	const cwd = workspace ?? (await realpath(await mkdtemp(join(tmpdir(), "managed-task-"))));
 	if (!workspace) {
@@ -67,7 +68,8 @@ export async function harness({
 			error: null,
 			records: [...host.records],
 		}),
-		"session.records.append": ({ type, data }) => {
+		"session.records.append": async ({ type, data }) => {
+			if (beforeAppend) await beforeAppend({ type, data });
 			if (host.failAppend) {
 				host.failAppend = false;
 				throw new Error("Actual managed checkpoint append failed");

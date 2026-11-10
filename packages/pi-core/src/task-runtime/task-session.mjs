@@ -1,3 +1,4 @@
+import { recordApproval } from "./approval-record.mjs";
 import { createEvidenceRecovery } from "./evidence.mjs";
 import { hostLanguage } from "./host-language.mjs";
 import { createTaskWorkbench, WORKBENCH_ENTRY } from "./workbench.mjs";
@@ -237,6 +238,8 @@ export function createTaskSession({
 						return journal.wait(event.input);
 					case "command":
 						return journal.command(event.input);
+					case "record-approval":
+						return recordApproval(journal, event.input);
 					case "file":
 						return journal.acceptFile(event.input, event.cwd);
 					case "reconcile":

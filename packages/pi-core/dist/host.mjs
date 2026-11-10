@@ -1944,8 +1944,27 @@ import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
 import { createHash as createHash4, randomUUID as randomUUID2 } from "node:crypto";
 import { resolve as resolve4 } from "node:path";
 
-// src/task-runtime/ask-authorization.mjs
+// src/task-runtime/approval-record.mjs
 var TASK_TOTAL_CALLS = 192;
+function recordApproval(workbench, input) {
+  const view = workbench.view();
+  const task = view.tasks.find((task2) => task2.id === input.taskId);
+  if (workbench.scope() !== input.scope || !task || ["completed", "cancelled", "archived"].includes(task.state) || contractHash(task) !== input.contractHash || (input.binding ?? null) !== (task.binding ?? null))
+    throw new Error("Task changed. Refresh before acting.");
+  if (input.action === "acknowledge") {
+    const action = task.actions.find((action2) => action2.id === input.actionId);
+    if (action?.state !== "pending" || action.kind !== "rebind" || action.expected?.doi !== input.expectedDoi)
+      throw new Error("Task changed. Refresh before acting.");
+  } else if (hasTaskConsent(task, TASK_TOTAL_CALLS)) return;
+  return workbench.command({
+    taskId: input.taskId,
+    revision: view.revision,
+    action: input.action,
+    actionId: input.actionId
+  });
+}
+
+// src/task-runtime/ask-authorization.mjs
 function computeAuthorizationDetails(compute) {
   if (!compute || typeof compute !== "object") return null;
   const hosts = Array.isArray(compute.hosts) && compute.hosts.every((host) => typeof host === "string") ? compute.hosts : null;
@@ -1981,12 +2000,39 @@ async function authorizeTask(journal, task, ctx, signal, { checkBinding, ui }) {
   if (!granted || signal?.aborted) return false;
   const currentBinding = await checkBinding();
   if (signal?.aborted) return false;
-  const view = journal.view();
-  const currentTask = view.tasks.find((t) => t.id === task.id);
-  if (journal.scope() !== scope || !currentTask || ["completed", "cancelled", "archived"].includes(currentTask.state) || contractHash(currentTask) !== approvedHash || (currentBinding ?? null) !== (currentTask.binding ?? null))
-    throw new Error("Task changed. Refresh before acting.");
-  if (!hasTaskConsent(currentTask, TASK_TOTAL_CALLS))
-    await journal.command({ taskId: task.id, revision: view.revision, action: "authorize-task" });
+  await journal.recordApproval({
+    scope,
+    taskId: task.id,
+    contractHash: approvedHash,
+    binding: currentBinding,
+    action: "authorize-task"
+  });
+  return true;
+}
+async function authorizeRebind(journal, task, action, ctx, signal, { checkBinding, ui }) {
+  const milestone = task.milestones.find((m) => m.id === action.milestoneId);
+  if (!milestone) throw new Error("Rebind milestone is no longer in the task.");
+  const scope = journal.scope();
+  const approvedHash = contractHash(task);
+  const granted = await ui.amendAllowance(
+    ctx,
+    task,
+    milestone,
+    { ...effectiveAcceptance(milestone), doi: action.expected?.doi },
+    signal
+  );
+  if (!granted || signal?.aborted) return false;
+  const binding = await checkBinding();
+  if (signal?.aborted) return false;
+  await journal.recordApproval({
+    scope,
+    taskId: task.id,
+    contractHash: approvedHash,
+    binding,
+    action: "acknowledge",
+    actionId: action.id,
+    expectedDoi: action.expected?.doi
+  });
   return true;
 }
 function createTaskAuthorization(journal, checkBinding = async () => null, ui = contextUi) {
@@ -2007,20 +2053,8 @@ function createTaskAuthorization(journal, checkBinding = async () => null, ui = 
     ) : null;
     if (input.action === "ask-authorization" && !action)
       throw new Error("Authorization action is no longer pending.");
-    if (action?.kind === "rebind" && ui.amendAllowance) {
-      const milestone = task.milestones.find((m) => m.id === action.milestoneId);
-      if (!milestone) throw new Error("Rebind milestone is no longer in the task.");
-      const granted = await ui.amendAllowance(
-        ctx,
-        task,
-        milestone,
-        { ...effectiveAcceptance(milestone), doi: action.expected?.doi },
-        signal
-      );
-      if (!granted || signal?.aborted) return false;
-      await journal.command({ ...input, action: "acknowledge" });
-      return true;
-    }
+    if (action?.kind === "rebind" && ui.amendAllowance)
+      return authorizeRebind(journal, task, action, ctx, signal, { checkBinding, ui });
     if (!["authorize-task", "approve-plan", "next-stage", "ask-authorization", "confirm-outcome"].includes(
       input.action
     ))
@@ -2227,6 +2261,7 @@ function createTaskController(session, readSignal) {
     plan: (input) => session.action({ kind: "plan", input }, readSignal()),
     wait: (input) => session.action({ kind: "wait", input }, readSignal()),
     command: (input) => session.action({ kind: "command", input }, readSignal()),
+    recordApproval: (input) => session.action({ kind: "record-approval", input }, readSignal()),
     acceptFile: (input, cwd) => session.action({ kind: "file", input, cwd }, readSignal()),
     reconcile: (cwd) => session.action({ kind: "reconcile", cwd }, readSignal()),
     guard: (value) => session.observe({ kind: "call", value }, readSignal()),
@@ -2546,6 +2581,8 @@ function createTaskSession({
           return journal2.wait(event.input);
         case "command":
           return journal2.command(event.input);
+        case "record-approval":
+          return recordApproval(journal2, event.input);
         case "file":
           return journal2.acceptFile(event.input, event.cwd);
         case "reconcile":

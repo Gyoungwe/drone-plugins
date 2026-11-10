@@ -1,8 +1,8 @@
 import { describeAcceptance, effectiveAcceptance } from "./acceptance.mjs";
+import { TASK_TOTAL_CALLS } from "./approval-record.mjs";
 import { contractHash, hasTaskConsent, MAX_AUTO_RESUMES } from "./consent.mjs";
 import { contextUi } from "./context-ui.mjs";
 
-const TASK_TOTAL_CALLS = 192;
 function computeAuthorizationDetails(compute) {
 	if (!compute || typeof compute !== "object") return null;
 	const hosts =
@@ -50,19 +50,39 @@ async function authorizeTask(journal, task, ctx, signal, { checkBinding, ui }) {
 	if (!granted || signal?.aborted) return false;
 	const currentBinding = await checkBinding();
 	if (signal?.aborted) return false;
-	// Result accounting can advance the revision while the user reviews the same contract.
-	const view = journal.view();
-	const currentTask = view.tasks.find((t) => t.id === task.id);
-	if (
-		journal.scope() !== scope ||
-		!currentTask ||
-		["completed", "cancelled", "archived"].includes(currentTask.state) ||
-		contractHash(currentTask) !== approvedHash ||
-		(currentBinding ?? null) !== (currentTask.binding ?? null)
-	)
-		throw new Error("Task changed. Refresh before acting.");
-	if (!hasTaskConsent(currentTask, TASK_TOTAL_CALLS))
-		await journal.command({ taskId: task.id, revision: view.revision, action: "authorize-task" });
+	await journal.recordApproval({
+		scope,
+		taskId: task.id,
+		contractHash: approvedHash,
+		binding: currentBinding,
+		action: "authorize-task",
+	});
+	return true;
+}
+async function authorizeRebind(journal, task, action, ctx, signal, { checkBinding, ui }) {
+	const milestone = task.milestones.find((m) => m.id === action.milestoneId);
+	if (!milestone) throw new Error("Rebind milestone is no longer in the task.");
+	const scope = journal.scope();
+	const approvedHash = contractHash(task);
+	const granted = await ui.amendAllowance(
+		ctx,
+		task,
+		milestone,
+		{ ...effectiveAcceptance(milestone), doi: action.expected?.doi },
+		signal,
+	);
+	if (!granted || signal?.aborted) return false;
+	const binding = await checkBinding();
+	if (signal?.aborted) return false;
+	await journal.recordApproval({
+		scope,
+		taskId: task.id,
+		contractHash: approvedHash,
+		binding,
+		action: "acknowledge",
+		actionId: action.id,
+		expectedDoi: action.expected?.doi,
+	});
 	return true;
 }
 /**
@@ -99,20 +119,8 @@ function createTaskAuthorization(journal, checkBinding = async () => null, ui = 
 		if (input.action === "ask-authorization" && !action)
 			throw new Error("Authorization action is no longer pending.");
 		// A host that keeps the task authorization also renders the rebind it widens.
-		if (action?.kind === "rebind" && ui.amendAllowance) {
-			const milestone = task.milestones.find((m) => m.id === action.milestoneId);
-			if (!milestone) throw new Error("Rebind milestone is no longer in the task.");
-			const granted = await ui.amendAllowance(
-				ctx,
-				task,
-				milestone,
-				{ ...effectiveAcceptance(milestone), doi: action.expected?.doi },
-				signal,
-			);
-			if (!granted || signal?.aborted) return false;
-			await journal.command({ ...input, action: "acknowledge" });
-			return true;
-		}
+		if (action?.kind === "rebind" && ui.amendAllowance)
+			return authorizeRebind(journal, task, action, ctx, signal, { checkBinding, ui });
 		if (
 			!["authorize-task", "approve-plan", "next-stage", "ask-authorization", "confirm-outcome"].includes(
 				input.action,

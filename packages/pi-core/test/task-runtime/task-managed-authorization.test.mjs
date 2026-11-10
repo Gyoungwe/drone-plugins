@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { contractHash } from "../../src/task-runtime/consent.mjs";
 import { harness, plan } from "./managed-harness.mjs";
 
@@ -109,6 +109,91 @@ it("rejects a grant when the shown task contract changes while authorization is 
 		).toMatchObject({ block: true });
 	} finally {
 		dialog.approve();
+		await t.close();
+	}
+});
+
+function deferred() {
+	let resolve;
+	const promise = new Promise((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
+
+function heldCheckpoint() {
+	const entered = deferred();
+	const released = deferred();
+	let armed = false;
+	return {
+		entered: entered.promise,
+		release: released.resolve,
+		hold: () => {
+			armed = true;
+		},
+		beforeAppend: () => {
+			if (!armed) return;
+			armed = false;
+			entered.resolve();
+			return released.promise;
+		},
+	};
+}
+
+function approvalQueued(journal) {
+	const queued = deferred();
+	// Watch both public recording paths so the reverse proof uses the same queue barrier.
+	for (const method of ["command", "recordApproval"]) {
+		const invoke = journal[method];
+		vi.spyOn(journal, method).mockImplementation((input) => {
+			const result = invoke(input);
+			if (["authorize-task", "acknowledge"].includes(input.action)) queued.resolve();
+			return result;
+		});
+	}
+	return queued.promise;
+}
+
+async function statusResult(t) {
+	const status = { toolName: "task_status", toolCallId: "status-1", input: {} };
+	expect(await t.hooks.tool_call({ type: "tool_call", ...status }, t.ctx)).toBeUndefined();
+	const result = await t.tools.task_status.execute("status-1", {}, t.ctx.signal, undefined, t.ctx);
+	return { type: "tool_result", ...status, ...result, isError: false };
+}
+
+it("records approval behind a held parallel task_status observation", async () => {
+	const dialog = heldGrant();
+	const checkpoint = heldCheckpoint();
+	const t = await harness({ beforeGrant: dialog.beforeGrant, beforeAppend: checkpoint.beforeAppend });
+	try {
+		await t.hooks.input({ text: plan.goal, images: [] }, t.ctx);
+		t.host.streaming = true;
+		await t.hooks.before_agent_start({ prompt: plan.goal, systemPrompt: "" }, t.ctx);
+		const planned = t.tool("task_plan", plan);
+		const shown = await dialog.shown;
+		const journal = await t.app.withCurrentSession(t.ctx.signal, ({ controller }) => controller.journal);
+		const queued = approvalQueued(journal);
+		const result = await statusResult(t);
+		const before = journal.view().revision;
+		checkpoint.hold();
+		const observing = t.hooks.tool_result(result, t.ctx);
+		await checkpoint.entered;
+		expect(journal.view().revision).toBe(before);
+		dialog.approve();
+		await queued;
+		checkpoint.release();
+		await observing;
+		expect((await planned).authorized).toBe(true);
+		expect(journal.snapshot().executionConsent).toMatchObject({ contractHash: shown.contractHash });
+		expect(
+			await t.hooks.tool_call(
+				{ type: "tool_call", toolName: "write", toolCallId: "w1", input: { path: "out/a.md", content: "A" } },
+				t.ctx,
+			),
+		).toBeUndefined();
+	} finally {
+		dialog.approve();
+		checkpoint.release();
 		await t.close();
 	}
 });
