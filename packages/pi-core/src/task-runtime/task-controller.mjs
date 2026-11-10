@@ -15,6 +15,7 @@ export function createTaskController(session, readSignal) {
 		plan: (input) => session.action({ kind: "plan", input }, readSignal()),
 		wait: (input) => session.action({ kind: "wait", input }, readSignal()),
 		command: (input) => session.action({ kind: "command", input }, readSignal()),
+		recordApproval: (input) => session.action({ kind: "record-approval", input }, readSignal()),
 		acceptFile: (input, cwd) => session.action({ kind: "file", input, cwd }, readSignal()),
 		reconcile: (cwd) => session.action({ kind: "reconcile", cwd }, readSignal()),
 		guard: (value) => session.observe({ kind: "call", value }, readSignal()),
