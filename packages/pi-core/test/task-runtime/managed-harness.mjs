@@ -19,6 +19,7 @@ export async function harness({
 	answer = (_title, options) => options.at(-1),
 	workspace,
 	extra = {},
+	beforeGrant,
 } = {}) {
 	const cwd = workspace ?? (await realpath(await mkdtemp(join(tmpdir(), "managed-task-"))));
 	if (!workspace) {
@@ -100,9 +101,10 @@ export async function harness({
 			return value === undefined ? { kind: "cancelled" } : { kind: "selected", value };
 		},
 		"task.grant.current": () => host.grant,
-		"task.grant.request": (input) => {
+		"task.grant.request": async (input) => {
 			host.grants.push(input);
 			if (host.denyGrant) throw new Error("Plugin capability denied: task.grant.request");
+			if (beforeGrant) await beforeGrant(input);
 			host.grant = {
 				grantId: `g${host.grants.length}`,
 				taskId: input.taskId,
