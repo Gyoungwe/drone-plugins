@@ -7,18 +7,14 @@ export const zoteroZh = {
 	refresh: "刷新",
 	loading: "加载中…",
 	statusTitle: "接入状态",
-	statusLine: "Zotero 桌面端 · 本机 API · 写入方式",
 	localApiOk: "本机 API 可达",
 	localApiNo: "本机 API 不可达",
 	desktopMissing: "未检测到 Zotero 桌面端",
 	version: "版本 {version}",
 	writeModeLocal: "本机写入（Zotero 10+）",
 	writeModeWeb: "网页 API（Zotero 9 及以下）",
-	advancedLegacy: "旧版 Zotero / 高级写入方式",
-	crossTitle: "与知识库的关系",
 	crossHint:
 		"Zotero 只是来源上游；命中的文献要整理为 Obsidian 的 Library/Papers 笔记后才可被引用。先建 Vault。",
-	gotoObsidian: "打开 Obsidian 知识库",
 	statusUnavailable: "本机 API 不可达，请启动 Zotero 后刷新。",
 	localTitle: "本机写入（Zotero 10+，推荐）",
 	localHint:
@@ -36,21 +32,8 @@ export const zoteroZh = {
 	localClear: "移除授权",
 	localClearHint:
 		"移除后 Drone 不再保存这把 key；Zotero 自己的授权记录可在 Zotero 设置 → 高级 →「清除写入授权」里清除。",
-	webTitle: "网页 API（修改已有条目）",
-	webHint:
-		"Zotero 9 及更早版本的本机 API 是只读的：把已有条目归入分类、挂 PDF 要走网页 API。Zotero 10+ 优先用上面的本机写入，不需要这个密钥。新建条目也不需要它。",
-	webSteps:
-		"在 Zotero 网站 → Settings → Security → Applications → Create new private key，勾选「Allow library access」和「Allow write access」，复制密钥粘贴到这里。",
-	webKeyLabel: "API 密钥",
-	webKeyPlaceholder: "粘贴私钥（只保存在本机，不进对话）",
-	webGroupLabel: "群组库 ID（可选，留空 = 个人库）",
-	webSave: "校验并保存",
-	webClear: "移除密钥",
-	webConfigured: "已配置：{library}（密钥 …{hint}）",
-	webNotConfigured: "未配置：Agent 只能新建条目，不能修改已有条目的分类或附件。",
-	webFromEnv: "来自环境变量 ZOTERO_API_KEY（…{hint}），在设置里不可更改。",
-	webSaved: "已保存，Agent 现在可以修改已有条目（每次修改仍会先征求你的同意）。",
-	webInvalidInput: "没有保存：密钥应为 16–64 位字母或数字，群组库 ID 最多 20 位数字。",
+	webCredentialsHint:
+		"群组库或 Zotero 未打开时需要 Zotero 网页 API 密钥：在 设置 → 插件 → pi-research → 凭据 中填写。",
 	instTitle: "机构访问（一次登录，自动保存模板）",
 	instIntro:
 		"Agent 在归档文献时若遇到付费墙，会自动请求机构登录。点“登录机构账号”后在弹出窗口完成学校/图书馆登录（支持 EZproxy / Shibboleth / CARSI / OpenAthens / WebVPN），系统会自动从 URL 中识别并保存 EZproxy 模板（例如 .../login?url=%s），无需手动填写。登录态保存在持久分区，重启仍有效。任务授权后会自动尝试下载（每任务最多 {limit} 篇），仅在过期或验证码时再次弹窗。",
@@ -88,18 +71,14 @@ export const zoteroEn: Record<keyof typeof zoteroZh, string> = {
 	refresh: "Refresh",
 	loading: "Loading…",
 	statusTitle: "Connection status",
-	statusLine: "Zotero desktop · local API · write mode",
 	localApiOk: "Local API reachable",
 	localApiNo: "Local API unreachable",
 	desktopMissing: "Zotero desktop was not detected",
 	version: "Version {version}",
 	writeModeLocal: "Local writes (Zotero 10+)",
 	writeModeWeb: "Web API (Zotero 9 and older)",
-	advancedLegacy: "Older Zotero / advanced write mode",
-	crossTitle: "Relationship to the knowledge base",
 	crossHint:
 		"Zotero is only the source upstream; hits must be deposited as Obsidian Library/Papers notes before they can be cited. Set up the Vault first.",
-	gotoObsidian: "Open Obsidian knowledge",
 	statusUnavailable: "The local API is unreachable. Start Zotero and refresh.",
 	localTitle: "Local writes (Zotero 10+, recommended)",
 	localHint:
@@ -119,23 +98,8 @@ export const zoteroEn: Record<keyof typeof zoteroZh, string> = {
 	localClear: "Remove authorization",
 	localClearHint:
 		"Drone forgets the key; Zotero's own record of the grant is cleared under Zotero Settings → Advanced → “Clear Write Authorizations”.",
-	webTitle: "Web API (change existing items)",
-	webHint:
-		"On Zotero 9 and older the local API is read-only, so filing an existing item into a collection or attaching a PDF goes through the Web API. On Zotero 10+ local writes above are used first and this key is not needed. Creating new items does not need it either.",
-	webSteps:
-		"On zotero.org → Settings → Security → Applications → Create new private key, tick “Allow library access” and “Allow write access”, then paste the key here.",
-	webKeyLabel: "API key",
-	webKeyPlaceholder: "Paste the private key (stored on this computer only, never in chat)",
-	webGroupLabel: "Group library ID (optional; empty = personal library)",
-	webSave: "Verify and save",
-	webClear: "Remove key",
-	webConfigured: "Configured: {library} (key …{hint})",
-	webNotConfigured:
-		"Not configured: the agent can create items but cannot change collections or attachments of existing ones.",
-	webFromEnv: "From the ZOTERO_API_KEY environment variable (…{hint}); not editable here.",
-	webSaved: "Saved. The agent can now change existing items (it still asks you before each change).",
-	webInvalidInput:
-		"Not saved: the key must be 16–64 letters or digits and the group library ID at most 20 digits.",
+	webCredentialsHint:
+		"A Zotero Web API key is needed only for group libraries or when Zotero desktop is closed. Enter it under Settings → Plugins → pi-research → credentials.",
 	instTitle: "Institutional access (log in once, template saved automatically)",
 	instIntro:
 		"When the agent hits a paywall while archiving literature, it asks for an institutional login. Click “Log in to institution” and sign in to your university/library in the pop-up (EZproxy / Shibboleth / CARSI / OpenAthens / WebVPN); the EZproxy template (e.g. .../login?url=%s) is recognised from the URL and saved automatically. The login lives in a persistent partition and survives restarts. After a task is authorized, downloads are tried automatically (up to {limit} per task); you are only asked again when the login expires or a CAPTCHA appears.",

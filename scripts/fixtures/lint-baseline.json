@@ -129,7 +129,6 @@
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/WikiModelReview.tsx": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/WikiReviewDialog.tsx": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/WikiReviewPanel.tsx": 1,
-	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/ZoteroWebApiSection.tsx": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/NativeKnowledgeModelReview.tsx": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/NativeKnowledgePreferences.tsx": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/NativeKnowledgeReading.tsx": 1,
