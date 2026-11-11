@@ -14,6 +14,7 @@ import {
 	zoteroWebApiConfig,
 } from "../core/zotero-write-runtime.js";
 import { type CapabilityCall, type CapabilityFetchOptions, capabilityFetch } from "./capability-fetch.js";
+import { zoteroLiteratureCard } from "./zotero-literature-card.js";
 
 /**
  * Zotero tools in the Drone Desktop managed runtime. Every request goes through the host's network
@@ -96,6 +97,11 @@ const text = (value: unknown) => ({
 	content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
 	details: value,
 });
+
+function literatureText(receipt: Record<string, unknown>, source: string) {
+	const card = zoteroLiteratureCard(receipt, source, Date.now());
+	return { ...text(receipt), details: card ? { ...receipt, cards: [card] } : receipt };
+}
 
 /** A call whose network writes are observed, so a write the user declined is not reported as a failure. */
 function observedWrites(call: CapabilityCall) {
@@ -241,6 +247,25 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 	pi.registerTool({
 		name: "research_zotero_status",
 		label: "Zotero literature status",
+		drone: {
+			readOnly: true,
+			capabilities: ["research", "external"],
+			activity: { text: "正在检查 Zotero 接入状态…", phase: "verification" },
+			families: [
+				{
+					match: "research-zotero",
+					label: "Zotero",
+					readOnly: true,
+					capabilities: ["research", "external"],
+					activity: {
+						text: "正在检索 Zotero 文献库…",
+						phase: "literature-search",
+						verb: "正在检索 Zotero",
+						queryKeys: ["query", "q", "search", "search_text", "text"],
+					},
+				},
+			],
+		},
 		description: `Read-only: report whether Zotero desktop is reachable and which write channels are available. ${MANAGED_LIMITS}`,
 		parameters: { type: "object", properties: {}, additionalProperties: false },
 		execute: async (_id: string, _params: unknown, signal?: AbortSignal) =>
@@ -249,6 +274,12 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 	pi.registerTool({
 		name: "research_zotero_save",
 		label: "Save one paper to Zotero (host-controlled)",
+		drone: {
+			capabilities: ["research", "external"],
+			subagent: "exclude",
+			activity: { text: "正在写入 Zotero 文献库…", phase: "literature-write" },
+			flow: "literature",
+		},
 		description: `Write ONE bibliographic item into the user's Zotero library, keyed by exact DOI. Dedups by DOI first (an existing item is reused, nothing is written); otherwise the host asks the user once on its own dialog, writes once and reads the item back by DOI. Never deletes, merges or retries; never ask the user for confirmation in chat. ${MANAGED_LIMITS}`,
 		parameters: {
 			type: "object",
@@ -296,11 +327,17 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 			},
 		},
 		execute: async (_id: string, params: Record<string, any>, signal?: AbortSignal) =>
-			text(await saveToZotero(call, params || {}, signal)),
+			literatureText(await saveToZotero(call, params || {}, signal), "research_zotero_save"),
 	});
 	pi.registerTool({
 		name: "research_zotero_update",
 		label: "Update an existing Zotero item (host-controlled)",
+		drone: {
+			capabilities: ["research", "external"],
+			subagent: "exclude",
+			activity: { text: "正在修改 Zotero 条目…", phase: "literature-write" },
+			flow: "literature",
+		},
 		description: `Change ONE existing item in the user's Zotero library (collection, PDF link, local PDF). Identify it by zotero_key or exact DOI; the host asks the user on its own dialog before writing, then reads the item back. Never deletes or retries. Without a write channel it returns status=blocked with the reason; never ask for a key in chat. ${MANAGED_LIMITS}`,
 		parameters: {
 			type: "object",
@@ -335,6 +372,6 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 			signal: AbortSignal | undefined,
 			_update: unknown,
 			ctx: { cwd: string },
-		) => text(await updateInZotero(call, params || {}, ctx.cwd, signal)),
+		) => literatureText(await updateInZotero(call, params || {}, ctx.cwd, signal), "research_zotero_update"),
 	});
 }
