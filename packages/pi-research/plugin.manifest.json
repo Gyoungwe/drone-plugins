@@ -18,6 +18,13 @@
 				"hosts": ["api.zotero.org"],
 				"header": "Zotero-API-Key",
 				"fields": ["libraryType", "libraryId"]
+			},
+			{
+				"slot": "zotero-local",
+				"label": { "zh": "Zotero 本机写入", "en": "Zotero local writes" },
+				"hosts": ["127.0.0.1:23119"],
+				"header": "Zotero-API-Key",
+				"fields": ["serverId"]
 			}
 		],
 		"provides": {
