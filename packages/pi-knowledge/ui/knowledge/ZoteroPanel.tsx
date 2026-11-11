@@ -2,7 +2,6 @@ import type { ZoteroStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
 import { Button, getKnowledgeApi } from "../api";
 import { ZoteroLocalWriteSection } from "./ZoteroLocalWriteSection";
-import { ZoteroWebApiSection } from "./ZoteroWebApiSection";
 import { useZoteroText } from "./zotero-copy";
 
 /** Zotero is a built-in connector. The optional zotero MCP remains visible in
@@ -74,13 +73,8 @@ export function ZoteroPanel() {
 						{!status.localApiReachable && <p className="mt-2 text-xs text-warn">{t("statusUnavailable")}</p>}
 					</section>
 
-					{localPreferred ? <ZoteroLocalWriteSection /> : <ZoteroWebApiSection />}
-					<details className="rounded-xl border border-border p-4">
-						<summary className="cursor-pointer text-xs font-semibold">{t("advancedLegacy")}</summary>
-						<div className="mt-3">
-							{localPreferred ? <ZoteroWebApiSection /> : <ZoteroLocalWriteSection />}
-						</div>
-					</details>
+					<ZoteroLocalWriteSection />
+					<p className="text-xs text-ink-dim">{t("webCredentialsHint")}</p>
 
 					<section className="rounded-xl border border-dashed border-border-strong px-4 py-3">
 						<p className="text-xs text-ink-dim">{t("crossHint")}</p>
