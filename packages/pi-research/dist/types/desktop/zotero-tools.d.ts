@@ -18,7 +18,7 @@ export declare const ZOTERO_LOCAL_CREDENTIAL: Readonly<{
     header: "Zotero-API-Key";
     hosts: readonly string[];
 }>;
-export declare function saveToZotero(call: CapabilityCall, params: Record<string, any>, signal?: AbortSignal): Promise<Record<string, any>>;
+export declare function saveToZotero(call: CapabilityCall, params: Record<string, any>, signal?: AbortSignal, reservedSlots?: Set<string>): Promise<Record<string, any>>;
 export declare function updateInZotero(call: CapabilityCall, params: Record<string, any>, cwd: string, signal?: AbortSignal): Promise<{
     consent: {
         via: string;

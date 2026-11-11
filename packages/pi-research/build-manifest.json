@@ -1,9 +1,9 @@
 {
   "version": 1,
   "generator": "packages/pi-research/scripts/build.mjs",
-  "inputsSha256": "479acde4621635b005cbaef81dcbafb6d9ac2b7da078b8bc904007ae77aa2048",
+  "inputsSha256": "2341305ff1476259f28b49f3fe1d9c421aeec4def4027d585afbc6428e2d21ea",
   "outputs": {
-    "dist/desktop-runtime.mjs": "0a068be391321959d9c0c21282a82b12659148c7d2e62d319eb6c1dd0ec13bf2",
+    "dist/desktop-runtime.mjs": "b865b6c0181c1e6787e5d478a97c7937d536c3d1d4793bb3a9e86900b4baff7e",
     "dist/host.mjs": "67e2abdcdf7d7fca5c7bb67cd22b14646b9822316fdf8d337e23f0e3b8fb79b2",
     "dist/index.mjs": "68f472b6bd4c8aa0dca694d6d76d6385be47f150986a842d36b9f1836cc7b5c3",
     "dist/types/core/claim-bindings.d.ts": "cf2ab2c03ff2ef73967de61f7f4d98ed63b598c64731aaeebb65d42204254ab4",
@@ -33,8 +33,9 @@
     "dist/types/desktop/capability-fetch.d.ts": "82adf585a82e6681c2e840a31437fe32df5963a2d666e1c58007b45219b9a7b2",
     "dist/types/desktop/runtime.d.ts": "7b0c708c1e10e34bd6690a709740702aaffe2faebb1ef7ce3595d2407b7e0d8a",
     "dist/types/desktop/zotero-acceptance.d.ts": "c443659a879f5370159b620aeed6e0d8d6f45a1f0e48c6b00d7febcae9b46335",
+    "dist/types/desktop/zotero-allowances.d.ts": "e3b7b58203b7d84301b7a40afd8eaa539ab34d27a3153eaae851bfb13a1695c1",
     "dist/types/desktop/zotero-literature-card.d.ts": "d6db3b7192b5a025e21727585462e559f94604025e02ddd9115a121a5e78bf73",
-    "dist/types/desktop/zotero-tools.d.ts": "d2132b2009dd4965603630e231e2e57a963757e0ceb4589dd416dbc8acc3bded",
+    "dist/types/desktop/zotero-tools.d.ts": "08c3d3cd60cf73136c191fef581e52273c3df708512161cad3d13d6384d9de88",
     "dist/types/evidence-gate.d.ts": "4f01bdeb41824004cf332e009f79dffea3f0f377e0e49895ac01db913ea01eea",
     "dist/types/evidence-loop.d.ts": "f8a7724620e7202c0b028729cbeff7e2afb5d9efe606c2bac8f163ee939d28f7",
     "dist/types/extension.d.ts": "dc89a9b9181577b637a31ce55d9e095f3325c5954559d468358d7cc3839596c1",
