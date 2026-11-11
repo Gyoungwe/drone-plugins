@@ -3,12 +3,14 @@ import { ZOTERO_ITEM_TYPES } from "../core/zotero-write.js";
 import {
 	executeZoteroSave,
 	executeZoteroUpdate,
+	localServerId,
 	prepareZoteroSave,
 	prepareZoteroUpdate,
 	probeZoteroConnector,
 	receiptWithoutUpdate,
 	receiptWithoutWrite,
 	webKeyAccess,
+	zoteroLocalWriteConfig,
 	zoteroWebApiConfig,
 } from "../core/zotero-write-runtime.js";
 import { type CapabilityCall, type CapabilityFetchOptions, capabilityFetch } from "./capability-fetch.js";
@@ -30,28 +32,63 @@ export const ZOTERO_WEB_CREDENTIAL = Object.freeze({
 	header: "Zotero-API-Key",
 	hosts: Object.freeze(["api.zotero.org"]),
 });
-/** Stands in for the key in the runtime's Web API config; the host replaces the header with the saved key. */
+/** Local write authorization stays in the host; the server ID is the only public setting. */
+export const ZOTERO_LOCAL_CREDENTIAL = Object.freeze({
+	slot: "zotero-local",
+	header: "Zotero-API-Key",
+	hosts: Object.freeze(["127.0.0.1:23119"]),
+});
+/** Stands in for keys in runtime configs; the host alone attaches the saved keys. */
 const HOST_ATTACHED_KEY = "attached-by-drone";
 const MANAGED_LIMITS =
-	"In Drone Desktop, saving goes through Zotero desktop (the connector) when it is running, otherwise through the Zotero Web API with the key the user saved in Drone Settings → UI plugins → Plugin credentials; Drone attaches the key, so never ask for it in chat. Changing an existing item needs that Web API key; Zotero 10 local writes are unavailable here.";
+	"In Drone Desktop, saving goes through Zotero desktop (the connector) when it is running, otherwise through the Zotero Web API with the key the user saved in Drone Settings → UI plugins → Plugin credentials; Drone attaches the key, so never ask for it in chat. Changing an existing item uses Zotero 10 local writes when authorized in Drone Settings → Zotero; otherwise it uses the Web API key.";
 
-const zoteroFetch = (call: CapabilityCall, options: CapabilityFetchOptions = {}) =>
-	capabilityFetch(call, { reads: ZOTERO_NETWORK_READS, credential: ZOTERO_WEB_CREDENTIAL, ...options });
+const zoteroFetch = (
+	call: CapabilityCall,
+	env: Record<string, string>,
+	options: CapabilityFetchOptions = {},
+) =>
+	capabilityFetch(call, {
+		reads: ZOTERO_NETWORK_READS,
+		credentials: [
+			ZOTERO_WEB_CREDENTIAL,
+			...(zoteroLocalWriteConfig(env).configured
+				? [
+						{
+							...ZOTERO_LOCAL_CREDENTIAL,
+							match: (url: URL, method: string) =>
+								url.pathname.startsWith("/api/") && ["POST", "PUT", "PATCH", "DELETE"].includes(method),
+						},
+					]
+				: []),
+		],
+		...options,
+	});
 
-/** Web API settings from the host's credential status; the key itself never reaches this process. */
-async function webEnv(call: CapabilityCall, signal?: AbortSignal): Promise<Record<string, string>> {
+/** Runtime settings from the host's credential status; keys never reach this process. */
+async function zoteroEnv(call: CapabilityCall, signal?: AbortSignal): Promise<Record<string, string>> {
 	let status: { slots?: Record<string, { configured: boolean; fields: Record<string, string> }> } | null;
 	try {
 		status = (await call("credentials.status", null, signal)) as typeof status;
 	} catch {
 		return {}; // a host without plugin credentials
 	}
-	const saved = status?.slots?.[ZOTERO_WEB_CREDENTIAL.slot];
-	if (!saved?.configured) return {};
+	const web = status?.slots?.[ZOTERO_WEB_CREDENTIAL.slot];
+	const local = status?.slots?.[ZOTERO_LOCAL_CREDENTIAL.slot];
 	return {
-		ZOTERO_API_KEY: HOST_ATTACHED_KEY,
-		ZOTERO_LIBRARY_TYPE: saved.fields.libraryType ?? "",
-		ZOTERO_LIBRARY_ID: saved.fields.libraryId ?? "",
+		...(web?.configured
+			? {
+					ZOTERO_API_KEY: HOST_ATTACHED_KEY,
+					ZOTERO_LIBRARY_TYPE: web.fields.libraryType ?? "",
+					ZOTERO_LIBRARY_ID: web.fields.libraryId ?? "",
+				}
+			: {}),
+		...(local?.configured
+			? {
+					ZOTERO_LOCAL_API_KEY: HOST_ATTACHED_KEY,
+					ZOTERO_LOCAL_SERVER_ID: local.fields.serverId,
+				}
+			: {}),
 	};
 }
 
@@ -97,9 +134,9 @@ async function allowanceFor(
 }
 
 export async function saveToZotero(call: CapabilityCall, params: Record<string, any>, signal?: AbortSignal) {
-	const env = await webEnv(call, signal);
+	const env = await zoteroEnv(call, signal);
 	const plan = await prepareZoteroSave(params, {
-		fetchImpl: zoteroFetch(call),
+		fetchImpl: zoteroFetch(call, env),
 		env,
 		signal,
 	});
@@ -110,7 +147,7 @@ export async function saveToZotero(call: CapabilityCall, params: Record<string, 
 		const writes = observedWrites(call);
 		allowance = await allowanceFor(call, plan.doi, signal);
 		receipt = await executeZoteroSave(plan, {
-			fetchImpl: zoteroFetch(writes.call, {
+			fetchImpl: zoteroFetch(writes.call, env, {
 				summary: `写入 Zotero 文献库：《${plan.item.title}》（DOI ${plan.doi}）`,
 				allowance,
 			}),
@@ -135,9 +172,9 @@ export async function updateInZotero(
 	cwd: string,
 	signal?: AbortSignal,
 ) {
-	const env = await webEnv(call, signal);
+	const env = await zoteroEnv(call, signal);
 	const plan = await prepareZoteroUpdate(params, {
-		fetchImpl: zoteroFetch(call),
+		fetchImpl: zoteroFetch(call, env),
 		env,
 		cwd,
 		signal,
@@ -145,7 +182,7 @@ export async function updateInZotero(
 	if (plan.action !== "update") return { ...receiptWithoutUpdate(plan), consent: { via: "not-needed" } };
 	const writes = observedWrites(call);
 	const receipt = await executeZoteroUpdate(plan, {
-		fetchImpl: zoteroFetch(writes.call, {
+		fetchImpl: zoteroFetch(writes.call, env, {
 			summary: `修改 Zotero 条目 ${plan.item.key}`,
 		}),
 		env,
@@ -160,12 +197,12 @@ export async function updateInZotero(
 }
 
 /** Whether the saved Web API key works for its library and may write there; never the key. */
-async function webApiStatus(call: CapabilityCall, signal?: AbortSignal) {
-	const config = zoteroWebApiConfig(await webEnv(call, signal));
+async function webApiStatus(call: CapabilityCall, env: Record<string, string>, signal?: AbortSignal) {
+	const config = zoteroWebApiConfig(env);
 	if (!config.configured) return { configured: false, reason: "not-saved-in-drone-settings" };
 	const library = { libraryType: config.libraryType, libraryId: config.libraryId };
 	try {
-		const access = await webKeyAccess({ fetchImpl: zoteroFetch(call), config, signal });
+		const access = await webKeyAccess({ fetchImpl: zoteroFetch(call, env), config, signal });
 		return { configured: true, ...library, library: access.library, write: access.write };
 	} catch (error) {
 		return { configured: true, ...library, error: (error as Error).message };
@@ -173,14 +210,22 @@ async function webApiStatus(call: CapabilityCall, signal?: AbortSignal) {
 }
 
 export async function zoteroStatus(call: CapabilityCall, signal?: AbortSignal) {
+	const env = await zoteroEnv(call, signal);
+	const local = zoteroLocalWriteConfig(env);
+	const serverId = local.configured
+		? await localServerId({ fetchImpl: zoteroFetch(call, env), signal })
+		: null;
 	return {
 		runtime: "drone-desktop-managed",
 		connector: await probeZoteroConnector({
-			fetchImpl: zoteroFetch(call),
+			fetchImpl: zoteroFetch(call, env),
 			signal,
 		}),
-		webApi: await webApiStatus(call, signal),
-		localWrite: { configured: false, reason: "managed-runtime-has-no-local-key" },
+		webApi: await webApiStatus(call, env, signal),
+		localWrite: {
+			configured: local.configured,
+			staleServer: Boolean(serverId && serverId !== local.serverId),
+		},
 		note: MANAGED_LIMITS,
 	};
 }

@@ -6,6 +6,13 @@
  */
 export type CapabilityCall = (name: string, input: unknown, signal?: AbortSignal) => Promise<unknown>;
 
+export interface CapabilityCredential {
+	readonly slot: string;
+	readonly header: string;
+	readonly hosts: readonly string[];
+	readonly match?: (url: URL, method: string) => boolean;
+}
+
 export interface CapabilityFetchOptions {
 	/** "host/path" POST endpoints that only read; must equal the manifest's `drone.networkReads`. */
 	readonly reads?: readonly string[];
@@ -14,10 +21,10 @@ export interface CapabilityFetchOptions {
 	/** A task grant allowance this write uses instead of the host's dialog (each is admitted once). */
 	readonly allowance?: string;
 	/**
-	 * A manifest `drone.credentials` slot. Toward its hosts the runtime's own copy of the header is dropped
-	 * and the slot is named instead, so the host attaches the secret the user saved in Drone settings.
+	 * Manifest `drone.credentials` slots. Reserved headers are dropped toward their hosts even when a
+	 * request does not match; only matching requests name a slot for the host to attach its secret.
 	 */
-	readonly credential?: { readonly slot: string; readonly header: string; readonly hosts: readonly string[] };
+	readonly credentials?: readonly CapabilityCredential[];
 }
 
 interface NetworkResult {
@@ -32,7 +39,7 @@ const NO_BODY = new Set([101, 204, 205, 304]);
 
 export function capabilityFetch(
 	call: CapabilityCall,
-	{ reads = [], summary, allowance, credential }: CapabilityFetchOptions = {},
+	{ reads = [], summary, allowance, credentials = [] }: CapabilityFetchOptions = {},
 ): typeof fetch {
 	return async (input, init) => {
 		// Request normalizes every body type (string, URLSearchParams, Buffer) and its content type.
@@ -42,10 +49,14 @@ export function capabilityFetch(
 			READ_METHODS.has(request.method) ||
 			(request.method === "POST" && reads.includes(`${url.host}${url.pathname}`));
 		const body = READ_METHODS.has(request.method) ? undefined : Buffer.from(await request.arrayBuffer());
-		const slot = credential?.hosts.includes(url.host) ? credential : undefined;
+		const hostCredentials = credentials.filter((credential) => credential.hosts.includes(url.host));
+		const slot = hostCredentials.find(
+			(credential) => !credential.match || credential.match(url, request.method),
+		);
 		const headers: Record<string, string> = {};
 		request.headers.forEach((value, name) => {
-			if (name !== slot?.header.toLowerCase()) headers[name] = value;
+			if (!hostCredentials.some((credential) => name === credential.header.toLowerCase()))
+				headers[name] = value;
 		});
 		const result = (await call(
 			read ? "network.read" : "network.write",

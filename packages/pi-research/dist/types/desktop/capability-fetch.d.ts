@@ -5,6 +5,12 @@
  * `fetchImpl` seams take it unchanged.
  */
 export type CapabilityCall = (name: string, input: unknown, signal?: AbortSignal) => Promise<unknown>;
+export interface CapabilityCredential {
+    readonly slot: string;
+    readonly header: string;
+    readonly hosts: readonly string[];
+    readonly match?: (url: URL, method: string) => boolean;
+}
 export interface CapabilityFetchOptions {
     /** "host/path" POST endpoints that only read; must equal the manifest's `drone.networkReads`. */
     readonly reads?: readonly string[];
@@ -13,13 +19,9 @@ export interface CapabilityFetchOptions {
     /** A task grant allowance this write uses instead of the host's dialog (each is admitted once). */
     readonly allowance?: string;
     /**
-     * A manifest `drone.credentials` slot. Toward its hosts the runtime's own copy of the header is dropped
-     * and the slot is named instead, so the host attaches the secret the user saved in Drone settings.
+     * Manifest `drone.credentials` slots. Reserved headers are dropped toward their hosts even when a
+     * request does not match; only matching requests name a slot for the host to attach its secret.
      */
-    readonly credential?: {
-        readonly slot: string;
-        readonly header: string;
-        readonly hosts: readonly string[];
-    };
+    readonly credentials?: readonly CapabilityCredential[];
 }
-export declare function capabilityFetch(call: CapabilityCall, { reads, summary, allowance, credential }?: CapabilityFetchOptions): typeof fetch;
+export declare function capabilityFetch(call: CapabilityCall, { reads, summary, allowance, credentials }?: CapabilityFetchOptions): typeof fetch;
