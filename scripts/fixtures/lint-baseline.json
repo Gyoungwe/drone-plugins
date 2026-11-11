@@ -309,7 +309,7 @@
 	"suspicious/noExplicitAny\tpackages/pi-research/src/core/zotero-setup-runtime.ts": 6,
 	"suspicious/noExplicitAny\tpackages/pi-research/src/core/zotero-write-runtime.ts": 67,
 	"suspicious/noExplicitAny\tpackages/pi-research/src/desktop/zotero-acceptance.ts": 6,
-	"suspicious/noExplicitAny\tpackages/pi-research/src/desktop/zotero-tools.ts": 6,
+	"suspicious/noExplicitAny\tpackages/pi-research/src/desktop/zotero-tools.ts": 5,
 	"suspicious/noExplicitAny\tpackages/pi-research/src/evidence-loop.ts": 16,
 	"suspicious/noExplicitAny\tpackages/pi-research/src/extension.ts": 30,
 	"suspicious/noExplicitAny\tpackages/pi-research/src/research-loop.ts": 2,
