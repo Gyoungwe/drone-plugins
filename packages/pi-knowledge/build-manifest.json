@@ -117,7 +117,7 @@
 		"lib/knowledge/runtime/worker.mjs": "eb524114e9a1ac23c8049ba66e52f55fc24ca6565d83410d2acab801da5a89d8",
 		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "d070e619c5f23f4a569ab7cfd3ea60052349a5f9a6a946f23f7b6978aee919a4",
 		"ui/bundle.js": "bc470a92cf93463a83cb5c6216b800cb23f6134182abbd68d8fc5262c506725c",
-		"ui/build-manifest.json": "54c81616a43c15c1c173c5e34e9dde1bf735ac0691e00b75355b99087054991d"
+		"ui/build-manifest.json": "01452679a871bd12e5f03ef3f1a444043d0f29677c714f59f4027419b40778ba"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",
