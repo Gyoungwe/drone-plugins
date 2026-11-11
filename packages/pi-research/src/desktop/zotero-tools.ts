@@ -14,6 +14,7 @@ import {
 	zoteroWebApiConfig,
 } from "../core/zotero-write-runtime.js";
 import { type CapabilityCall, type CapabilityFetchOptions, capabilityFetch } from "./capability-fetch.js";
+import { allowanceFor } from "./zotero-allowances.js";
 import { zoteroLiteratureCard } from "./zotero-literature-card.js";
 
 /**
@@ -98,7 +99,22 @@ const text = (value: unknown) => ({
 	details: value,
 });
 
-function literatureText(receipt: Record<string, unknown>, source: string) {
+async function literatureText(
+	pending: Promise<Record<string, unknown>>,
+	source: string,
+	params: Record<string, unknown>,
+	signal?: AbortSignal,
+) {
+	const receipt = await pending.catch((error: unknown) => {
+		if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
+		return {
+			status: "failed",
+			doi: normalizeZoteroDoi(params.doi),
+			error: `${error instanceof Error ? error.name : "Error"}: Zotero write failed.`.slice(0, 200),
+			next: "Do not retry automatically. Inspect Zotero or ask the user before any further write.",
+		};
+	});
+	signal?.throwIfAborted();
 	const card = zoteroLiteratureCard(receipt, source, Date.now());
 	return { ...text(receipt), details: card ? { ...receipt, cards: [card] } : receipt };
 }
@@ -119,27 +135,12 @@ function observedWrites(call: CapabilityCall) {
 	return { call: observed, declinedBeforeAnyWrite: () => state.declined && !state.wrote };
 }
 
-/**
- * The allowance the user's task authorization gave this package for a DOI: the milestone naming it, else an
- * unused "one paper after close reading" slot. Without one the host asks as usual.
- */
-async function allowanceFor(
+export async function saveToZotero(
 	call: CapabilityCall,
-	doi: string,
+	params: Record<string, any>,
 	signal?: AbortSignal,
-): Promise<string | undefined> {
-	let held: { allowances?: { id: string; member: string; consent: any; used: boolean }[] } | null;
-	try {
-		held = (await call("task.grant.allowances", null, signal)) as typeof held;
-	} catch {
-		return undefined;
-	}
-	const open = (held?.allowances ?? []).filter((item) => item.member === "zotero_item" && !item.used);
-	const named = open.find((item) => normalizeZoteroDoi(item.consent?.doi) === doi);
-	return (named ?? open.find((item) => item.consent?.slot === true && !item.consent?.doi))?.id;
-}
-
-export async function saveToZotero(call: CapabilityCall, params: Record<string, any>, signal?: AbortSignal) {
+	reservedSlots = new Set<string>(),
+) {
 	const env = await zoteroEnv(call, signal);
 	const plan = await prepareZoteroSave(params, {
 		fetchImpl: zoteroFetch(call, env),
@@ -151,7 +152,7 @@ export async function saveToZotero(call: CapabilityCall, params: Record<string, 
 	if (plan.action !== "create") receipt = receiptWithoutWrite(plan);
 	else {
 		const writes = observedWrites(call);
-		allowance = await allowanceFor(call, plan.doi, signal);
+		allowance = await allowanceFor(call, plan.doi, reservedSlots, signal);
 		receipt = await executeZoteroSave(plan, {
 			fetchImpl: zoteroFetch(writes.call, env, {
 				summary: `写入 Zotero 文献库：《${plan.item.title}》（DOI ${plan.doi}）`,
@@ -159,6 +160,8 @@ export async function saveToZotero(call: CapabilityCall, params: Record<string, 
 			}),
 			env,
 			signal,
+		}).finally(() => {
+			if (allowance) reservedSlots.delete(allowance);
 		});
 		if (writes.declinedBeforeAnyWrite())
 			receipt = receiptWithoutWrite({ ...plan, action: "cancelled", reason: "user-declined" });
@@ -187,19 +190,22 @@ export async function updateInZotero(
 	});
 	if (plan.action !== "update") return { ...receiptWithoutUpdate(plan), consent: { via: "not-needed" } };
 	const writes = observedWrites(call);
-	const receipt = await executeZoteroUpdate(plan, {
-		fetchImpl: zoteroFetch(writes.call, env, {
-			summary: `修改 Zotero 条目 ${plan.item.key}`,
-		}),
-		env,
-		signal,
-	});
-	if (writes.declinedBeforeAnyWrite())
-		return {
-			...receiptWithoutUpdate({ ...plan, action: "cancelled", reason: "user-declined" }),
-			consent: { via: "host-dialog" },
-		};
-	return { ...receipt, consent: { via: "host-dialog" } };
+	try {
+		const receipt = await executeZoteroUpdate(plan, {
+			fetchImpl: zoteroFetch(writes.call, env, {
+				summary: `修改 Zotero 条目 ${plan.item.key}`,
+			}),
+			env,
+			signal,
+		});
+		if (!writes.declinedBeforeAnyWrite()) return { ...receipt, consent: { via: "host-dialog" } };
+	} catch (error) {
+		if (!writes.declinedBeforeAnyWrite()) throw error;
+	}
+	return {
+		...receiptWithoutUpdate({ ...plan, action: "cancelled", reason: "user-declined" }),
+		consent: { via: "host-dialog" },
+	};
 }
 
 /** Whether the saved Web API key works for its library and may write there; never the key. */
@@ -244,6 +250,7 @@ export const ZOTERO_TOOL_EFFECTS = Object.freeze({
 } as const);
 
 export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): void }, call: CapabilityCall) {
+	const reservedSlots = new Set<string>();
 	pi.registerTool({
 		name: "research_zotero_status",
 		label: "Zotero literature status",
@@ -327,7 +334,12 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 			},
 		},
 		execute: async (_id: string, params: Record<string, any>, signal?: AbortSignal) =>
-			literatureText(await saveToZotero(call, params || {}, signal), "research_zotero_save"),
+			literatureText(
+				saveToZotero(call, params || {}, signal, reservedSlots),
+				"research_zotero_save",
+				params,
+				signal,
+			),
 	});
 	pi.registerTool({
 		name: "research_zotero_update",
@@ -372,6 +384,12 @@ export function registerManagedZoteroTools(pi: { registerTool(tool: unknown): vo
 			signal: AbortSignal | undefined,
 			_update: unknown,
 			ctx: { cwd: string },
-		) => literatureText(await updateInZotero(call, params || {}, ctx.cwd, signal), "research_zotero_update"),
+		) =>
+			literatureText(
+				updateInZotero(call, params || {}, ctx.cwd, signal),
+				"research_zotero_update",
+				params,
+				signal,
+			),
 	});
 }
