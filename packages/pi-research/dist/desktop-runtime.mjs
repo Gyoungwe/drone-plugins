@@ -1883,6 +1883,115 @@ function receiptWithoutUpdate(plan) {
   };
 }
 
+// src/desktop/zotero-literature-card.ts
+var OK = /* @__PURE__ */ new Set([
+  "verified",
+  "saved",
+  "reused",
+  "both-verified",
+  "attachment-indexed-not-read",
+  "applied",
+  "written",
+  "note-written",
+  "summary-written",
+  "explainer-archived",
+  "setup-complete",
+  "\u5DF2\u4FDD\u5B58",
+  "archived",
+  "found",
+  "ready"
+]);
+var ERROR = /* @__PURE__ */ new Set([
+  "failed",
+  "identity-mismatch",
+  "missing",
+  "blocked",
+  "cancelled",
+  "not-found",
+  "error"
+]);
+var MUTED = /* @__PURE__ */ new Set(["unknown", "unavailable", "pending"]);
+var ZOTERO_KEY2 = /^[A-Z0-9]{8}$/;
+var CHANNEL_LABEL = { connector: "\u8FDE\u63A5\u5668", web: "Web API" };
+var clip = (value, max) => value ? value.slice(0, max) : null;
+function statusTone(status) {
+  if (OK.has(status)) return "ok";
+  if (ERROR.has(status)) return "error";
+  if (MUTED.has(status)) return "muted";
+  return "warn";
+}
+function writeCardFields(receipt2, zoteroKey) {
+  const zoteroStatus2 = receipt2.status === "saved" || receipt2.status === "reused" ? "verified" : clip(receipt2.status, 32) || "unavailable";
+  const fulltext = clip(receipt2.fulltextStatus, 64) || "unknown";
+  const channel = clip(receipt2.channel, 16);
+  const library = clip(receipt2.library?.name, 120);
+  return [
+    {
+      label: "Zotero",
+      value: zoteroStatus2,
+      status: true,
+      code: zoteroKey && ZOTERO_KEY2.test(zoteroKey) ? zoteroKey : null,
+      note: [channel ? CHANNEL_LABEL[channel] || channel : null, library].filter(Boolean).join(" \xB7 ") || null,
+      tone: statusTone(zoteroStatus2)
+    },
+    {
+      label: "Vault \u7B14\u8BB0",
+      i18n: "flow.field.vaultNote",
+      value: "unknown",
+      status: true,
+      code: null,
+      tone: "muted"
+    },
+    {
+      label: "\u5168\u6587",
+      i18n: "flow.field.fulltext",
+      value: fulltext,
+      status: true,
+      tone: statusTone(fulltext)
+    }
+  ];
+}
+function writeCardLinks(doi, zoteroKey) {
+  const links = [
+    {
+      label: "\u6253\u5F00 DOI",
+      i18n: "flow.link.openDoi",
+      kind: "external",
+      target: `https://doi.org/${encodeURI(doi)}`
+    }
+  ];
+  if (zoteroKey && ZOTERO_KEY2.test(zoteroKey))
+    links.unshift({
+      label: "\u5728 Zotero \u4E2D\u6253\u5F00",
+      i18n: "flow.link.openInZotero",
+      kind: "resource",
+      target: `zotero://select/library/items/${zoteroKey}`
+    });
+  return links;
+}
+function zoteroLiteratureCard(receipt2, source, at) {
+  const doi = clip(receipt2.doi, 300);
+  if (!doi) return null;
+  const zoteroKey = clip(receipt2.zoteroKey, 8);
+  const title = clip(receipt2.title, 200);
+  const status = clip(receipt2.status, 32) || "unknown";
+  return {
+    key: `doi:${doi}`,
+    kind: "literature",
+    title: title || doi.slice(0, 200),
+    provisionalTitle: !title,
+    subtitle: `DOI ${doi}`.slice(0, 300),
+    status,
+    tone: statusTone(status),
+    detail: null,
+    path: null,
+    fields: writeCardFields(receipt2, zoteroKey),
+    links: writeCardLinks(doi, zoteroKey),
+    source: clip(source, 80),
+    at
+  };
+}
+
 // src/desktop/zotero-tools.ts
 var ZOTERO_NETWORK_READS = Object.freeze([
   "127.0.0.1:23119/connector/ping",
@@ -1938,6 +2047,10 @@ var text4 = (value) => ({
   content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
   details: value
 });
+function literatureText(receipt2, source) {
+  const card = zoteroLiteratureCard(receipt2, source, Date.now());
+  return { ...text4(receipt2), details: card ? { ...receipt2, cards: [card] } : receipt2 };
+}
 function observedWrites(call) {
   const state = { wrote: false, declined: false };
   const observed = async (name, input, signal) => {
@@ -2055,6 +2168,25 @@ function registerManagedZoteroTools(pi, call) {
   pi.registerTool({
     name: "research_zotero_status",
     label: "Zotero literature status",
+    drone: {
+      readOnly: true,
+      capabilities: ["research", "external"],
+      activity: { text: "\u6B63\u5728\u68C0\u67E5 Zotero \u63A5\u5165\u72B6\u6001\u2026", phase: "verification" },
+      families: [
+        {
+          match: "research-zotero",
+          label: "Zotero",
+          readOnly: true,
+          capabilities: ["research", "external"],
+          activity: {
+            text: "\u6B63\u5728\u68C0\u7D22 Zotero \u6587\u732E\u5E93\u2026",
+            phase: "literature-search",
+            verb: "\u6B63\u5728\u68C0\u7D22 Zotero",
+            queryKeys: ["query", "q", "search", "search_text", "text"]
+          }
+        }
+      ]
+    },
     description: `Read-only: report whether Zotero desktop is reachable and which write channels are available. ${MANAGED_LIMITS}`,
     parameters: { type: "object", properties: {}, additionalProperties: false },
     execute: async (_id, _params, signal) => text4(await zoteroStatus(call, signal))
@@ -2062,6 +2194,12 @@ function registerManagedZoteroTools(pi, call) {
   pi.registerTool({
     name: "research_zotero_save",
     label: "Save one paper to Zotero (host-controlled)",
+    drone: {
+      capabilities: ["research", "external"],
+      subagent: "exclude",
+      activity: { text: "\u6B63\u5728\u5199\u5165 Zotero \u6587\u732E\u5E93\u2026", phase: "literature-write" },
+      flow: "literature"
+    },
     description: `Write ONE bibliographic item into the user's Zotero library, keyed by exact DOI. Dedups by DOI first (an existing item is reused, nothing is written); otherwise the host asks the user once on its own dialog, writes once and reads the item back by DOI. Never deletes, merges or retries; never ask the user for confirmation in chat. ${MANAGED_LIMITS}`,
     parameters: {
       type: "object",
@@ -2106,11 +2244,17 @@ function registerManagedZoteroTools(pi, call) {
         }
       }
     },
-    execute: async (_id, params, signal) => text4(await saveToZotero(call, params || {}, signal))
+    execute: async (_id, params, signal) => literatureText(await saveToZotero(call, params || {}, signal), "research_zotero_save")
   });
   pi.registerTool({
     name: "research_zotero_update",
     label: "Update an existing Zotero item (host-controlled)",
+    drone: {
+      capabilities: ["research", "external"],
+      subagent: "exclude",
+      activity: { text: "\u6B63\u5728\u4FEE\u6539 Zotero \u6761\u76EE\u2026", phase: "literature-write" },
+      flow: "literature"
+    },
     description: `Change ONE existing item in the user's Zotero library (collection, PDF link, local PDF). Identify it by zotero_key or exact DOI; the host asks the user on its own dialog before writing, then reads the item back. Never deletes or retries. Without a write channel it returns status=blocked with the reason; never ask for a key in chat. ${MANAGED_LIMITS}`,
     parameters: {
       type: "object",
@@ -2139,7 +2283,7 @@ function registerManagedZoteroTools(pi, call) {
         }
       }
     },
-    execute: async (_id, params, signal, _update, ctx) => text4(await updateInZotero(call, params || {}, ctx.cwd, signal))
+    execute: async (_id, params, signal, _update, ctx) => literatureText(await updateInZotero(call, params || {}, ctx.cwd, signal), "research_zotero_update")
   });
 }
 
