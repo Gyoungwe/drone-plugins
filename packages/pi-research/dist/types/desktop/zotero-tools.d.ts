@@ -12,6 +12,12 @@ export declare const ZOTERO_WEB_CREDENTIAL: Readonly<{
     header: "Zotero-API-Key";
     hosts: readonly string[];
 }>;
+/** Local write authorization stays in the host; the server ID is the only public setting. */
+export declare const ZOTERO_LOCAL_CREDENTIAL: Readonly<{
+    slot: "zotero-local";
+    header: "Zotero-API-Key";
+    hosts: readonly string[];
+}>;
 export declare function saveToZotero(call: CapabilityCall, params: Record<string, any>, signal?: AbortSignal): Promise<Record<string, any>>;
 export declare function updateInZotero(call: CapabilityCall, params: Record<string, any>, cwd: string, signal?: AbortSignal): Promise<{
     consent: {
@@ -90,7 +96,7 @@ export declare function zoteroStatus(call: CapabilityCall, signal?: AbortSignal)
     };
     localWrite: {
         configured: boolean;
-        reason: string;
+        staleServer: boolean;
     };
     note: string;
 }>;

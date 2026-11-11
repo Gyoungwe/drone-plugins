@@ -4,7 +4,7 @@
     "ui/src/index.tsx": "341ad7cc7af4843e93443d2b95d5e004380f3fe95fb0c187099449f6d26d69a0",
     "scripts/build-ui.mjs": "7f1c75eee7f708f2d3eefdb949d97140374f090ae5ca21df5acd7054f6ad98fd",
     "package.json": "82b9f06a99d287f48616ad5990866fa1d4cfdfb14c0c625b000c7d25369bcb85",
-    "plugin.manifest.json": "bb922fb5379eb65a3aa1945c958bd8af4ffa7553ae8475f8853f20a3d4717b97",
+    "plugin.manifest.json": "0224945bb6fb3cfc3ebeb4c0d90de5707208c4c800c6396213121fd0d24f181e",
     "ui/plugin.json": "f69c5484dfcc253ab39c60f87c42e9ef3b1e9faffa19661b3a9a45e0e19678a5"
   },
   "outputs": {
