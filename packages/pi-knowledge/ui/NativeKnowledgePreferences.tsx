@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KnowledgePreferences, KnowledgeSetReviewPolicyInput } from "../src/desktop/contract";
 import { NativeKnowledgeCloud } from "./NativeKnowledgeCloud";
 import { NativeKnowledgeSemanticSettings } from "./NativeKnowledgeSemanticSettings";
+import { NativeKnowledgeSpecialistSettings } from "./NativeKnowledgeSpecialistSettings";
 import { useNativeKnowledgeText } from "./native-copy";
 import { Button } from "./runtime-api";
 
@@ -181,6 +182,11 @@ export function NativeKnowledgePreferences({
 						)}
 					</section>
 					<NativeKnowledgeSemanticSettings
+						client={client}
+						observationRevision={observationRevision}
+						refreshing={refreshing}
+					/>
+					<NativeKnowledgeSpecialistSettings
 						client={client}
 						observationRevision={observationRevision}
 						refreshing={refreshing}

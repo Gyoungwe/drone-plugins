@@ -27,16 +27,36 @@ const initial: KnowledgePreferences = {
 	},
 };
 function respond(value: KnowledgePreferences) {
-	return async (operation: string, _input: unknown): Promise<unknown> =>
-		operation === "cloudStatus"
-			? {
-					status: "not_configured",
-					reason: "not_configured",
-					configured: false,
-					credentialSource: null,
-					savedConfigured: false,
-				}
-			: value;
+	return async (operation: string, _input: unknown): Promise<unknown> => {
+		if (operation === "cloudStatus")
+			return {
+				status: "not_configured",
+				reason: "not_configured",
+				configured: false,
+				credentialSource: null,
+				savedConfigured: false,
+			};
+		if (operation === "specialistSettings")
+			return {
+				mode: "manual",
+				revision: 4,
+				bindingRevision: value.binding?.revision ?? null,
+				canWriteState: value.canWriteState,
+				maxRunsPerTurn: 4,
+				maxRunsPerSession: 20,
+				maxToolOperations: 80,
+				concurrency: 2,
+				maxConcurrency: 4,
+				queueLimit: 8,
+				queueWaitMs: 15000,
+				timeoutMs: 120000,
+				maxTokensPerTurn: 24000,
+				maxTokensPerSession: 120000,
+				maxCostPerTurn: 1,
+				maxCostPerSession: 5,
+			};
+		return value;
+	};
 }
 function client() {
 	return {
@@ -45,6 +65,16 @@ function client() {
 	};
 }
 afterEach(cleanup);
+it("mounts native specialist mode settings beside semantic settings", async () => {
+	const runtime = client();
+	render(<NativeKnowledgePreferences client={runtime} observationRevision={1} refreshing={false} />);
+	const select = await screen.findByRole("combobox", { name: "自动调度模式" });
+	expect((select as HTMLSelectElement).value).toBe("manual");
+	expect(screen.getByTestId("native-knowledge-specialist-settings").previousElementSibling).toBe(
+		screen.getByTestId("native-knowledge-semantic-settings"),
+	);
+	expect(runtime.invoke).toHaveBeenCalledWith("specialistSettings", null);
+});
 it("displays binding details and saves the chosen mode with the observed state version", async () => {
 	const runtime = client();
 	render(<NativeKnowledgePreferences client={runtime} observationRevision={1} refreshing={false} />);
@@ -70,18 +100,19 @@ it("displays binding details and saves the chosen mode with the observed state v
 		expectedVersion: version,
 		mode: "automatic",
 	});
-	expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("automatic");
+	expect((screen.getByRole("combobox", { name: "审核策略" }) as HTMLSelectElement).value).toBe("automatic");
 });
 it("keeps state mutation disabled when the real resource grant is read-only", async () => {
 	const runtime = client();
 	runtime.invoke.mockImplementation(respond({ ...initial, canWriteState: false }));
 	render(<NativeKnowledgePreferences client={runtime} observationRevision={1} refreshing={false} />);
 	await screen.findByText(/当前仅授权读取状态/);
-	expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(true);
+	expect((screen.getByRole("combobox", { name: "审核策略" }) as HTMLSelectElement).disabled).toBe(true);
 	expect((screen.getByRole("button", { name: "保存审核策略" }) as HTMLButtonElement).disabled).toBe(true);
 	expect(runtime.invoke.mock.calls.map(([op]) => op)).toEqual([
 		"preferences",
 		"semanticSettings",
+		"specialistSettings",
 		"cloudStatus",
 	]);
 });
@@ -117,7 +148,7 @@ it("does not claim success on a concurrent state conflict and uses a fresh versi
 		<NativeKnowledgePreferences client={runtime} observationRevision={1} refreshing={false} />,
 	);
 	await screen.findByText("/selected/library");
-	fireEvent.change(screen.getByRole("combobox"), {
+	fireEvent.change(screen.getByRole("combobox", { name: "审核策略" }), {
 		target: { value: "automatic" },
 	});
 	runtime.invoke.mockRejectedValueOnce(new Error("ESTATECONFLICT: policy changed"));
@@ -133,7 +164,7 @@ it("does not claim success on a concurrent state conflict and uses a fresh versi
 	view.rerender(<NativeKnowledgePreferences client={runtime} observationRevision={2} refreshing={false} />);
 	await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 	await screen.findByText("/selected/library");
-	fireEvent.change(screen.getByRole("combobox"), {
+	fireEvent.change(screen.getByRole("combobox", { name: "审核策略" }), {
 		target: { value: "automatic" },
 	});
 	fireEvent.click(screen.getByRole("button", { name: "保存审核策略" }));
@@ -189,7 +220,10 @@ it("keeps settings reachable without a binding and never invokes the legacy sett
 	fireEvent.click(screen.getByRole("button", { name: "设置" }));
 	await screen.findByText("当前知识库绑定");
 	expect(screen.getByText("尚未绑定知识库")).toBeDefined();
-	expect(screen.queryByRole("combobox")).toBeNull();
+	expect(screen.queryByRole("combobox", { name: "审核策略" })).toBeNull();
+	expect(
+		((await screen.findByRole("combobox", { name: "自动调度模式" })) as HTMLSelectElement).disabled,
+	).toBe(true);
 	expect(services.maintainKnowledge).not.toHaveBeenCalled();
 });
 
@@ -208,6 +242,6 @@ it("does not offer to override an environment-enforced strict policy", async () 
 	);
 	render(<NativeKnowledgePreferences client={runtime} observationRevision={1} refreshing={false} />);
 	await screen.findByText("环境策略强制严格审核；此处不能覆盖。");
-	expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(true);
+	expect((screen.getByRole("combobox", { name: "审核策略" }) as HTMLSelectElement).disabled).toBe(true);
 	expect((screen.getByRole("button", { name: "保存审核策略" }) as HTMLButtonElement).disabled).toBe(true);
 });
