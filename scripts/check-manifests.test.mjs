@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { validatePackageManifest } from "./check-manifests.mjs";
+import { credentialFailures } from "./manifest-credentials.mjs";
 
 const packageRoot = fileURLToPath(new URL("../packages/pi-analysis/", import.meta.url));
 const packageJson = {
@@ -331,6 +332,7 @@ test("credential slots name declared hosts, a non-reserved header and need a man
 	};
 	const withSlots = (manifest, credentials) => ({ ...manifest, drone: { ...valid.drone, credentials } });
 	assert.equal(errors(withSlots(owned, [slot])), "");
+	assert.equal(errors(withSlots(owned, [{ ...slot, header: "Authorization" }])), "");
 	for (const bad of [
 		[{ ...slot, hosts: ["evil.example.org"] }],
 		[{ ...slot, header: "Cookie" }],
@@ -342,5 +344,41 @@ test("credential slots name declared hosts, a non-reserved header and need a man
 	assert.match(
 		errors(withSlots({ ...valid, permissions: owned.permissions }, [slot])),
 		/requires desktopRuntime/,
+	);
+});
+
+test("credential authentication requires host-managed Basic/Digest, Authorization and empty fields", () => {
+	const slot = {
+		slot: "webdav",
+		label: { zh: "密码", en: "Password" },
+		hosts: ["dav.example.org"],
+		header: "Authorization",
+		fields: [],
+		authentication: "http-basic-digest",
+	};
+	const owned = {
+		...valid,
+		entrypoints: { ...valid.entrypoints, desktopRuntime: "./dist/index.mjs" },
+		permissions: { ...valid.permissions, network: ["dav.example.org"] },
+	};
+	const withSlots = (credentials) => ({ ...owned, drone: { ...valid.drone, credentials } });
+	const failures = (manifest) => credentialFailures(manifest).join("\n");
+	assert.equal(failures(withSlots([slot])), "");
+	const literalSlot = { ...slot };
+	delete literalSlot.authentication;
+	assert.equal(failures(withSlots([{ ...literalSlot, fields: ["libraryId"] }])), "");
+	for (const authentication of ["http-digest", "", null, true, 1, [], {}])
+		assert.match(failures(withSlots([{ ...slot, authentication }])), /drone.credentials authentication must/);
+	for (const changes of [{ header: "X-Auth" }, { header: "authorization" }, { fields: ["username"] }])
+		assert.match(failures(withSlots([{ ...slot, ...changes }])), /drone.credentials authentication must/);
+	for (const credentials of [
+		[{ ...slot, hosts: ["other.example.org"] }],
+		[{ ...slot, label: { zh: "密码" } }],
+		[slot, slot],
+	])
+		assert.match(failures(withSlots(credentials)), /drone.credentials must list unique slots/);
+	assert.match(
+		failures({ ...withSlots([slot]), entrypoints: valid.entrypoints }),
+		/requires desktopRuntime ownership/,
 	);
 });

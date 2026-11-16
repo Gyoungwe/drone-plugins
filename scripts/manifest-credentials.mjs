@@ -1,4 +1,4 @@
-/** Drone's manifest parser rules (`network-declaration.ts`); the host attaches the secret as `header`, never a reserved one. */
+/** Drone's manifest parser rules (`network-declaration.ts`); credential headers must never be reserved. */
 const RESERVED_HEADER =
 	/^(?:host|cookie|connection|keep-alive|transfer-encoding|upgrade|te|trailer|content-length|proxy-.*)$/i;
 
@@ -31,6 +31,19 @@ export function credentialFailures(manifest) {
 	if (!valid)
 		failures.push(
 			"drone.credentials must list unique slots with a zh/en label, hosts from permissions.network, a non-reserved header and fields",
+		);
+	if (
+		valid &&
+		slots.some(
+			(slot) =>
+				Object.hasOwn(slot, "authentication") &&
+				(slot.authentication !== "http-basic-digest" ||
+					slot.header !== "Authorization" ||
+					slot.fields.length !== 0),
+		)
+	)
+		failures.push(
+			'drone.credentials authentication must be "http-basic-digest" with header Authorization and empty fields',
 		);
 	return failures;
 }
