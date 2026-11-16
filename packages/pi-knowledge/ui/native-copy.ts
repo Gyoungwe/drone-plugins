@@ -115,7 +115,7 @@ const zh = {
 	lines: "行",
 	unsupportedTitle: "其他知识功能暂不可用",
 	unsupported:
-		"当前支持总览、搜索、笔记阅读、链接、图谱、索引任务查询、候选审核、历史与撤销，以及审核策略和相似内容设置。绑定编辑、自动发现、云同步及 Zotero 功能仍在迁移中。",
+		"当前支持总览、搜索、笔记阅读、链接、图谱、索引任务查询、候选审核、历史与撤销，以及审核策略和相似内容设置。绑定编辑、自动发现及 Zotero 功能仍在迁移中。",
 	readOnly: "搜索片段仅供浏览，不代表当前会话已读取原文或完成证据核验。",
 };
 const en: Record<keyof typeof zh, string> = {
@@ -242,7 +242,7 @@ const en: Record<keyof typeof zh, string> = {
 	lines: "Lines",
 	unsupportedTitle: "Other knowledge features are temporarily unavailable",
 	unsupported:
-		"Overview, search, note reading, links, graphs, index jobs, candidate review decisions, history and undo are available, along with review policy and similarity settings. Binding changes, discovery, cloud sync and Zotero are still being migrated.",
+		"Overview, search, note reading, links, graphs, index jobs, candidate review decisions, history and undo are available, along with review policy and similarity settings. Binding changes, discovery and Zotero are still being migrated.",
 	readOnly:
 		"Search excerpts are for browsing. They do not establish that this session read the source or verified its evidence.",
 };

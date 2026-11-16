@@ -30,6 +30,8 @@ and types; `cloud-runtime.ts` registers them and `cloud-capabilities.ts` adapts 
 domain ports to caller-scoped host capabilities. Sync is manual and transfers only
 explicitly selected notes, with preview/binding checks, CAS and write readback.
 
+The cloud UI lives in Knowledge settings; set its password in Drone's plugin credentials settings.
+
 Enter the host-kept WebDAV password in Drone settings → UI plugins → Plugin
 credentials. The host's `DRONE_WEBDAV_PASSWORD` overrides the saved password; the
 plugin never reads either value. This flow requires a host supporting

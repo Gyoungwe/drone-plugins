@@ -1,6 +1,7 @@
 import type { PluginUiRuntimeClient } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useRef, useState } from "react";
 import type { KnowledgePreferences, KnowledgeSetReviewPolicyInput } from "../src/desktop/contract";
+import { NativeKnowledgeCloud } from "./NativeKnowledgeCloud";
 import { NativeKnowledgeSemanticSettings } from "./NativeKnowledgeSemanticSettings";
 import { useNativeKnowledgeText } from "./native-copy";
 import { Button } from "./runtime-api";
@@ -183,6 +184,12 @@ export function NativeKnowledgePreferences({
 						client={client}
 						observationRevision={observationRevision}
 						refreshing={refreshing}
+					/>
+					<NativeKnowledgeCloud
+						client={client}
+						observationRevision={observationRevision}
+						refreshing={refreshing}
+						bindingRevision={value.binding?.revision ?? null}
 					/>
 				</>
 			)}
