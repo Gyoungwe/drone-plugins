@@ -2,12 +2,14 @@
   "artifactSource": "ui/src/index.ts",
   "inputs": {
     "package.json": "fc55e0c6d9ba113d607ef3beccb9e5ad26e567fb2772ad4373b35cb79c9817c7",
-    "plugin.manifest.json": "591accc441c05aaaa9292fef8a9702dfe37e72b836ebc376fe314adf00cd583b",
+    "plugin.manifest.json": "290d717f7abd4823e48375d55b5edf18105d29112c7bbd28e339331f12da0078",
     "scripts/build-ui.mjs": "1e6e3a91c4907156f3adf905e2752b188f524395ec7cc130f7879c0f077d976e",
+    "ui/NativeKnowledgeCloud.tsx": "74e5a60f47a9e70f1f1d1c0bbc33dd2e5964ae63fc038fe8a9f9f9c7da6a48b7",
+    "ui/NativeKnowledgeCloudSync.tsx": "bde07c8748cce37610e7fb01eef044399f3c4c5a764d632dc0debd9bd8f4af4e",
     "ui/NativeKnowledgeHistory.tsx": "70640e035c4cdf544cc6e4245af6155ab56b0adebb5cc0481be939c6831adf5b",
     "ui/NativeKnowledgeModelReview.tsx": "95771a5c62322e75828b74f3b98804f1097296beaa2092f898350f68e585ece3",
     "ui/NativeKnowledgePage.tsx": "4d7342fde3e5183e724668464d98069af215f394129d872193956e718f705cca",
-    "ui/NativeKnowledgePreferences.tsx": "72d6a942b372b241543199570c9948923bbe2ca6a9e579eb83bb3656fbdb470a",
+    "ui/NativeKnowledgePreferences.tsx": "62a69036e9acd52442708ab15147642e41c04f0a3e0470cb94ac021491ab47f9",
     "ui/NativeKnowledgeReading.tsx": "f88f66cf4c837cf65770974614279dc0681782f66ded794e579d3839cf7197d1",
     "ui/NativeKnowledgeReviews.tsx": "0adf60d7b3b302e08ac50841d651bc33c042973a7d8b61b0e89d2ebf7ea836bb",
     "ui/NativeKnowledgeSemanticSettings.tsx": "38ee43fe2ddef05105abb29aa22a18871e618e0711ad47551a75d8b0f3d37954",
@@ -15,7 +17,6 @@
     "ui/entry.tsx": "0ffcfeb30af636916e23a7256b450e8ae4dbadd416fe0b5a323ae701b9636209",
     "ui/knowledge/DailyIdeas.tsx": "bc94478026148cc3666652637784148fef427e28af2355e1ad9ca34e42ba5433",
     "ui/knowledge/InstitutionalAccessSection.tsx": "2d9a980a94ab129efd4064d196b0a01143217948bd92bd27173d383a9b82c3a6",
-    "ui/knowledge/KnowledgeCloudSection.tsx": "6223d4ca9114dc9e5429f8374130e5d30bba4d1f2bb0bf0c3152d20f613687c9",
     "ui/knowledge/KnowledgeFlowCard.tsx": "04da7b9b6cf75d5e7ad2788c6c29abbbf5c9a6956cc68de407b191058a39aaf8",
     "ui/knowledge/KnowledgeGraph.tsx": "b33c645d90840bcc2f315e1cb54feade321f60b4bb99d13ec969b25b8069e030",
     "ui/knowledge/KnowledgeGraphView.tsx": "849469bdd4cd0f430c00be4f4d3546b2e1bdbebf777b09639163a16abad0252e",
@@ -27,7 +28,7 @@
     "ui/knowledge/KnowledgeNetwork.tsx": "af4e4503798f14755844d9b5a566c9534ac515d972ca2c27439fd9aa75e2b474",
     "ui/knowledge/KnowledgeNoteView.tsx": "eb8b62cd5406f4ee21edba206c145ab03b946b37a382a6e045bb1442e66628fe",
     "ui/knowledge/KnowledgeNoteViewer.tsx": "0145afc751978dbd09cd899c85fa7d4ed64f7c7bc635778c4c8dc29fc863ab46",
-    "ui/knowledge/KnowledgePanel.tsx": "30189d697c600d51f99da2bb2e4f5f9f840c698daaf2be4ecc5df3afe1c82e9d",
+    "ui/knowledge/KnowledgePanel.tsx": "6cb6ab41504ff53b4d6a8520932e139ab3e516eb4d57453213137d85dcd0793c",
     "ui/knowledge/KnowledgeSearch.tsx": "e60a1d4648413f7d69915fca62cea899cfc85d5afc98cea9142f5c7da5efa06f",
     "ui/knowledge/KnowledgeSearchView.tsx": "a9be872c3b3061a0a517685e25da001ec67e2ede3d267a7e3ba3e799ffb54b80",
     "ui/knowledge/KnowledgeSpecialists.tsx": "39931716173902cd3c6e12c74c5c7959664ef86c726d43e96a5746edbf7efc19",
@@ -43,7 +44,7 @@
     "ui/knowledge/ZoteroLocalWriteSection.tsx": "c256162f6e489c0a0dbf2c218e8d11ebc60f6c0676716a253c4beea9d86e95d5",
     "ui/knowledge/ZoteroPanel.tsx": "a65ce417db1cfa2ec98c57c2c8d4796516ab72af5adf16769a426b1ed2ec418a",
     "ui/knowledge/artifacts.ts": "51b02c28389d4f221cc6126de8e8fb6d502cc7461377f099d124873456c72c36",
-    "ui/knowledge/copy.ts": "eaa3f324d9d2a1902469e9e1e7714038910d10df1f2a32a82118052db7d83982",
+    "ui/knowledge/copy.ts": "e498204b5f8e449932750f555642f583efa14362063ee4b3263c593534b19acc",
     "ui/knowledge/graph-layout.ts": "50a8eb55b8de8809accad14592b605a79ae56494af83fccc123701221f5963ad",
     "ui/knowledge/graph-model.ts": "b3328c27ec09597f93b4d3699a1b36e2ed8ceab6a63f154e219737b50624a311",
     "ui/knowledge/hooks.ts": "cd3e02c1d67cdc7764d2a28a4e9782bc5a3eaee63fd61a36dcb88d7c7922fd48",
@@ -52,7 +53,8 @@
     "ui/knowledge/nebula-model.ts": "44e63f088ffa3bad4fd9a93c238165b07853fc149448358f1ca9a2a60ec746b4",
     "ui/knowledge/note-display.ts": "22c6b1f6375acb7cd3269641b53f8182460e5c5c57cf5b2adfa8ed981ebf862a",
     "ui/knowledge/zotero-copy.ts": "9961f575c43456a85e4de14830dd14ebe22ef71bd9738dc849dd07fcd525ecaa",
-    "ui/native-copy.ts": "bd40539158639219b99e44babdaae69bb12e95f14184b83ba04ef69a0022618c",
+    "ui/native-cloud-copy.ts": "72dfac97ea9cee4aefe8a03f9888c41e599d9a8091572bb00c645dce37bdae92",
+    "ui/native-copy.ts": "5a3d9ac741d21e8f06444d38adf24e4673f28635ec526a9dbc8bc15dc013792d",
     "ui/plugin.json": "7c1c4b8f707b1203f20e6f9f6ea9295552f11ecbe7c3aac5de87bddfac0ddcd9",
     "ui/runtime-api.ts": "08b5d4ceaffdacabd55ab03ee118d55dce1f42eed83262a2974cc2152247435b",
     "ui/runtime-store.ts": "1e31f1ebd2ccb709eeec4c628e1901666ede367624608af81439ea74f603933d",
@@ -61,7 +63,7 @@
     "ui/styles/utilities.css": "2002c87dd3d05601d0c91c97afc7d11e0fecec5a3ddc1cdef9279842eb1cefd0"
   },
   "outputs": {
-    "ui/styles/generated.ts": "f465f07d146992e169509b7631f46695c94461173c928632674635682190c77b",
-    "ui/bundle.js": "bc470a92cf93463a83cb5c6216b800cb23f6134182abbd68d8fc5262c506725c"
+    "ui/styles/generated.ts": "87b4c00ea5cbc2f88001c20193c45fc1c7c5d082a9d4a724996afb09f628e84a",
+    "ui/bundle.js": "c5c9dcdb4659ca2f6ee2d59e48b845e85af5d512187fb870604feda599cc76f1"
   }
 }
