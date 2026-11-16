@@ -1,9 +1,5 @@
-import type { PluginNativeRuntimeFactory, PluginNativeSession } from "@gyoungwe/plugin-api/native";
-import type {
-	PluginNativeSessionFacts,
-	PluginRuntimeCapabilities,
-	PluginRuntimeContext,
-} from "@gyoungwe/plugin-api/runtime";
+import type { PluginNativeRuntimeFactory } from "@gyoungwe/plugin-api/native";
+import type { PluginRuntimeCapabilities, PluginRuntimeContext } from "@gyoungwe/plugin-api/runtime";
 import { type KnowledgeBinding, parseKnowledgeBinding, projectIdentity } from "../core/config.js";
 import { createKnowledgeOwnerLifecycle } from "../core/owner-lifecycle.js";
 import { createStoredKnowledgeReviewPolicy } from "../core/review-policy.js";
@@ -16,76 +12,41 @@ import { createTopicMemoryApi } from "../core/topic-memory.js";
 import { createKnowledgeUi } from "../core/ui-state.js";
 import { createKnowledgeModelReview } from "../core/wiki-model-review.js";
 import { createKnowledgeWikiReview } from "../core/wiki-review.js";
-import { createManagedNativeSession } from "../extension/knowledge-extension.js";
 import { bindingOperation } from "./binding-service.js";
 import { withCloudOperations } from "./cloud-runtime.js";
 import {
-	applyReviewInputSchema,
-	applyReviewResultSchema,
 	graphInputSchema,
 	graphResultSchema,
 	jobsInputSchema,
 	jobsResultSchema,
-	type KnowledgeApplyReviewInput,
 	type KnowledgeGraphInput,
 	type KnowledgeJobsInput,
 	type KnowledgeLinksInput,
-	type KnowledgeModelReviewInfoInput,
-	type KnowledgeModelReviewInput,
-	type KnowledgePreviewReviewInput,
 	type KnowledgeReadNoteInput,
 	type KnowledgeRecentByCategoryInput,
-	type KnowledgeRejectReviewInput,
-	type KnowledgeReviewHistoryInput,
-	type KnowledgeReviewsInput,
 	type KnowledgeSearchInput,
-	type KnowledgeSetReviewPolicyInput,
-	type KnowledgeSetSemanticSettingsInput,
-	type KnowledgeUndoReviewInput,
 	linksInputSchema,
 	linksResultSchema,
-	modelReviewInfoInputSchema,
-	modelReviewInfoResultSchema,
-	modelReviewInputSchema,
-	modelReviewResultSchema,
 	overviewInputSchema,
 	overviewResultSchema,
-	preferencesInputSchema,
-	preferencesResultSchema,
-	previewReviewInputSchema,
-	previewReviewResultSchema,
 	readNoteInputSchema,
 	readNoteResultSchema,
 	recentByCategoryInputSchema,
 	recentByCategoryResultSchema,
-	rejectReviewInputSchema,
-	rejectReviewResultSchema,
-	reviewHistoryInputSchema,
-	reviewHistoryResultSchema,
-	reviewsInputSchema,
-	reviewsResultSchema,
 	searchInputSchema,
 	searchResultSchema,
-	semanticPreferencesInputSchema,
-	semanticPreferencesResultSchema,
-	setReviewPolicyInputSchema,
-	setSemanticSettingsInputSchema,
-	undoReviewInputSchema,
-	undoReviewResultSchema,
 } from "./contract.js";
-import { createKnowledgeModelReviewModel, parseModelReviewCommandInput } from "./model-review.js";
-import { registerDesktopKnowledgeNativeReadTools } from "./native.js";
+import { createKnowledgeModelReviewModel } from "./model-review.js";
+import { createKnowledgeNativeSessionFactory } from "./native-session.js";
 import { createBrokerKnowledgeState } from "./native-state.js";
 import { createKnowledgePreferences } from "./preferences.js";
 import { createKnowledgeReadModel, type KnowledgeReadOwner } from "./read-model.js";
-import { createKnowledgeRecoveryMigration } from "./recovery-migration.js";
+import { createKnowledgeReviewOperations } from "./review-operations.js";
 import { createBrokerWikiReviewPorts } from "./review-storage.js";
 import { createKnowledgeReviewModel } from "./reviews.js";
 import { createKnowledgeSemanticPreferences } from "./semantic-preferences.js";
 import { createBrokerSemanticSettings } from "./semantic-settings.js";
 import { createResourceServiceTransportFactory } from "./service-transport.js";
-import { createManagedKnowledgeSessionPorts } from "./session-ports.js";
-import { createBrokerKnowledgeSpecialist } from "./specialist-model.js";
 import { createBrokerSpecialistSettingsStorage } from "./specialist-settings-storage.js";
 import { createBrokerReviewPolicyStorage } from "./state-policy.js";
 import { createBrokerTopicMemoryStorage } from "./topic-storage.js";
@@ -120,34 +81,6 @@ async function projectFor(
 		throw new Error("Invalid research workspace configuration");
 	return projectIdentity(workspace, (document as Record<string, unknown>).knowledgeProjectId);
 }
-
-/** Every tool the read-only knowledge interface registers in a child session; none of them writes. */
-const CHILD_READ_TOOLS = [
-	"knowledge_status",
-	"knowledge_search",
-	"research_check_answer",
-	"research_knowledge_status",
-	"research_prepare_knowledge",
-	"research_read_knowledge",
-	"research_restore_evidence",
-	"research_resume_topic",
-	"research_search_explainers",
-	"research_search_knowledge",
-	"research_task_status",
-	"research_topics",
-] as const;
-
-/** Every hook the read-only knowledge interface registers in a child session. */
-const CHILD_SESSION_EVENTS = [
-	"session_start",
-	"session_tree",
-	"before_agent_start",
-	"context",
-	"message_start",
-	"tool_execution_start",
-	"tool_execution_end",
-	"tool_result",
-] as const;
 
 const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	const states = context.resources.filter((resource) => resource.kind === "state");
@@ -266,113 +199,14 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	return {
 		operations: {
 			binding: bindingOperation(readKnowledgeBinding),
-			modelReviewInfo: {
-				inputSchema: modelReviewInfoInputSchema,
-				resultSchema: modelReviewInfoResultSchema,
-				effect: "read",
-				execute: async (input, call) =>
-					modelReviews.info(input as KnowledgeModelReviewInfoInput, await callerProject(call), call),
-			},
-			modelReview: {
-				inputSchema: modelReviewInputSchema,
-				resultSchema: modelReviewResultSchema,
-				effect: "write",
-				execute: async (input, call) => {
-					const result = await modelReviews.review(
-						input as KnowledgeModelReviewInput,
-						await callerProject(call),
-						call,
-					);
-					context.events.changed();
-					return result;
-				},
-			},
-			reviewHistory: {
-				inputSchema: reviewHistoryInputSchema,
-				resultSchema: reviewHistoryResultSchema,
-				effect: "read",
-				execute: async (input, call) =>
-					reviews.history(input as KnowledgeReviewHistoryInput, await callerProject(call)),
-			},
-			undoReview: {
-				inputSchema: undoReviewInputSchema,
-				resultSchema: undoReviewResultSchema,
-				effect: "write",
-				execute: async (input, call) =>
-					reviews.undoReview(input as KnowledgeUndoReviewInput, await callerProject(call)),
-			},
-			semanticSettings: {
-				inputSchema: semanticPreferencesInputSchema,
-				resultSchema: semanticPreferencesResultSchema,
-				effect: "read",
-				execute: () => semanticPreferences.read(),
-			},
-			setSemanticSettings: {
-				inputSchema: setSemanticSettingsInputSchema,
-				resultSchema: semanticPreferencesResultSchema,
-				effect: "write",
-				execute: async (input) => {
-					const saved = await semanticPreferences.write(input as KnowledgeSetSemanticSettingsInput);
-					context.events.changed();
-					return saved;
-				},
-			},
-			reviews: {
-				inputSchema: reviewsInputSchema,
-				resultSchema: reviewsResultSchema,
-				effect: "read",
-				execute: async (input, call) =>
-					reviews.reviews(input as KnowledgeReviewsInput, await callerProject(call)),
-			},
-			previewReview: {
-				inputSchema: previewReviewInputSchema,
-				resultSchema: previewReviewResultSchema,
-				effect: "read",
-				execute: async (input, call) =>
-					reviews.previewReview(input as KnowledgePreviewReviewInput, await callerProject(call)),
-			},
-			rejectReview: {
-				inputSchema: rejectReviewInputSchema,
-				resultSchema: rejectReviewResultSchema,
-				effect: "write",
-				execute: async (input, call) => {
-					const result = await reviews.rejectReview(
-						input as KnowledgeRejectReviewInput,
-						await callerProject(call),
-					);
-					context.events.changed();
-					return result;
-				},
-			},
-			applyReview: {
-				inputSchema: applyReviewInputSchema,
-				resultSchema: applyReviewResultSchema,
-				effect: "write",
-				execute: async (input, call) => {
-					const result = await reviews.applyReview(
-						input as KnowledgeApplyReviewInput,
-						await callerProject(call),
-					);
-					context.events.changed();
-					return result;
-				},
-			},
-			preferences: {
-				inputSchema: preferencesInputSchema,
-				resultSchema: preferencesResultSchema,
-				effect: "read",
-				execute: () => preferences.read(),
-			},
-			setReviewPolicy: {
-				inputSchema: setReviewPolicyInputSchema,
-				resultSchema: preferencesResultSchema,
-				effect: "write",
-				execute: async (input) => {
-					const saved = await preferences.write(input as KnowledgeSetReviewPolicyInput);
-					context.events.changed();
-					return saved;
-				},
-			},
+			...createKnowledgeReviewOperations({
+				context,
+				modelReviews,
+				reviews,
+				preferences,
+				semanticPreferences,
+				callerProject,
+			}),
 			overview: {
 				inputSchema: overviewInputSchema,
 				resultSchema: overviewResultSchema,
@@ -419,108 +253,14 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 					reads.recentByCategory(input as KnowledgeRecentByCategoryInput, await callerProject(call)),
 			},
 		},
-		createNativeSession: async (facts?: PluginNativeSessionFacts) => {
-			const sessionPorts = createManagedKnowledgeSessionPorts(context.capabilities);
-			const composition = {
-				session: sessionPorts.ports,
-				registerReadTools: (pi: any) =>
-					registerDesktopKnowledgeNativeReadTools(pi, owner, (native: { cwd: string }) =>
-						projectFor(context.capabilities, native.cwd),
-					),
-				project: async (cwd: string) => {
-					const project = await projectFor(context.capabilities, cwd);
-					if (project === null) throw new Error("Knowledge native session has no workspace project");
-					return project;
-				},
-			};
-			if (facts?.kind === "child") {
-				// The host fact is not a grant. "none" never touches the Vault binding. "read" offers the
-				// read-only interface, and every call re-reads this package's own subagent policy with the
-				// live caller the host supplies at that moment (none exists while the session is created).
-				const readable = facts.files === "read";
-				const child = createManagedNativeSession(owner, {
-					...composition,
-					child: readable ? "read" : "evidence",
-					childReadAllowed: async () => (await readKnowledgeBinding())?.subagentPolicy === "read-local",
-				});
-				if (!child.projection) throw new Error("Knowledge child session requires its publication projection");
-				const session: PluginNativeSession = {
-					...child,
-					// A child's answers only take the evidence-only path (label, no task report), so its
-					// finalizer runs with read capabilities; any write it attempted would fail at the broker.
-					projection: { ...child.projection, finalizeEffect: "read" },
-					toolEffects: readable
-						? Object.fromEntries(CHILD_READ_TOOLS.map((tool) => [tool, "read" as const]))
-						: {},
-					// A child is read-only: its hooks get read capabilities only, so any write attempt fails at the broker.
-					eventEffects: Object.fromEntries(CHILD_SESSION_EVENTS.map((event) => [event, "read" as const])),
-					commandEffects: {},
-				};
-				return session;
-			}
-			const migrateRecovery = createKnowledgeRecoveryMigration(context.capabilities, config);
-			const native = createManagedNativeSession(owner, composition);
-			let unregister: (() => void) | undefined;
-			return {
-				...native,
-				toolEffects: { knowledge_status: "read", knowledge_search: "read" },
-				eventEffects: {
-					session_start: "read",
-					session_tree: "read",
-					tool_execution_start: "read",
-					tool_result: "read",
-				},
-				commandEffects: {
-					"knowledge-review-model": "write",
-					"obsidian-review": "write",
-					"knowledge-migrate-recovery": "write",
-				},
-				async extension(pi) {
-					await native.extension(pi);
-					pi.on("session_start", (_event, caller) => {
-						unregister = specialists.registerKnowledgeSpecialistHost(
-							caller.sessionManager.getSessionId(),
-							createBrokerKnowledgeSpecialist(context.capabilities),
-						);
-					});
-					pi.registerCommand("knowledge-migrate-recovery", {
-						description:
-							"Explicitly import an authorized 0.2.0/0.2.1 historical read-window checkpoint; no current proof is restored",
-						async handler(args, caller) {
-							if (args.trim()) throw new Error("Checkpoint migration accepts no scope or target arguments");
-							const result = await migrateRecovery(caller);
-							await sessionPorts.ports.notify(JSON.stringify(result), caller);
-						},
-					});
-					pi.registerCommand("knowledge-review-model", {
-						description:
-							"Review one exact Wiki proposal with explicit JSON cost/data acknowledgement; read the audit in the knowledge review UI",
-						async handler(args, caller) {
-							const input = parseModelReviewCommandInput(args);
-							const scope = (await context.capabilities.call(
-								"caller.scope",
-								null,
-							)) as import("@gyoungwe/plugin-api/runtime").PluginRuntimeScope;
-							if (scope.kind !== "session" || scope.sessionId !== caller.sessionManager.getSessionId())
-								throw new Error("Model review command requires its originating live session");
-							const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-							if (!binding) throw new Error("No application knowledge Vault is bound");
-							const signal = caller.signal ? AbortSignal.any([native.signal, caller.signal]) : native.signal;
-							await modelReviews.review(
-								{ ...input, revision: binding.revision },
-								await projectFor(context.capabilities, scope.workspaceDirectory),
-								{ scope, signal, capabilities: context.capabilities },
-							);
-							context.events.changed();
-						},
-					});
-				},
-				async dispose() {
-					unregister?.();
-					await native.dispose();
-				},
-			};
-		},
+		createNativeSession: createKnowledgeNativeSessionFactory({
+			context,
+			owner,
+			specialists,
+			modelReviews,
+			readKnowledgeBinding,
+			projectFor,
+		}),
 		dispose: () => owner.dispose(),
 	};
 };

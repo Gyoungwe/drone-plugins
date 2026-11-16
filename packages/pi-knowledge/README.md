@@ -22,6 +22,12 @@ The candidate UI declares `droneUi: 2`: v1-only hosts must reject it before load
 
 ## 0.3.0 source candidate
 
+Desktop runtime modules:
+
+- `src/desktop/runtime.ts` composes the shared services and runtime entry.
+- `src/desktop/review-operations.ts` registers review and settings operations.
+- `src/desktop/native-session.ts` constructs managed native sessions.
+
 ### Cloud (WebDAV)
 
 The managed runtime adds `cloudStatus`, `cloudProbe`, `cloudInitialize`, `cloudRead`,

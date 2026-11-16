@@ -10769,6 +10769,1472 @@ init_ui_state();
 init_wiki_model_review();
 init_wiki_review();
 
+// src/desktop/binding-service.ts
+function bindingOperation(read) {
+  return {
+    inputSchema: { type: "null" },
+    resultSchema: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          properties: {
+            vaultId: { type: "string", pattern: "^[a-f0-9]{24}$" },
+            revision: { type: "integer", minimum: 1 },
+            vault: { type: "string" }
+          },
+          required: ["vaultId", "revision", "vault"],
+          additionalProperties: false
+        }
+      ]
+    },
+    effect: "read",
+    execute: async () => {
+      const binding = await read();
+      return binding && { vaultId: binding.vaultId, revision: binding.revision, vault: binding.vault };
+    }
+  };
+}
+
+// src/desktop/cloud.ts
+import { createHash as createHash13 } from "node:crypto";
+
+// src/desktop/cloud-dav.ts
+var import_xmldom = __toESM(require_lib(), 1);
+function strongEtag(value) {
+  return value && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value) && value.length <= 1024 ? value : null;
+}
+function invalid() {
+  throw new CloudError("protocol");
+}
+function parseMultistatus(body) {
+  if (body.byteLength > 64 * 1024) invalid();
+  const xml = new TextDecoder().decode(body);
+  if (/<!DOCTYPE|<!ENTITY/i.test(xml)) invalid();
+  let document;
+  try {
+    document = new import_xmldom.DOMParser({
+      errorHandler: { warning: invalid, error: invalid, fatalError: invalid }
+    }).parseFromString(xml, "application/xml");
+  } catch {
+    return invalid();
+  }
+  if (document.documentElement?.namespaceURI !== "DAV:" || document.documentElement.localName !== "multistatus")
+    invalid();
+  return document;
+}
+function hrefTarget(href, expected) {
+  try {
+    return new URL(href, expected);
+  } catch {
+    return invalid();
+  }
+}
+function isCollection(body, expected) {
+  const document = parseMultistatus(body);
+  for (const item of Array.from(document.getElementsByTagNameNS("DAV:", "response"))) {
+    const href = item.getElementsByTagNameNS("DAV:", "href").item(0)?.textContent;
+    if (!href) continue;
+    const target = hrefTarget(href, expected);
+    if (target.origin !== expected.origin || target.pathname.replace(/\/$/, "") !== expected.pathname.replace(/\/$/, ""))
+      continue;
+    const directStatus = Array.from(item.getElementsByTagNameNS("DAV:", "status")).find(
+      (element) => element.parentNode === item
+    );
+    if (directStatus) throw httpError(Number(directStatus.textContent?.split(" ")[1]));
+    for (const prop of Array.from(item.getElementsByTagNameNS("DAV:", "propstat"))) {
+      const status = prop.getElementsByTagNameNS("DAV:", "status").item(0)?.textContent;
+      if (!status || !/^HTTP\/\S+ 200(?: |$)/.test(status)) continue;
+      if (prop.getElementsByTagNameNS("DAV:", "resourcetype").length && prop.getElementsByTagNameNS("DAV:", "collection").length)
+        return true;
+    }
+    invalid();
+  }
+  return invalid();
+}
+var CloudDav = class {
+  constructor(http, endpoint2) {
+    this.http = http;
+    this.endpoint = endpoint2;
+  }
+  async request(input) {
+    try {
+      return await this.http.request(input);
+    } catch (error) {
+      if (error instanceof CloudError && error.code === "forbidden") throw error;
+      throw new CloudError("offline");
+    }
+  }
+  async collection(path2) {
+    const result3 = await this.request({
+      method: "PROPFIND",
+      path: path2,
+      headers: { Depth: "0", "Content-Type": "application/xml; charset=utf-8" },
+      body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>'
+    });
+    if (result3.status === 404) return false;
+    if (result3.status !== 200 && result3.status !== 207) throw httpError(result3.status);
+    return isCollection(result3.body, new URL(`${this.endpoint}/${path2}`));
+  }
+  async ensureCollection(path2) {
+    if (await this.collection(path2)) return;
+    const result3 = await this.request({ method: "MKCOL", path: path2 });
+    if (result3.status !== 201 && result3.status !== 405) throw httpError(result3.status);
+    if (!await this.collection(path2)) invalid();
+  }
+};
+
+// src/desktop/cloud-paths.ts
+var KNOWLEDGE_MAX_NOTE_BYTES = 1024 * 1024;
+var OMIT2 = /* @__PURE__ */ new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "coverage",
+  "vendor",
+  "venv",
+  "__pycache__",
+  "Attachments",
+  "Templates",
+  "_template"
+]);
+function cloudNotePath(path2) {
+  const parts = path2.split("/");
+  if (path2.length > 1024 || path2.includes("\\") || /[%:#?]/.test(path2) || Array.from(path2).some(
+    (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127
+  ) || !/^(?:Home\.md|(?:Wiki|Library|Projects|Inbox)\/.+\.md)$/.test(path2) || parts.some(
+    (part) => !part || part.startsWith(".") || OMIT2.has(part) || /[. ]$/.test(part) || /^(?:secrets?|credentials?|id_rsa|id_ed25519)(?:[.\-_]|$)/i.test(part) || /^(?:results|sessions|credentials?|secrets?|auth)(?:\.|$)/i.test(part)
+  ))
+    throw new CloudError("protocol");
+  return path2;
+}
+
+// src/desktop/cloud.ts
+var CloudError = class extends Error {
+  constructor(code, status = null) {
+    super(code);
+    this.code = code;
+    this.status = status;
+    this.name = "CloudError";
+  }
+};
+function httpError(status) {
+  if (status === 401) return new CloudError("unauthorized", status);
+  if (status === 403) return new CloudError("forbidden", status);
+  if (status === 404) return new CloudError("not_found", status);
+  if ([409, 412, 423, 428].includes(status)) return new CloudError("conflict", status);
+  return new CloudError("protocol", status);
+}
+var DEFAULT_WEBDAV_ENDPOINT = "http://10.126.126.1:8080";
+var DEFAULT_WEBDAV_USERNAME = "gaoyangwei";
+var DEFAULT_WEBDAV_FOLDER = "Drone-Knowledge";
+function endpointOrigin(endpoint2) {
+  let url;
+  try {
+    url = new URL(endpoint2);
+  } catch {
+    throw new CloudError("protocol");
+  }
+  if (!["http:", "https:"].includes(url.protocol) || url.href !== `${url.origin}/`)
+    throw new CloudError("protocol");
+  return url.origin;
+}
+function decodeNote(bytes) {
+  if (bytes.byteLength > KNOWLEDGE_MAX_NOTE_BYTES) throw new CloudError("protocol");
+  try {
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    throw new CloudError("protocol");
+  }
+}
+function writeFailure(error, putStarted) {
+  if (!(error instanceof CloudError)) throw error;
+  if (error.code === "conflict") return { status: "conflict", reason: error.code };
+  if (error.code === "forbidden" || error.code === "unauthorized")
+    return { status: "forbidden", reason: error.code };
+  if (error.code === "offline")
+    return putStarted ? { status: "unknown", reason: "write_unverified" } : { status: "offline", reason: error.code };
+  if (putStarted) return { status: "unknown", reason: "write_unverified" };
+  throw error;
+}
+var CloudService = class {
+  endpoint;
+  username = DEFAULT_WEBDAV_USERNAME;
+  folder = DEFAULT_WEBDAV_FOLDER;
+  dav;
+  constructor(options) {
+    this.endpoint = endpointOrigin(options.endpoint ?? DEFAULT_WEBDAV_ENDPOINT);
+    this.dav = new CloudDav(options.http, this.endpoint);
+  }
+  async check(initialize) {
+    let initialized = await this.dav.collection(`${this.folder}/`);
+    if (!initialized) {
+      if (!await this.dav.collection("")) throw new CloudError("protocol");
+      if (initialize) {
+        await this.dav.ensureCollection(`${this.folder}/`);
+        initialized = true;
+      }
+    }
+    return { initialized };
+  }
+  probe() {
+    return this.check(false);
+  }
+  initialize() {
+    return this.check(true);
+  }
+  notePath(path2) {
+    return `${this.folder}/${cloudNotePath(path2).split("/").map(encodeURIComponent).join("/")}`;
+  }
+  async read(path2) {
+    const response = await this.dav.request({
+      method: "GET",
+      path: this.notePath(path2),
+      headers: { Accept: "text/markdown, text/plain" }
+    });
+    if (response.status !== 200) throw httpError(response.status);
+    return {
+      path: path2,
+      text: decodeNote(response.body),
+      hash: createHash13("sha256").update(response.body).digest("hex"),
+      version: strongEtag(response.headers.etag),
+      bytes: response.body.byteLength,
+      lastModified: response.headers["last-modified"] ?? null
+    };
+  }
+  async verifyWrite(path2, hash4) {
+    let note;
+    try {
+      note = await this.read(path2);
+    } catch (error) {
+      if (!(error instanceof CloudError)) throw error;
+      return false;
+    }
+    return note.hash === hash4;
+  }
+  async write(input) {
+    const path2 = this.notePath(input.path);
+    if (new TextEncoder().encode(input.text).byteLength > KNOWLEDGE_MAX_NOTE_BYTES || input.expectedVersion !== void 0 && !strongEtag(input.expectedVersion))
+      throw new CloudError("protocol");
+    const result3 = {
+      path: input.path,
+      status: "unknown",
+      version: null,
+      hash: createHash13("sha256").update(input.text).digest("hex"),
+      reason: null
+    };
+    let putStarted = false;
+    try {
+      if (!await this.dav.collection(`${this.folder}/`)) throw new CloudError("not_found");
+      const parents = path2.split("/").slice(0, -1);
+      for (let i = 2; i <= parents.length; i++)
+        await this.dav.ensureCollection(`${parents.slice(0, i).join("/")}/`);
+      putStarted = true;
+      const response = await this.dav.request({
+        method: "PUT",
+        path: path2,
+        body: input.text,
+        headers: {
+          "Content-Type": "text/markdown; charset=utf-8",
+          ...input.expectedVersion ? { "If-Match": input.expectedVersion } : { "If-None-Match": "*" }
+        }
+      });
+      if (![200, 201, 204].includes(response.status)) throw httpError(response.status);
+      if (!await this.verifyWrite(input.path, result3.hash))
+        return { ...result3, reason: "write_unverified" };
+      result3.status = input.expectedVersion ? "updated" : "created";
+      result3.version = strongEtag(response.headers.etag);
+      result3.reason = result3.version ? null : "missing_strong_etag";
+    } catch (error) {
+      Object.assign(result3, writeFailure(error, putStarted));
+    }
+    return result3;
+  }
+};
+
+// src/desktop/cloud-capabilities.ts
+init_config();
+async function cloudAvailability(capabilities, signal) {
+  let status;
+  try {
+    status = await capabilities.call("credentials.status", null, signal);
+  } catch {
+    return {
+      status: "unavailable",
+      reason: "host_unsupported",
+      configured: false,
+      credentialSource: null,
+      savedConfigured: null
+    };
+  }
+  const slot = status.slots?.webdav;
+  const metadata = {
+    configured: slot?.configured ?? false,
+    credentialSource: slot?.source ?? null,
+    savedConfigured: slot?.savedConfigured ?? null
+  };
+  if (slot?.authentication !== "http-basic-digest")
+    return { ...metadata, status: "unavailable", reason: "host_unsupported" };
+  if (!slot.configured) return { ...metadata, status: "not_configured", reason: "not_configured" };
+  return { ...metadata, status: "available", reason: null };
+}
+function capabilityError(error) {
+  return error !== null && typeof error === "object" ? error : {};
+}
+function denied(error) {
+  const { code = "", message = "" } = capabilityError(error);
+  return /denied|declined|not authorized|forbidden|EACCES|EPERM/i.test(`${code} ${message}`);
+}
+function createCloudHttp(capabilities, signal) {
+  return {
+    async request(input) {
+      const read = input.method === "GET" || input.method === "PROPFIND";
+      const headers = Object.fromEntries(
+        Object.entries(input.headers ?? {}).filter(([name]) => name.toLowerCase() !== "authorization")
+      );
+      let response;
+      try {
+        response = await capabilities.call(
+          read ? "network.read" : "network.write",
+          {
+            method: input.method,
+            url: `${DEFAULT_WEBDAV_ENDPOINT}/${input.path}`,
+            headers,
+            ...input.body === void 0 ? {} : { bodyBase64: Buffer.from(input.body).toString("base64") },
+            credential: "webdav",
+            httpAuth: { username: DEFAULT_WEBDAV_USERNAME },
+            ...!read ? {
+              summary: input.method === "PUT" ? `Upload knowledge note ${input.path} to WebDAV` : `Create WebDAV collection ${input.path}`
+            } : {}
+          },
+          signal
+        );
+      } catch (error) {
+        throw new CloudError(denied(error) ? "forbidden" : "offline");
+      }
+      return {
+        status: response.status,
+        headers: Object.fromEntries(
+          Object.entries(response.headers).map(([name, value]) => [name.toLowerCase(), value])
+        ),
+        body: Buffer.from(response.base64, "base64")
+      };
+    }
+  };
+}
+async function fileCall(capabilities, signal, name, input) {
+  try {
+    return await capabilities.call(name, input, signal);
+  } catch (error) {
+    if (denied(error)) throw new CloudError("forbidden");
+    const { code, message } = capabilityError(error);
+    if (code === "EEXIST" || message === "Plugin file version conflict; reread before writing")
+      throw new CloudError("conflict");
+    throw error;
+  }
+}
+async function fileRoot(capabilities, signal, vault) {
+  try {
+    return (await capabilities.call("roots.resolve", { path: vault, kind: "files" }, signal)).handle;
+  } catch {
+    throw new CloudError("forbidden");
+  }
+}
+async function writeCloudFile(capabilities, signal, target, text4, expectedHash) {
+  const parent = target.path.slice(0, target.path.lastIndexOf("/"));
+  if (target.path.includes("/"))
+    await fileCall(capabilities, signal, "files.ensureDirectory", { root: target.root, path: parent });
+  const result3 = await fileCall(capabilities, signal, "files.writeText", {
+    ...target,
+    text: text4,
+    expectedHash
+  });
+  if (result3.text !== text4) throw new CloudError("protocol");
+}
+function writableTargets(capabilities, resources, signal) {
+  const targets = {};
+  return {
+    targets,
+    async containedFile(vault, path2) {
+      const relative11 = cloudNotePath(path2);
+      const root = await fileRoot(capabilities, signal, vault);
+      if (!resources.some(
+        (resource) => resource.kind === "files" && resource.handle === root && resource.access === "read-write"
+      ))
+        throw new CloudError("forbidden");
+      const key = `${vault}/${relative11}`;
+      targets[key] = { root, path: relative11 };
+      return key;
+    }
+  };
+}
+function createCloudVault(capabilities, stateRoot, resources, signal) {
+  const { targets, containedFile } = writableTargets(capabilities, resources, signal);
+  return {
+    readBinding: () => readCloudBinding(capabilities, stateRoot, signal),
+    async readNote(vault, path2) {
+      const relative11 = cloudNotePath(path2);
+      const root = await fileRoot(capabilities, signal, vault);
+      const result3 = await fileCall(capabilities, signal, "files.readText", { root, path: relative11 });
+      return { text: result3.text, hash: result3.sha256 };
+    },
+    containedFile,
+    async createFileOnly(path2, content) {
+      try {
+        await writeCloudFile(capabilities, signal, targets[path2], content, null);
+        return true;
+      } catch (error) {
+        if (error instanceof CloudError && error.code === "conflict") return false;
+        throw error;
+      }
+    },
+    async replaceFile(path2, content, options) {
+      if (options.expectedHash === void 0) throw new CloudError("protocol");
+      await writeCloudFile(capabilities, signal, targets[path2], content, options.expectedHash);
+    },
+    isConflict: (error) => error instanceof CloudError && error.code === "conflict"
+  };
+}
+async function readCloudBinding(capabilities, stateRoot, signal) {
+  try {
+    const result3 = await fileCall(capabilities, signal, "state.readJson", {
+      root: stateRoot,
+      path: "binding.json"
+    });
+    return result3.kind === "missing" ? null : parseKnowledgeBinding(result3.value);
+  } catch (error) {
+    if (error instanceof CloudError) throw error;
+    throw new CloudError("protocol");
+  }
+}
+
+// src/desktop/cloud-contract.ts
+var object = (properties, required = Object.keys(properties)) => ({
+  type: "object",
+  properties,
+  required,
+  additionalProperties: false
+});
+var string = { type: "string" };
+var boolean = { type: "boolean" };
+var nullable = (schema) => ({ anyOf: [schema, { type: "null" }] });
+var codes = ["not_configured", "offline", "unauthorized", "forbidden", "not_found", "conflict", "protocol"];
+var failure = object({ status: { const: "failed" }, reason: { enum: [...codes, "host_unsupported"] } });
+var result = (schema) => ({
+  anyOf: [object({ status: { const: "ok" }, result: schema }), failure]
+});
+var path = { type: "string", minLength: 1, maxLength: 1024 };
+var hash = { type: "string", pattern: "^[a-f0-9]{64}$" };
+var version = { type: "string", maxLength: 1024 };
+var cloudStatusInputSchema = { type: "null" };
+var cloudStatusResultSchema = object({
+  status: { enum: ["available", "unavailable", "not_configured"] },
+  reason: nullable({ enum: ["host_unsupported", "not_configured"] }),
+  configured: boolean,
+  credentialSource: nullable({ enum: ["env", "saved"] }),
+  savedConfigured: nullable(boolean)
+});
+var cloudProbeInputSchema = { type: "null" };
+var cloudProbeResultSchema = result(object({ initialized: boolean }));
+var cloudInitializeInputSchema = { type: "null" };
+var cloudInitializeResultSchema = cloudProbeResultSchema;
+var cloudReadInputSchema = object({ path });
+var cloudReadResultSchema = result(
+  object({
+    path,
+    text: string,
+    hash,
+    version: nullable(version),
+    bytes: { type: "integer", minimum: 0, maximum: 1024 * 1024 },
+    lastModified: nullable(string)
+  })
+);
+var cloudWriteInputSchema = object(
+  { path, text: { type: "string", maxLength: 1024 * 1024 }, expectedVersion: version },
+  ["path", "text"]
+);
+var cloudWriteResultSchema = result(
+  object({
+    path,
+    status: { enum: ["created", "updated", "conflict", "forbidden", "offline", "unknown"] },
+    version: nullable(version),
+    hash,
+    reason: nullable({ enum: [...codes, "missing_strong_etag", "write_unverified"] })
+  })
+);
+var cloudSyncInputSchema = object(
+  {
+    mode: { enum: ["pull", "push"] },
+    bindingRevision: { type: "integer", minimum: 1 },
+    paths: { type: "array", minItems: 1, maxItems: 64, items: path },
+    previews: {
+      type: "array",
+      minItems: 1,
+      maxItems: 64,
+      items: object({
+        path,
+        localHash: nullable(hash),
+        remoteHash: nullable(hash),
+        remoteVersion: nullable(version)
+      })
+    },
+    resolution: { enum: ["local", "remote"] }
+  },
+  ["mode", "bindingRevision", "paths", "previews"]
+);
+var cloudSyncResultSchema = result(
+  object({
+    mode: { enum: ["pull", "push"] },
+    completed: boolean,
+    items: {
+      type: "array",
+      items: object({
+        path,
+        status: { enum: ["unchanged", "pulled", "pushed", "conflict", "skipped", "failed"] },
+        localHash: nullable(hash),
+        remoteVersion: nullable(version),
+        reason: nullable({
+          enum: [
+            ...codes,
+            "divergent",
+            "source_missing",
+            "index_pending",
+            "missing_strong_etag",
+            "write_unverified"
+          ]
+        })
+      })
+    },
+    warnings: { type: "array", items: { const: "selected_notes_only" } }
+  })
+);
+
+// src/desktop/cloud-sync.ts
+function selectedPreviews(input) {
+  if (!Array.isArray(input.paths) || !input.paths.length || input.paths.length > 64 || !["pull", "push"].includes(input.mode))
+    throw new CloudError("protocol");
+  const paths = [...new Set(input.paths.map(cloudNotePath))];
+  if (!Array.isArray(input.previews) || input.previews.length !== paths.length)
+    throw new CloudError("conflict");
+  const previews = /* @__PURE__ */ new Map();
+  for (const preview of input.previews) {
+    const path2 = cloudNotePath(preview.path);
+    if (!paths.includes(path2) || previews.has(path2)) throw new CloudError("protocol");
+    previews.set(path2, { ...preview, path: path2 });
+  }
+  return paths.map((path2) => {
+    const preview = previews.get(path2);
+    if (!preview) throw new CloudError("protocol");
+    return preview;
+  });
+}
+async function checkBinding(context) {
+  const current = await context.vault.readBinding({ fresh: true });
+  if (current?.vaultId !== context.binding.vaultId || current?.revision !== context.binding.revision)
+    throw new CloudError("conflict");
+}
+async function readLocal(vault, root, path2) {
+  try {
+    return await vault.readNote(root, path2);
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")
+      return null;
+    throw error;
+  }
+}
+async function readRemote(cloud, path2) {
+  try {
+    return await cloud.read(path2);
+  } catch (error) {
+    if (error instanceof CloudError && error.code === "not_found") return null;
+    throw error;
+  }
+}
+async function checkLocal(context, path2, hash4) {
+  if ((await context.vault.readNote(context.binding.vault, path2)).hash !== hash4)
+    throw new CloudError("conflict");
+}
+async function pushNote(context, path2, local, remote) {
+  const expectedVersion = remote?.version;
+  if (remote && !expectedVersion) throw new CloudError("conflict");
+  await checkLocal(context, path2, local.hash);
+  await checkBinding(context);
+  const result3 = await context.cloud.write({
+    path: path2,
+    text: local.text,
+    ...expectedVersion ? { expectedVersion } : {}
+  });
+  let status = "failed";
+  if (result3.status === (remote ? "updated" : "created")) status = "pushed";
+  else if (result3.status === "conflict") status = "conflict";
+  return { status, localHash: local.hash, remoteVersion: result3.version, reason: result3.reason };
+}
+async function pullNote(context, preview, local, remote) {
+  if (!remote.version || !preview.remoteVersion) throw new CloudError("conflict");
+  if (local) await checkLocal(context, preview.path, local.hash);
+  const target = await context.vault.containedFile(context.binding.vault, preview.path);
+  await checkBinding(context);
+  if (local) {
+    try {
+      await context.vault.replaceFile(target, remote.text, { expectedHash: local.hash });
+    } catch (error) {
+      if (context.vault.isConflict(error)) throw new CloudError("conflict");
+      throw error;
+    }
+  } else if (!await context.vault.createFileOnly(target, remote.text)) {
+    return { status: "conflict", localHash: null, remoteVersion: remote.version, reason: "conflict" };
+  }
+  if ((await context.vault.readNote(context.binding.vault, preview.path)).hash !== remote.hash)
+    throw new CloudError("protocol");
+  return { status: "pulled", localHash: remote.hash, remoteVersion: remote.version, reason: "index_pending" };
+}
+async function transferNote(context, preview, local, remote) {
+  const versions = { localHash: local?.hash ?? null, remoteVersion: remote?.version ?? null };
+  if (local && remote) {
+    if (local.hash === remote.hash) return { ...versions, status: "unchanged", reason: null };
+    if (context.mode === "push" && context.resolution === "local")
+      return pushNote(context, preview.path, local, remote);
+    if (context.mode === "pull" && context.resolution === "remote")
+      return pullNote(context, preview, local, remote);
+    return { ...versions, status: "conflict", reason: "divergent" };
+  }
+  if (context.mode === "push" && local) return pushNote(context, preview.path, local, null);
+  if (context.mode === "pull" && remote) return pullNote(context, preview, null, remote);
+  return { ...versions, status: "skipped", reason: "source_missing" };
+}
+async function syncNote(context, preview) {
+  let localHash = null;
+  let remoteVersion = null;
+  try {
+    await checkBinding(context);
+    const local = await readLocal(context.vault, context.binding.vault, preview.path);
+    localHash = local?.hash ?? null;
+    const remote = await readRemote(context.cloud, preview.path);
+    remoteVersion = remote?.version ?? null;
+    await checkBinding(context);
+    if (localHash !== preview.localHash || (remote?.hash ?? null) !== preview.remoteHash || remoteVersion !== preview.remoteVersion)
+      throw new CloudError("conflict");
+    return { path: preview.path, ...await transferNote(context, preview, local, remote) };
+  } catch (error) {
+    return {
+      path: preview.path,
+      localHash,
+      remoteVersion,
+      status: error instanceof CloudError && error.code === "conflict" ? "conflict" : "failed",
+      reason: error instanceof CloudError ? error.code : "protocol"
+    };
+  }
+}
+async function syncCloudNotes(cloud, input, vault) {
+  const previews = selectedPreviews(input);
+  const binding = await vault.readBinding({ fresh: true });
+  if (!binding || binding.revision !== input.bindingRevision) throw new CloudError("conflict");
+  const context = { cloud, vault, binding, mode: input.mode, resolution: input.resolution };
+  const items = [];
+  for (const preview of previews) items.push(await syncNote(context, preview));
+  return {
+    mode: input.mode,
+    completed: items.every((item) => ["unchanged", "pulled", "pushed"].includes(item.status)),
+    items,
+    warnings: ["selected_notes_only"]
+  };
+}
+
+// src/desktop/cloud-runtime.ts
+var definitions = [
+  ["cloudStatus", "read", cloudStatusInputSchema, cloudStatusResultSchema],
+  ["cloudProbe", "read", cloudProbeInputSchema, cloudProbeResultSchema],
+  ["cloudInitialize", "write", cloudInitializeInputSchema, cloudInitializeResultSchema],
+  ["cloudRead", "read", cloudReadInputSchema, cloudReadResultSchema],
+  ["cloudWrite", "write", cloudWriteInputSchema, cloudWriteResultSchema],
+  ["cloudSync", "write", cloudSyncInputSchema, cloudSyncResultSchema]
+];
+function withCloudOperations(factory) {
+  return async (context) => {
+    const runtime = await factory(context);
+    const operations = {};
+    for (const [name, effect, inputSchema, resultSchema] of definitions) {
+      if (name in runtime.operations) {
+        await runtime.dispose();
+        throw new Error(`Cloud operation collision: ${name}`);
+      }
+      operations[name] = {
+        inputSchema,
+        resultSchema,
+        effect,
+        async execute(input, call) {
+          const status = await cloudAvailability(call.capabilities, call.signal);
+          if (name === "cloudStatus") return status;
+          if (status.reason !== null) return { status: "failed", reason: status.reason };
+          const cloud = new CloudService({ http: createCloudHttp(call.capabilities, call.signal) });
+          try {
+            const result3 = await executeService(cloud, name, input, context, call);
+            return { status: "ok", result: result3 };
+          } catch (error) {
+            if (!(error instanceof CloudError)) throw error;
+            return { status: "failed", reason: error.code };
+          }
+        }
+      };
+    }
+    return { ...runtime, operations: { ...runtime.operations, ...operations } };
+  };
+}
+function executeService(cloud, name, input, context, call) {
+  switch (name) {
+    case "cloudProbe":
+      return cloud.probe();
+    case "cloudInitialize":
+      return cloud.initialize();
+    case "cloudRead":
+      return cloud.read(input.path);
+    case "cloudWrite":
+      return cloud.write(input);
+    case "cloudSync": {
+      const states = context.resources.filter((resource) => resource.kind === "state");
+      if (states.length !== 1) throw new CloudError("forbidden");
+      return syncCloudNotes(
+        cloud,
+        input,
+        createCloudVault(call.capabilities, states[0].handle, context.resources, call.signal)
+      );
+    }
+    default:
+      throw new Error(`Unknown cloud operation: ${name}`);
+  }
+}
+
+// src/desktop/contract.ts
+var string2 = { type: "string" };
+var integer = { type: "integer", minimum: 0 };
+var coverage = { enum: ["uninitialized", "indexing", "partial", "ready"] };
+var nullable2 = (schema) => ({ anyOf: [schema, { type: "null" }] });
+var object2 = (properties, required = Object.keys(properties)) => ({
+  type: "object",
+  properties,
+  required,
+  additionalProperties: false
+});
+var overviewInputSchema = { type: "null" };
+var overviewResultSchema = object2({
+  state: { enum: ["unconfigured", "bound"] },
+  binding: nullable2(
+    object2({
+      vaultId: string2,
+      revision: { type: "integer", minimum: 1 },
+      label: string2
+    })
+  ),
+  project: nullable2(string2),
+  index: nullable2(
+    object2({
+      revision: integer,
+      coverage,
+      noteCount: integer,
+      pendingChanges: integer,
+      lastReconciledAt: nullable2(string2)
+    })
+  ),
+  recentNotes: {
+    type: "array",
+    items: object2({
+      path: string2,
+      title: string2,
+      kind: string2,
+      updatedAt: { type: "number" }
+    })
+  }
+});
+var searchInputSchema = object2(
+  {
+    query: { type: "string", minLength: 1, maxLength: 2e3 },
+    revision: { type: "integer", minimum: 1 },
+    limit: { type: "integer", minimum: 1, maximum: 12 }
+  },
+  ["query", "revision"]
+);
+var searchResultSchema = object2({
+  query: string2,
+  revision: integer,
+  bindingRevision: { type: "integer", minimum: 1 },
+  coverage,
+  complete: { type: "boolean" },
+  hits: {
+    type: "array",
+    items: object2({
+      path: string2,
+      title: string2,
+      kind: string2,
+      hash: string2,
+      text: string2,
+      startLine: { type: "integer", minimum: 1 },
+      endLine: integer
+    })
+  }
+});
+var boolean2 = { type: "boolean" };
+var array = (items) => ({ type: "array", items });
+var record = (additionalProperties) => ({
+  type: "object",
+  additionalProperties
+});
+var bindingRevision = { type: "integer", minimum: 1 };
+var readScope = {
+  revision: integer,
+  bindingRevision,
+  project: nullable2(string2)
+};
+var notePath = { type: "string", minLength: 1, maxLength: 1e3 };
+var snippetProperties = {
+  text: string2,
+  startLine: bindingRevision,
+  endLine: integer,
+  totalLines: integer,
+  truncated: boolean2
+};
+var snippetSchema = object2(snippetProperties);
+var recentNoteSchema = object2({
+  path: string2,
+  title: string2,
+  kind: string2,
+  updatedAt: { type: "number" }
+});
+var readNoteInputSchema = object2(
+  {
+    path: notePath,
+    revision: bindingRevision,
+    startLine: bindingRevision,
+    expectedHash: { type: "string", pattern: "^[a-f0-9]{64}$" }
+  },
+  ["path", "revision"]
+);
+var readNoteResultSchema = {
+  anyOf: [
+    object2({ ...readScope, path: string2, missing: { const: true } }),
+    object2({
+      ...readScope,
+      path: string2,
+      missing: { const: false },
+      title: string2,
+      kind: string2,
+      category: { enum: ["paper", "software", "method", "idea", "other"] },
+      hash: string2,
+      ...snippetProperties,
+      humanReview: nullable2(snippetSchema),
+      pending: array(object2({ kind: string2, revision: integer }))
+    })
+  ]
+};
+var linksInputSchema = object2({
+  path: notePath,
+  revision: bindingRevision
+});
+var linksResultSchema = object2({
+  ...readScope,
+  path: string2,
+  title: string2,
+  outgoing: array(object2({ path: string2, title: string2, exists: boolean2 })),
+  incoming: array(object2({ path: string2, title: string2, exists: boolean2 }))
+});
+var graphInputSchema = object2(
+  {
+    revision: bindingRevision,
+    limit: { type: "integer", minimum: 10, maximum: 500 },
+    view: { enum: ["semantic", "all"] },
+    mergeMirrors: boolean2
+  },
+  ["revision"]
+);
+var edgeSchema = object2({ source: string2, target: string2 });
+var graphNodeProperties = {
+  path: string2,
+  title: string2,
+  kind: string2,
+  degree: integer,
+  warnings: array(string2)
+};
+var semanticNodeSchema = object2(
+  {
+    ...graphNodeProperties,
+    nodeType: {
+      enum: ["note", "wiki", "navigation", "mirror", "infrastructure", "memory"]
+    },
+    isInfrastructure: boolean2,
+    community: { type: "integer", minimum: -1 },
+    x: { type: "number" },
+    y: { type: "number" },
+    mirrors: array(string2),
+    contentType: string2,
+    isMain: boolean2,
+    sharedWith: array(string2)
+  },
+  ["path", "title", "kind", "degree", "nodeType", "isInfrastructure", "community", "x", "y"]
+);
+var graphResultSchema = object2({
+  ...readScope,
+  nodes: array(object2(graphNodeProperties, ["path", "title", "kind", "degree"])),
+  edges: array(edgeSchema),
+  totalNotes: integer,
+  semantic: object2({
+    nodes: array(semanticNodeSchema),
+    edges: array(edgeSchema),
+    totalNotes: integer,
+    view: { enum: ["semantic", "all"] },
+    mergeMirrors: boolean2,
+    relations: array(
+      object2({
+        source: string2,
+        target: string2,
+        type: { enum: ["link", "directory", "duplicate"] }
+      })
+    ),
+    duplicates: array(object2({ canonical: string2, duplicate: string2 })),
+    communities: record({ type: "integer", minimum: -1 }),
+    layout: record(object2({ x: { type: "number" }, y: { type: "number" } })),
+    health: object2({
+      isolated: integer,
+      duplicates: integer,
+      infrastructure: integer,
+      truncated: boolean2,
+      candidateNodes: integer,
+      candidateLimit: integer
+    })
+  })
+});
+var jobsInputSchema = object2(
+  {
+    revision: bindingRevision,
+    offset: { type: "integer", minimum: 0, maximum: 1e5 },
+    limit: { type: "integer", minimum: 1, maximum: 50 }
+  },
+  ["revision"]
+);
+var jobsResultSchema = object2({
+  ...readScope,
+  items: array(
+    object2({
+      key: string2,
+      kind: string2,
+      path: string2,
+      scope: string2,
+      revision: integer,
+      updated: string2
+    })
+  ),
+  total: integer,
+  offset: integer,
+  nextOffset: nullable2(integer)
+});
+var recentByCategoryInputSchema = object2(
+  {
+    revision: bindingRevision,
+    limit: { type: "integer", minimum: 1, maximum: 24 }
+  },
+  ["revision"]
+);
+var recentByCategoryResultSchema = object2({
+  ...readScope,
+  groups: object2({
+    paper: array(recentNoteSchema),
+    software: array(recentNoteSchema),
+    method: array(recentNoteSchema),
+    idea: array(recentNoteSchema)
+  }),
+  counts: object2({
+    paper: integer,
+    software: integer,
+    method: integer,
+    idea: integer,
+    other: integer
+  })
+});
+var reviewModeSchema = { enum: ["automatic", "strict"] };
+var preferencesInputSchema = { type: "null" };
+var preferencesResultSchema = object2({
+  binding: nullable2(
+    object2({
+      vaultId: string2,
+      revision: bindingRevision,
+      label: string2,
+      vault: string2,
+      profile: { enum: ["project", "literature", "hybrid"] },
+      depositMode: { enum: ["run-only", "verified", "rich"] },
+      subagentPolicy: { enum: ["none", "read-local"] },
+      updatedAt: string2
+    })
+  ),
+  canWriteState: boolean2,
+  reviewPolicy: object2({
+    mode: reviewModeSchema,
+    persistedMode: nullable2(reviewModeSchema),
+    version: nullable2(string2),
+    override: nullable2({ const: "environment" }),
+    diagnostic: nullable2({ enum: ["invalid-json", "invalid-policy"] })
+  })
+});
+var setReviewPolicyInputSchema = object2({
+  bindingRevision,
+  expectedVersion: nullable2(string2),
+  mode: reviewModeSchema
+});
+var proposalId = { type: "string", pattern: "^[0-9a-f-]{36}$" };
+var proposalHash = { type: "string", pattern: "^[a-f0-9]{64}$" };
+var reviewsInputSchema = object2(
+  {
+    revision: bindingRevision,
+    offset: { type: "integer", minimum: 0, maximum: 100 },
+    limit: { type: "integer", minimum: 1, maximum: 25 }
+  },
+  ["revision"]
+);
+var reviewsResultSchema = object2({
+  bindingRevision,
+  project: nullable2(string2),
+  items: array(
+    object2({
+      id: proposalId,
+      path: string2,
+      title: string2,
+      status: string2,
+      proposalHash,
+      expiresAt: integer,
+      expired: boolean2,
+      bindingChanged: boolean2
+    })
+  ),
+  problems: array(object2({ id: string2, error: string2 })),
+  total: integer,
+  offset: integer,
+  nextOffset: nullable2(integer)
+});
+var previewReviewInputSchema = object2({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedProposalHash: proposalHash
+});
+var previewReviewResultSchema = object2({
+  bindingRevision,
+  id: proposalId,
+  path: string2,
+  project: string2,
+  status: string2,
+  proposalHash,
+  title: string2,
+  rationale: string2,
+  before: string2,
+  after: string2,
+  protectedText: string2,
+  sources: array(
+    object2(
+      {
+        path: string2,
+        hash: nullable2(string2),
+        startLine: bindingRevision,
+        endLine: bindingRevision,
+        excerptHash: string2,
+        paperDois: array(string2),
+        currentHash: nullable2(string2),
+        changed: boolean2,
+        error: nullable2(string2)
+      },
+      ["path", "hash", "startLine", "endLine", "excerptHash", "currentHash", "changed", "error"]
+    )
+  ),
+  expired: boolean2,
+  targetChanged: boolean2,
+  canApply: boolean2,
+  expiresAt: integer,
+  scientificallyVerified: { const: false }
+});
+var rejectReviewInputSchema = object2({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedProposalHash: proposalHash
+});
+var rejectReviewResultSchema = object2({
+  id: proposalId,
+  status: { const: "rejected" },
+  vaultWritten: { const: false },
+  reviewRecorded: boolean2
+});
+var applyReviewInputSchema = object2({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedProposalHash: proposalHash
+});
+var applyReviewResultSchema = object2({
+  id: proposalId,
+  status: { const: "applied" },
+  path: { type: "string", minLength: 1 },
+  vaultWritten: { const: true },
+  reviewRecorded: boolean2,
+  indexed: boolean2,
+  recovered: boolean2,
+  recordError: nullable2(string2),
+  indexError: nullable2(string2)
+});
+var semanticConfigProperties = {
+  enabled: boolean2,
+  provider: { enum: ["none", "ollama", "openai-compatible"] },
+  baseUrl: string2,
+  model: string2,
+  credentialEnv: string2,
+  remoteConsent: boolean2,
+  timeoutMs: { type: "integer", minimum: 500, maximum: 3e4 },
+  chunkChars: { type: "integer", minimum: 256, maximum: 8e3 },
+  minSimilarity: { type: "number", minimum: 0, maximum: 1 }
+};
+var semanticPreferencesInputSchema = { type: "null" };
+var semanticPreferencesResultSchema = object2({
+  binding: nullable2(object2({ vaultId: string2, revision: bindingRevision, label: string2 })),
+  settings: nullable2(
+    object2({ ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string2 }, [
+      "enabled",
+      "provider",
+      "baseUrl",
+      "model",
+      "credentialEnv",
+      "remoteConsent",
+      "version",
+      "revision",
+      "updatedAt"
+    ])
+  ),
+  canWriteState: boolean2,
+  providerExecution: { const: "unavailable" }
+});
+var setSemanticSettingsInputSchema = object2({
+  bindingRevision,
+  expectedSettingsRevision: integer,
+  settings: object2(semanticConfigProperties, [])
+});
+var reviewHistoryInputSchema = object2({ revision: bindingRevision });
+var reviewHistoryResultSchema = object2({
+  bindingRevision,
+  project: string2,
+  items: array(
+    object2({
+      id: proposalId,
+      path: string2,
+      afterHash: proposalHash,
+      reviewedAt: integer,
+      reviewMethod: string2
+    })
+  )
+});
+var undoReviewInputSchema = object2({
+  revision: bindingRevision,
+  id: proposalId,
+  expectedHash: proposalHash
+});
+var undoReviewResultSchema = object2({ status: { const: "reverted" }, path: string2 });
+var modelReviewProfile = { const: "knowledge-wiki-reviewer" };
+var modelReviewInputSchema = object2(
+  {
+    revision: bindingRevision,
+    id: proposalId,
+    expectedProposalHash: proposalHash,
+    acknowledged: { const: true },
+    autoApply: boolean2,
+    profile: modelReviewProfile
+  },
+  ["revision", "id", "expectedProposalHash", "acknowledged", "autoApply"]
+);
+var modelReviewInfoInputSchema = object2(
+  {
+    revision: bindingRevision,
+    id: proposalId,
+    expectedProposalHash: proposalHash,
+    profile: modelReviewProfile
+  },
+  ["revision", "id", "expectedProposalHash"]
+);
+var modelReviewUsageSchema = object2({
+  inputTokens: nullable2({ type: "number", minimum: 0 }),
+  outputTokens: nullable2({ type: "number", minimum: 0 }),
+  cost: nullable2({ type: "number", minimum: 0 })
+});
+var modelReviewResultSchema = {
+  type: "object",
+  properties: {
+    auditId: proposalId,
+    proposalId,
+    proposalHash,
+    path: string2,
+    model: string2,
+    startedAt: integer,
+    completedAt: integer,
+    verdict: { enum: ["approve", "needs-human", "reject"] },
+    summary: string2,
+    cautions: array(string2),
+    checks: { type: "object", additionalProperties: boolean2 },
+    source_paths: array(string2),
+    canAutoApply: boolean2,
+    autoApplyAuthorized: boolean2,
+    applied: boolean2,
+    humanReviewed: { const: false },
+    scientificallyVerified: { const: false },
+    usage: modelReviewUsageSchema,
+    partial: boolean2,
+    applyError: string2,
+    auditSaveError: string2,
+    writeResult: { type: "object" }
+  },
+  required: [
+    "auditId",
+    "proposalId",
+    "proposalHash",
+    "path",
+    "model",
+    "startedAt",
+    "completedAt",
+    "verdict",
+    "summary",
+    "cautions",
+    "checks",
+    "source_paths",
+    "canAutoApply",
+    "autoApplyAuthorized",
+    "applied",
+    "humanReviewed",
+    "scientificallyVerified",
+    "usage"
+  ],
+  additionalProperties: true
+};
+var modelReviewInfoResultSchema = object2({
+  selection: object2({ provider: string2, model: string2, thinkingLevel: string2, profile: string2 }, [
+    "provider",
+    "model",
+    "thinkingLevel"
+  ]),
+  lastReview: nullable2(modelReviewResultSchema)
+});
+
+// src/desktop/model-review.ts
+init_wiki_model_review();
+
+// src/desktop/reviews.ts
+function createKnowledgeReviewContext(owner, canWriteState, canWriteFiles) {
+  async function bound(revision, project, operation) {
+    return owner.run(async () => {
+      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+      if (!binding) throw new Error("No application knowledge Vault is bound");
+      if (binding.revision !== revision)
+        throw new Error("Knowledge binding changed; refresh before reviewing");
+      if (project === null) throw new Error("Select a project session to review Wiki proposals");
+      const service = {
+        binding,
+        async request(operation2, input) {
+          const index = await owner.services.getKnowledgeService(binding);
+          return index.request(operation2, input);
+        }
+      };
+      return owner.config.withKnowledgeBinding(binding, () => operation(service));
+    });
+  }
+  function requireWrite(files = false) {
+    if (!canWriteState) throw new Error("Application-state write permission is required");
+    if (files && !canWriteFiles) throw new Error("Configured Vault write permission is required");
+  }
+  return { bound, requireWrite };
+}
+function createKnowledgeReviewModel(owner, canWriteState, canWriteFiles) {
+  const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
+  return {
+    async reviews(input, project) {
+      if (project === null) {
+        return owner.run(async () => {
+          const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+          if (!binding || binding.revision !== input.revision)
+            throw new Error("Knowledge binding changed; refresh before reviewing");
+          return {
+            bindingRevision: binding.revision,
+            project,
+            items: [],
+            problems: [],
+            total: 0,
+            offset: 0,
+            nextOffset: null
+          };
+        });
+      }
+      return bound(input.revision, project, async (service) => {
+        const { items, problems } = await owner.wiki.listWikiProposals(service, project);
+        const offset = input.offset ?? 0, limit = input.limit ?? 12;
+        return {
+          bindingRevision: service.binding.revision,
+          project,
+          items: items.slice(offset, offset + limit),
+          problems,
+          total: items.length,
+          offset,
+          nextOffset: offset + limit < items.length ? offset + limit : null
+        };
+      });
+    },
+    previewReview(input, project) {
+      return bound(input.revision, project, async (service) => {
+        const preview = await owner.wiki.previewWikiProposal(service, input.id, project);
+        if (preview.proposalHash !== input.expectedProposalHash)
+          throw new Error("Wiki proposal changed; refresh before previewing");
+        return { ...preview, bindingRevision: service.binding.revision };
+      });
+    },
+    rejectReview(input, project) {
+      requireWrite();
+      return bound(input.revision, project, async (service) => {
+        const result3 = await owner.wiki.decideWikiProposal(
+          service,
+          input.id,
+          project,
+          input.expectedProposalHash,
+          "reject"
+        );
+        if (result3.alreadyReviewed)
+          throw new Error("Wiki proposal was already reviewed; refresh before reviewing");
+        return { id: result3.id, status: "rejected", vaultWritten: false, reviewRecorded: true };
+      });
+    },
+    applyReview(input, project) {
+      requireWrite(true);
+      return bound(input.revision, project, async (service) => {
+        const result3 = await owner.wiki.decideWikiProposal(
+          service,
+          input.id,
+          project,
+          input.expectedProposalHash,
+          "apply"
+        );
+        if (result3.alreadyReviewed)
+          throw new Error("Wiki proposal was already reviewed; refresh before reviewing");
+        const {
+          id: id2,
+          status,
+          path: path2,
+          vaultWritten,
+          reviewRecorded,
+          indexed,
+          recovered,
+          recordError,
+          indexError
+        } = result3;
+        return {
+          id: id2,
+          status,
+          path: path2,
+          vaultWritten,
+          reviewRecorded,
+          indexed,
+          recovered,
+          recordError,
+          indexError
+        };
+      });
+    },
+    history(input, project) {
+      return bound(input.revision, project, async (service) => ({
+        bindingRevision: service.binding.revision,
+        project,
+        items: await owner.wiki.wikiHistory(service, project)
+      }));
+    },
+    undoReview(input, project) {
+      requireWrite(true);
+      return bound(
+        input.revision,
+        project,
+        (service) => owner.wiki.undoWikiUpdate(service, project, input.id, input.expectedHash)
+      );
+    }
+  };
+}
+
+// src/desktop/model-review.ts
+function createKnowledgeModelReviewModel(owner, canWriteState, canWriteFiles) {
+  const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
+  async function selection(call, profile) {
+    if (call.scope.kind !== "session")
+      throw new Error("Choose the originating live session before model review");
+    return await call.capabilities.call(
+      "model.selection",
+      profile === void 0 ? {} : { profile }
+    );
+  }
+  return {
+    info(input, project, call) {
+      return bound(input.revision, project, async (service) => {
+        const preview = await owner.wiki.previewWikiProposal(service, input.id, project);
+        if (preview.proposalHash !== input.expectedProposalHash)
+          throw new Error("Wiki proposal changed; refresh before model review");
+        return {
+          selection: await selection(call, input.profile),
+          lastReview: await owner.modelReview.lastWikiModelReview(
+            service,
+            input.id,
+            input.expectedProposalHash
+          )
+        };
+      });
+    },
+    review(input, project, call) {
+      requireWrite(input.autoApply);
+      return bound(input.revision, project, async (service) => {
+        const initial = await selection(call, input.profile);
+        const check = async () => {
+          call.signal.throwIfAborted();
+          const state = await call.capabilities.call("session.inspect", null);
+          if (state.agentActive)
+            throw new Error("Wait for the current conversation to finish before model review");
+          const current = await selection(call, input.profile);
+          if (current.provider !== initial.provider || current.model !== initial.model || current.thinkingLevel !== initial.thinkingLevel || current.profile !== initial.profile)
+            throw new Error("Model selection changed; review again before applying");
+        };
+        return owner.modelReview.reviewWikiWithModel(
+          {
+            service,
+            project,
+            id: input.id,
+            hash: input.expectedProposalHash,
+            binding: service.binding
+          },
+          input,
+          {
+            signal: call.signal,
+            check,
+            evaluate: (request) => generateWikiModelReview(call.capabilities, initial, request)
+          }
+        );
+      });
+    }
+  };
+}
+function parseModelReviewCommandInput(args) {
+  let input;
+  try {
+    input = JSON.parse(args);
+  } catch {
+    throw new Error("Expected model-review command JSON; raw arguments are not included in diagnostics");
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new Error("Expected JSON with id, expectedProposalHash, acknowledged:true and autoApply:boolean");
+  const value = input;
+  if (Object.keys(value).some(
+    (key) => !["id", "expectedProposalHash", "acknowledged", "autoApply", "profile"].includes(key)
+  ) || typeof value.id !== "string" || !/^[0-9a-f-]{36}$/.test(value.id) || typeof value.expectedProposalHash !== "string" || !/^[0-9a-f]{64}$/.test(value.expectedProposalHash) || value.acknowledged !== true || typeof value.autoApply !== "boolean" || value.profile !== void 0 && value.profile !== "knowledge-wiki-reviewer")
+    throw new Error(
+      "Expected the exact proposal ID/hash, explicit cost/data acknowledgement and autoApply choice"
+    );
+  return {
+    id: value.id,
+    expectedProposalHash: value.expectedProposalHash,
+    acknowledged: true,
+    autoApply: value.autoApply,
+    ...value.profile === void 0 ? {} : { profile: "knowledge-wiki-reviewer" }
+  };
+}
+
 // src/extension/knowledge-extension.ts
 import { Worker } from "node:worker_threads";
 
@@ -10799,11 +12265,11 @@ var DAILY_DISCOVERY_SYSTEM = [
 ].join("\n");
 
 // src/core/deliverable-review.ts
-import { createHash as createHash13 } from "node:crypto";
+import { createHash as createHash14 } from "node:crypto";
 
 // src/core/delivery-claims.ts
-import { createHash as createHash14 } from "node:crypto";
-var digest5 = (text4) => createHash14("sha256").update(text4).digest("hex");
+import { createHash as createHash15 } from "node:crypto";
+var digest5 = (text4) => createHash15("sha256").update(text4).digest("hex");
 function summaryDeliveryClaims(details, markdown) {
   const receipt = details.delivery_receipt;
   if (!receipt || receipt.version !== 1 || receipt.semanticAssessment?.status !== "model-assessed" || receipt.bodySha256 !== digest5(`${markdown.trim()}
@@ -10837,7 +12303,7 @@ function summaryDeliveryClaims(details, markdown) {
 // src/core/experience-store.ts
 init_config();
 init_runtime_host();
-import { createHash as createHash15, randomUUID as randomUUID14 } from "node:crypto";
+import { createHash as createHash16, randomUUID as randomUUID14 } from "node:crypto";
 import { lstat as lstat8, mkdir as mkdir9, readFile as readFile9, rename as rename8, unlink as unlink7, writeFile as writeFile9 } from "node:fs/promises";
 import { isAbsolute as isAbsolute6, join as join13, relative as relative7, resolve as resolve6, sep as sep7 } from "node:path";
 var EXPERIENCE_VERSION = 1;
@@ -10864,7 +12330,7 @@ var EXPERIENCE_LIMITS = Object.freeze({
   maxSchedulerJobIdChars: 180,
   maxQueryChars: 200
 });
-var HASH = (value) => createHash15("sha256").update(value).digest("hex");
+var HASH = (value) => createHash16("sha256").update(value).digest("hex");
 var now = () => (/* @__PURE__ */ new Date()).toISOString();
 function text2(value, limit) {
   if (typeof value !== "string" && typeof value !== "number") return "";
@@ -10905,7 +12371,7 @@ function vaultKey(value) {
   if (!/^[a-f0-9]{24}$/.test(vault)) throw new Error("Invalid experience binding");
   return vault;
 }
-function hash(value) {
+function hash2(value) {
   const result3 = text2(value, 128).toLowerCase();
   return /^[a-f0-9]{64}$/.test(result3) ? result3 : null;
 }
@@ -11030,7 +12496,7 @@ function normalizeQcMetrics(value) {
 function normalizeArtifact(value) {
   if (!value || typeof value !== "object") return null;
   const item = value;
-  const sha256 = hash(item.sha256);
+  const sha256 = hash2(item.sha256);
   if (!sha256) return null;
   const bytes = typeof item.bytes === "number" && Number.isSafeInteger(item.bytes) && item.bytes >= 0 ? item.bytes : void 0;
   const pathValue = text2(item.path, 240).replaceAll("\\", "/");
@@ -11063,7 +12529,7 @@ function normalizeSchedulerJobId(value) {
 function normalizeProvenance(input) {
   if (!input || typeof input !== "object") throw new Error("Experience provenance is required");
   const item = input;
-  const manifestSha256 = hash(item.manifestSha256 ?? item.manifestHash);
+  const manifestSha256 = hash2(item.manifestSha256 ?? item.manifestHash);
   const artifactHashes = Array.isArray(item.artifactHashes) ? item.artifactHashes.map(normalizeArtifact).filter((value) => Boolean(value)).slice(0, EXPERIENCE_LIMITS.maxArtifacts) : [];
   const runId = opaqueRef(item.runId);
   const observationId = opaqueRef(item.observationId);
@@ -11146,7 +12612,7 @@ function normalizeRecord(value, vaultId, project, hostId) {
     qcMetrics: normalizeQcMetrics(item.qcMetrics ?? item.qc ?? item.qcMetricDistribution),
     modelSummary: text2(item.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars) || null,
     modelGenerated: item.modelGenerated === true && Boolean(text2(item.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars)),
-    contractHash: hash(item.contractHash),
+    contractHash: hash2(item.contractHash),
     workflow: normalizeWorkflow(item.workflow),
     workflowRevision: normalizeWorkflowRevision(item.workflowRevision ?? item.workflowRevisionId),
     scheduler: normalizeScheduler(item.scheduler),
@@ -11309,7 +12775,7 @@ function createExperienceStore(options) {
         input.qcMetrics ?? input.qc ?? observation.qcMetrics ?? observation.qc
       );
       const modelSummary = text2(input.modelSummary ?? observation.modelSummary, EXPERIENCE_LIMITS.maxModelSummaryChars) || null;
-      const contractHash = hash(input.contractHash ?? observation.contractHash);
+      const contractHash = hash2(input.contractHash ?? observation.contractHash);
       const workflow = normalizeWorkflow(input.workflow ?? observation.workflow);
       const workflowRevision = normalizeWorkflowRevision(
         input.workflowRevision ?? observation.workflowRevision
@@ -11541,7 +13007,7 @@ async function resolveWorkspaceProject(input) {
 }
 
 // src/core/extension-helpers.ts
-function result(data) {
+function result2(data) {
   return {
     content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
     details: data
@@ -11586,7 +13052,7 @@ init_wiki_review();
 init_wiki_review_node();
 
 // src/core/writer-lease.ts
-import { createHash as createHash16, randomUUID as randomUUID15 } from "node:crypto";
+import { createHash as createHash17, randomUUID as randomUUID15 } from "node:crypto";
 import {
   closeSync,
   fstatSync,
@@ -11607,12 +13073,12 @@ init_layout();
 // src/core/maintenance.ts
 init_files();
 init_layout();
-import { createHash as createHash17, randomUUID as randomUUID16 } from "node:crypto";
+import { createHash as createHash18, randomUUID as randomUUID16 } from "node:crypto";
 import { mkdir as mkdir10, rename as rename9, writeFile as writeFile10 } from "node:fs/promises";
 import { dirname as dirname8 } from "node:path";
 var START = "<!-- pi-agent:managed:start -->";
 var END = "<!-- pi-agent:managed:end -->";
-var hash2 = (text4) => createHash17("sha256").update(text4).digest("hex");
+var hash3 = (text4) => createHash18("sha256").update(text4).digest("hex");
 async function updateNavigation(vault, path2, heading, body) {
   if (!["Home.md", "Wiki/Index.md", "Library/Index.md"].includes(path2) && !/^Projects\/[a-z0-9-]+\/Index\.md$/.test(path2))
     throw new Error("Not an allowed navigation target");
@@ -11637,7 +13103,7 @@ ${END}`;
 ${block}
 `;
   if (updated === original) return { path: path2, changed: false };
-  if (original !== null && (await readNoteFile(vault, path2)).hash !== hash2(original))
+  if (original !== null && (await readNoteFile(vault, path2)).hash !== hash3(original))
     throw new Error("Human navigation changed; update was not applied");
   await mkdir10(dirname8(full), { recursive: true });
   if (original === null) {
@@ -11952,7 +13418,7 @@ function evaluateMetacognitivePublication(answer, snapshot) {
 }
 
 // src/core/ingest-identity.ts
-import { createHash as createHash18 } from "node:crypto";
+import { createHash as createHash19 } from "node:crypto";
 
 // src/core/ingest-frontmatter.ts
 var KNOWLEDGE_TYPES = [
@@ -11986,7 +13452,7 @@ __export(publication_exports, {
   registerAnswerPublication: () => registerAnswerPublication
 });
 init_config();
-import { createHash as createHash19, randomUUID as randomUUID17 } from "node:crypto";
+import { createHash as createHash20, randomUUID as randomUUID17 } from "node:crypto";
 
 // src/core/publication-policy.ts
 var publicationNotices = {
@@ -12096,7 +13562,7 @@ function createPublicationApi(ui, reviewPolicy, ports, createState, signal = nul
     })
   );
   const FIELD = "knowledgePublication";
-  const hash4 = (content) => createHash19("sha256").update(JSON.stringify(content ?? [])).digest("hex");
+  const hash4 = (content) => createHash20("sha256").update(JSON.stringify(content ?? [])).digest("hex");
   const protocolKey = (message) => hash4({
     timestamp: message.timestamp,
     api: message.api,
@@ -12987,7 +14453,7 @@ init_topic_memory();
 
 // src/core/ui-service.ts
 init_config();
-import { createHash as createHash20, randomUUID as randomUUID18 } from "node:crypto";
+import { createHash as createHash21, randomUUID as randomUUID18 } from "node:crypto";
 import { lstat as lstat10, mkdir as mkdir11, readFile as readFile11, realpath as realpath8, stat as stat3, writeFile as writeFile11 } from "node:fs/promises";
 import { dirname as dirname9, isAbsolute as isAbsolute9, join as join16, relative as relative10, resolve as resolve11 } from "node:path";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
@@ -20949,7 +22415,7 @@ var Edit = Union([Insert2, Update2, Delete2]);
 
 // src/core/recovery-checkpoint.ts
 var text3 = typebox_exports.String({ minLength: 1, maxLength: 512 });
-var record = typebox_exports.Object({
+var record2 = typebox_exports.Object({
   id: text3,
   sessionId: text3,
   taskId: typebox_exports.Union([text3, typebox_exports.Null()]),
@@ -20964,7 +22430,7 @@ var record = typebox_exports.Object({
 });
 var checkpoint = typebox_exports.Object({
   scope: typebox_exports.String({ minLength: 1 }),
-  records: typebox_exports.Array(record, { maxItems: 8 })
+  records: typebox_exports.Array(record2, { maxItems: 8 })
 });
 function parseKnowledgeRecoveryCheckpoint(value) {
   if (!Check2(checkpoint, value)) throw new Error("Invalid knowledge recovery checkpoint");
@@ -21013,7 +22479,7 @@ function createKnowledgePrepareTool({
     label: "Obsidian \xB7 \u8BFB\u53D6\u5BFC\u822A\u4E0E\u9879\u76EE\u80CC\u666F",
     description: "Read the current application Vault navigation before search. Refresh after a Vault/navigation change. Does not rewrite notes.",
     parameters: { type: "object", properties: {} },
-    execute: async (_id, _params, _signal, _update, ctx) => result(await prepare(ctx))
+    execute: async (_id, _params, _signal, _update, ctx) => result2(await prepare(ctx))
   };
 }
 function createKnowledgeReadTool({
@@ -21047,7 +22513,7 @@ function createKnowledgeReadTool({
         "read",
         JSON.stringify([p.path, p.start_line ?? 1, p.max_chars ?? 5e3])
       );
-      if (blocked) return result(blocked);
+      if (blocked) return result2(blocked);
       try {
         observer?.updateFlow?.(ctx, {
           phase: /(?:^|\/)Wiki\//.test(p.path) ? "reading-wiki" : "reading-evidence"
@@ -21068,7 +22534,7 @@ function createKnowledgeReadTool({
           const slim = (xs) => (xs || []).filter((x) => x.exists !== false).slice(0, 12).map((x) => ({ path: x.path, title: x.title }));
           links = { outgoing: slim(nl.outgoing), backlinks: slim(nl.incoming) };
         }
-        return result({
+        return result2({
           ...page,
           ...links ? { links } : {},
           ...page.hash && !page.missing ? {
@@ -21122,11 +22588,11 @@ function createKnowledgeSearchTool({
         "search",
         p.kind === "experiences" ? JSON.stringify([p.kind, p.workflow, p.host_id, p.query]) : p.query
       );
-      if (blocked) return result(blocked);
+      if (blocked) return result2(blocked);
       if (p.kind === "experiences") {
         if (!p.workflow?.trim() || !p.host_id?.trim())
           throw new Error("Experience navigation requires explicit workflow and host_id");
-        return result(await searchExperiences2(ctx, p));
+        return result2(await searchExperiences2(ctx, p));
       }
       observer?.updateFlow?.(ctx, { phase: "searching", error: null });
       try {
@@ -21140,7 +22606,7 @@ function createKnowledgeSearchTool({
         const slimHits = Array.isArray(found?.hits) ? found.hits.map(
           ({ rank: _r, fusionScore: _f, ...hit }) => typeof hit.text === "string" && hit.text.length > 700 ? { ...hit, text: hit.text.slice(0, 700), truncated: true } : hit
         ) : found?.hits;
-        return result(slimHits ? { ...found, hits: slimHits } : found);
+        return result2(slimHits ? { ...found, hits: slimHits } : found);
       } catch (error) {
         observer?.updateFlow?.(ctx, {
           phase: "blocked",
@@ -21167,7 +22633,7 @@ function createKnowledgeAnswerCheckTool({
     },
     execute: async (_id, p, _s, _u, ctx) => {
       await ensureTurn(ctx);
-      return result(await preflight(ctx, p.draft));
+      return result2(await preflight(ctx, p.draft));
     }
   };
 }
@@ -21818,7 +23284,7 @@ ${JSON.stringify(visible)}`
       execute: async (_id, p, _s, _u, ctx) => {
         const c = await requireTopicTurn(ctx);
         const memory = topicMemory || createTopicMemory2({ binding: c.binding, project: c.project });
-        return result({
+        return result2({
           scope: memory.scope,
           ...await memory.list(p.query || "", { includeArchived: p.include_archived === true }),
           activeTopic: activeTopic?.id || null
@@ -21842,16 +23308,16 @@ ${JSON.stringify(visible)}`
         if (!found.matches.length) {
           const query = String(p.topic || "");
           const candidates = /(?:previous|prior|last|earlier|continue|resume|之前|上个|继续|刚才|它|那个|那它)/i.test(query) ? (await memory.list("")).topics : (await memory.list(query)).topics;
-          return result({ status: "not-found", candidates });
+          return result2({ status: "not-found", candidates });
         }
-        if (found.matches.length > 1) return result({ status: "ambiguous", candidates: found.matches });
+        if (found.matches.length > 1) return result2({ status: "ambiguous", candidates: found.matches });
         if (found.matches[0].status === "archived")
-          return result({ status: "archived", candidates: found.matches });
+          return result2({ status: "archived", candidates: found.matches });
         const sourceCheck = await memory.refreshSourceCheck(found.matches[0].id);
         if (sourceCheck.stale.length)
-          return result({ status: "stale", topic: { ...found.matches[0], status: "stale" }, sourceCheck });
+          return result2({ status: "stale", topic: { ...found.matches[0], status: "stale" }, sourceCheck });
         activeTopic = found.matches[0];
-        return result({
+        return result2({
           status: "selected",
           topic: activeTopic,
           context: await memory.context(activeTopic.id),
@@ -21911,7 +23377,7 @@ ${JSON.stringify(visible)}`
         const blocked = toolBudget.consume("read", JSON.stringify([r.path, r.startLine, r.maxChars]), {
           recovery: true
         });
-        if (blocked) return result(blocked);
+        if (blocked) return result2(blocked);
         const page = await c.service.read(c.ticket, ctx.cwd, {
           path: r.path,
           startLine: r.startLine,
@@ -21922,7 +23388,7 @@ ${JSON.stringify(visible)}`
         r.evicted = false;
         await saveRecovery(ctx);
         noteKnowledgeRead2(ctx, page);
-        return result(page);
+        return result2(page);
       }
     });
     registerTool(
@@ -21964,7 +23430,7 @@ ${JSON.stringify(visible)}`
       label: "Obsidian \xB7 \u5DF2\u5B8C\u6210\u4EA7\u7269\u4E0E\u963B\u585E\u539F\u56E0",
       description: "Return observed current-turn tool facts, output files and failures. This is an operational report, not scientific validation or permission to publish a draft.",
       parameters: { type: "object", properties: {} },
-      execute: async () => result({
+      execute: async () => result2({
         ...feedback.facts(),
         specialists: {
           decisions: specialists.decisions().slice(-16),
@@ -21990,7 +23456,7 @@ ${JSON.stringify(visible)}`
           limit: p.limit
         });
         noteKnowledgeSearch2(ctx, found, false);
-        return result(found);
+        return result2(found);
       }
     });
     registerTool(pi, {
@@ -22001,9 +23467,9 @@ ${JSON.stringify(visible)}`
       parameters: { type: "object", properties: {} },
       execute: async (_id, _p, _s, _u, ctx) => {
         const binding = await readKnowledgeBinding2();
-        if (!binding) return result({ bound: false, scope: "application" });
+        if (!binding) return result2({ bound: false, scope: "application" });
         const service = await getKnowledgeService2(binding);
-        return result({
+        return result2({
           bound: true,
           scope: "application",
           vault: binding.vault,
@@ -22069,7 +23535,7 @@ ${JSON.stringify(visible)}`
             p.expected_revision
           );
           activeTopic = (await memory.get(p.id)).matches[0] || activeTopic;
-          return result({ status: "updated", revision: updated.revision, topic: activeTopic });
+          return result2({ status: "updated", revision: updated.revision, topic: activeTopic });
         }
       });
     if (!readOnly)
@@ -22093,7 +23559,7 @@ ${JSON.stringify(visible)}`
           const memory = topicMemory || createTopicMemory2({ binding: c.binding, project: c.project });
           const updated = await memory.archive(p.id, p.expected_revision);
           if (activeTopic?.id === p.id) activeTopic = null;
-          return result({ status: "archived", revision: updated.revision, id: p.id });
+          return result2({ status: "archived", revision: updated.revision, id: p.id });
         }
       });
     if (!readOnly)
@@ -22116,7 +23582,7 @@ ${JSON.stringify(visible)}`
         },
         execute: async (_id, p, _s, _u, ctx) => {
           const c = requireTurn(ctx);
-          return result(
+          return result2(
             await withKnowledgeBinding2(
               c.binding,
               async () => p.action === "reconcile" ? c.service.request("reconcile") : runNavigationMaintenance(c.service, c.project, p.limit || 3)
@@ -22158,7 +23624,7 @@ ${JSON.stringify(visible)}`
             sourcePaths: sources,
             targetPath: p.role === "wiki" ? p.target_path : null
           });
-          if (answer.status !== "completed") return result(specialists.compact(answer));
+          if (answer.status !== "completed") return result2(specialists.compact(answer));
           if (p.role === "wiki") {
             const staged = await stageWikiUpdate(c.service, c.ticket, ctx.cwd, {
               path: p.target_path,
@@ -22178,7 +23644,7 @@ ${JSON.stringify(visible)}`
             appendFooter(
               staged.status === "applied" ? `Wiki \u4FEE\u8BA2\u5458\uFF1A\u5DF2\u5199\u5165 ${staged.path}\u3002` : `Wiki \u4FEE\u8BA2\u5458\uFF1A\u5DF2\u751F\u6210\u5F85\u5BA1\u6838\u5019\u9009 ${staged.path}\uFF0C\u5C1A\u672A\u8FDB\u5165\u6B63\u5F0F\u77E5\u8BC6\u3002`
             );
-            return result({
+            return result2({
               ...specialists.compact(answer),
               proposal: { id: staged.id, path: staged.path, status: staged.status }
             });
@@ -22198,12 +23664,12 @@ ${JSON.stringify(visible)}`
               isError: false
             });
             appendFooter(`Show Me\uFF1A\u8BB2\u89E3\u5458\u5DF2\u5F52\u6863 ${archived.note}\uFF1B\u5C55\u793A\u5C42\uFF0C\u4E0D\u662F\u79D1\u5B66\u8BC1\u636E\u3002`);
-            return result({
+            return result2({
               ...specialists.compact(answer),
               artifact: { note: archived.note, path: archived.result_file }
             });
           }
-          return result(specialists.compact(answer));
+          return result2(specialists.compact(answer));
         }
       });
       registerTool(pi, {
@@ -22246,7 +23712,7 @@ ${JSON.stringify(visible)}`
             summary: p.summary || "",
             sources: receipts.sources
           });
-          return result(data);
+          return result2(data);
         }
       });
       registerTool(pi, {
@@ -22284,7 +23750,7 @@ ${JSON.stringify(visible)}`
           const c = requireTurn(ctx);
           const staged = await stageWikiUpdate(c.service, c.ticket, ctx.cwd, p);
           if (staged.status === "pending") requestWikiReviewUi2(ctx, staged.id);
-          return result(staged);
+          return result2(staged);
         }
       });
       registerTool(pi, {
@@ -22295,7 +23761,7 @@ ${JSON.stringify(visible)}`
         parameters: { type: "object", properties: { id: { type: "string" } } },
         execute: async (_id, p, _s, _u, ctx) => {
           const c = requireTurn(ctx);
-          return result(
+          return result2(
             p.id ? await previewWikiProposal2(c.service, p.id, c.project) : await listWikiProposals2(c.service, c.project)
           );
         }
@@ -22633,11 +24099,11 @@ function registerNativeStatusTools(pi, owner, projectFor2 = currentProject, sess
     parameters: { type: "object", properties: {} },
     async execute(_id, _params, _signal, _update, ctx) {
       const binding = await readKnowledgeBinding2();
-      if (!binding) return result({ status: "unconfigured", next: "/drone-init", revision: 0 });
+      if (!binding) return result2({ status: "unconfigured", next: "/drone-init", revision: 0 });
       const local = await localService(owner, ctx, "", projectFor2);
-      if (!local) return result({ status: "unconfigured", next: "/drone-init", revision: binding.revision });
+      if (!local) return result2({ status: "unconfigured", next: "/drone-init", revision: binding.revision });
       const index = await local.service.request("status");
-      return result({
+      return result2({
         status: "configured",
         vault: binding.vault,
         project: local.project,
@@ -22664,7 +24130,7 @@ function registerNativeStatusTools(pi, owner, projectFor2 = currentProject, sess
       if (!query) throw new Error("query is required");
       const local = await localService(owner, ctx, query, projectFor2);
       if (!local)
-        return result({
+        return result2({
           query,
           hits: [],
           local: { status: "unconfigured", hitCount: 0 },
@@ -22672,7 +24138,7 @@ function registerNativeStatusTools(pi, owner, projectFor2 = currentProject, sess
         });
       const limit = Math.max(1, Math.min(12, Number(params?.limit) || 6));
       const found = await local.service.request("search", { query, project: local.project, limit });
-      return result({
+      return result2({
         query,
         hits: (found?.hits || []).slice(0, limit),
         local: {
@@ -22824,1472 +24290,6 @@ function composeNativeSession(owner, managed) {
 }
 function createManagedNativeSession(owner, composition) {
   return composeNativeSession(owner, composition);
-}
-
-// src/desktop/binding-service.ts
-function bindingOperation(read) {
-  return {
-    inputSchema: { type: "null" },
-    resultSchema: {
-      anyOf: [
-        { type: "null" },
-        {
-          type: "object",
-          properties: {
-            vaultId: { type: "string", pattern: "^[a-f0-9]{24}$" },
-            revision: { type: "integer", minimum: 1 },
-            vault: { type: "string" }
-          },
-          required: ["vaultId", "revision", "vault"],
-          additionalProperties: false
-        }
-      ]
-    },
-    effect: "read",
-    execute: async () => {
-      const binding = await read();
-      return binding && { vaultId: binding.vaultId, revision: binding.revision, vault: binding.vault };
-    }
-  };
-}
-
-// src/desktop/cloud.ts
-import { createHash as createHash21 } from "node:crypto";
-
-// src/desktop/cloud-dav.ts
-var import_xmldom = __toESM(require_lib(), 1);
-function strongEtag(value) {
-  return value && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value) && value.length <= 1024 ? value : null;
-}
-function invalid() {
-  throw new CloudError("protocol");
-}
-function parseMultistatus(body) {
-  if (body.byteLength > 64 * 1024) invalid();
-  const xml = new TextDecoder().decode(body);
-  if (/<!DOCTYPE|<!ENTITY/i.test(xml)) invalid();
-  let document;
-  try {
-    document = new import_xmldom.DOMParser({
-      errorHandler: { warning: invalid, error: invalid, fatalError: invalid }
-    }).parseFromString(xml, "application/xml");
-  } catch {
-    return invalid();
-  }
-  if (document.documentElement?.namespaceURI !== "DAV:" || document.documentElement.localName !== "multistatus")
-    invalid();
-  return document;
-}
-function hrefTarget(href, expected) {
-  try {
-    return new URL(href, expected);
-  } catch {
-    return invalid();
-  }
-}
-function isCollection(body, expected) {
-  const document = parseMultistatus(body);
-  for (const item of Array.from(document.getElementsByTagNameNS("DAV:", "response"))) {
-    const href = item.getElementsByTagNameNS("DAV:", "href").item(0)?.textContent;
-    if (!href) continue;
-    const target = hrefTarget(href, expected);
-    if (target.origin !== expected.origin || target.pathname.replace(/\/$/, "") !== expected.pathname.replace(/\/$/, ""))
-      continue;
-    const directStatus = Array.from(item.getElementsByTagNameNS("DAV:", "status")).find(
-      (element) => element.parentNode === item
-    );
-    if (directStatus) throw httpError(Number(directStatus.textContent?.split(" ")[1]));
-    for (const prop of Array.from(item.getElementsByTagNameNS("DAV:", "propstat"))) {
-      const status = prop.getElementsByTagNameNS("DAV:", "status").item(0)?.textContent;
-      if (!status || !/^HTTP\/\S+ 200(?: |$)/.test(status)) continue;
-      if (prop.getElementsByTagNameNS("DAV:", "resourcetype").length && prop.getElementsByTagNameNS("DAV:", "collection").length)
-        return true;
-    }
-    invalid();
-  }
-  return invalid();
-}
-var CloudDav = class {
-  constructor(http, endpoint2) {
-    this.http = http;
-    this.endpoint = endpoint2;
-  }
-  async request(input) {
-    try {
-      return await this.http.request(input);
-    } catch (error) {
-      if (error instanceof CloudError && error.code === "forbidden") throw error;
-      throw new CloudError("offline");
-    }
-  }
-  async collection(path2) {
-    const result3 = await this.request({
-      method: "PROPFIND",
-      path: path2,
-      headers: { Depth: "0", "Content-Type": "application/xml; charset=utf-8" },
-      body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>'
-    });
-    if (result3.status === 404) return false;
-    if (result3.status !== 200 && result3.status !== 207) throw httpError(result3.status);
-    return isCollection(result3.body, new URL(`${this.endpoint}/${path2}`));
-  }
-  async ensureCollection(path2) {
-    if (await this.collection(path2)) return;
-    const result3 = await this.request({ method: "MKCOL", path: path2 });
-    if (result3.status !== 201 && result3.status !== 405) throw httpError(result3.status);
-    if (!await this.collection(path2)) invalid();
-  }
-};
-
-// src/desktop/cloud-paths.ts
-var KNOWLEDGE_MAX_NOTE_BYTES = 1024 * 1024;
-var OMIT2 = /* @__PURE__ */ new Set([
-  "node_modules",
-  "dist",
-  "build",
-  "out",
-  "coverage",
-  "vendor",
-  "venv",
-  "__pycache__",
-  "Attachments",
-  "Templates",
-  "_template"
-]);
-function cloudNotePath(path2) {
-  const parts = path2.split("/");
-  if (path2.length > 1024 || path2.includes("\\") || /[%:#?]/.test(path2) || Array.from(path2).some(
-    (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127
-  ) || !/^(?:Home\.md|(?:Wiki|Library|Projects|Inbox)\/.+\.md)$/.test(path2) || parts.some(
-    (part) => !part || part.startsWith(".") || OMIT2.has(part) || /[. ]$/.test(part) || /^(?:secrets?|credentials?|id_rsa|id_ed25519)(?:[.\-_]|$)/i.test(part) || /^(?:results|sessions|credentials?|secrets?|auth)(?:\.|$)/i.test(part)
-  ))
-    throw new CloudError("protocol");
-  return path2;
-}
-
-// src/desktop/cloud.ts
-var CloudError = class extends Error {
-  constructor(code, status = null) {
-    super(code);
-    this.code = code;
-    this.status = status;
-    this.name = "CloudError";
-  }
-};
-function httpError(status) {
-  if (status === 401) return new CloudError("unauthorized", status);
-  if (status === 403) return new CloudError("forbidden", status);
-  if (status === 404) return new CloudError("not_found", status);
-  if ([409, 412, 423, 428].includes(status)) return new CloudError("conflict", status);
-  return new CloudError("protocol", status);
-}
-var DEFAULT_WEBDAV_ENDPOINT = "http://10.126.126.1:8080";
-var DEFAULT_WEBDAV_USERNAME = "gaoyangwei";
-var DEFAULT_WEBDAV_FOLDER = "Drone-Knowledge";
-function endpointOrigin(endpoint2) {
-  let url;
-  try {
-    url = new URL(endpoint2);
-  } catch {
-    throw new CloudError("protocol");
-  }
-  if (!["http:", "https:"].includes(url.protocol) || url.href !== `${url.origin}/`)
-    throw new CloudError("protocol");
-  return url.origin;
-}
-function decodeNote(bytes) {
-  if (bytes.byteLength > KNOWLEDGE_MAX_NOTE_BYTES) throw new CloudError("protocol");
-  try {
-    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
-  } catch {
-    throw new CloudError("protocol");
-  }
-}
-function writeFailure(error, putStarted) {
-  if (!(error instanceof CloudError)) throw error;
-  if (error.code === "conflict") return { status: "conflict", reason: error.code };
-  if (error.code === "forbidden" || error.code === "unauthorized")
-    return { status: "forbidden", reason: error.code };
-  if (error.code === "offline")
-    return putStarted ? { status: "unknown", reason: "write_unverified" } : { status: "offline", reason: error.code };
-  if (putStarted) return { status: "unknown", reason: "write_unverified" };
-  throw error;
-}
-var CloudService = class {
-  endpoint;
-  username = DEFAULT_WEBDAV_USERNAME;
-  folder = DEFAULT_WEBDAV_FOLDER;
-  dav;
-  constructor(options) {
-    this.endpoint = endpointOrigin(options.endpoint ?? DEFAULT_WEBDAV_ENDPOINT);
-    this.dav = new CloudDav(options.http, this.endpoint);
-  }
-  async check(initialize) {
-    let initialized = await this.dav.collection(`${this.folder}/`);
-    if (!initialized) {
-      if (!await this.dav.collection("")) throw new CloudError("protocol");
-      if (initialize) {
-        await this.dav.ensureCollection(`${this.folder}/`);
-        initialized = true;
-      }
-    }
-    return { initialized };
-  }
-  probe() {
-    return this.check(false);
-  }
-  initialize() {
-    return this.check(true);
-  }
-  notePath(path2) {
-    return `${this.folder}/${cloudNotePath(path2).split("/").map(encodeURIComponent).join("/")}`;
-  }
-  async read(path2) {
-    const response = await this.dav.request({
-      method: "GET",
-      path: this.notePath(path2),
-      headers: { Accept: "text/markdown, text/plain" }
-    });
-    if (response.status !== 200) throw httpError(response.status);
-    return {
-      path: path2,
-      text: decodeNote(response.body),
-      hash: createHash21("sha256").update(response.body).digest("hex"),
-      version: strongEtag(response.headers.etag),
-      bytes: response.body.byteLength,
-      lastModified: response.headers["last-modified"] ?? null
-    };
-  }
-  async verifyWrite(path2, hash4) {
-    let note;
-    try {
-      note = await this.read(path2);
-    } catch (error) {
-      if (!(error instanceof CloudError)) throw error;
-      return false;
-    }
-    return note.hash === hash4;
-  }
-  async write(input) {
-    const path2 = this.notePath(input.path);
-    if (new TextEncoder().encode(input.text).byteLength > KNOWLEDGE_MAX_NOTE_BYTES || input.expectedVersion !== void 0 && !strongEtag(input.expectedVersion))
-      throw new CloudError("protocol");
-    const result3 = {
-      path: input.path,
-      status: "unknown",
-      version: null,
-      hash: createHash21("sha256").update(input.text).digest("hex"),
-      reason: null
-    };
-    let putStarted = false;
-    try {
-      if (!await this.dav.collection(`${this.folder}/`)) throw new CloudError("not_found");
-      const parents = path2.split("/").slice(0, -1);
-      for (let i = 2; i <= parents.length; i++)
-        await this.dav.ensureCollection(`${parents.slice(0, i).join("/")}/`);
-      putStarted = true;
-      const response = await this.dav.request({
-        method: "PUT",
-        path: path2,
-        body: input.text,
-        headers: {
-          "Content-Type": "text/markdown; charset=utf-8",
-          ...input.expectedVersion ? { "If-Match": input.expectedVersion } : { "If-None-Match": "*" }
-        }
-      });
-      if (![200, 201, 204].includes(response.status)) throw httpError(response.status);
-      if (!await this.verifyWrite(input.path, result3.hash))
-        return { ...result3, reason: "write_unverified" };
-      result3.status = input.expectedVersion ? "updated" : "created";
-      result3.version = strongEtag(response.headers.etag);
-      result3.reason = result3.version ? null : "missing_strong_etag";
-    } catch (error) {
-      Object.assign(result3, writeFailure(error, putStarted));
-    }
-    return result3;
-  }
-};
-
-// src/desktop/cloud-capabilities.ts
-init_config();
-async function cloudAvailability(capabilities, signal) {
-  let status;
-  try {
-    status = await capabilities.call("credentials.status", null, signal);
-  } catch {
-    return {
-      status: "unavailable",
-      reason: "host_unsupported",
-      configured: false,
-      credentialSource: null,
-      savedConfigured: null
-    };
-  }
-  const slot = status.slots?.webdav;
-  const metadata = {
-    configured: slot?.configured ?? false,
-    credentialSource: slot?.source ?? null,
-    savedConfigured: slot?.savedConfigured ?? null
-  };
-  if (slot?.authentication !== "http-basic-digest")
-    return { ...metadata, status: "unavailable", reason: "host_unsupported" };
-  if (!slot.configured) return { ...metadata, status: "not_configured", reason: "not_configured" };
-  return { ...metadata, status: "available", reason: null };
-}
-function capabilityError(error) {
-  return error !== null && typeof error === "object" ? error : {};
-}
-function denied(error) {
-  const { code = "", message = "" } = capabilityError(error);
-  return /denied|declined|not authorized|forbidden|EACCES|EPERM/i.test(`${code} ${message}`);
-}
-function createCloudHttp(capabilities, signal) {
-  return {
-    async request(input) {
-      const read = input.method === "GET" || input.method === "PROPFIND";
-      const headers = Object.fromEntries(
-        Object.entries(input.headers ?? {}).filter(([name]) => name.toLowerCase() !== "authorization")
-      );
-      let response;
-      try {
-        response = await capabilities.call(
-          read ? "network.read" : "network.write",
-          {
-            method: input.method,
-            url: `${DEFAULT_WEBDAV_ENDPOINT}/${input.path}`,
-            headers,
-            ...input.body === void 0 ? {} : { bodyBase64: Buffer.from(input.body).toString("base64") },
-            credential: "webdav",
-            httpAuth: { username: DEFAULT_WEBDAV_USERNAME },
-            ...!read ? {
-              summary: input.method === "PUT" ? `Upload knowledge note ${input.path} to WebDAV` : `Create WebDAV collection ${input.path}`
-            } : {}
-          },
-          signal
-        );
-      } catch (error) {
-        throw new CloudError(denied(error) ? "forbidden" : "offline");
-      }
-      return {
-        status: response.status,
-        headers: Object.fromEntries(
-          Object.entries(response.headers).map(([name, value]) => [name.toLowerCase(), value])
-        ),
-        body: Buffer.from(response.base64, "base64")
-      };
-    }
-  };
-}
-async function fileCall(capabilities, signal, name, input) {
-  try {
-    return await capabilities.call(name, input, signal);
-  } catch (error) {
-    if (denied(error)) throw new CloudError("forbidden");
-    const { code, message } = capabilityError(error);
-    if (code === "EEXIST" || message === "Plugin file version conflict; reread before writing")
-      throw new CloudError("conflict");
-    throw error;
-  }
-}
-async function fileRoot(capabilities, signal, vault) {
-  try {
-    return (await capabilities.call("roots.resolve", { path: vault, kind: "files" }, signal)).handle;
-  } catch {
-    throw new CloudError("forbidden");
-  }
-}
-async function writeCloudFile(capabilities, signal, target, text4, expectedHash) {
-  const parent = target.path.slice(0, target.path.lastIndexOf("/"));
-  if (target.path.includes("/"))
-    await fileCall(capabilities, signal, "files.ensureDirectory", { root: target.root, path: parent });
-  const result3 = await fileCall(capabilities, signal, "files.writeText", {
-    ...target,
-    text: text4,
-    expectedHash
-  });
-  if (result3.text !== text4) throw new CloudError("protocol");
-}
-function writableTargets(capabilities, resources, signal) {
-  const targets = {};
-  return {
-    targets,
-    async containedFile(vault, path2) {
-      const relative11 = cloudNotePath(path2);
-      const root = await fileRoot(capabilities, signal, vault);
-      if (!resources.some(
-        (resource) => resource.kind === "files" && resource.handle === root && resource.access === "read-write"
-      ))
-        throw new CloudError("forbidden");
-      const key = `${vault}/${relative11}`;
-      targets[key] = { root, path: relative11 };
-      return key;
-    }
-  };
-}
-function createCloudVault(capabilities, stateRoot, resources, signal) {
-  const { targets, containedFile } = writableTargets(capabilities, resources, signal);
-  return {
-    readBinding: () => readCloudBinding(capabilities, stateRoot, signal),
-    async readNote(vault, path2) {
-      const relative11 = cloudNotePath(path2);
-      const root = await fileRoot(capabilities, signal, vault);
-      const result3 = await fileCall(capabilities, signal, "files.readText", { root, path: relative11 });
-      return { text: result3.text, hash: result3.sha256 };
-    },
-    containedFile,
-    async createFileOnly(path2, content) {
-      try {
-        await writeCloudFile(capabilities, signal, targets[path2], content, null);
-        return true;
-      } catch (error) {
-        if (error instanceof CloudError && error.code === "conflict") return false;
-        throw error;
-      }
-    },
-    async replaceFile(path2, content, options) {
-      if (options.expectedHash === void 0) throw new CloudError("protocol");
-      await writeCloudFile(capabilities, signal, targets[path2], content, options.expectedHash);
-    },
-    isConflict: (error) => error instanceof CloudError && error.code === "conflict"
-  };
-}
-async function readCloudBinding(capabilities, stateRoot, signal) {
-  try {
-    const result3 = await fileCall(capabilities, signal, "state.readJson", {
-      root: stateRoot,
-      path: "binding.json"
-    });
-    return result3.kind === "missing" ? null : parseKnowledgeBinding(result3.value);
-  } catch (error) {
-    if (error instanceof CloudError) throw error;
-    throw new CloudError("protocol");
-  }
-}
-
-// src/desktop/cloud-contract.ts
-var object = (properties, required = Object.keys(properties)) => ({
-  type: "object",
-  properties,
-  required,
-  additionalProperties: false
-});
-var string = { type: "string" };
-var boolean = { type: "boolean" };
-var nullable = (schema) => ({ anyOf: [schema, { type: "null" }] });
-var codes = ["not_configured", "offline", "unauthorized", "forbidden", "not_found", "conflict", "protocol"];
-var failure = object({ status: { const: "failed" }, reason: { enum: [...codes, "host_unsupported"] } });
-var result2 = (schema) => ({
-  anyOf: [object({ status: { const: "ok" }, result: schema }), failure]
-});
-var path = { type: "string", minLength: 1, maxLength: 1024 };
-var hash3 = { type: "string", pattern: "^[a-f0-9]{64}$" };
-var version = { type: "string", maxLength: 1024 };
-var cloudStatusInputSchema = { type: "null" };
-var cloudStatusResultSchema = object({
-  status: { enum: ["available", "unavailable", "not_configured"] },
-  reason: nullable({ enum: ["host_unsupported", "not_configured"] }),
-  configured: boolean,
-  credentialSource: nullable({ enum: ["env", "saved"] }),
-  savedConfigured: nullable(boolean)
-});
-var cloudProbeInputSchema = { type: "null" };
-var cloudProbeResultSchema = result2(object({ initialized: boolean }));
-var cloudInitializeInputSchema = { type: "null" };
-var cloudInitializeResultSchema = cloudProbeResultSchema;
-var cloudReadInputSchema = object({ path });
-var cloudReadResultSchema = result2(
-  object({
-    path,
-    text: string,
-    hash: hash3,
-    version: nullable(version),
-    bytes: { type: "integer", minimum: 0, maximum: 1024 * 1024 },
-    lastModified: nullable(string)
-  })
-);
-var cloudWriteInputSchema = object(
-  { path, text: { type: "string", maxLength: 1024 * 1024 }, expectedVersion: version },
-  ["path", "text"]
-);
-var cloudWriteResultSchema = result2(
-  object({
-    path,
-    status: { enum: ["created", "updated", "conflict", "forbidden", "offline", "unknown"] },
-    version: nullable(version),
-    hash: hash3,
-    reason: nullable({ enum: [...codes, "missing_strong_etag", "write_unverified"] })
-  })
-);
-var cloudSyncInputSchema = object(
-  {
-    mode: { enum: ["pull", "push"] },
-    bindingRevision: { type: "integer", minimum: 1 },
-    paths: { type: "array", minItems: 1, maxItems: 64, items: path },
-    previews: {
-      type: "array",
-      minItems: 1,
-      maxItems: 64,
-      items: object({
-        path,
-        localHash: nullable(hash3),
-        remoteHash: nullable(hash3),
-        remoteVersion: nullable(version)
-      })
-    },
-    resolution: { enum: ["local", "remote"] }
-  },
-  ["mode", "bindingRevision", "paths", "previews"]
-);
-var cloudSyncResultSchema = result2(
-  object({
-    mode: { enum: ["pull", "push"] },
-    completed: boolean,
-    items: {
-      type: "array",
-      items: object({
-        path,
-        status: { enum: ["unchanged", "pulled", "pushed", "conflict", "skipped", "failed"] },
-        localHash: nullable(hash3),
-        remoteVersion: nullable(version),
-        reason: nullable({
-          enum: [
-            ...codes,
-            "divergent",
-            "source_missing",
-            "index_pending",
-            "missing_strong_etag",
-            "write_unverified"
-          ]
-        })
-      })
-    },
-    warnings: { type: "array", items: { const: "selected_notes_only" } }
-  })
-);
-
-// src/desktop/cloud-sync.ts
-function selectedPreviews(input) {
-  if (!Array.isArray(input.paths) || !input.paths.length || input.paths.length > 64 || !["pull", "push"].includes(input.mode))
-    throw new CloudError("protocol");
-  const paths = [...new Set(input.paths.map(cloudNotePath))];
-  if (!Array.isArray(input.previews) || input.previews.length !== paths.length)
-    throw new CloudError("conflict");
-  const previews = /* @__PURE__ */ new Map();
-  for (const preview of input.previews) {
-    const path2 = cloudNotePath(preview.path);
-    if (!paths.includes(path2) || previews.has(path2)) throw new CloudError("protocol");
-    previews.set(path2, { ...preview, path: path2 });
-  }
-  return paths.map((path2) => {
-    const preview = previews.get(path2);
-    if (!preview) throw new CloudError("protocol");
-    return preview;
-  });
-}
-async function checkBinding(context) {
-  const current = await context.vault.readBinding({ fresh: true });
-  if (current?.vaultId !== context.binding.vaultId || current?.revision !== context.binding.revision)
-    throw new CloudError("conflict");
-}
-async function readLocal(vault, root, path2) {
-  try {
-    return await vault.readNote(root, path2);
-  } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")
-      return null;
-    throw error;
-  }
-}
-async function readRemote(cloud, path2) {
-  try {
-    return await cloud.read(path2);
-  } catch (error) {
-    if (error instanceof CloudError && error.code === "not_found") return null;
-    throw error;
-  }
-}
-async function checkLocal(context, path2, hash4) {
-  if ((await context.vault.readNote(context.binding.vault, path2)).hash !== hash4)
-    throw new CloudError("conflict");
-}
-async function pushNote(context, path2, local, remote) {
-  const expectedVersion = remote?.version;
-  if (remote && !expectedVersion) throw new CloudError("conflict");
-  await checkLocal(context, path2, local.hash);
-  await checkBinding(context);
-  const result3 = await context.cloud.write({
-    path: path2,
-    text: local.text,
-    ...expectedVersion ? { expectedVersion } : {}
-  });
-  let status = "failed";
-  if (result3.status === (remote ? "updated" : "created")) status = "pushed";
-  else if (result3.status === "conflict") status = "conflict";
-  return { status, localHash: local.hash, remoteVersion: result3.version, reason: result3.reason };
-}
-async function pullNote(context, preview, local, remote) {
-  if (!remote.version || !preview.remoteVersion) throw new CloudError("conflict");
-  if (local) await checkLocal(context, preview.path, local.hash);
-  const target = await context.vault.containedFile(context.binding.vault, preview.path);
-  await checkBinding(context);
-  if (local) {
-    try {
-      await context.vault.replaceFile(target, remote.text, { expectedHash: local.hash });
-    } catch (error) {
-      if (context.vault.isConflict(error)) throw new CloudError("conflict");
-      throw error;
-    }
-  } else if (!await context.vault.createFileOnly(target, remote.text)) {
-    return { status: "conflict", localHash: null, remoteVersion: remote.version, reason: "conflict" };
-  }
-  if ((await context.vault.readNote(context.binding.vault, preview.path)).hash !== remote.hash)
-    throw new CloudError("protocol");
-  return { status: "pulled", localHash: remote.hash, remoteVersion: remote.version, reason: "index_pending" };
-}
-async function transferNote(context, preview, local, remote) {
-  const versions = { localHash: local?.hash ?? null, remoteVersion: remote?.version ?? null };
-  if (local && remote) {
-    if (local.hash === remote.hash) return { ...versions, status: "unchanged", reason: null };
-    if (context.mode === "push" && context.resolution === "local")
-      return pushNote(context, preview.path, local, remote);
-    if (context.mode === "pull" && context.resolution === "remote")
-      return pullNote(context, preview, local, remote);
-    return { ...versions, status: "conflict", reason: "divergent" };
-  }
-  if (context.mode === "push" && local) return pushNote(context, preview.path, local, null);
-  if (context.mode === "pull" && remote) return pullNote(context, preview, null, remote);
-  return { ...versions, status: "skipped", reason: "source_missing" };
-}
-async function syncNote(context, preview) {
-  let localHash = null;
-  let remoteVersion = null;
-  try {
-    await checkBinding(context);
-    const local = await readLocal(context.vault, context.binding.vault, preview.path);
-    localHash = local?.hash ?? null;
-    const remote = await readRemote(context.cloud, preview.path);
-    remoteVersion = remote?.version ?? null;
-    await checkBinding(context);
-    if (localHash !== preview.localHash || (remote?.hash ?? null) !== preview.remoteHash || remoteVersion !== preview.remoteVersion)
-      throw new CloudError("conflict");
-    return { path: preview.path, ...await transferNote(context, preview, local, remote) };
-  } catch (error) {
-    return {
-      path: preview.path,
-      localHash,
-      remoteVersion,
-      status: error instanceof CloudError && error.code === "conflict" ? "conflict" : "failed",
-      reason: error instanceof CloudError ? error.code : "protocol"
-    };
-  }
-}
-async function syncCloudNotes(cloud, input, vault) {
-  const previews = selectedPreviews(input);
-  const binding = await vault.readBinding({ fresh: true });
-  if (!binding || binding.revision !== input.bindingRevision) throw new CloudError("conflict");
-  const context = { cloud, vault, binding, mode: input.mode, resolution: input.resolution };
-  const items = [];
-  for (const preview of previews) items.push(await syncNote(context, preview));
-  return {
-    mode: input.mode,
-    completed: items.every((item) => ["unchanged", "pulled", "pushed"].includes(item.status)),
-    items,
-    warnings: ["selected_notes_only"]
-  };
-}
-
-// src/desktop/cloud-runtime.ts
-var definitions = [
-  ["cloudStatus", "read", cloudStatusInputSchema, cloudStatusResultSchema],
-  ["cloudProbe", "read", cloudProbeInputSchema, cloudProbeResultSchema],
-  ["cloudInitialize", "write", cloudInitializeInputSchema, cloudInitializeResultSchema],
-  ["cloudRead", "read", cloudReadInputSchema, cloudReadResultSchema],
-  ["cloudWrite", "write", cloudWriteInputSchema, cloudWriteResultSchema],
-  ["cloudSync", "write", cloudSyncInputSchema, cloudSyncResultSchema]
-];
-function withCloudOperations(factory) {
-  return async (context) => {
-    const runtime = await factory(context);
-    const operations = {};
-    for (const [name, effect, inputSchema, resultSchema] of definitions) {
-      if (name in runtime.operations) {
-        await runtime.dispose();
-        throw new Error(`Cloud operation collision: ${name}`);
-      }
-      operations[name] = {
-        inputSchema,
-        resultSchema,
-        effect,
-        async execute(input, call) {
-          const status = await cloudAvailability(call.capabilities, call.signal);
-          if (name === "cloudStatus") return status;
-          if (status.reason !== null) return { status: "failed", reason: status.reason };
-          const cloud = new CloudService({ http: createCloudHttp(call.capabilities, call.signal) });
-          try {
-            const result3 = await executeService(cloud, name, input, context, call);
-            return { status: "ok", result: result3 };
-          } catch (error) {
-            if (!(error instanceof CloudError)) throw error;
-            return { status: "failed", reason: error.code };
-          }
-        }
-      };
-    }
-    return { ...runtime, operations: { ...runtime.operations, ...operations } };
-  };
-}
-function executeService(cloud, name, input, context, call) {
-  switch (name) {
-    case "cloudProbe":
-      return cloud.probe();
-    case "cloudInitialize":
-      return cloud.initialize();
-    case "cloudRead":
-      return cloud.read(input.path);
-    case "cloudWrite":
-      return cloud.write(input);
-    case "cloudSync": {
-      const states = context.resources.filter((resource) => resource.kind === "state");
-      if (states.length !== 1) throw new CloudError("forbidden");
-      return syncCloudNotes(
-        cloud,
-        input,
-        createCloudVault(call.capabilities, states[0].handle, context.resources, call.signal)
-      );
-    }
-    default:
-      throw new Error(`Unknown cloud operation: ${name}`);
-  }
-}
-
-// src/desktop/contract.ts
-var string2 = { type: "string" };
-var integer = { type: "integer", minimum: 0 };
-var coverage = { enum: ["uninitialized", "indexing", "partial", "ready"] };
-var nullable2 = (schema) => ({ anyOf: [schema, { type: "null" }] });
-var object2 = (properties, required = Object.keys(properties)) => ({
-  type: "object",
-  properties,
-  required,
-  additionalProperties: false
-});
-var overviewInputSchema = { type: "null" };
-var overviewResultSchema = object2({
-  state: { enum: ["unconfigured", "bound"] },
-  binding: nullable2(
-    object2({
-      vaultId: string2,
-      revision: { type: "integer", minimum: 1 },
-      label: string2
-    })
-  ),
-  project: nullable2(string2),
-  index: nullable2(
-    object2({
-      revision: integer,
-      coverage,
-      noteCount: integer,
-      pendingChanges: integer,
-      lastReconciledAt: nullable2(string2)
-    })
-  ),
-  recentNotes: {
-    type: "array",
-    items: object2({
-      path: string2,
-      title: string2,
-      kind: string2,
-      updatedAt: { type: "number" }
-    })
-  }
-});
-var searchInputSchema = object2(
-  {
-    query: { type: "string", minLength: 1, maxLength: 2e3 },
-    revision: { type: "integer", minimum: 1 },
-    limit: { type: "integer", minimum: 1, maximum: 12 }
-  },
-  ["query", "revision"]
-);
-var searchResultSchema = object2({
-  query: string2,
-  revision: integer,
-  bindingRevision: { type: "integer", minimum: 1 },
-  coverage,
-  complete: { type: "boolean" },
-  hits: {
-    type: "array",
-    items: object2({
-      path: string2,
-      title: string2,
-      kind: string2,
-      hash: string2,
-      text: string2,
-      startLine: { type: "integer", minimum: 1 },
-      endLine: integer
-    })
-  }
-});
-var boolean2 = { type: "boolean" };
-var array = (items) => ({ type: "array", items });
-var record2 = (additionalProperties) => ({
-  type: "object",
-  additionalProperties
-});
-var bindingRevision = { type: "integer", minimum: 1 };
-var readScope = {
-  revision: integer,
-  bindingRevision,
-  project: nullable2(string2)
-};
-var notePath = { type: "string", minLength: 1, maxLength: 1e3 };
-var snippetProperties = {
-  text: string2,
-  startLine: bindingRevision,
-  endLine: integer,
-  totalLines: integer,
-  truncated: boolean2
-};
-var snippetSchema = object2(snippetProperties);
-var recentNoteSchema = object2({
-  path: string2,
-  title: string2,
-  kind: string2,
-  updatedAt: { type: "number" }
-});
-var readNoteInputSchema = object2(
-  {
-    path: notePath,
-    revision: bindingRevision,
-    startLine: bindingRevision,
-    expectedHash: { type: "string", pattern: "^[a-f0-9]{64}$" }
-  },
-  ["path", "revision"]
-);
-var readNoteResultSchema = {
-  anyOf: [
-    object2({ ...readScope, path: string2, missing: { const: true } }),
-    object2({
-      ...readScope,
-      path: string2,
-      missing: { const: false },
-      title: string2,
-      kind: string2,
-      category: { enum: ["paper", "software", "method", "idea", "other"] },
-      hash: string2,
-      ...snippetProperties,
-      humanReview: nullable2(snippetSchema),
-      pending: array(object2({ kind: string2, revision: integer }))
-    })
-  ]
-};
-var linksInputSchema = object2({
-  path: notePath,
-  revision: bindingRevision
-});
-var linksResultSchema = object2({
-  ...readScope,
-  path: string2,
-  title: string2,
-  outgoing: array(object2({ path: string2, title: string2, exists: boolean2 })),
-  incoming: array(object2({ path: string2, title: string2, exists: boolean2 }))
-});
-var graphInputSchema = object2(
-  {
-    revision: bindingRevision,
-    limit: { type: "integer", minimum: 10, maximum: 500 },
-    view: { enum: ["semantic", "all"] },
-    mergeMirrors: boolean2
-  },
-  ["revision"]
-);
-var edgeSchema = object2({ source: string2, target: string2 });
-var graphNodeProperties = {
-  path: string2,
-  title: string2,
-  kind: string2,
-  degree: integer,
-  warnings: array(string2)
-};
-var semanticNodeSchema = object2(
-  {
-    ...graphNodeProperties,
-    nodeType: {
-      enum: ["note", "wiki", "navigation", "mirror", "infrastructure", "memory"]
-    },
-    isInfrastructure: boolean2,
-    community: { type: "integer", minimum: -1 },
-    x: { type: "number" },
-    y: { type: "number" },
-    mirrors: array(string2),
-    contentType: string2,
-    isMain: boolean2,
-    sharedWith: array(string2)
-  },
-  ["path", "title", "kind", "degree", "nodeType", "isInfrastructure", "community", "x", "y"]
-);
-var graphResultSchema = object2({
-  ...readScope,
-  nodes: array(object2(graphNodeProperties, ["path", "title", "kind", "degree"])),
-  edges: array(edgeSchema),
-  totalNotes: integer,
-  semantic: object2({
-    nodes: array(semanticNodeSchema),
-    edges: array(edgeSchema),
-    totalNotes: integer,
-    view: { enum: ["semantic", "all"] },
-    mergeMirrors: boolean2,
-    relations: array(
-      object2({
-        source: string2,
-        target: string2,
-        type: { enum: ["link", "directory", "duplicate"] }
-      })
-    ),
-    duplicates: array(object2({ canonical: string2, duplicate: string2 })),
-    communities: record2({ type: "integer", minimum: -1 }),
-    layout: record2(object2({ x: { type: "number" }, y: { type: "number" } })),
-    health: object2({
-      isolated: integer,
-      duplicates: integer,
-      infrastructure: integer,
-      truncated: boolean2,
-      candidateNodes: integer,
-      candidateLimit: integer
-    })
-  })
-});
-var jobsInputSchema = object2(
-  {
-    revision: bindingRevision,
-    offset: { type: "integer", minimum: 0, maximum: 1e5 },
-    limit: { type: "integer", minimum: 1, maximum: 50 }
-  },
-  ["revision"]
-);
-var jobsResultSchema = object2({
-  ...readScope,
-  items: array(
-    object2({
-      key: string2,
-      kind: string2,
-      path: string2,
-      scope: string2,
-      revision: integer,
-      updated: string2
-    })
-  ),
-  total: integer,
-  offset: integer,
-  nextOffset: nullable2(integer)
-});
-var recentByCategoryInputSchema = object2(
-  {
-    revision: bindingRevision,
-    limit: { type: "integer", minimum: 1, maximum: 24 }
-  },
-  ["revision"]
-);
-var recentByCategoryResultSchema = object2({
-  ...readScope,
-  groups: object2({
-    paper: array(recentNoteSchema),
-    software: array(recentNoteSchema),
-    method: array(recentNoteSchema),
-    idea: array(recentNoteSchema)
-  }),
-  counts: object2({
-    paper: integer,
-    software: integer,
-    method: integer,
-    idea: integer,
-    other: integer
-  })
-});
-var reviewModeSchema = { enum: ["automatic", "strict"] };
-var preferencesInputSchema = { type: "null" };
-var preferencesResultSchema = object2({
-  binding: nullable2(
-    object2({
-      vaultId: string2,
-      revision: bindingRevision,
-      label: string2,
-      vault: string2,
-      profile: { enum: ["project", "literature", "hybrid"] },
-      depositMode: { enum: ["run-only", "verified", "rich"] },
-      subagentPolicy: { enum: ["none", "read-local"] },
-      updatedAt: string2
-    })
-  ),
-  canWriteState: boolean2,
-  reviewPolicy: object2({
-    mode: reviewModeSchema,
-    persistedMode: nullable2(reviewModeSchema),
-    version: nullable2(string2),
-    override: nullable2({ const: "environment" }),
-    diagnostic: nullable2({ enum: ["invalid-json", "invalid-policy"] })
-  })
-});
-var setReviewPolicyInputSchema = object2({
-  bindingRevision,
-  expectedVersion: nullable2(string2),
-  mode: reviewModeSchema
-});
-var proposalId = { type: "string", pattern: "^[0-9a-f-]{36}$" };
-var proposalHash = { type: "string", pattern: "^[a-f0-9]{64}$" };
-var reviewsInputSchema = object2(
-  {
-    revision: bindingRevision,
-    offset: { type: "integer", minimum: 0, maximum: 100 },
-    limit: { type: "integer", minimum: 1, maximum: 25 }
-  },
-  ["revision"]
-);
-var reviewsResultSchema = object2({
-  bindingRevision,
-  project: nullable2(string2),
-  items: array(
-    object2({
-      id: proposalId,
-      path: string2,
-      title: string2,
-      status: string2,
-      proposalHash,
-      expiresAt: integer,
-      expired: boolean2,
-      bindingChanged: boolean2
-    })
-  ),
-  problems: array(object2({ id: string2, error: string2 })),
-  total: integer,
-  offset: integer,
-  nextOffset: nullable2(integer)
-});
-var previewReviewInputSchema = object2({
-  revision: bindingRevision,
-  id: proposalId,
-  expectedProposalHash: proposalHash
-});
-var previewReviewResultSchema = object2({
-  bindingRevision,
-  id: proposalId,
-  path: string2,
-  project: string2,
-  status: string2,
-  proposalHash,
-  title: string2,
-  rationale: string2,
-  before: string2,
-  after: string2,
-  protectedText: string2,
-  sources: array(
-    object2(
-      {
-        path: string2,
-        hash: nullable2(string2),
-        startLine: bindingRevision,
-        endLine: bindingRevision,
-        excerptHash: string2,
-        paperDois: array(string2),
-        currentHash: nullable2(string2),
-        changed: boolean2,
-        error: nullable2(string2)
-      },
-      ["path", "hash", "startLine", "endLine", "excerptHash", "currentHash", "changed", "error"]
-    )
-  ),
-  expired: boolean2,
-  targetChanged: boolean2,
-  canApply: boolean2,
-  expiresAt: integer,
-  scientificallyVerified: { const: false }
-});
-var rejectReviewInputSchema = object2({
-  revision: bindingRevision,
-  id: proposalId,
-  expectedProposalHash: proposalHash
-});
-var rejectReviewResultSchema = object2({
-  id: proposalId,
-  status: { const: "rejected" },
-  vaultWritten: { const: false },
-  reviewRecorded: boolean2
-});
-var applyReviewInputSchema = object2({
-  revision: bindingRevision,
-  id: proposalId,
-  expectedProposalHash: proposalHash
-});
-var applyReviewResultSchema = object2({
-  id: proposalId,
-  status: { const: "applied" },
-  path: { type: "string", minLength: 1 },
-  vaultWritten: { const: true },
-  reviewRecorded: boolean2,
-  indexed: boolean2,
-  recovered: boolean2,
-  recordError: nullable2(string2),
-  indexError: nullable2(string2)
-});
-var semanticConfigProperties = {
-  enabled: boolean2,
-  provider: { enum: ["none", "ollama", "openai-compatible"] },
-  baseUrl: string2,
-  model: string2,
-  credentialEnv: string2,
-  remoteConsent: boolean2,
-  timeoutMs: { type: "integer", minimum: 500, maximum: 3e4 },
-  chunkChars: { type: "integer", minimum: 256, maximum: 8e3 },
-  minSimilarity: { type: "number", minimum: 0, maximum: 1 }
-};
-var semanticPreferencesInputSchema = { type: "null" };
-var semanticPreferencesResultSchema = object2({
-  binding: nullable2(object2({ vaultId: string2, revision: bindingRevision, label: string2 })),
-  settings: nullable2(
-    object2({ ...semanticConfigProperties, version: { const: 1 }, revision: integer, updatedAt: string2 }, [
-      "enabled",
-      "provider",
-      "baseUrl",
-      "model",
-      "credentialEnv",
-      "remoteConsent",
-      "version",
-      "revision",
-      "updatedAt"
-    ])
-  ),
-  canWriteState: boolean2,
-  providerExecution: { const: "unavailable" }
-});
-var setSemanticSettingsInputSchema = object2({
-  bindingRevision,
-  expectedSettingsRevision: integer,
-  settings: object2(semanticConfigProperties, [])
-});
-var reviewHistoryInputSchema = object2({ revision: bindingRevision });
-var reviewHistoryResultSchema = object2({
-  bindingRevision,
-  project: string2,
-  items: array(
-    object2({
-      id: proposalId,
-      path: string2,
-      afterHash: proposalHash,
-      reviewedAt: integer,
-      reviewMethod: string2
-    })
-  )
-});
-var undoReviewInputSchema = object2({
-  revision: bindingRevision,
-  id: proposalId,
-  expectedHash: proposalHash
-});
-var undoReviewResultSchema = object2({ status: { const: "reverted" }, path: string2 });
-var modelReviewProfile = { const: "knowledge-wiki-reviewer" };
-var modelReviewInputSchema = object2(
-  {
-    revision: bindingRevision,
-    id: proposalId,
-    expectedProposalHash: proposalHash,
-    acknowledged: { const: true },
-    autoApply: boolean2,
-    profile: modelReviewProfile
-  },
-  ["revision", "id", "expectedProposalHash", "acknowledged", "autoApply"]
-);
-var modelReviewInfoInputSchema = object2(
-  {
-    revision: bindingRevision,
-    id: proposalId,
-    expectedProposalHash: proposalHash,
-    profile: modelReviewProfile
-  },
-  ["revision", "id", "expectedProposalHash"]
-);
-var modelReviewUsageSchema = object2({
-  inputTokens: nullable2({ type: "number", minimum: 0 }),
-  outputTokens: nullable2({ type: "number", minimum: 0 }),
-  cost: nullable2({ type: "number", minimum: 0 })
-});
-var modelReviewResultSchema = {
-  type: "object",
-  properties: {
-    auditId: proposalId,
-    proposalId,
-    proposalHash,
-    path: string2,
-    model: string2,
-    startedAt: integer,
-    completedAt: integer,
-    verdict: { enum: ["approve", "needs-human", "reject"] },
-    summary: string2,
-    cautions: array(string2),
-    checks: { type: "object", additionalProperties: boolean2 },
-    source_paths: array(string2),
-    canAutoApply: boolean2,
-    autoApplyAuthorized: boolean2,
-    applied: boolean2,
-    humanReviewed: { const: false },
-    scientificallyVerified: { const: false },
-    usage: modelReviewUsageSchema,
-    partial: boolean2,
-    applyError: string2,
-    auditSaveError: string2,
-    writeResult: { type: "object" }
-  },
-  required: [
-    "auditId",
-    "proposalId",
-    "proposalHash",
-    "path",
-    "model",
-    "startedAt",
-    "completedAt",
-    "verdict",
-    "summary",
-    "cautions",
-    "checks",
-    "source_paths",
-    "canAutoApply",
-    "autoApplyAuthorized",
-    "applied",
-    "humanReviewed",
-    "scientificallyVerified",
-    "usage"
-  ],
-  additionalProperties: true
-};
-var modelReviewInfoResultSchema = object2({
-  selection: object2({ provider: string2, model: string2, thinkingLevel: string2, profile: string2 }, [
-    "provider",
-    "model",
-    "thinkingLevel"
-  ]),
-  lastReview: nullable2(modelReviewResultSchema)
-});
-
-// src/desktop/model-review.ts
-init_wiki_model_review();
-
-// src/desktop/reviews.ts
-function createKnowledgeReviewContext(owner, canWriteState, canWriteFiles) {
-  async function bound(revision, project, operation) {
-    return owner.run(async () => {
-      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-      if (!binding) throw new Error("No application knowledge Vault is bound");
-      if (binding.revision !== revision)
-        throw new Error("Knowledge binding changed; refresh before reviewing");
-      if (project === null) throw new Error("Select a project session to review Wiki proposals");
-      const service = {
-        binding,
-        async request(operation2, input) {
-          const index = await owner.services.getKnowledgeService(binding);
-          return index.request(operation2, input);
-        }
-      };
-      return owner.config.withKnowledgeBinding(binding, () => operation(service));
-    });
-  }
-  function requireWrite(files = false) {
-    if (!canWriteState) throw new Error("Application-state write permission is required");
-    if (files && !canWriteFiles) throw new Error("Configured Vault write permission is required");
-  }
-  return { bound, requireWrite };
-}
-function createKnowledgeReviewModel(owner, canWriteState, canWriteFiles) {
-  const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
-  return {
-    async reviews(input, project) {
-      if (project === null) {
-        return owner.run(async () => {
-          const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-          if (!binding || binding.revision !== input.revision)
-            throw new Error("Knowledge binding changed; refresh before reviewing");
-          return {
-            bindingRevision: binding.revision,
-            project,
-            items: [],
-            problems: [],
-            total: 0,
-            offset: 0,
-            nextOffset: null
-          };
-        });
-      }
-      return bound(input.revision, project, async (service) => {
-        const { items, problems } = await owner.wiki.listWikiProposals(service, project);
-        const offset = input.offset ?? 0, limit = input.limit ?? 12;
-        return {
-          bindingRevision: service.binding.revision,
-          project,
-          items: items.slice(offset, offset + limit),
-          problems,
-          total: items.length,
-          offset,
-          nextOffset: offset + limit < items.length ? offset + limit : null
-        };
-      });
-    },
-    previewReview(input, project) {
-      return bound(input.revision, project, async (service) => {
-        const preview = await owner.wiki.previewWikiProposal(service, input.id, project);
-        if (preview.proposalHash !== input.expectedProposalHash)
-          throw new Error("Wiki proposal changed; refresh before previewing");
-        return { ...preview, bindingRevision: service.binding.revision };
-      });
-    },
-    rejectReview(input, project) {
-      requireWrite();
-      return bound(input.revision, project, async (service) => {
-        const result3 = await owner.wiki.decideWikiProposal(
-          service,
-          input.id,
-          project,
-          input.expectedProposalHash,
-          "reject"
-        );
-        if (result3.alreadyReviewed)
-          throw new Error("Wiki proposal was already reviewed; refresh before reviewing");
-        return { id: result3.id, status: "rejected", vaultWritten: false, reviewRecorded: true };
-      });
-    },
-    applyReview(input, project) {
-      requireWrite(true);
-      return bound(input.revision, project, async (service) => {
-        const result3 = await owner.wiki.decideWikiProposal(
-          service,
-          input.id,
-          project,
-          input.expectedProposalHash,
-          "apply"
-        );
-        if (result3.alreadyReviewed)
-          throw new Error("Wiki proposal was already reviewed; refresh before reviewing");
-        const {
-          id: id2,
-          status,
-          path: path2,
-          vaultWritten,
-          reviewRecorded,
-          indexed,
-          recovered,
-          recordError,
-          indexError
-        } = result3;
-        return {
-          id: id2,
-          status,
-          path: path2,
-          vaultWritten,
-          reviewRecorded,
-          indexed,
-          recovered,
-          recordError,
-          indexError
-        };
-      });
-    },
-    history(input, project) {
-      return bound(input.revision, project, async (service) => ({
-        bindingRevision: service.binding.revision,
-        project,
-        items: await owner.wiki.wikiHistory(service, project)
-      }));
-    },
-    undoReview(input, project) {
-      requireWrite(true);
-      return bound(
-        input.revision,
-        project,
-        (service) => owner.wiki.undoWikiUpdate(service, project, input.id, input.expectedHash)
-      );
-    }
-  };
-}
-
-// src/desktop/model-review.ts
-function createKnowledgeModelReviewModel(owner, canWriteState, canWriteFiles) {
-  const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
-  async function selection(call, profile) {
-    if (call.scope.kind !== "session")
-      throw new Error("Choose the originating live session before model review");
-    return await call.capabilities.call(
-      "model.selection",
-      profile === void 0 ? {} : { profile }
-    );
-  }
-  return {
-    info(input, project, call) {
-      return bound(input.revision, project, async (service) => {
-        const preview = await owner.wiki.previewWikiProposal(service, input.id, project);
-        if (preview.proposalHash !== input.expectedProposalHash)
-          throw new Error("Wiki proposal changed; refresh before model review");
-        return {
-          selection: await selection(call, input.profile),
-          lastReview: await owner.modelReview.lastWikiModelReview(
-            service,
-            input.id,
-            input.expectedProposalHash
-          )
-        };
-      });
-    },
-    review(input, project, call) {
-      requireWrite(input.autoApply);
-      return bound(input.revision, project, async (service) => {
-        const initial = await selection(call, input.profile);
-        const check = async () => {
-          call.signal.throwIfAborted();
-          const state = await call.capabilities.call("session.inspect", null);
-          if (state.agentActive)
-            throw new Error("Wait for the current conversation to finish before model review");
-          const current = await selection(call, input.profile);
-          if (current.provider !== initial.provider || current.model !== initial.model || current.thinkingLevel !== initial.thinkingLevel || current.profile !== initial.profile)
-            throw new Error("Model selection changed; review again before applying");
-        };
-        return owner.modelReview.reviewWikiWithModel(
-          {
-            service,
-            project,
-            id: input.id,
-            hash: input.expectedProposalHash,
-            binding: service.binding
-          },
-          input,
-          {
-            signal: call.signal,
-            check,
-            evaluate: (request) => generateWikiModelReview(call.capabilities, initial, request)
-          }
-        );
-      });
-    }
-  };
-}
-function parseModelReviewCommandInput(args) {
-  let input;
-  try {
-    input = JSON.parse(args);
-  } catch {
-    throw new Error("Expected model-review command JSON; raw arguments are not included in diagnostics");
-  }
-  if (!input || typeof input !== "object" || Array.isArray(input))
-    throw new Error("Expected JSON with id, expectedProposalHash, acknowledged:true and autoApply:boolean");
-  const value = input;
-  if (Object.keys(value).some(
-    (key) => !["id", "expectedProposalHash", "acknowledged", "autoApply", "profile"].includes(key)
-  ) || typeof value.id !== "string" || !/^[0-9a-f-]{36}$/.test(value.id) || typeof value.expectedProposalHash !== "string" || !/^[0-9a-f]{64}$/.test(value.expectedProposalHash) || value.acknowledged !== true || typeof value.autoApply !== "boolean" || value.profile !== void 0 && value.profile !== "knowledge-wiki-reviewer")
-    throw new Error(
-      "Expected the exact proposal ID/hash, explicit cost/data acknowledgement and autoApply choice"
-    );
-  return {
-    id: value.id,
-    expectedProposalHash: value.expectedProposalHash,
-    acknowledged: true,
-    autoApply: value.autoApply,
-    ...value.profile === void 0 ? {} : { profile: "knowledge-wiki-reviewer" }
-  };
 }
 
 // src/desktop/read-model.ts
@@ -24446,7 +24446,7 @@ function registerDesktopKnowledgeNativeReadTools(pi, owner, projectFor2) {
     parameters: { type: "object", properties: {}, additionalProperties: false },
     async execute(_id, _input, _signal, _update, context) {
       const overview = await reads.overview(await projectFor2(context));
-      return result({
+      return result2({
         status: overview.state === "bound" ? "configured" : "unconfigured",
         ...overview
       });
@@ -24469,103 +24469,9 @@ function registerDesktopKnowledgeNativeReadTools(pi, owner, projectFor2) {
     async execute(_id, input, _signal, _update, context) {
       const binding = await owner.config.readKnowledgeBinding({ fresh: true });
       if (!binding) throw new Error("No application knowledge Vault is bound");
-      return result(await reads.search({ ...input, revision: binding.revision }, await projectFor2(context)));
+      return result2(await reads.search({ ...input, revision: binding.revision }, await projectFor2(context)));
     }
   });
-}
-
-// src/desktop/native-state.ts
-function createBrokerKnowledgeState(capabilities, root) {
-  return {
-    async read(path2) {
-      const result3 = await capabilities.call("state.readJson", { root, path: path2 });
-      return result3.kind === "missing" ? null : { value: result3.value, version: result3.version };
-    },
-    async list(path2) {
-      const entries = await capabilities.call("state.list", { root, path: path2 });
-      return entries.filter((entry) => entry.kind === "file").map((entry) => entry.name);
-    },
-    async write(path2, value, expectedVersion) {
-      const parents = path2.split("/").slice(0, -1);
-      for (let length = 1; length <= parents.length; length++)
-        await capabilities.call("state.ensureDirectory", { root, path: parents.slice(0, length).join("/") });
-      const result3 = await capabilities.call("state.writeJson", { root, path: path2, value, expectedVersion });
-      if (JSON.stringify(result3.value) !== JSON.stringify(value))
-        throw new Error("Knowledge state write could not be read back");
-    },
-    async remove(path2, expectedVersion) {
-      const result3 = await capabilities.call("state.removeJson", { root, path: path2, expectedVersion });
-      if (result3.kind !== "missing") throw new Error("Knowledge state removal could not be read back");
-    }
-  };
-}
-
-// src/desktop/preferences.ts
-init_review_policy();
-import { basename as basename6 } from "node:path";
-
-// src/desktop/state-policy.ts
-function createBrokerReviewPolicyStorage(capabilities, root) {
-  return {
-    async read() {
-      try {
-        return await capabilities.call("state.readJson", {
-          root,
-          path: "review-policy.json"
-        });
-      } catch (error) {
-        if (error.code !== "ESTATECORRUPTED") throw error;
-        return { kind: "corrupt", version: null };
-      }
-    },
-    write: (value, expectedVersion) => capabilities.call("state.writeJson", {
-      root,
-      path: "review-policy.json",
-      value,
-      expectedVersion
-    })
-  };
-}
-
-// src/desktop/preferences.ts
-function createKnowledgePreferences(owner, capabilities, state, canWriteState) {
-  const policy = createStoredKnowledgeReviewPolicy(
-    createBrokerReviewPolicyStorage(capabilities, state),
-    () => false
-  );
-  async function snapshot() {
-    const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-    return {
-      binding: binding ? {
-        vaultId: binding.vaultId,
-        revision: binding.revision,
-        label: basename6(binding.vault),
-        vault: binding.vault,
-        profile: binding.profile,
-        depositMode: binding.depositMode,
-        subagentPolicy: binding.subagentPolicy,
-        updatedAt: binding.updatedAt
-      } : null,
-      canWriteState,
-      reviewPolicy: await policy.readReviewPolicy()
-    };
-  }
-  return {
-    read: () => owner.run(snapshot),
-    write: (input) => owner.run(async () => {
-      if (!canWriteState) throw new Error("Application-state write permission is required");
-      const binding = await owner.config.readKnowledgeBinding({
-        fresh: true
-      });
-      if (!binding || binding.revision !== input.bindingRevision)
-        throw new Error("Knowledge binding changed; refresh before saving");
-      await owner.config.withKnowledgeBinding(
-        binding,
-        () => policy.saveReviewMode(input.mode, input.expectedVersion)
-      );
-      return owner.config.withKnowledgeBinding(binding, snapshot);
-    })
-  };
 }
 
 // src/desktop/recovery-migration.ts
@@ -24643,228 +24549,6 @@ function createKnowledgeRecoveryMigration(capabilities, config) {
       packageVersion: inspection.packageVersion,
       currentReadProof: false
     };
-  };
-}
-
-// src/desktop/review-storage.ts
-init_files();
-function createBrokerWikiReviewPorts(capabilities, stateRoot) {
-  const state = {
-    async read(path2) {
-      const result3 = await capabilities.call("state.readJson", { root: stateRoot, path: path2 });
-      if (result3.kind === "missing") return null;
-      if (Buffer.byteLength(JSON.stringify(result3.value)) > 256 * 1024)
-        throw new Error("Wiki proposal exceeds its storage budget");
-      return { value: result3.value, version: result3.version };
-    },
-    async list(path2) {
-      const entries = await capabilities.call("state.list", { root: stateRoot, path: path2 });
-      return entries.filter((entry) => entry.kind === "file").map((entry) => entry.name);
-    },
-    async write(path2, value, expectedVersion) {
-      const parent = path2.slice(0, path2.lastIndexOf("/"));
-      await capabilities.call("state.ensureDirectory", { root: stateRoot, path: parent });
-      const result3 = await capabilities.call("state.writeJson", {
-        root: stateRoot,
-        path: path2,
-        value,
-        expectedVersion
-      });
-      if (JSON.stringify(result3.value) !== JSON.stringify(value))
-        throw new Error("Wiki review state write could not be read back");
-    },
-    async remove(path2, expectedVersion) {
-      const result3 = await capabilities.call("state.removeJson", {
-        root: stateRoot,
-        path: path2,
-        expectedVersion
-      });
-      if (result3.kind !== "missing") throw new Error("Wiki review state removal could not be read back");
-    }
-  };
-  async function rootFor(vault) {
-    return (await capabilities.call("roots.resolve", { path: vault, kind: "files" })).handle;
-  }
-  const files = {
-    async read(binding, path2) {
-      validateNote(path2);
-      const root = await rootFor(binding.vault);
-      try {
-        const result3 = await capabilities.call("files.readText", { root, path: path2 });
-        return {
-          path: path2,
-          text: result3.text,
-          hash: result3.sha256,
-          bytes: result3.bytes,
-          signature: fileVersion(result3.version)
-        };
-      } catch (error) {
-        if (error.code === "ENOENT") return null;
-        throw error;
-      }
-    },
-    async write(binding, path2, text4, expectedHash, check) {
-      validateNote(path2);
-      const root = await rootFor(binding.vault);
-      await capabilities.call("files.ensureDirectory", { root, path: path2.slice(0, path2.lastIndexOf("/")) });
-      await check();
-      const result3 = await capabilities.call("files.writeText", { root, path: path2, text: text4, expectedHash });
-      if (result3.text !== text4) throw new Error("Wiki write could not be read back");
-    },
-    async remove(binding, path2, expectedHash, check) {
-      validateNote(path2);
-      const root = await rootFor(binding.vault);
-      await check();
-      await capabilities.call("files.remove", { root, path: path2, expectedHash });
-      if (await files.read(binding, path2)) throw new Error("Wiki removal could not be read back");
-    }
-  };
-  return { state, files };
-}
-
-// src/desktop/semantic-preferences.ts
-import { basename as basename7 } from "node:path";
-function createKnowledgeSemanticPreferences(owner, semantic, canWriteState) {
-  async function snapshot() {
-    const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-    if (!binding) return { binding: null, settings: null, canWriteState, providerExecution: "unavailable" };
-    const settings2 = await semantic.readSemanticSettings(binding.vaultId);
-    return owner.config.withKnowledgeBinding(binding, () => ({
-      binding: { vaultId: binding.vaultId, revision: binding.revision, label: basename7(binding.vault) },
-      settings: settings2,
-      canWriteState,
-      providerExecution: "unavailable"
-    }));
-  }
-  return {
-    read: () => owner.run(snapshot),
-    write: (input) => owner.run(async () => {
-      if (!canWriteState) throw new Error("Semantic settings require an application-state write grant");
-      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-      if (!binding || binding.revision !== input.bindingRevision)
-        throw new Error("Knowledge binding changed; refresh before saving semantic settings");
-      await owner.config.withKnowledgeBinding(
-        binding,
-        () => semantic.saveSemanticSettings(binding.vaultId, input.settings, input.expectedSettingsRevision)
-      );
-      await owner.config.withKnowledgeBinding(binding, () => void 0);
-      return snapshot();
-    })
-  };
-}
-
-// src/desktop/semantic-settings.ts
-function createBrokerSemanticSettings(capabilities, root) {
-  return createStoredSemanticSettingsApi({
-    read: async (vaultId) => await capabilities.call("state.readJson", {
-      root,
-      path: `${vaultId}/semantic.json`
-    }),
-    async write(vaultId, value, expectedVersion) {
-      await capabilities.call("state.ensureDirectory", { root, path: vaultId });
-      await capabilities.call("state.writeJson", {
-        root,
-        path: `${vaultId}/semantic.json`,
-        value,
-        expectedVersion
-      });
-    }
-  });
-}
-
-// src/desktop/service-transport.ts
-function createResourceServiceTransportFactory(context, state, lifecycle) {
-  const metadata = { version: "unknown" };
-  const transports = /* @__PURE__ */ new Set();
-  let shutdown = null;
-  class ResourceTransport {
-    closed = false;
-    closing = false;
-    lifecycle = "staged";
-    metadata = metadata;
-    version = metadata.version;
-    opening;
-    pending = /* @__PURE__ */ new Set();
-    closePromise = null;
-    constructor(binding) {
-      this.opening = (async () => {
-        const vault = await context.capabilities.call("roots.resolve", {
-          path: binding.vault,
-          kind: "files"
-        });
-        return await context.capabilities.call("resource.create", {
-          resource: "index",
-          storage: { root: state, key: binding.vaultId },
-          parameters: { vaultRoot: vault.handle },
-          reservation: {
-            namespace: "knowledge-writers",
-            roots: [{ root: vault.handle, path: "", kind: "vault" }],
-            storage: { path: "index.sqlite", kind: "index" }
-          }
-        });
-      })();
-    }
-    get pendingRequestCount() {
-      return this.pending.size;
-    }
-    async waitUntilReady() {
-      await this.opening;
-      return { version: this.version };
-    }
-    request(operation, input = {}) {
-      if (this.closed || this.closing || shutdown)
-        return Promise.reject(new Error("Knowledge service is closed"));
-      const request = this.opening.then(
-        (resource) => context.capabilities.call("resource.invoke", { handle: resource.handle, operation, input })
-      );
-      this.pending.add(request);
-      return request.finally(() => this.pending.delete(request));
-    }
-    prepareUnload() {
-      return { pendingRequests: this.pending.size, version: this.version };
-    }
-    close() {
-      if (this.closePromise) return this.closePromise;
-      this.closing = true;
-      this.lifecycle = "disabled";
-      const close = (async () => {
-        if (shutdown) {
-          await shutdown;
-        } else {
-          await Promise.allSettled([...this.pending]);
-          const resource = await this.opening;
-          await context.capabilities.call("resource.dispose", { handle: resource.handle });
-        }
-        this.closed = true;
-        this.lifecycle = "drained";
-      })();
-      this.closePromise = close.catch((error) => {
-        this.closePromise = null;
-        throw error;
-      });
-      return this.closePromise;
-    }
-  }
-  return {
-    metadata: () => metadata,
-    resourceKey: (binding) => JSON.stringify([state, "index", binding.vaultId]),
-    create({ binding }) {
-      if (shutdown) throw new Error("Knowledge resource owner is closing");
-      const transport = new ResourceTransport(binding);
-      transports.add(transport);
-      return transport;
-    },
-    dispose() {
-      if (!shutdown)
-        shutdown = lifecycle.dispose().then(() => {
-          for (const transport of transports) {
-            transport.closed = true;
-            transport.closing = true;
-            transport.lifecycle = "drained";
-          }
-        });
-      return shutdown;
-    }
   };
 }
 
@@ -25238,6 +24922,589 @@ function createBrokerKnowledgeSpecialist(capabilities) {
   );
 }
 
+// src/desktop/native-session.ts
+var CHILD_READ_TOOLS = [
+  "knowledge_status",
+  "knowledge_search",
+  "research_check_answer",
+  "research_knowledge_status",
+  "research_prepare_knowledge",
+  "research_read_knowledge",
+  "research_restore_evidence",
+  "research_resume_topic",
+  "research_search_explainers",
+  "research_search_knowledge",
+  "research_task_status",
+  "research_topics"
+];
+var CHILD_SESSION_EVENTS = [
+  "session_start",
+  "session_tree",
+  "before_agent_start",
+  "context",
+  "message_start",
+  "tool_execution_start",
+  "tool_execution_end",
+  "tool_result"
+];
+function createKnowledgeNativeSessionFactory(options) {
+  const { context, owner, projectFor: projectFor2 } = options;
+  return async (facts) => {
+    const sessionPorts = createManagedKnowledgeSessionPorts(context.capabilities);
+    const composition = {
+      session: sessionPorts.ports,
+      registerReadTools: (pi) => registerDesktopKnowledgeNativeReadTools(
+        pi,
+        owner,
+        (native) => projectFor2(context.capabilities, native.cwd)
+      ),
+      project: async (cwd) => {
+        const project = await projectFor2(context.capabilities, cwd);
+        if (project === null) throw new Error("Knowledge native session has no workspace project");
+        return project;
+      }
+    };
+    if (facts?.kind === "child") return createChildSession(options, composition, facts);
+    return createPrimarySession(options, composition, sessionPorts);
+  };
+}
+function createChildSession({ owner, readKnowledgeBinding: readKnowledgeBinding2 }, composition, facts) {
+  const readable = facts.files === "read";
+  const child = createManagedNativeSession(owner, {
+    ...composition,
+    child: readable ? "read" : "evidence",
+    childReadAllowed: async () => (await readKnowledgeBinding2())?.subagentPolicy === "read-local"
+  });
+  if (!child.projection) throw new Error("Knowledge child session requires its publication projection");
+  const session = {
+    ...child,
+    // A child's answers only take the evidence-only path (label, no task report), so its
+    // finalizer runs with read capabilities; any write it attempted would fail at the broker.
+    projection: { ...child.projection, finalizeEffect: "read" },
+    toolEffects: readable ? Object.fromEntries(CHILD_READ_TOOLS.map((tool) => [tool, "read"])) : {},
+    // A child is read-only: its hooks get read capabilities only, so any write attempt fails at the broker.
+    eventEffects: Object.fromEntries(CHILD_SESSION_EVENTS.map((event) => [event, "read"])),
+    commandEffects: {}
+  };
+  return session;
+}
+function createPrimarySession(options, composition, sessionPorts) {
+  const { context, owner, specialists } = options;
+  const { config } = owner;
+  const migrateRecovery = createKnowledgeRecoveryMigration(context.capabilities, config);
+  const native = createManagedNativeSession(owner, composition);
+  let unregister;
+  return {
+    ...native,
+    toolEffects: { knowledge_status: "read", knowledge_search: "read" },
+    eventEffects: {
+      session_start: "read",
+      session_tree: "read",
+      tool_execution_start: "read",
+      tool_result: "read"
+    },
+    commandEffects: {
+      "knowledge-review-model": "write",
+      "obsidian-review": "write",
+      "knowledge-migrate-recovery": "write"
+    },
+    async extension(pi) {
+      await native.extension(pi);
+      pi.on("session_start", (_event, caller) => {
+        unregister = specialists.registerKnowledgeSpecialistHost(
+          caller.sessionManager.getSessionId(),
+          createBrokerKnowledgeSpecialist(context.capabilities)
+        );
+      });
+      registerNativeCommands(pi, options, native, migrateRecovery, sessionPorts);
+    },
+    async dispose() {
+      unregister?.();
+      await native.dispose();
+    }
+  };
+}
+function registerNativeCommands(pi, { context, owner, modelReviews, projectFor: projectFor2 }, native, migrateRecovery, sessionPorts) {
+  pi.registerCommand("knowledge-migrate-recovery", {
+    description: "Explicitly import an authorized 0.2.0/0.2.1 historical read-window checkpoint; no current proof is restored",
+    async handler(args, caller) {
+      if (args.trim()) throw new Error("Checkpoint migration accepts no scope or target arguments");
+      const result3 = await migrateRecovery(caller);
+      await sessionPorts.ports.notify(JSON.stringify(result3), caller);
+    }
+  });
+  pi.registerCommand("knowledge-review-model", {
+    description: "Review one exact Wiki proposal with explicit JSON cost/data acknowledgement; read the audit in the knowledge review UI",
+    async handler(args, caller) {
+      const input = parseModelReviewCommandInput(args);
+      const scope = await context.capabilities.call(
+        "caller.scope",
+        null
+      );
+      if (scope.kind !== "session" || scope.sessionId !== caller.sessionManager.getSessionId())
+        throw new Error("Model review command requires its originating live session");
+      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+      if (!binding) throw new Error("No application knowledge Vault is bound");
+      const signal = caller.signal ? AbortSignal.any([native.signal, caller.signal]) : native.signal;
+      await modelReviews.review(
+        { ...input, revision: binding.revision },
+        await projectFor2(context.capabilities, scope.workspaceDirectory),
+        { scope, signal, capabilities: context.capabilities }
+      );
+      context.events.changed();
+    }
+  });
+}
+
+// src/desktop/native-state.ts
+function createBrokerKnowledgeState(capabilities, root) {
+  return {
+    async read(path2) {
+      const result3 = await capabilities.call("state.readJson", { root, path: path2 });
+      return result3.kind === "missing" ? null : { value: result3.value, version: result3.version };
+    },
+    async list(path2) {
+      const entries = await capabilities.call("state.list", { root, path: path2 });
+      return entries.filter((entry) => entry.kind === "file").map((entry) => entry.name);
+    },
+    async write(path2, value, expectedVersion) {
+      const parents = path2.split("/").slice(0, -1);
+      for (let length = 1; length <= parents.length; length++)
+        await capabilities.call("state.ensureDirectory", { root, path: parents.slice(0, length).join("/") });
+      const result3 = await capabilities.call("state.writeJson", { root, path: path2, value, expectedVersion });
+      if (JSON.stringify(result3.value) !== JSON.stringify(value))
+        throw new Error("Knowledge state write could not be read back");
+    },
+    async remove(path2, expectedVersion) {
+      const result3 = await capabilities.call("state.removeJson", { root, path: path2, expectedVersion });
+      if (result3.kind !== "missing") throw new Error("Knowledge state removal could not be read back");
+    }
+  };
+}
+
+// src/desktop/preferences.ts
+init_review_policy();
+import { basename as basename6 } from "node:path";
+
+// src/desktop/state-policy.ts
+function createBrokerReviewPolicyStorage(capabilities, root) {
+  return {
+    async read() {
+      try {
+        return await capabilities.call("state.readJson", {
+          root,
+          path: "review-policy.json"
+        });
+      } catch (error) {
+        if (error.code !== "ESTATECORRUPTED") throw error;
+        return { kind: "corrupt", version: null };
+      }
+    },
+    write: (value, expectedVersion) => capabilities.call("state.writeJson", {
+      root,
+      path: "review-policy.json",
+      value,
+      expectedVersion
+    })
+  };
+}
+
+// src/desktop/preferences.ts
+function createKnowledgePreferences(owner, capabilities, state, canWriteState) {
+  const policy = createStoredKnowledgeReviewPolicy(
+    createBrokerReviewPolicyStorage(capabilities, state),
+    () => false
+  );
+  async function snapshot() {
+    const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+    return {
+      binding: binding ? {
+        vaultId: binding.vaultId,
+        revision: binding.revision,
+        label: basename6(binding.vault),
+        vault: binding.vault,
+        profile: binding.profile,
+        depositMode: binding.depositMode,
+        subagentPolicy: binding.subagentPolicy,
+        updatedAt: binding.updatedAt
+      } : null,
+      canWriteState,
+      reviewPolicy: await policy.readReviewPolicy()
+    };
+  }
+  return {
+    read: () => owner.run(snapshot),
+    write: (input) => owner.run(async () => {
+      if (!canWriteState) throw new Error("Application-state write permission is required");
+      const binding = await owner.config.readKnowledgeBinding({
+        fresh: true
+      });
+      if (!binding || binding.revision !== input.bindingRevision)
+        throw new Error("Knowledge binding changed; refresh before saving");
+      await owner.config.withKnowledgeBinding(
+        binding,
+        () => policy.saveReviewMode(input.mode, input.expectedVersion)
+      );
+      return owner.config.withKnowledgeBinding(binding, snapshot);
+    })
+  };
+}
+
+// src/desktop/review-operations.ts
+function createKnowledgeReviewOperations(options) {
+  return {
+    ...modelReviewOperations(options),
+    ...semanticSettingsOperations(options),
+    ...proposalReviewOperations(options),
+    ...reviewPolicyOperations(options)
+  };
+}
+function modelReviewOperations({
+  context,
+  modelReviews,
+  reviews,
+  callerProject: callerProject2
+}) {
+  return {
+    modelReviewInfo: {
+      inputSchema: modelReviewInfoInputSchema,
+      resultSchema: modelReviewInfoResultSchema,
+      effect: "read",
+      execute: async (input, call) => modelReviews.info(input, await callerProject2(call), call)
+    },
+    modelReview: {
+      inputSchema: modelReviewInputSchema,
+      resultSchema: modelReviewResultSchema,
+      effect: "write",
+      execute: async (input, call) => {
+        const result3 = await modelReviews.review(
+          input,
+          await callerProject2(call),
+          call
+        );
+        context.events.changed();
+        return result3;
+      }
+    },
+    reviewHistory: {
+      inputSchema: reviewHistoryInputSchema,
+      resultSchema: reviewHistoryResultSchema,
+      effect: "read",
+      execute: async (input, call) => reviews.history(input, await callerProject2(call))
+    },
+    undoReview: {
+      inputSchema: undoReviewInputSchema,
+      resultSchema: undoReviewResultSchema,
+      effect: "write",
+      execute: async (input, call) => reviews.undoReview(input, await callerProject2(call))
+    }
+  };
+}
+function semanticSettingsOperations({ context, semanticPreferences }) {
+  return {
+    semanticSettings: {
+      inputSchema: semanticPreferencesInputSchema,
+      resultSchema: semanticPreferencesResultSchema,
+      effect: "read",
+      execute: () => semanticPreferences.read()
+    },
+    setSemanticSettings: {
+      inputSchema: setSemanticSettingsInputSchema,
+      resultSchema: semanticPreferencesResultSchema,
+      effect: "write",
+      execute: async (input) => {
+        const saved = await semanticPreferences.write(input);
+        context.events.changed();
+        return saved;
+      }
+    }
+  };
+}
+function proposalReviewOperations({ context, reviews, callerProject: callerProject2 }) {
+  return {
+    reviews: {
+      inputSchema: reviewsInputSchema,
+      resultSchema: reviewsResultSchema,
+      effect: "read",
+      execute: async (input, call) => reviews.reviews(input, await callerProject2(call))
+    },
+    previewReview: {
+      inputSchema: previewReviewInputSchema,
+      resultSchema: previewReviewResultSchema,
+      effect: "read",
+      execute: async (input, call) => reviews.previewReview(input, await callerProject2(call))
+    },
+    rejectReview: {
+      inputSchema: rejectReviewInputSchema,
+      resultSchema: rejectReviewResultSchema,
+      effect: "write",
+      execute: async (input, call) => {
+        const result3 = await reviews.rejectReview(
+          input,
+          await callerProject2(call)
+        );
+        context.events.changed();
+        return result3;
+      }
+    },
+    applyReview: {
+      inputSchema: applyReviewInputSchema,
+      resultSchema: applyReviewResultSchema,
+      effect: "write",
+      execute: async (input, call) => {
+        const result3 = await reviews.applyReview(
+          input,
+          await callerProject2(call)
+        );
+        context.events.changed();
+        return result3;
+      }
+    }
+  };
+}
+function reviewPolicyOperations({ context, preferences }) {
+  return {
+    preferences: {
+      inputSchema: preferencesInputSchema,
+      resultSchema: preferencesResultSchema,
+      effect: "read",
+      execute: () => preferences.read()
+    },
+    setReviewPolicy: {
+      inputSchema: setReviewPolicyInputSchema,
+      resultSchema: preferencesResultSchema,
+      effect: "write",
+      execute: async (input) => {
+        const saved = await preferences.write(input);
+        context.events.changed();
+        return saved;
+      }
+    }
+  };
+}
+
+// src/desktop/review-storage.ts
+init_files();
+function createBrokerWikiReviewPorts(capabilities, stateRoot) {
+  const state = {
+    async read(path2) {
+      const result3 = await capabilities.call("state.readJson", { root: stateRoot, path: path2 });
+      if (result3.kind === "missing") return null;
+      if (Buffer.byteLength(JSON.stringify(result3.value)) > 256 * 1024)
+        throw new Error("Wiki proposal exceeds its storage budget");
+      return { value: result3.value, version: result3.version };
+    },
+    async list(path2) {
+      const entries = await capabilities.call("state.list", { root: stateRoot, path: path2 });
+      return entries.filter((entry) => entry.kind === "file").map((entry) => entry.name);
+    },
+    async write(path2, value, expectedVersion) {
+      const parent = path2.slice(0, path2.lastIndexOf("/"));
+      await capabilities.call("state.ensureDirectory", { root: stateRoot, path: parent });
+      const result3 = await capabilities.call("state.writeJson", {
+        root: stateRoot,
+        path: path2,
+        value,
+        expectedVersion
+      });
+      if (JSON.stringify(result3.value) !== JSON.stringify(value))
+        throw new Error("Wiki review state write could not be read back");
+    },
+    async remove(path2, expectedVersion) {
+      const result3 = await capabilities.call("state.removeJson", {
+        root: stateRoot,
+        path: path2,
+        expectedVersion
+      });
+      if (result3.kind !== "missing") throw new Error("Wiki review state removal could not be read back");
+    }
+  };
+  async function rootFor(vault) {
+    return (await capabilities.call("roots.resolve", { path: vault, kind: "files" })).handle;
+  }
+  const files = {
+    async read(binding, path2) {
+      validateNote(path2);
+      const root = await rootFor(binding.vault);
+      try {
+        const result3 = await capabilities.call("files.readText", { root, path: path2 });
+        return {
+          path: path2,
+          text: result3.text,
+          hash: result3.sha256,
+          bytes: result3.bytes,
+          signature: fileVersion(result3.version)
+        };
+      } catch (error) {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      }
+    },
+    async write(binding, path2, text4, expectedHash, check) {
+      validateNote(path2);
+      const root = await rootFor(binding.vault);
+      await capabilities.call("files.ensureDirectory", { root, path: path2.slice(0, path2.lastIndexOf("/")) });
+      await check();
+      const result3 = await capabilities.call("files.writeText", { root, path: path2, text: text4, expectedHash });
+      if (result3.text !== text4) throw new Error("Wiki write could not be read back");
+    },
+    async remove(binding, path2, expectedHash, check) {
+      validateNote(path2);
+      const root = await rootFor(binding.vault);
+      await check();
+      await capabilities.call("files.remove", { root, path: path2, expectedHash });
+      if (await files.read(binding, path2)) throw new Error("Wiki removal could not be read back");
+    }
+  };
+  return { state, files };
+}
+
+// src/desktop/semantic-preferences.ts
+import { basename as basename7 } from "node:path";
+function createKnowledgeSemanticPreferences(owner, semantic, canWriteState) {
+  async function snapshot() {
+    const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+    if (!binding) return { binding: null, settings: null, canWriteState, providerExecution: "unavailable" };
+    const settings2 = await semantic.readSemanticSettings(binding.vaultId);
+    return owner.config.withKnowledgeBinding(binding, () => ({
+      binding: { vaultId: binding.vaultId, revision: binding.revision, label: basename7(binding.vault) },
+      settings: settings2,
+      canWriteState,
+      providerExecution: "unavailable"
+    }));
+  }
+  return {
+    read: () => owner.run(snapshot),
+    write: (input) => owner.run(async () => {
+      if (!canWriteState) throw new Error("Semantic settings require an application-state write grant");
+      const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+      if (!binding || binding.revision !== input.bindingRevision)
+        throw new Error("Knowledge binding changed; refresh before saving semantic settings");
+      await owner.config.withKnowledgeBinding(
+        binding,
+        () => semantic.saveSemanticSettings(binding.vaultId, input.settings, input.expectedSettingsRevision)
+      );
+      await owner.config.withKnowledgeBinding(binding, () => void 0);
+      return snapshot();
+    })
+  };
+}
+
+// src/desktop/semantic-settings.ts
+function createBrokerSemanticSettings(capabilities, root) {
+  return createStoredSemanticSettingsApi({
+    read: async (vaultId) => await capabilities.call("state.readJson", {
+      root,
+      path: `${vaultId}/semantic.json`
+    }),
+    async write(vaultId, value, expectedVersion) {
+      await capabilities.call("state.ensureDirectory", { root, path: vaultId });
+      await capabilities.call("state.writeJson", {
+        root,
+        path: `${vaultId}/semantic.json`,
+        value,
+        expectedVersion
+      });
+    }
+  });
+}
+
+// src/desktop/service-transport.ts
+function createResourceServiceTransportFactory(context, state, lifecycle) {
+  const metadata = { version: "unknown" };
+  const transports = /* @__PURE__ */ new Set();
+  let shutdown = null;
+  class ResourceTransport {
+    closed = false;
+    closing = false;
+    lifecycle = "staged";
+    metadata = metadata;
+    version = metadata.version;
+    opening;
+    pending = /* @__PURE__ */ new Set();
+    closePromise = null;
+    constructor(binding) {
+      this.opening = (async () => {
+        const vault = await context.capabilities.call("roots.resolve", {
+          path: binding.vault,
+          kind: "files"
+        });
+        return await context.capabilities.call("resource.create", {
+          resource: "index",
+          storage: { root: state, key: binding.vaultId },
+          parameters: { vaultRoot: vault.handle },
+          reservation: {
+            namespace: "knowledge-writers",
+            roots: [{ root: vault.handle, path: "", kind: "vault" }],
+            storage: { path: "index.sqlite", kind: "index" }
+          }
+        });
+      })();
+    }
+    get pendingRequestCount() {
+      return this.pending.size;
+    }
+    async waitUntilReady() {
+      await this.opening;
+      return { version: this.version };
+    }
+    request(operation, input = {}) {
+      if (this.closed || this.closing || shutdown)
+        return Promise.reject(new Error("Knowledge service is closed"));
+      const request = this.opening.then(
+        (resource) => context.capabilities.call("resource.invoke", { handle: resource.handle, operation, input })
+      );
+      this.pending.add(request);
+      return request.finally(() => this.pending.delete(request));
+    }
+    prepareUnload() {
+      return { pendingRequests: this.pending.size, version: this.version };
+    }
+    close() {
+      if (this.closePromise) return this.closePromise;
+      this.closing = true;
+      this.lifecycle = "disabled";
+      const close = (async () => {
+        if (shutdown) {
+          await shutdown;
+        } else {
+          await Promise.allSettled([...this.pending]);
+          const resource = await this.opening;
+          await context.capabilities.call("resource.dispose", { handle: resource.handle });
+        }
+        this.closed = true;
+        this.lifecycle = "drained";
+      })();
+      this.closePromise = close.catch((error) => {
+        this.closePromise = null;
+        throw error;
+      });
+      return this.closePromise;
+    }
+  }
+  return {
+    metadata: () => metadata,
+    resourceKey: (binding) => JSON.stringify([state, "index", binding.vaultId]),
+    create({ binding }) {
+      if (shutdown) throw new Error("Knowledge resource owner is closing");
+      const transport = new ResourceTransport(binding);
+      transports.add(transport);
+      return transport;
+    },
+    dispose() {
+      if (!shutdown)
+        shutdown = lifecycle.dispose().then(() => {
+          for (const transport of transports) {
+            transport.closed = true;
+            transport.closing = true;
+            transport.lifecycle = "drained";
+          }
+        });
+      return shutdown;
+    }
+  };
+}
+
 // src/desktop/specialist-settings-storage.ts
 function createBrokerSpecialistSettingsStorage(state) {
   return {
@@ -25302,30 +25569,6 @@ async function projectFor(capabilities, workspace) {
     throw new Error("Invalid research workspace configuration");
   return projectIdentity(workspace, document.knowledgeProjectId);
 }
-var CHILD_READ_TOOLS = [
-  "knowledge_status",
-  "knowledge_search",
-  "research_check_answer",
-  "research_knowledge_status",
-  "research_prepare_knowledge",
-  "research_read_knowledge",
-  "research_restore_evidence",
-  "research_resume_topic",
-  "research_search_explainers",
-  "research_search_knowledge",
-  "research_task_status",
-  "research_topics"
-];
-var CHILD_SESSION_EVENTS = [
-  "session_start",
-  "session_tree",
-  "before_agent_start",
-  "context",
-  "message_start",
-  "tool_execution_start",
-  "tool_execution_end",
-  "tool_result"
-];
 var createDesktopRuntime = async (context) => {
   const states = context.resources.filter((resource) => resource.kind === "state");
   if (states.length !== 1)
@@ -25441,108 +25684,14 @@ var createDesktopRuntime = async (context) => {
   return {
     operations: {
       binding: bindingOperation(readKnowledgeBinding2),
-      modelReviewInfo: {
-        inputSchema: modelReviewInfoInputSchema,
-        resultSchema: modelReviewInfoResultSchema,
-        effect: "read",
-        execute: async (input, call) => modelReviews.info(input, await callerProject(call), call)
-      },
-      modelReview: {
-        inputSchema: modelReviewInputSchema,
-        resultSchema: modelReviewResultSchema,
-        effect: "write",
-        execute: async (input, call) => {
-          const result3 = await modelReviews.review(
-            input,
-            await callerProject(call),
-            call
-          );
-          context.events.changed();
-          return result3;
-        }
-      },
-      reviewHistory: {
-        inputSchema: reviewHistoryInputSchema,
-        resultSchema: reviewHistoryResultSchema,
-        effect: "read",
-        execute: async (input, call) => reviews.history(input, await callerProject(call))
-      },
-      undoReview: {
-        inputSchema: undoReviewInputSchema,
-        resultSchema: undoReviewResultSchema,
-        effect: "write",
-        execute: async (input, call) => reviews.undoReview(input, await callerProject(call))
-      },
-      semanticSettings: {
-        inputSchema: semanticPreferencesInputSchema,
-        resultSchema: semanticPreferencesResultSchema,
-        effect: "read",
-        execute: () => semanticPreferences.read()
-      },
-      setSemanticSettings: {
-        inputSchema: setSemanticSettingsInputSchema,
-        resultSchema: semanticPreferencesResultSchema,
-        effect: "write",
-        execute: async (input) => {
-          const saved = await semanticPreferences.write(input);
-          context.events.changed();
-          return saved;
-        }
-      },
-      reviews: {
-        inputSchema: reviewsInputSchema,
-        resultSchema: reviewsResultSchema,
-        effect: "read",
-        execute: async (input, call) => reviews.reviews(input, await callerProject(call))
-      },
-      previewReview: {
-        inputSchema: previewReviewInputSchema,
-        resultSchema: previewReviewResultSchema,
-        effect: "read",
-        execute: async (input, call) => reviews.previewReview(input, await callerProject(call))
-      },
-      rejectReview: {
-        inputSchema: rejectReviewInputSchema,
-        resultSchema: rejectReviewResultSchema,
-        effect: "write",
-        execute: async (input, call) => {
-          const result3 = await reviews.rejectReview(
-            input,
-            await callerProject(call)
-          );
-          context.events.changed();
-          return result3;
-        }
-      },
-      applyReview: {
-        inputSchema: applyReviewInputSchema,
-        resultSchema: applyReviewResultSchema,
-        effect: "write",
-        execute: async (input, call) => {
-          const result3 = await reviews.applyReview(
-            input,
-            await callerProject(call)
-          );
-          context.events.changed();
-          return result3;
-        }
-      },
-      preferences: {
-        inputSchema: preferencesInputSchema,
-        resultSchema: preferencesResultSchema,
-        effect: "read",
-        execute: () => preferences.read()
-      },
-      setReviewPolicy: {
-        inputSchema: setReviewPolicyInputSchema,
-        resultSchema: preferencesResultSchema,
-        effect: "write",
-        execute: async (input) => {
-          const saved = await preferences.write(input);
-          context.events.changed();
-          return saved;
-        }
-      },
+      ...createKnowledgeReviewOperations({
+        context,
+        modelReviews,
+        reviews,
+        preferences,
+        semanticPreferences,
+        callerProject
+      }),
       overview: {
         inputSchema: overviewInputSchema,
         resultSchema: overviewResultSchema,
@@ -25586,102 +25735,14 @@ var createDesktopRuntime = async (context) => {
         execute: async (input, call) => reads.recentByCategory(input, await callerProject(call))
       }
     },
-    createNativeSession: async (facts) => {
-      const sessionPorts = createManagedKnowledgeSessionPorts(context.capabilities);
-      const composition = {
-        session: sessionPorts.ports,
-        registerReadTools: (pi) => registerDesktopKnowledgeNativeReadTools(
-          pi,
-          owner,
-          (native2) => projectFor(context.capabilities, native2.cwd)
-        ),
-        project: async (cwd) => {
-          const project = await projectFor(context.capabilities, cwd);
-          if (project === null) throw new Error("Knowledge native session has no workspace project");
-          return project;
-        }
-      };
-      if (facts?.kind === "child") {
-        const readable = facts.files === "read";
-        const child = createManagedNativeSession(owner, {
-          ...composition,
-          child: readable ? "read" : "evidence",
-          childReadAllowed: async () => (await readKnowledgeBinding2())?.subagentPolicy === "read-local"
-        });
-        if (!child.projection) throw new Error("Knowledge child session requires its publication projection");
-        const session = {
-          ...child,
-          // A child's answers only take the evidence-only path (label, no task report), so its
-          // finalizer runs with read capabilities; any write it attempted would fail at the broker.
-          projection: { ...child.projection, finalizeEffect: "read" },
-          toolEffects: readable ? Object.fromEntries(CHILD_READ_TOOLS.map((tool) => [tool, "read"])) : {},
-          // A child is read-only: its hooks get read capabilities only, so any write attempt fails at the broker.
-          eventEffects: Object.fromEntries(CHILD_SESSION_EVENTS.map((event) => [event, "read"])),
-          commandEffects: {}
-        };
-        return session;
-      }
-      const migrateRecovery = createKnowledgeRecoveryMigration(context.capabilities, config);
-      const native = createManagedNativeSession(owner, composition);
-      let unregister;
-      return {
-        ...native,
-        toolEffects: { knowledge_status: "read", knowledge_search: "read" },
-        eventEffects: {
-          session_start: "read",
-          session_tree: "read",
-          tool_execution_start: "read",
-          tool_result: "read"
-        },
-        commandEffects: {
-          "knowledge-review-model": "write",
-          "obsidian-review": "write",
-          "knowledge-migrate-recovery": "write"
-        },
-        async extension(pi) {
-          await native.extension(pi);
-          pi.on("session_start", (_event, caller) => {
-            unregister = specialists.registerKnowledgeSpecialistHost(
-              caller.sessionManager.getSessionId(),
-              createBrokerKnowledgeSpecialist(context.capabilities)
-            );
-          });
-          pi.registerCommand("knowledge-migrate-recovery", {
-            description: "Explicitly import an authorized 0.2.0/0.2.1 historical read-window checkpoint; no current proof is restored",
-            async handler(args, caller) {
-              if (args.trim()) throw new Error("Checkpoint migration accepts no scope or target arguments");
-              const result3 = await migrateRecovery(caller);
-              await sessionPorts.ports.notify(JSON.stringify(result3), caller);
-            }
-          });
-          pi.registerCommand("knowledge-review-model", {
-            description: "Review one exact Wiki proposal with explicit JSON cost/data acknowledgement; read the audit in the knowledge review UI",
-            async handler(args, caller) {
-              const input = parseModelReviewCommandInput(args);
-              const scope = await context.capabilities.call(
-                "caller.scope",
-                null
-              );
-              if (scope.kind !== "session" || scope.sessionId !== caller.sessionManager.getSessionId())
-                throw new Error("Model review command requires its originating live session");
-              const binding = await owner.config.readKnowledgeBinding({ fresh: true });
-              if (!binding) throw new Error("No application knowledge Vault is bound");
-              const signal = caller.signal ? AbortSignal.any([native.signal, caller.signal]) : native.signal;
-              await modelReviews.review(
-                { ...input, revision: binding.revision },
-                await projectFor(context.capabilities, scope.workspaceDirectory),
-                { scope, signal, capabilities: context.capabilities }
-              );
-              context.events.changed();
-            }
-          });
-        },
-        async dispose() {
-          unregister?.();
-          await native.dispose();
-        }
-      };
-    },
+    createNativeSession: createKnowledgeNativeSessionFactory({
+      context,
+      owner,
+      specialists,
+      modelReviews,
+      readKnowledgeBinding: readKnowledgeBinding2,
+      projectFor
+    }),
     dispose: () => owner.dispose()
   };
 };
