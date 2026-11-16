@@ -10,6 +10,16 @@
 	"drone": {
 		"pluginApi": 1,
 		"resultContract": "drone-result/v3",
+		"credentials": [
+			{
+				"slot": "webdav",
+				"label": { "zh": "WebDAV 云端知识库密码", "en": "WebDAV cloud knowledge password" },
+				"hosts": ["10.126.126.1:8080"],
+				"header": "Authorization",
+				"fields": [],
+				"authentication": "http-basic-digest"
+			}
+		],
 		"deliveryProjection": "required",
 		"nativeChildSessions": "read-only",
 		"requires": {
@@ -74,7 +84,8 @@
 			"application-state",
 			"application-state-write"
 		],
-		"network": ["configured-services"],
+		"network": ["configured-services", "10.126.126.1:8080"],
+		"credentials": ["host-kept WebDAV password (drone.credentials)"],
 		"subprocess": [],
 		"externalWrites": true,
 		"readWrite": {

@@ -76,7 +76,8 @@ export class CloudDav {
 	async request(input: Parameters<CloudHttp["request"]>[0]): ReturnType<CloudHttp["request"]> {
 		try {
 			return await this.http.request(input);
-		} catch {
+		} catch (error) {
+			if (error instanceof CloudError && error.code === "forbidden") throw error;
 			// A thrown port request has no known HTTP outcome; never expose transport details.
 			throw new CloudError("offline");
 		}

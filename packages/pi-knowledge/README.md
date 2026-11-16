@@ -22,6 +22,23 @@ The candidate UI declares `droneUi: 2`: v1-only hosts must reject it before load
 
 ## 0.3.0 source candidate
 
+### Cloud (WebDAV)
+
+The managed runtime adds `cloudStatus`, `cloudProbe`, `cloudInitialize`, `cloudRead`,
+`cloudWrite` and `cloudSync`. `src/desktop/cloud-contract.ts` owns their JSON schemas
+and types; `cloud-runtime.ts` registers them and `cloud-capabilities.ts` adapts the
+domain ports to caller-scoped host capabilities. Sync is manual and transfers only
+explicitly selected notes, with preview/binding checks, CAS and write readback.
+
+Enter the host-kept WebDAV password in Drone settings → UI plugins → Plugin
+credentials. The host's `DRONE_WEBDAV_PASSWORD` overrides the saved password; the
+plugin never reads either value. This flow requires a host supporting
+`authentication: "http-basic-digest"`; older hosts report unavailable without any
+network request. Status never probes. Defaults remain `http://10.126.126.1:8080`,
+username `gaoyangwei`, folder `Drone-Knowledge`. **Plain HTTP does not encrypt
+credentials or note contents in transit.** Network writes use the host's existing
+approval dialog; local pull writes require the selected writable Vault root.
+
 Knowledge category counts and recent-note groups now share one rule: explicit frontmatter type takes precedence, then the nearest recognized category directory, then filename keywords for untyped notes. A method named `mapping-tools.md` remains a method; a typed concept is not relabeled from its filename. This is a local source candidate, not an npm publication claim.
 
 Scientific claim comparisons preserve missing conditions and unknown directions

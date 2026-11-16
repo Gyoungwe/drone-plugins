@@ -309,6 +309,18 @@ it("reports unknown for a throw after PUT starts and never retries", async () =>
 	expect(requests.map((request) => request.method)).toEqual(["PROPFIND", "PUT"]);
 });
 
+it("reports a denied PUT as forbidden without retry or readback", async () => {
+	const { cloud, requests } = fixture((input) => {
+		if (input.method === "PROPFIND") return collection(input.path);
+		throw new CloudError("forbidden");
+	});
+	expect(await cloud.write({ path: "Home.md", text: "fake" })).toMatchObject({
+		status: "forbidden",
+		reason: "forbidden",
+	});
+	expect(requests.map((request) => request.method)).toEqual(["PROPFIND", "PUT"]);
+});
+
 it.each(["mismatch", "throw"])(
 	"reports unknown on %s during PUT readback without resending",
 	async (failure) => {

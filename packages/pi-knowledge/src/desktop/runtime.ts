@@ -18,6 +18,7 @@ import { createKnowledgeModelReview } from "../core/wiki-model-review.js";
 import { createKnowledgeWikiReview } from "../core/wiki-review.js";
 import { createManagedNativeSession } from "../extension/knowledge-extension.js";
 import { bindingOperation } from "./binding-service.js";
+import { withCloudOperations } from "./cloud-runtime.js";
 import {
 	applyReviewInputSchema,
 	applyReviewResultSchema,
@@ -120,7 +121,6 @@ async function projectFor(
 	return projectIdentity(workspace, (document as Record<string, unknown>).knowledgeProjectId);
 }
 
-/** One granted knowledge owner composes the same native interface, services and UI operations. */
 /** Every tool the read-only knowledge interface registers in a child session; none of them writes. */
 const CHILD_READ_TOOLS = [
 	"knowledge_status",
@@ -524,4 +524,4 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 		dispose: () => owner.dispose(),
 	};
 };
-export default createDesktopRuntime;
+export default withCloudOperations(createDesktopRuntime);
