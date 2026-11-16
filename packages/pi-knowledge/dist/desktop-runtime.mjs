@@ -12154,13 +12154,13 @@ function createKnowledgeReviewModel(owner, canWriteState, canWriteFiles) {
 // src/desktop/model-review.ts
 function createKnowledgeModelReviewModel(owner, canWriteState, canWriteFiles) {
   const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
-  async function selection(call, profile) {
+  async function selection(call) {
     if (call.scope.kind !== "session")
       throw new Error("Choose the originating live session before model review");
-    return await call.capabilities.call(
-      "model.selection",
-      profile === void 0 ? {} : { profile }
-    );
+    return await call.capabilities.call("model.selection", {
+      optionalProfile: "knowledge-wiki-reviewer",
+      inheritedThinking: "nearest-supported"
+    });
   }
   return {
     info(input, project, call) {
@@ -12169,7 +12169,7 @@ function createKnowledgeModelReviewModel(owner, canWriteState, canWriteFiles) {
         if (preview.proposalHash !== input.expectedProposalHash)
           throw new Error("Wiki proposal changed; refresh before model review");
         return {
-          selection: await selection(call, input.profile),
+          selection: await selection(call),
           lastReview: await owner.modelReview.lastWikiModelReview(
             service,
             input.id,
@@ -12181,14 +12181,14 @@ function createKnowledgeModelReviewModel(owner, canWriteState, canWriteFiles) {
     review(input, project, call) {
       requireWrite(input.autoApply);
       return bound(input.revision, project, async (service) => {
-        const initial = await selection(call, input.profile);
+        const initial = await selection(call);
         const check = async () => {
           call.signal.throwIfAborted();
           const state = await call.capabilities.call("session.inspect", null);
           if (state.agentActive)
             throw new Error("Wait for the current conversation to finish before model review");
-          const current = await selection(call, input.profile);
-          if (current.provider !== initial.provider || current.model !== initial.model || current.thinkingLevel !== initial.thinkingLevel || current.profile !== initial.profile)
+          const current = await selection(call);
+          if (current.provider !== initial.provider || current.model !== initial.model || current.thinkingLevel !== initial.thinkingLevel || current.profile !== initial.profile || current.optionalProfile !== initial.optionalProfile || current.inheritedThinking !== initial.inheritedThinking)
             throw new Error("Model selection changed; review again before applying");
         };
         return owner.modelReview.reviewWikiWithModel(
@@ -24915,7 +24915,10 @@ ${request.skillText}` : "",
 function createBrokerKnowledgeSpecialist(capabilities) {
   return (request) => runKnowledgeSpecialist(
     {
-      select: async (profile) => await capabilities.call("model.selection", { optionalProfile: profile }),
+      select: async (profile) => await capabilities.call("model.selection", {
+        optionalProfile: profile,
+        inheritedThinking: "nearest-supported"
+      }),
       step: async (input, signal) => await capabilities.call("model.toolStep", input, signal)
     },
     request
