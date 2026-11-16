@@ -1,13 +1,15 @@
 {
   "artifactSource": "ui/src/index.tsx",
   "inputs": {
-    "ui/src/index.tsx": "341ad7cc7af4843e93443d2b95d5e004380f3fe95fb0c187099449f6d26d69a0",
-    "scripts/build-ui.mjs": "7f1c75eee7f708f2d3eefdb949d97140374f090ae5ca21df5acd7054f6ad98fd",
     "package.json": "82b9f06a99d287f48616ad5990866fa1d4cfdfb14c0c625b000c7d25369bcb85",
     "plugin.manifest.json": "0224945bb6fb3cfc3ebeb4c0d90de5707208c4c800c6396213121fd0d24f181e",
-    "ui/plugin.json": "f69c5484dfcc253ab39c60f87c42e9ef3b1e9faffa19661b3a9a45e0e19678a5"
+    "scripts/build-ui.mjs": "98bc65a95e03b7d6556fab9beaf7cd45146507a1c8b48a42a8299a3883dccb51",
+    "ui/plugin.json": "38e0cd05b3e2b11089d6329e50a72207286239e6f8339ad09a1083069408f2c8",
+    "ui/src/ResearchRunsCard.tsx": "39b1a01f84119b14525bbb2ce0c12ea559af641a2a0efdb1b636b8e0ade173d9",
+    "ui/src/index.tsx": "4147d7f79bb09376f49bd60b5c9971261d4f5598cff9d36d9cf1d58ea5f337cb",
+    "ui/src/research-runs-copy.ts": "c6d2f6b7c9f0405bc3cb36c31b2d1a6a7eb7ca5b05c16197f518e28eda71c0ea"
   },
   "outputs": {
-    "ui/bundle.js": "dc6c9b4f7097d0451550da56a2e5108fa0821afd46d0845d6c1351a109bdf699"
+    "ui/bundle.js": "78de27bfc236f3a601337e86336510b4f5be314c54b9fca35072e308e85d6a08"
   }
 }
