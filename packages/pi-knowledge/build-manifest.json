@@ -79,6 +79,10 @@
 		"src/core/writer-lease-group.ts": "fcdc8b778198830217435c57d1e1ff2326669f10f2654c1c8d79f9c7f43a21e4",
 		"src/core/writer-lease.ts": "abb723298994aebe779d25552f1b77c3da8d55902ae562a51702179eb09917cb",
 		"src/desktop/binding-service.ts": "1af95bf5ad7939e40b6d1d22667c15d398d57fcec9c639ea8f71fd8b042b2c7c",
+		"src/desktop/cloud-dav.ts": "e8b9fd02de38ce8776aabb660c4b993770052e32f8b6a36b4e1415625f87e5ae",
+		"src/desktop/cloud-paths.ts": "a59ba5d5ce10280a6455decb04cf5d672951d8cf3bbfdabf6645444150c79074",
+		"src/desktop/cloud-sync.ts": "db73625f253d9e151282850e40003ca239135dcf8c007d46401f37e6992909eb",
+		"src/desktop/cloud.ts": "76ed7557f3cf0889490f4801d6eeac989bc1901d43d63a138d44fd1b7f522469",
 		"src/desktop/contract.ts": "810834beaabe91bb9bc873937e487e61dafb303293501a0f8e7508324409ba2a",
 		"src/desktop/index-resource.ts": "49abef7646b5bc3112f8e4c343ab066dd7352c3b12ad9c23b73b824a699a300a",
 		"src/desktop/model-review.ts": "0a7408c391adb95bc5fede3014c1199d9b6a5f0cb11fbd4dd6398cb5ea72d180",
@@ -115,9 +119,9 @@
 		"dist/desktop-runtime.mjs": "8f8a25acbbaed950a4b3eec62f224f83e713affc273f80461bfceb2e04550dee",
 		"lib/knowledge/runtime/desktop-index.mjs": "87225858bd27bd5a038723ee29eca421cd9f05fb1764e3984d8a28df84f73ba0",
 		"lib/knowledge/runtime/worker.mjs": "eb524114e9a1ac23c8049ba66e52f55fc24ca6565d83410d2acab801da5a89d8",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "d070e619c5f23f4a569ab7cfd3ea60052349a5f9a6a946f23f7b6978aee919a4",
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "95555a80a2f39150e802a1e0c72f25438915812f8ac030cabe0d968998e3e61a",
 		"ui/bundle.js": "bc470a92cf93463a83cb5c6216b800cb23f6134182abbd68d8fc5262c506725c",
-		"ui/build-manifest.json": "01452679a871bd12e5f03ef3f1a444043d0f29677c714f59f4027419b40778ba"
+		"ui/build-manifest.json": "7132f91d5b91da023d1e71aea637b9eaafded1195b41fa866bb3726e6bdc5b52"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",
