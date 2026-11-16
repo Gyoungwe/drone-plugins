@@ -882,6 +882,7 @@ var specialistZh = {
   specialistDenied: "\u5F53\u524D\u77E5\u8BC6\u5E93\u76EE\u5F55\u4E0D\u5141\u8BB8\u534F\u4F5C\u52A9\u624B\u8BBF\u95EE\uFF1B\u8C03\u5EA6\u5DF2\u5173\u95ED\uFF0C\u4E0D\u80FD\u7528\u6B64\u5F00\u5173\u63D0\u5347\u6743\u9650\u3002",
   specialistPermissions: "\u89D2\u8272\u3001\u804C\u8D23\u4E0E\u6700\u5C0F\u6743\u9650",
   specialistLimits: "\u6BCF\u8F6E\u6700\u591A 4 \u6B21\uFF0C\u77E5\u8BC6\u534F\u4F5C\u52A9\u624B\u5168\u5E94\u7528\u6700\u591A\u5E76\u53D1 2 \u4E2A\uFF1B\u5355\u4E2A\u6700\u957F 120 \u79D2\u3002\u65E0 shell\u3001\u7F51\u7EDC\u6293\u53D6\u3001\u9012\u5F52\u59D4\u6D3E\u3001\u6B63\u5F0F Wiki \u5199\u5165\u6216\u6279\u51C6\u6743\u9650\u3002",
+  specialistLimitsSummary: "\u6BCF\u8F6E\u6700\u591A {maxRunsPerTurn} \u6B21\uFF1B\u6700\u591A\u5E76\u53D1 {concurrency} \u4E2A\uFF08\u4E0A\u9650 {maxConcurrency}\uFF09\uFF1B\u5355\u4E2A\u6700\u957F {timeoutSeconds} \u79D2\u3002",
   specialistModels: "\u914D\u7F6E\u534F\u4F5C\u52A9\u624B\u6A21\u578B",
   specialistModel: "\u6A21\u578B",
   specialistThinking: "\u601D\u8003\u5F3A\u5EA6",
@@ -914,6 +915,7 @@ var specialistEn = {
   specialistDenied: "Knowledge-base policy denies access for collaborating assistants. This switch cannot elevate permissions.",
   specialistPermissions: "Roles and capability limits",
   specialistLimits: "Up to 4 calls per turn, 2 knowledge specialists concurrently across the app, 120 seconds each. No shell, network fetch, recursive delegation, live Wiki writes or approval.",
+  specialistLimitsSummary: "Up to {maxRunsPerTurn} calls per turn; {concurrency} concurrently (maximum {maxConcurrency}); up to {timeoutSeconds} seconds per run.",
   specialistModels: "Configure specialist models",
   specialistModel: "Model",
   specialistThinking: "Thinking",
@@ -1910,6 +1912,7 @@ function NativeKnowledgeSpecialistSettings({
             }
           )
         ] }),
+        value && /* @__PURE__ */ jsx5("p", { className: "mt-3 text-xs text-ink-dim", "data-testid": "native-knowledge-specialist-limits", children: t("specialistLimitsSummary").replace("{maxRunsPerTurn}", String(value.maxRunsPerTurn)).replace("{concurrency}", String(value.concurrency)).replace("{maxConcurrency}", String(value.maxConcurrency)).replace("{timeoutSeconds}", String(Math.ceil(value.timeoutMs / 1e3))) }),
         /* @__PURE__ */ jsx5("p", { className: "mt-3 text-xs text-ink-dim", children: t("specialistCost") }),
         value && !value.canWriteState && /* @__PURE__ */ jsx5("p", { className: "mt-3 text-xs text-warn", children: t("specialistDenied") })
       ]
