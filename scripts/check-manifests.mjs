@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, normalize, resolve } from "node:path";
 import { isMainModule } from "./is-main-module.mjs";
+import { approvalPermissionFailures } from "./manifest-approvals.mjs";
 import { credentialFailures } from "./manifest-credentials.mjs";
 
 export const CAPABILITIES = new Set([
@@ -23,20 +24,9 @@ export const CAPABILITIES = new Set([
 	"ui",
 	"core",
 ]);
-const FILESYSTEM_PERMISSIONS = new Set([
-	"workspace-read",
-	"workspace",
-	"configured-vault",
-	"configured-vault-write",
-	"vault-read",
-	"application-state",
-	"application-state-write",
-	"binary-state-read",
-	"binary-state-write",
-	"project-read",
-]);
 const PERMISSION_KEYS = new Set([
 	"filesystem",
+	"model",
 	"network",
 	"subprocess",
 	"externalWrites",
@@ -92,17 +82,14 @@ function validatePermissions(packageName, permissions, failures) {
 	for (const key of Object.keys(permissions))
 		if (!PERMISSION_KEYS.has(key)) failure(failures, packageName, `permissions.${key} is not supported`);
 	const value = permissions;
-	for (const key of ["filesystem", "network", "subprocess", "credentials", "externalSideEffects"]) {
+	for (const key of ["network", "subprocess", "credentials", "externalSideEffects"]) {
 		if (
 			value[key] !== undefined &&
 			(!Array.isArray(value[key]) || value[key].some((item) => typeof item !== "string"))
 		)
 			failure(failures, packageName, `permissions.${key} must be an array of strings`);
 	}
-	if (Array.isArray(value.filesystem))
-		for (const item of value.filesystem)
-			if (!FILESYSTEM_PERMISSIONS.has(item))
-				failure(failures, packageName, `permissions.filesystem has invalid value ${item}`);
+	for (const message of approvalPermissionFailures(permissions)) failure(failures, packageName, message);
 	if (value.externalWrites !== undefined && typeof value.externalWrites !== "boolean")
 		failure(failures, packageName, "permissions.externalWrites must be boolean");
 	if (value.readWrite !== undefined) {
