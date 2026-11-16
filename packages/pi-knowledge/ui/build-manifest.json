@@ -28,13 +28,12 @@
     "ui/knowledge/KnowledgeNetwork.tsx": "af4e4503798f14755844d9b5a566c9534ac515d972ca2c27439fd9aa75e2b474",
     "ui/knowledge/KnowledgeNoteView.tsx": "eb8b62cd5406f4ee21edba206c145ab03b946b37a382a6e045bb1442e66628fe",
     "ui/knowledge/KnowledgeNoteViewer.tsx": "0145afc751978dbd09cd899c85fa7d4ed64f7c7bc635778c4c8dc29fc863ab46",
-    "ui/knowledge/KnowledgePanel.tsx": "6cb6ab41504ff53b4d6a8520932e139ab3e516eb4d57453213137d85dcd0793c",
+    "ui/knowledge/KnowledgePanel.tsx": "2f1b4c5bf23054f387cf6d592e05816c47c8cecf5bab2fe0e9849037dfd00ffb",
     "ui/knowledge/KnowledgeSearch.tsx": "e60a1d4648413f7d69915fca62cea899cfc85d5afc98cea9142f5c7da5efa06f",
     "ui/knowledge/KnowledgeSearchView.tsx": "a9be872c3b3061a0a517685e25da001ec67e2ede3d267a7e3ba3e799ffb54b80",
     "ui/knowledge/KnowledgeSpecialists.tsx": "39931716173902cd3c6e12c74c5c7959664ef86c726d43e96a5746edbf7efc19",
     "ui/knowledge/KnowledgeUiRoot.tsx": "a5dcfefd72f30e3b84478c72b6564d8878f226f6774dd921f8559a0788206394",
     "ui/knowledge/KnowledgeView.tsx": "a6945ed6b95533636d2277ccb8c2607f99cc7b43156db487446224ad18ded7dc",
-    "ui/knowledge/ResearchRunsCard.tsx": "69929f9868f6a16cca5f7c10e23b91bb6068c7f077554d4f3d5d544a18c1ceb1",
     "ui/knowledge/SemanticManagement.tsx": "c17361fde921a927447c350fd98c1020b8574a70aab6d1f43f8c58daec66d884",
     "ui/knowledge/TopicManagement.tsx": "8a69bca0fe0c34591f98e7e4f6e495cf293de5d64cd881ab93646821f36c760f",
     "ui/knowledge/WikiModelReview.tsx": "aef3a90d22a71c5498cf2549d323b52ad8f10b068472a58b082945d5e4d1c89f",
@@ -44,7 +43,7 @@
     "ui/knowledge/ZoteroLocalWriteSection.tsx": "c256162f6e489c0a0dbf2c218e8d11ebc60f6c0676716a253c4beea9d86e95d5",
     "ui/knowledge/ZoteroPanel.tsx": "a65ce417db1cfa2ec98c57c2c8d4796516ab72af5adf16769a426b1ed2ec418a",
     "ui/knowledge/artifacts.ts": "51b02c28389d4f221cc6126de8e8fb6d502cc7461377f099d124873456c72c36",
-    "ui/knowledge/copy.ts": "e498204b5f8e449932750f555642f583efa14362063ee4b3263c593534b19acc",
+    "ui/knowledge/copy.ts": "3ed0f4898062911ab24a4905f28111ddd87bf8974f2f0c602803ef4c0d290cc1",
     "ui/knowledge/graph-layout.ts": "50a8eb55b8de8809accad14592b605a79ae56494af83fccc123701221f5963ad",
     "ui/knowledge/graph-model.ts": "b3328c27ec09597f93b4d3699a1b36e2ed8ceab6a63f154e219737b50624a311",
     "ui/knowledge/hooks.ts": "cd3e02c1d67cdc7764d2a28a4e9782bc5a3eaee63fd61a36dcb88d7c7922fd48",
@@ -63,7 +62,7 @@
     "ui/styles/utilities.css": "2002c87dd3d05601d0c91c97afc7d11e0fecec5a3ddc1cdef9279842eb1cefd0"
   },
   "outputs": {
-    "ui/styles/generated.ts": "87b4c00ea5cbc2f88001c20193c45fc1c7c5d082a9d4a724996afb09f628e84a",
-    "ui/bundle.js": "c5c9dcdb4659ca2f6ee2d59e48b845e85af5d512187fb870604feda599cc76f1"
+    "ui/styles/generated.ts": "576e83bd47cbf49e03f222ac4248156f125736167cfc990ef314bf0a2348d986",
+    "ui/bundle.js": "4bb7cab90467f0b394b1f993160791126259674e17231351365d1b97e196c777"
   }
 }
