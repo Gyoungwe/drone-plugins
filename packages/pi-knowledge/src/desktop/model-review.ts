@@ -7,6 +7,7 @@ import type {
 	KnowledgeModelReviewInput,
 	KnowledgeModelReviewResult,
 } from "./contract.js";
+import { createModelReviewControl } from "./model-review-control.js";
 import { createKnowledgeReviewContext, type KnowledgeReviewOwner } from "./reviews.js";
 
 /** One foreground operation on the same owner and scoped Wiki IO as human review/history/undo. */
@@ -16,14 +17,7 @@ export function createKnowledgeModelReviewModel(
 	canWriteFiles: boolean,
 ) {
 	const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
-	async function selection(call: PluginRuntimeContext): Promise<PluginModelSelection> {
-		if (call.scope.kind !== "session")
-			throw new Error("Choose the originating live session before model review");
-		return (await call.capabilities.call("model.selection", {
-			optionalProfile: "knowledge-wiki-reviewer",
-			inheritedThinking: "nearest-supported",
-		})) as PluginModelSelection;
-	}
+	const control = createModelReviewControl();
 	return {
 		info(
 			input: KnowledgeModelReviewInfoInput,
@@ -46,48 +40,59 @@ export function createKnowledgeModelReviewModel(
 		},
 		review(
 			input: KnowledgeModelReviewInput,
-			project: string | null,
+			project: () => Promise<string | null>,
 			call: PluginRuntimeContext,
 		): Promise<KnowledgeModelReviewResult> {
 			requireWrite(input.autoApply);
-			return bound(input.revision, project, async (service) => {
-				const initial = await selection(call);
-				const check = async () => {
-					call.signal.throwIfAborted();
-					const state = (await call.capabilities.call("session.inspect", null)) as {
-						agentActive: boolean;
+			return control.run(call.signal, project, (resolvedProject, signal) =>
+				bound(input.revision, resolvedProject, async (service) => {
+					const initial = await selection(call);
+					const check = async () => {
+						signal.throwIfAborted();
+						const state = (await call.capabilities.call("session.inspect", null)) as {
+							agentActive: boolean;
+						};
+						if (state.agentActive)
+							throw new Error("Wait for the current conversation to finish before model review");
+						const current = await selection(call);
+						if (
+							current.provider !== initial.provider ||
+							current.model !== initial.model ||
+							current.thinkingLevel !== initial.thinkingLevel ||
+							current.profile !== initial.profile ||
+							current.optionalProfile !== initial.optionalProfile ||
+							current.inheritedThinking !== initial.inheritedThinking
+						)
+							throw new Error("Model selection changed; review again before applying");
 					};
-					if (state.agentActive)
-						throw new Error("Wait for the current conversation to finish before model review");
-					const current = await selection(call);
-					if (
-						current.provider !== initial.provider ||
-						current.model !== initial.model ||
-						current.thinkingLevel !== initial.thinkingLevel ||
-						current.profile !== initial.profile ||
-						current.optionalProfile !== initial.optionalProfile ||
-						current.inheritedThinking !== initial.inheritedThinking
-					)
-						throw new Error("Model selection changed; review again before applying");
-				};
-				return owner.modelReview.reviewWikiWithModel(
-					{
-						service,
-						project,
-						id: input.id,
-						hash: input.expectedProposalHash,
-						binding: service.binding,
-					},
-					input,
-					{
-						signal: call.signal,
-						check,
-						evaluate: (request: unknown) => generateWikiModelReview(call.capabilities, initial, request),
-					},
-				);
-			});
+					return owner.modelReview.reviewWikiWithModel(
+						{
+							service,
+							project: resolvedProject,
+							id: input.id,
+							hash: input.expectedProposalHash,
+							binding: service.binding,
+						},
+						input,
+						{
+							signal,
+							check,
+							evaluate: (request: unknown) => generateWikiModelReview(call.capabilities, initial, request),
+						},
+					);
+				}),
+			);
 		},
 	};
+}
+
+async function selection(call: PluginRuntimeContext): Promise<PluginModelSelection> {
+	if (call.scope.kind !== "session")
+		throw new Error("Choose the originating live session before model review");
+	return (await call.capabilities.call("model.selection", {
+		optionalProfile: "knowledge-wiki-reviewer",
+		inheritedThinking: "nearest-supported",
+	})) as PluginModelSelection;
 }
 
 /** A slash command is external user input; it never accepts caller identity or a filesystem path. */
