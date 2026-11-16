@@ -9,10 +9,11 @@
     "ui/NativeKnowledgeHistory.tsx": "70640e035c4cdf544cc6e4245af6155ab56b0adebb5cc0481be939c6831adf5b",
     "ui/NativeKnowledgeModelReview.tsx": "95771a5c62322e75828b74f3b98804f1097296beaa2092f898350f68e585ece3",
     "ui/NativeKnowledgePage.tsx": "4d7342fde3e5183e724668464d98069af215f394129d872193956e718f705cca",
-    "ui/NativeKnowledgePreferences.tsx": "62a69036e9acd52442708ab15147642e41c04f0a3e0470cb94ac021491ab47f9",
+    "ui/NativeKnowledgePreferences.tsx": "7b25183dab32b0da317e0c43dc0e767246e8c46fe936b7a6ff8c044256e70c4b",
     "ui/NativeKnowledgeReading.tsx": "f88f66cf4c837cf65770974614279dc0681782f66ded794e579d3839cf7197d1",
     "ui/NativeKnowledgeReviews.tsx": "0adf60d7b3b302e08ac50841d651bc33c042973a7d8b61b0e89d2ebf7ea836bb",
     "ui/NativeKnowledgeSemanticSettings.tsx": "38ee43fe2ddef05105abb29aa22a18871e618e0711ad47551a75d8b0f3d37954",
+    "ui/NativeKnowledgeSpecialistSettings.tsx": "86ad0cfa9b532857aca2c74b05df4fb30171e499dc7c1be59ff84dae127db806",
     "ui/api.ts": "d89a19ce96d98736077de1aa5e511fc69cfd0f26a8d227bb5e4e6837a159ec1a",
     "ui/entry.tsx": "0ffcfeb30af636916e23a7256b450e8ae4dbadd416fe0b5a323ae701b9636209",
     "ui/knowledge/DailyIdeas.tsx": "bc94478026148cc3666652637784148fef427e28af2355e1ad9ca34e42ba5433",
@@ -63,6 +64,6 @@
   },
   "outputs": {
     "ui/styles/generated.ts": "576e83bd47cbf49e03f222ac4248156f125736167cfc990ef314bf0a2348d986",
-    "ui/bundle.js": "4bb7cab90467f0b394b1f993160791126259674e17231351365d1b97e196c777"
+    "ui/bundle.js": "a58ff6effeeab14759d725b8c5dd446bf9b7effb1a6603b5dbb1288bb7460d0e"
   }
 }

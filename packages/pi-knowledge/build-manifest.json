@@ -127,8 +127,8 @@
 		"lib/knowledge/runtime/desktop-index.mjs": "87225858bd27bd5a038723ee29eca421cd9f05fb1764e3984d8a28df84f73ba0",
 		"lib/knowledge/runtime/worker.mjs": "eb524114e9a1ac23c8049ba66e52f55fc24ca6565d83410d2acab801da5a89d8",
 		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "a3fdc683208799c3e5ee367ddbe9acc02bee92b9dde44a7d65b44f69f283ce58",
-		"ui/bundle.js": "4bb7cab90467f0b394b1f993160791126259674e17231351365d1b97e196c777",
-		"ui/build-manifest.json": "83822da2baabc0567772616b6a43cfde6ed0616b3449f935e1ba145db52c7c58"
+		"ui/bundle.js": "a58ff6effeeab14759d725b8c5dd446bf9b7effb1a6603b5dbb1288bb7460d0e",
+		"ui/build-manifest.json": "97f2d9c01a855b4a36ad2b6a85b6f8810bc990dfb3f52e5fea04a006333c0dfb"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",
