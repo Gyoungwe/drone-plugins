@@ -90,7 +90,7 @@ function modelReviewOperations({
 			execute: async (input, call) => {
 				const result = await modelReviews.review(
 					input as KnowledgeModelReviewInput,
-					await callerProject(call),
+					() => callerProject(call),
 					call,
 				);
 				context.events.changed();

@@ -176,7 +176,7 @@ function registerNativeCommands(
 			const signal = caller.signal ? AbortSignal.any([native.signal, caller.signal]) : native.signal;
 			await modelReviews.review(
 				{ ...input, revision: binding.revision },
-				await projectFor(context.capabilities, scope.workspaceDirectory),
+				() => projectFor(context.capabilities, scope.workspaceDirectory),
 				{ scope, signal, capabilities: context.capabilities },
 			);
 			context.events.changed();
