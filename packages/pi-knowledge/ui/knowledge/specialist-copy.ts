@@ -11,6 +11,8 @@ export const specialistZh = {
 	specialistPermissions: "角色、职责与最小权限",
 	specialistLimits:
 		"每轮最多 4 次，知识协作助手全应用最多并发 2 个；单个最长 120 秒。无 shell、网络抓取、递归委派、正式 Wiki 写入或批准权限。",
+	specialistLimitsSummary:
+		"每轮最多 {maxRunsPerTurn} 次；最多并发 {concurrency} 个（上限 {maxConcurrency}）；单个最长 {timeoutSeconds} 秒。",
 	specialistModels: "配置协作助手模型",
 	specialistModel: "模型",
 	specialistThinking: "思考强度",
@@ -47,6 +49,8 @@ export const specialistEn: Record<keyof typeof specialistZh, string> = {
 	specialistPermissions: "Roles and capability limits",
 	specialistLimits:
 		"Up to 4 calls per turn, 2 knowledge specialists concurrently across the app, 120 seconds each. No shell, network fetch, recursive delegation, live Wiki writes or approval.",
+	specialistLimitsSummary:
+		"Up to {maxRunsPerTurn} calls per turn; {concurrency} concurrently (maximum {maxConcurrency}); up to {timeoutSeconds} seconds per run.",
 	specialistModels: "Configure specialist models",
 	specialistModel: "Model",
 	specialistThinking: "Thinking",

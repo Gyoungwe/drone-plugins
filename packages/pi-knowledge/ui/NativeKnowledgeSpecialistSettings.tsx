@@ -8,6 +8,7 @@ import { useKnowledgeText } from "./knowledge/copy";
 import { useNativeKnowledgeText } from "./native-copy";
 
 type SpecialistPreferences = KnowledgeSpecialistSettings & {
+	maxConcurrency: number;
 	bindingRevision: number | null;
 	canWriteState: boolean;
 };
@@ -157,6 +158,15 @@ export function NativeKnowledgeSpecialistSettings({
 						<option value="off">{t("specialistOff")}</option>
 					</select>
 				</label>
+			)}
+			{value && (
+				<p className="mt-3 text-xs text-ink-dim" data-testid="native-knowledge-specialist-limits">
+					{t("specialistLimitsSummary")
+						.replace("{maxRunsPerTurn}", String(value.maxRunsPerTurn))
+						.replace("{concurrency}", String(value.concurrency))
+						.replace("{maxConcurrency}", String(value.maxConcurrency))
+						.replace("{timeoutSeconds}", String(Math.ceil(value.timeoutMs / 1000)))}
+				</p>
 			)}
 			<p className="mt-3 text-xs text-ink-dim">{t("specialistCost")}</p>
 			{value && !value.canWriteState && <p className="mt-3 text-xs text-warn">{t("specialistDenied")}</p>}
