@@ -25718,13 +25718,13 @@ var createDesktopRuntime = async (context) => {
     { invalidateKnowledgeUi: () => context.events.changed() },
     reviewIo
   );
-  const modelReview = createKnowledgeModelReview(host, config, wiki, reviewIo, async () => {
-    const document = (await reviewIo.state.read("specialists.json"))?.value;
-    if (document === void 0) return { mode: "automatic" };
-    if (!["automatic", "manual", "off"].includes(document.mode))
-      throw new Error("Invalid knowledge specialist settings");
-    return document;
-  });
+  const modelReview = createKnowledgeModelReview(
+    host,
+    config,
+    wiki,
+    reviewIo,
+    specialists.specialistSettings
+  );
   const topics = createTopicMemoryApi(
     host,
     void 0,
