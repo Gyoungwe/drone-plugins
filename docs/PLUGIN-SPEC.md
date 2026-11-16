@@ -115,7 +115,7 @@ packages/<name>/
 | `tools` | L1 必填：本包注册的全部工具名；必须与运行时实际注册的完全一致（smoke 校验） |
 | `hosts` | `native-pi`、`drone-desktop` 的非空子集；只写 `drone-desktop` 时必须在 README 说明原因 |
 | `requires.hostCapabilities` | 依赖的宿主能力，由 `negotiateCapabilities` 协商；缺失时插件必须返回 `degraded` 或 `incompatible`，不能抛错 |
-| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`configured-vault`、`vault-read`、`application-state`、`application-state-write`）、`network`（主机名列表或已配置服务边界 `configured-services`）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
+| `permissions` | **如实**声明：`filesystem`（`workspace-read`、`workspace`、`workspace-write`、`configured-vault`、`configured-vault-write`、`vault-read`、`application-state`、`application-state-write`、`binary-state-read`、`binary-state-write`）、可选 `model`（仅接受 `background-model-spend` 的无重复数组；缺省表示禁止后台模型花费）、`network`（主机名列表或已配置服务边界 `configured-services`）、`subprocess`（可执行名列表）、`externalWrites`（布尔）。实际行为超出声明即判不合格 |
 
 **官方 Pi 格式合规（2026-10-29）。** 每个声明 `pi` 的包都必须能被官方 Pi 的包管理器当作来源解析并加载（等同 `pi -e <包目录>`）：扩展无加载错误、声明的技能可发现，并在按包自身方式配置后注册其 `plugin.manifest.json` 声明的全部工具（如 pi-knowledge 需先有知识目录，未配置时只提供 `/drone-init` 与状态/检索工具）。`npm run check:pi-format` 自动检查 `packages/` 下全部这类包，已纳入 `npm run check`。这只证明格式与可加载性，不要求在原生 Pi 中完成领域闭环。
 
@@ -128,6 +128,8 @@ packages/<name>/
 同包 UI 的 `droneUi: 2` 需要宿主已验证 installed desktopRuntime 来源；v1-only 宿主应在加载前拒绝。原生 `PluginNativeSession.toolEffects` 明确声明每个工具的 read/write 效果，未声明时宿主按写操作处理，不能依赖插件自定义 metadata 推断。可信 scope 的 `workspaceId` 是身份标识，`workspaceDirectory` 才是实际目录；两者都来自宿主，目录值本身不赋予文件访问权。API 1.3 尚未发布时只允许记录指纹的私有验收，正式最低依赖及公开 clean install 仍是发布门禁。
 
 manifest 是声明，不是安全边界：外部写入、远程执行、删除和发布仍由宿主授权。宿主会在安装确认和插件详情中展示 `permissions` 与 `tools`。
+
+权限声明不授予授权；宿主按 `subprocess-install`、`background-model-spend` 类别分别向用户请求批准，类别名称当前不是 manifest 字段。
 
 临时旧会话记录导入只能通过两项 write 能力 `session.records.adoption.inspect({type})` / `commit({type,legacyId,legacyHash,data})`。inspect 只在真实用户批准后返回已声明精确旧 tag 的当前 branch 最新候选，并明确 creator/packageVersion=unknown；fromVersions 只是当前迁移器支持范围，不能证明旧记录来自哪个包或版本。不能导入 `plugin-record:` / `plugin-notice:` 的其他来源 namespace。普通 records.read 没有 legacyTypes 参数。
 
