@@ -11,7 +11,10 @@ export function createBrokerKnowledgeSpecialist(capabilities: PluginRuntimeCapab
 		runKnowledgeSpecialist(
 			{
 				select: async (profile) =>
-					(await capabilities.call("model.selection", { optionalProfile: profile })) as PluginModelSelection,
+					(await capabilities.call("model.selection", {
+						optionalProfile: profile,
+						inheritedThinking: "nearest-supported",
+					})) as PluginModelSelection,
 				step: async (input, signal) =>
 					(await capabilities.call("model.toolStep", input, signal)) as PluginModelToolStepResult,
 			},
