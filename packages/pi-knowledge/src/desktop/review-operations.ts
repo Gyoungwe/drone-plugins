@@ -41,6 +41,13 @@ import type { createKnowledgeModelReviewModel } from "./model-review.js";
 import type { createKnowledgePreferences } from "./preferences.js";
 import type { createKnowledgeReviewModel } from "./reviews.js";
 import type { createKnowledgeSemanticPreferences } from "./semantic-preferences.js";
+import type { createKnowledgeSpecialistPreferences } from "./specialist-preferences.js";
+import {
+	type KnowledgeSetSpecialistSettingsInput,
+	setSpecialistSettingsInputSchema,
+	specialistPreferencesInputSchema,
+	specialistPreferencesResultSchema,
+} from "./specialist-preferences-contract.js";
 
 interface KnowledgeReviewOperationsOptions {
 	context: Pick<PluginRuntimeFactoryContext, "events">;
@@ -48,6 +55,7 @@ interface KnowledgeReviewOperationsOptions {
 	reviews: ReturnType<typeof createKnowledgeReviewModel>;
 	preferences: ReturnType<typeof createKnowledgePreferences>;
 	semanticPreferences: ReturnType<typeof createKnowledgeSemanticPreferences>;
+	specialistPreferences: ReturnType<typeof createKnowledgeSpecialistPreferences>;
 	callerProject: (call: PluginRuntimeContext) => Promise<string | null>;
 }
 
@@ -55,6 +63,7 @@ export function createKnowledgeReviewOperations(options: KnowledgeReviewOperatio
 	return {
 		...modelReviewOperations(options),
 		...semanticSettingsOperations(options),
+		...specialistSettingsOperations(options),
 		...proposalReviewOperations(options),
 		...reviewPolicyOperations(options),
 	};
@@ -119,6 +128,27 @@ function semanticSettingsOperations({ context, semanticPreferences }: KnowledgeR
 			effect: "write",
 			execute: async (input) => {
 				const saved = await semanticPreferences.write(input as KnowledgeSetSemanticSettingsInput);
+				context.events.changed();
+				return saved;
+			},
+		},
+	} satisfies Record<string, PluginRuntimeOperation>;
+}
+
+function specialistSettingsOperations({ context, specialistPreferences }: KnowledgeReviewOperationsOptions) {
+	return {
+		specialistSettings: {
+			inputSchema: specialistPreferencesInputSchema,
+			resultSchema: specialistPreferencesResultSchema,
+			effect: "read",
+			execute: () => specialistPreferences.read(),
+		},
+		setSpecialistSettings: {
+			inputSchema: setSpecialistSettingsInputSchema,
+			resultSchema: specialistPreferencesResultSchema,
+			effect: "write",
+			execute: async (input) => {
+				const saved = await specialistPreferences.write(input as KnowledgeSetSpecialistSettingsInput);
 				context.events.changed();
 				return saved;
 			},

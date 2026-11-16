@@ -47,6 +47,7 @@ import { createKnowledgeReviewModel } from "./reviews.js";
 import { createKnowledgeSemanticPreferences } from "./semantic-preferences.js";
 import { createBrokerSemanticSettings } from "./semantic-settings.js";
 import { createResourceServiceTransportFactory } from "./service-transport.js";
+import { createKnowledgeSpecialistPreferences } from "./specialist-preferences.js";
 import { createBrokerSpecialistSettingsStorage } from "./specialist-settings-storage.js";
 import { createBrokerReviewPolicyStorage } from "./state-policy.js";
 import { createBrokerTopicMemoryStorage } from "./topic-storage.js";
@@ -196,6 +197,11 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 		semantic,
 		states[0].access === "read-write",
 	);
+	const specialistPreferences = createKnowledgeSpecialistPreferences(
+		owner,
+		specialists,
+		states[0].access === "read-write",
+	);
 	return {
 		operations: {
 			binding: bindingOperation(readKnowledgeBinding),
@@ -205,6 +211,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 				reviews,
 				preferences,
 				semanticPreferences,
+				specialistPreferences,
 				callerProject,
 			}),
 			overview: {
