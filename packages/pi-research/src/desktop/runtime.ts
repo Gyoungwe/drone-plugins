@@ -1,6 +1,11 @@
 import type { PluginNativeRuntimeFactory } from "@gyoungwe/plugin-api/native";
 import type { PluginRuntimeOperation, PluginRuntimeScope } from "@gyoungwe/plugin-api/runtime";
-import { createResearchHost, type ResearchHostPort } from "../research-host.js";
+import {
+	createResearchHost,
+	type ResearchHostOperations,
+	type ResearchHostPort,
+	type ResearchRunDetailInput,
+} from "../research-host.js";
 import { zoteroAcceptanceOperations, zoteroIdentifyNativeOperation } from "./zotero-acceptance.js";
 import { registerManagedZoteroTools, ZOTERO_TOOL_EFFECTS } from "./zotero-tools.js";
 
@@ -51,39 +56,61 @@ function portFor(capabilities: { call(name: string, input: unknown): Promise<unk
 	};
 }
 
-/**
- * Desktop runtime: read-only research operations over host-granted roots, and per session the
- * Zotero tools, whose network goes through the host.
- */
-const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
-	const adapterFor = (capabilities: { call(name: string, input: unknown): Promise<unknown> }) =>
-		createResearchHost(portFor(capabilities));
-	const operation = (name: "status" | "listRuns" | "detail"): PluginRuntimeOperation => ({
+async function readDetail(operations: ResearchHostOperations, input: ResearchRunDetailInput) {
+	if (operations.detail)
+		return { ...(await operations.detail(input)), scientificallyVerified: false as const };
+	const result = await operations.status(input);
+	const item = "item" in result ? result.item : result.items.find((run) => run.runId === input.runId);
+	if (!item) throw new Error("Research plugin did not return a run detail");
+	return {
+		...item,
+		scientificallyVerified: false as const,
+		route: [],
+		sources: [],
+		claims: [],
+		warnings: ["The installed research plugin exposes run metadata only; detailed evidence is unavailable."],
+		coverage: null,
+		archive: { count: 0, reused: 0, verified: false },
+	};
+}
+
+function operation(name: "status" | "listRuns" | "detail"): PluginRuntimeOperation {
+	return {
 		inputSchema: { type: "object" },
 		resultSchema: { type: "object" },
 		effect: "read",
 		execute: async (input, callContext) => {
 			const workspace = scopeWorkspace(callContext.scope);
 			const params = paramsOf(input);
-			const adapter = adapterFor(callContext.capabilities);
+			const adapter = createResearchHost(portFor(callContext.capabilities));
 			const base = {
 				workspace,
-				project: params.project === undefined ? undefined : String(params.project),
+				project: params.project === undefined || params.project === null ? undefined : String(params.project),
 				limit: params.limit === undefined ? undefined : Number(params.limit),
 			};
 			const runDir = params.runDir === undefined ? undefined : String(params.runDir);
 			if (name === "status") return adapter.operations.status({ ...base, runDir });
 			if (name === "detail") {
-				if (!adapter.operations.detail) throw new Error("Research detail operation is unavailable");
-				return adapter.operations.detail({
+				return readDetail(adapter.operations, {
 					...base,
 					runDir,
 					runId: params.runId === undefined ? undefined : String(params.runId),
 				});
 			}
-			return adapter.operations.listRuns(base);
+			const result = await adapter.operations.listRuns(base);
+			return {
+				items: result.items.map((item) => ({ ...item, scientificallyVerified: false as const })),
+				total: result.total,
+			};
 		},
-	});
+	};
+}
+
+/**
+ * Desktop runtime: read-only research operations over host-granted roots, and per session the
+ * Zotero tools, whose network goes through the host.
+ */
+const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	return {
 		operations: {
 			status: operation("status"),

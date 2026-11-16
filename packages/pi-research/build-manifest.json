@@ -1,9 +1,9 @@
 {
   "version": 1,
   "generator": "packages/pi-research/scripts/build.mjs",
-  "inputsSha256": "2341305ff1476259f28b49f3fe1d9c421aeec4def4027d585afbc6428e2d21ea",
+  "inputsSha256": "8a4eb89700b8db3ceb7f95145f62f9bed92c7acbc55475f366b520c7ead4e5dc",
   "outputs": {
-    "dist/desktop-runtime.mjs": "b865b6c0181c1e6787e5d478a97c7937d536c3d1d4793bb3a9e86900b4baff7e",
+    "dist/desktop-runtime.mjs": "7a08009483d1217711fc1349a9e03124b4e1be1ff5e3573a008a1d8b578eaca8",
     "dist/host.mjs": "67e2abdcdf7d7fca5c7bb67cd22b14646b9822316fdf8d337e23f0e3b8fb79b2",
     "dist/index.mjs": "68f472b6bd4c8aa0dca694d6d76d6385be47f150986a842d36b9f1836cc7b5c3",
     "dist/types/core/claim-bindings.d.ts": "cf2ab2c03ff2ef73967de61f7f4d98ed63b598c64731aaeebb65d42204254ab4",

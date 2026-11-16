@@ -10,9 +10,9 @@ const uiManifest = JSON.parse(await readFile(join(root, "ui/plugin.json"), "utf8
 const uiBundle = await readFile(join(root, "ui/bundle.js"), "utf8");
 assert.deepEqual(
 	uiManifest.contributions.map((entry) => entry.region),
-	["home.section", "panel.tab", "skills.section"],
+	["home.section", "panel.tab", "skills.section", "panel.tab"],
 );
-for (const exportName of ["ResearchHome", "ResearchCitations", "ResearchConnectors"])
+for (const exportName of ["ResearchHome", "ResearchCitations", "ResearchConnectors", "ResearchRunsCard"])
 	assert.ok(uiBundle.includes(exportName));
 const { default: register } = await import(pathToFileURL(join(root, "dist/index.mjs")));
 const { researchHostLoader, registerResearchHost, zoteroHostLoader, registerZoteroHost } = await import(

@@ -2359,34 +2359,55 @@ function portFor(capabilities) {
     }
   };
 }
-var createDesktopRuntime = async (context) => {
-  const adapterFor = (capabilities) => createResearchHost(portFor(capabilities));
-  const operation = (name) => ({
+async function readDetail(operations, input) {
+  if (operations.detail)
+    return { ...await operations.detail(input), scientificallyVerified: false };
+  const result = await operations.status(input);
+  const item = "item" in result ? result.item : result.items.find((run) => run.runId === input.runId);
+  if (!item) throw new Error("Research plugin did not return a run detail");
+  return {
+    ...item,
+    scientificallyVerified: false,
+    route: [],
+    sources: [],
+    claims: [],
+    warnings: ["The installed research plugin exposes run metadata only; detailed evidence is unavailable."],
+    coverage: null,
+    archive: { count: 0, reused: 0, verified: false }
+  };
+}
+function operation(name) {
+  return {
     inputSchema: { type: "object" },
     resultSchema: { type: "object" },
     effect: "read",
     execute: async (input, callContext) => {
       const workspace = scopeWorkspace(callContext.scope);
       const params = paramsOf(input);
-      const adapter = adapterFor(callContext.capabilities);
+      const adapter = createResearchHost(portFor(callContext.capabilities));
       const base = {
         workspace,
-        project: params.project === void 0 ? void 0 : String(params.project),
+        project: params.project === void 0 || params.project === null ? void 0 : String(params.project),
         limit: params.limit === void 0 ? void 0 : Number(params.limit)
       };
       const runDir = params.runDir === void 0 ? void 0 : String(params.runDir);
       if (name === "status") return adapter.operations.status({ ...base, runDir });
       if (name === "detail") {
-        if (!adapter.operations.detail) throw new Error("Research detail operation is unavailable");
-        return adapter.operations.detail({
+        return readDetail(adapter.operations, {
           ...base,
           runDir,
           runId: params.runId === void 0 ? void 0 : String(params.runId)
         });
       }
-      return adapter.operations.listRuns(base);
+      const result = await adapter.operations.listRuns(base);
+      return {
+        items: result.items.map((item) => ({ ...item, scientificallyVerified: false })),
+        total: result.total
+      };
     }
-  });
+  };
+}
+var createDesktopRuntime = async (context) => {
   return {
     operations: {
       status: operation("status"),

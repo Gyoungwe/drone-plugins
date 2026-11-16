@@ -122,7 +122,6 @@
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/KnowledgeSearchView.tsx": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/KnowledgeSpecialists.tsx": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/KnowledgeView.tsx": 1,
-	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/ResearchRunsCard.tsx": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/SemanticManagement.tsx": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/TopicManagement.tsx": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/ui/knowledge/WikiModelReview.tsx": 1,
