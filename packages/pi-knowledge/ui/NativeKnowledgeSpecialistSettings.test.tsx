@@ -2,6 +2,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, expect, it, vi } from "vitest";
 import type { KnowledgeSpecialistPreferences } from "../src/desktop/specialist-preferences-contract";
 import { NativeKnowledgeSpecialistSettings } from "./NativeKnowledgeSpecialistSettings";
+import { useLanguage } from "./runtime-api";
+
+vi.mock("./runtime-api", async (original) => ({
+	...(await original<typeof import("./runtime-api")>()),
+	useLanguage: vi.fn(() => "zh"),
+}));
 
 const initial: KnowledgeSpecialistPreferences = {
 	mode: "manual",
@@ -39,7 +45,38 @@ function deferred<T>() {
 	return { promise, resolve: (value: T) => resolve(value), reject: (cause: Error) => reject(cause) };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	vi.mocked(useLanguage).mockReturnValue("zh");
+});
+
+it.each([
+	{
+		language: "zh",
+		expected: "每轮最多 3 次；最多并发 2 个（上限 4）；单个最长 91 秒。",
+	},
+	{
+		language: "en",
+		expected: "Up to 3 calls per turn; 2 concurrently (maximum 4); up to 91 seconds per run.",
+	},
+] as const)("shows the configured specialist limits in $language", async ({ language, expected }) => {
+	vi.mocked(useLanguage).mockReturnValue(language);
+	const runtime = client();
+	runtime.invoke.mockResolvedValue({ ...initial, maxRunsPerTurn: 3, timeoutMs: 90500 });
+	render(<NativeKnowledgeSpecialistSettings client={runtime} observationRevision={1} refreshing={false} />);
+	const limits = await screen.findByTestId("native-knowledge-specialist-limits");
+	expect(limits.textContent).toBe(expected);
+});
+
+it("does not show specialist limits while the settings value is loading", async () => {
+	const runtime = client();
+	const read = deferred<KnowledgeSpecialistPreferences>();
+	runtime.invoke.mockReturnValueOnce(read.promise);
+	render(<NativeKnowledgeSpecialistSettings client={runtime} observationRevision={1} refreshing={false} />);
+	expect(screen.getByRole("status").textContent).toBe("正在加载…");
+	expect(screen.queryByTestId("native-knowledge-specialist-limits")).toBeNull();
+	await act(async () => read.resolve(initial));
+});
 
 it("reads the current specialist mode through the bound runtime and shows existing mode and cost copy", async () => {
 	const runtime = client();
