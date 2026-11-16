@@ -16,13 +16,13 @@ export function createKnowledgeModelReviewModel(
 	canWriteFiles: boolean,
 ) {
 	const { bound, requireWrite } = createKnowledgeReviewContext(owner, canWriteState, canWriteFiles);
-	async function selection(call: PluginRuntimeContext, profile?: string): Promise<PluginModelSelection> {
+	async function selection(call: PluginRuntimeContext): Promise<PluginModelSelection> {
 		if (call.scope.kind !== "session")
 			throw new Error("Choose the originating live session before model review");
-		return (await call.capabilities.call(
-			"model.selection",
-			profile === undefined ? {} : { profile },
-		)) as PluginModelSelection;
+		return (await call.capabilities.call("model.selection", {
+			optionalProfile: "knowledge-wiki-reviewer",
+			inheritedThinking: "nearest-supported",
+		})) as PluginModelSelection;
 	}
 	return {
 		info(
@@ -35,7 +35,7 @@ export function createKnowledgeModelReviewModel(
 				if (preview.proposalHash !== input.expectedProposalHash)
 					throw new Error("Wiki proposal changed; refresh before model review");
 				return {
-					selection: await selection(call, input.profile),
+					selection: await selection(call),
 					lastReview: await owner.modelReview.lastWikiModelReview(
 						service,
 						input.id,
@@ -51,7 +51,7 @@ export function createKnowledgeModelReviewModel(
 		): Promise<KnowledgeModelReviewResult> {
 			requireWrite(input.autoApply);
 			return bound(input.revision, project, async (service) => {
-				const initial = await selection(call, input.profile);
+				const initial = await selection(call);
 				const check = async () => {
 					call.signal.throwIfAborted();
 					const state = (await call.capabilities.call("session.inspect", null)) as {
@@ -59,12 +59,14 @@ export function createKnowledgeModelReviewModel(
 					};
 					if (state.agentActive)
 						throw new Error("Wait for the current conversation to finish before model review");
-					const current = await selection(call, input.profile);
+					const current = await selection(call);
 					if (
 						current.provider !== initial.provider ||
 						current.model !== initial.model ||
 						current.thinkingLevel !== initial.thinkingLevel ||
-						current.profile !== initial.profile
+						current.profile !== initial.profile ||
+						current.optionalProfile !== initial.optionalProfile ||
+						current.inheritedThinking !== initial.inheritedThinking
 					)
 						throw new Error("Model selection changed; review again before applying");
 				};
