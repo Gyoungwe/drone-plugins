@@ -148,13 +148,13 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 		{ invalidateKnowledgeUi: () => context.events.changed() },
 		reviewIo,
 	);
-	const modelReview = createKnowledgeModelReview(host, config, wiki, reviewIo, async () => {
-		const document = (await reviewIo.state.read("specialists.json"))?.value as { mode?: unknown } | undefined;
-		if (document === undefined) return { mode: "automatic" };
-		if (!["automatic", "manual", "off"].includes(document.mode as string))
-			throw new Error("Invalid knowledge specialist settings");
-		return document;
-	});
+	const modelReview = createKnowledgeModelReview(
+		host,
+		config,
+		wiki,
+		reviewIo,
+		specialists.specialistSettings,
+	);
 	const topics = createTopicMemoryApi(
 		host,
 		undefined,
