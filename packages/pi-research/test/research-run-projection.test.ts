@@ -25,7 +25,7 @@ async function harness(operations: researchHost.ResearchHostOperations) {
 		signal,
 		resources: [],
 		capabilities,
-		events: { changed: () => {} },
+		events: { changed: () => undefined },
 	});
 	const context = {
 		capabilities,
@@ -78,7 +78,9 @@ describe("Desktop research run projection", () => {
 		await runtime.operations.listRuns.execute({ project: null, limit: 8 }, context);
 		expect(listRuns).toHaveBeenCalledWith({ workspace: "/granted/demo", project: undefined, limit: 8 });
 	});
+});
 
+describe("Desktop metadata-only research run projection", () => {
 	it("returns the host's metadata-only shape and warning when detail is absent", async () => {
 		const status = vi.fn().mockResolvedValue({ item });
 		const { runtime, context } = await harness({ listRuns: vi.fn(), status });
