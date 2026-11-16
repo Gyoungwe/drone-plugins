@@ -141,3 +141,30 @@ it("maps rejected MKCOL and thrown port errors without exposing details", async 
 	);
 	await expect(offline.collection("Drone-Knowledge/")).rejects.toEqual(new CloudError("offline"));
 });
+
+it("preserves a host denial before network IO unchanged", async () => {
+	const denied = new CloudError("forbidden");
+	const dav = new CloudDav(
+		{
+			request: async () => {
+				throw denied;
+			},
+		},
+		"https://dav.example.test",
+	);
+	await expect(dav.request({ method: "PUT", path: "Home.md" })).rejects.toBe(denied);
+});
+
+it("maps every other thrown port error to offline", async () => {
+	for (const error of [new CloudError("unauthorized"), new Error("fake-private-detail")]) {
+		const dav = new CloudDav(
+			{
+				request: async () => {
+					throw error;
+				},
+			},
+			"https://dav.example.test",
+		);
+		await expect(dav.request({ method: "GET", path: "Home.md" })).rejects.toEqual(new CloudError("offline"));
+	}
+});

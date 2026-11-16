@@ -26,9 +26,21 @@ const initial: KnowledgePreferences = {
 		diagnostic: null,
 	},
 };
+function respond(value: KnowledgePreferences) {
+	return async (operation: string, _input: unknown): Promise<unknown> =>
+		operation === "cloudStatus"
+			? {
+					status: "not_configured",
+					reason: "not_configured",
+					configured: false,
+					credentialSource: null,
+					savedConfigured: false,
+				}
+			: value;
+}
 function client() {
 	return {
-		invoke: vi.fn(async (_operation: string, _input: unknown): Promise<unknown> => initial),
+		invoke: vi.fn(respond(initial)),
 		subscribe: vi.fn(() => () => {}),
 	};
 }
@@ -62,25 +74,31 @@ it("displays binding details and saves the chosen mode with the observed state v
 });
 it("keeps state mutation disabled when the real resource grant is read-only", async () => {
 	const runtime = client();
-	runtime.invoke.mockResolvedValue({ ...initial, canWriteState: false });
+	runtime.invoke.mockImplementation(respond({ ...initial, canWriteState: false }));
 	render(<NativeKnowledgePreferences client={runtime} observationRevision={1} refreshing={false} />);
 	await screen.findByText(/当前仅授权读取状态/);
 	expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(true);
 	expect((screen.getByRole("button", { name: "保存审核策略" }) as HTMLButtonElement).disabled).toBe(true);
-	expect(runtime.invoke.mock.calls.map(([op]) => op)).toEqual(["preferences", "semanticSettings"]);
+	expect(runtime.invoke.mock.calls.map(([op]) => op)).toEqual([
+		"preferences",
+		"semanticSettings",
+		"cloudStatus",
+	]);
 });
 it.each(["invalid-json", "invalid-policy"] as const)(
 	"shows %s as a strict diagnostic without offering to overwrite it",
 	async (diagnostic) => {
 		const runtime = client();
-		runtime.invoke.mockResolvedValue({
-			...initial,
-			reviewPolicy: {
-				...initial.reviewPolicy,
-				persistedMode: null,
-				diagnostic,
-			},
-		});
+		runtime.invoke.mockImplementation(
+			respond({
+				...initial,
+				reviewPolicy: {
+					...initial.reviewPolicy,
+					persistedMode: null,
+					diagnostic,
+				},
+			}),
+		);
 		render(<NativeKnowledgePreferences client={runtime} observationRevision={1} refreshing={false} />);
 		await screen.findByRole("alert");
 		expect(screen.getByRole("alert").textContent).toContain("当前执行严格模式");
@@ -106,10 +124,12 @@ it("does not claim success on a concurrent state conflict and uses a fresh versi
 	fireEvent.click(screen.getByRole("button", { name: "保存审核策略" }));
 	await screen.findByText("ESTATECONFLICT: policy changed");
 	expect(screen.queryByText("策略已保存并回读核对。")).toBeNull();
-	runtime.invoke.mockResolvedValue({
-		...initial,
-		reviewPolicy: { ...initial.reviewPolicy, version: "b".repeat(64) },
-	});
+	runtime.invoke.mockImplementation(
+		respond({
+			...initial,
+			reviewPolicy: { ...initial.reviewPolicy, version: "b".repeat(64) },
+		}),
+	);
 	view.rerender(<NativeKnowledgePreferences client={runtime} observationRevision={2} refreshing={false} />);
 	await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 	await screen.findByText("/selected/library");
@@ -136,10 +156,12 @@ it("ignores an old settings response after a new observation has been requested"
 	const view = render(
 		<NativeKnowledgePreferences client={runtime} observationRevision={1} refreshing={false} />,
 	);
-	runtime.invoke.mockResolvedValue({
-		...initial,
-		binding: { ...initial.binding!, vault: "/selected/new" },
-	});
+	runtime.invoke.mockImplementation(
+		respond({
+			...initial,
+			binding: { ...initial.binding!, vault: "/selected/new" },
+		}),
+	);
 	view.rerender(<NativeKnowledgePreferences client={runtime} observationRevision={2} refreshing={false} />);
 	await screen.findByText("/selected/new");
 	await act(async () => resolve(initial));
@@ -156,7 +178,7 @@ it("keeps settings reachable without a binding and never invokes the legacy sett
 					index: null,
 					recentNotes: [],
 				}
-			: { ...initial, binding: null, canWriteState: false },
+			: respond({ ...initial, binding: null, canWriteState: false })(op, null),
 	);
 	setPluginRuntime(runtime);
 	sessions.setState({ activeSessionId: null });
@@ -173,15 +195,17 @@ it("keeps settings reachable without a binding and never invokes the legacy sett
 
 it("does not offer to override an environment-enforced strict policy", async () => {
 	const runtime = client();
-	runtime.invoke.mockResolvedValue({
-		...initial,
-		reviewPolicy: {
-			...initial.reviewPolicy,
-			mode: "strict",
-			persistedMode: "automatic",
-			override: "environment",
-		},
-	});
+	runtime.invoke.mockImplementation(
+		respond({
+			...initial,
+			reviewPolicy: {
+				...initial.reviewPolicy,
+				mode: "strict",
+				persistedMode: "automatic",
+				override: "environment",
+			},
+		}),
+	);
 	render(<NativeKnowledgePreferences client={runtime} observationRevision={1} refreshing={false} />);
 	await screen.findByText("环境策略强制严格审核；此处不能覆盖。");
 	expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(true);

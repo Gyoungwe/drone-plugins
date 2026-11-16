@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { Button, getKnowledgeApi, useSessionsStore, useSettingsStore } from "../api";
 import { useKnowledgeText } from "./copy";
 import { launchKnowledgeSetup, reportKnowledgeError, useKnowledgeOverview } from "./hooks";
-import { KnowledgeCloudSection } from "./KnowledgeCloudSection";
 import { KnowledgeMaintenance } from "./KnowledgeMaintenance";
 import { KnowledgeSpecialists } from "./KnowledgeSpecialists";
 import { ResearchRunsCard } from "./ResearchRunsCard";
@@ -153,7 +152,6 @@ export function KnowledgePanel({
 						</div>
 						<p className="mt-2 text-xs text-ink-dim">{t("globalSwitch")}</p>
 					</section>
-					<KnowledgeCloudSection cwd={cwd} bindingRevision={binding?.revision} />
 					{binding && <KnowledgeMaintenance cwd={cwd} revision={binding.revision} index={index} />}
 					{/* Similar-content search and topic memory were only reachable through the old panel tabs,
 					    which the knowledge page hides; keep them on the settings tab as collapsible sections. */}
@@ -177,7 +175,6 @@ export function KnowledgePanel({
 			)}
 			{tab === "overview" && (
 				<div className="space-y-4">
-					<KnowledgeCloudSection cwd={cwd} bindingRevision={binding?.revision} />
 					<ResearchRunsCard cwd={cwd} project={data?.project || null} revision={binding?.revision || 0} />
 					{data && !data.enabled && (
 						<p className="rounded-lg bg-hover p-3 text-xs text-warn">{t("disabled")}</p>
