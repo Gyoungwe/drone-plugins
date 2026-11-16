@@ -147,6 +147,8 @@ it("keeps the existing desktop operation key set while adding the cloud operatio
 			"undoReview",
 			"semanticSettings",
 			"setSemanticSettings",
+			"specialistSettings",
+			"setSpecialistSettings",
 			"reviews",
 			"previewReview",
 			"rejectReview",

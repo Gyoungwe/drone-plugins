@@ -253,8 +253,8 @@ function createStoredKnowledgeReviewPolicy(storage, strictOverride) {
         diagnostic: "invalid-json"
       };
     const value = document.value;
-    const mode = value && typeof value === "object" && "mode" in value ? value.mode : void 0;
-    if (mode !== "automatic" && mode !== "strict")
+    const mode2 = value && typeof value === "object" && "mode" in value ? value.mode : void 0;
+    if (mode2 !== "automatic" && mode2 !== "strict")
       return {
         mode: "strict",
         persistedMode: null,
@@ -263,8 +263,8 @@ function createStoredKnowledgeReviewPolicy(storage, strictOverride) {
         diagnostic: "invalid-policy"
       };
     return {
-      mode: override ? "strict" : mode,
-      persistedMode: mode,
+      mode: override ? "strict" : mode2,
+      persistedMode: mode2,
       version: document.version,
       override,
       diagnostic: null
@@ -273,16 +273,16 @@ function createStoredKnowledgeReviewPolicy(storage, strictOverride) {
   async function readReviewMode2() {
     return (await readReviewPolicy()).mode;
   }
-  async function saveReviewMode2(mode, expectedVersion) {
-    if (mode !== "automatic" && mode !== "strict") throw new Error("Invalid review mode");
+  async function saveReviewMode2(mode2, expectedVersion) {
+    if (mode2 !== "automatic" && mode2 !== "strict") throw new Error("Invalid review mode");
     const current = await readReviewPolicy();
     if (current.diagnostic) throw new Error("Review policy is damaged; repair it before changing settings");
     await storage.write(
-      { version: 1, mode },
+      { version: 1, mode: mode2 },
       expectedVersion === void 0 ? current.version : expectedVersion
     );
     const saved = await readReviewPolicy();
-    if (saved.diagnostic || saved.persistedMode !== mode)
+    if (saved.diagnostic || saved.persistedMode !== mode2)
       throw new Error("Review policy changed during write verification");
     return { mode: saved.mode };
   }
@@ -1319,8 +1319,8 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
       bounded2[key] = Math.min(max, Math.max(0, data[key] ?? SPECIALIST_LIMITS2[key]));
     return { ...SPECIALIST_LIMITS2, ...bounded2, mode: data.mode, revision: data.revision };
   }
-  async function setSpecialistSettings2({ mode, revision, bindingRevision: bindingRevision2, ...requested }) {
-    if (!["automatic", "manual", "off"].includes(mode) || !Number.isSafeInteger(revision))
+  async function setSpecialistSettings2({ mode: mode2, revision, bindingRevision: bindingRevision3, ...requested }) {
+    if (!["automatic", "manual", "off"].includes(mode2) || !Number.isSafeInteger(revision))
       throw new Error("Invalid specialist setting request");
     const allowedRequested = /* @__PURE__ */ new Set([
       "maxRunsPerTurn",
@@ -1339,12 +1339,12 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
       if (!allowedRequested.has(key)) throw new Error(`Unknown specialist setting: ${key}`);
     const operation = state.settingsQueue.catch(() => void 0).then(async () => {
       const binding = await readKnowledgeBinding2({ fresh: true });
-      if (!binding || binding.revision !== bindingRevision2)
+      if (!binding || binding.revision !== bindingRevision3)
         throw new Error("Knowledge binding changed; refresh settings");
       return withKnowledgeBinding2(binding, async () => {
         const current = await specialistSettings3();
         if (current.revision !== revision) throw new Error("Specialist settings changed; refresh first");
-        const data = { ...current, ...requested, mode, revision: revision + 1 };
+        const data = { ...current, ...requested, mode: mode2, revision: revision + 1 };
         const minimums = {
           maxRunsPerTurn: 1,
           maxRunsPerSession: 1,
@@ -1376,7 +1376,7 @@ function createKnowledgeSpecialistHostApi(runtime, config, ui, emitLegacyPeerEve
           "maxCostPerSession"
         ])
           data[key] = Math.min(data[key] ?? SPECIALIST_LIMITS2[key], SPECIALIST_LIMITS2[key]);
-        data.mode = mode;
+        data.mode = mode2;
         data.revision = revision + 1;
         if (storage) await storage.write(data, revision);
         else {
@@ -2493,8 +2493,8 @@ function createLocalWikiReviewPorts(config) {
       }
       const full = await containedVaultFile(binding.vault, path2);
       const temporary = join11(dirname5(full), `.${basename3(full)}.${randomUUID11()}.tmp`);
-      const mode = expectedHash === null ? 384 : (await lstat7(full)).mode & 511;
-      await writeFile8(temporary, text4, { flag: "wx", mode });
+      const mode2 = expectedHash === null ? 384 : (await lstat7(full)).mode & 511;
+      await writeFile8(temporary, text4, { flag: "wx", mode: mode2 });
       try {
         await check();
         if (((await files.read(binding, path2))?.hash ?? null) !== expectedHash)
@@ -9000,21 +9000,21 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
   function queueSemantic(key, task) {
     return runRuntimeExclusive2("semantic-lock", key, task);
   }
-  function providerConfig(settings2) {
+  function providerConfig(settings3) {
     return {
-      enabled: settings2.enabled,
-      provider: settings2.provider,
-      baseUrl: settings2.baseUrl,
-      model: settings2.model,
-      credentialEnv: settings2.credentialEnv,
-      remoteConsent: settings2.remoteConsent,
-      timeoutMs: settings2.timeoutMs,
-      chunkChars: settings2.chunkChars,
-      minSimilarity: settings2.minSimilarity
+      enabled: settings3.enabled,
+      provider: settings3.provider,
+      baseUrl: settings3.baseUrl,
+      model: settings3.model,
+      credentialEnv: settings3.credentialEnv,
+      remoteConsent: settings3.remoteConsent,
+      timeoutMs: settings3.timeoutMs,
+      chunkChars: settings3.chunkChars,
+      minSimilarity: settings3.minSimilarity
     };
   }
-  function fingerprintFor(settings2) {
-    return createHash5("sha256").update(`${settings2.provider}\0${settings2.baseUrl}\0${settings2.model}\0${settings2.chunkChars || 1200}`).digest("hex");
+  function fingerprintFor(settings3) {
+    return createHash5("sha256").update(`${settings3.provider}\0${settings3.baseUrl}\0${settings3.model}\0${settings3.chunkChars || 1200}`).digest("hex");
   }
   function awaitSemanticDeadline(operation, controller) {
     let onAbort;
@@ -9302,21 +9302,21 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
       const byPath = new Map((lexical.hits || []).map((hit) => [hit.path, hit]));
       const order = [];
       try {
-        const settings2 = await readSemanticSettings2(this.binding.vaultId);
-        if (settings2.enabled) {
+        const settings3 = await readSemanticSettings2(this.binding.vaultId);
+        if (settings3.enabled) {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(new Error("semantic deadline exceeded")), 1500);
           try {
             const embedded = await awaitSemanticDeadline(
-              embedTexts(providerConfig(settings2), [text4], { signal: controller.signal }),
+              embedTexts(providerConfig(settings3), [text4], { signal: controller.signal }),
               controller
             );
             const result3 = await this.request("semanticCandidates", {
               vector: embedded.vectors[0],
-              fingerprint: fingerprintFor(settings2),
+              fingerprint: fingerprintFor(settings3),
               project,
               limit: 8,
-              minSimilarity: settings2.minSimilarity
+              minSimilarity: settings3.minSimilarity
             });
             const items = Array.isArray(result3) ? result3 : Array.isArray(result3?.items) ? result3.items : [];
             for (const item of items) if (typeof item?.path === "string") order.push(item.path);
@@ -9413,20 +9413,20 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
               (item) => typeof item.path === "string" && item.path.length > 0 && !/(?:^|\/)(?:Runs|Explainers)\//i.test(item.path)
             ).slice(0, 24) : [];
           } else {
-            const settings2 = await readSemanticSettings2(this.binding.vaultId);
-            semanticEnabled = settings2.enabled;
-            if (settings2.enabled) {
+            const settings3 = await readSemanticSettings2(this.binding.vaultId);
+            semanticEnabled = settings3.enabled;
+            if (settings3.enabled) {
               const embedded = await awaitSemanticDeadline(
-                embedTexts(providerConfig(settings2), [semanticQuery], { signal: semanticController.signal }),
+                embedTexts(providerConfig(settings3), [semanticQuery], { signal: semanticController.signal }),
                 semanticController
               );
-              const fingerprint = fingerprintFor(settings2);
+              const fingerprint = fingerprintFor(settings3);
               const candidateResult = await this.request("semanticCandidates", {
                 vector: embedded.vectors[0],
                 fingerprint,
                 project: state.project,
                 limit: 24,
-                minSimilarity: settings2.minSimilarity
+                minSimilarity: settings3.minSimilarity
               });
               const semanticResult = Array.isArray(candidateResult) ? { items: candidateResult, partial: Boolean(candidateResult.partial) } : candidateResult && typeof candidateResult === "object" ? candidateResult : { items: [], partial: false };
               semanticItems = (Array.isArray(semanticResult.items) ? semanticResult.items : []).map(
@@ -9531,14 +9531,14 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
     async semanticStatus({ project = null } = {}) {
       await withKnowledgeBinding2(this.binding, async () => {
       });
-      const settings2 = await readSemanticSettings2(this.binding.vaultId);
+      const settings3 = await readSemanticSettings2(this.binding.vaultId);
       const index = await this.request("status", {
-        fingerprint: settings2.enabled ? fingerprintFor(settings2) : null,
+        fingerprint: settings3.enabled ? fingerprintFor(settings3) : null,
         project
       });
-      const activeSemantic = settings2.enabled ? index.semanticScoped ?? { vectors: 0, paths: 0, coverage: "unconfigured" } : { ...index.semantic, coverage: "disabled" };
+      const activeSemantic = settings3.enabled ? index.semanticScoped ?? { vectors: 0, paths: 0, coverage: "unconfigured" } : { ...index.semantic, coverage: "disabled" };
       return {
-        settings: settings2,
+        settings: settings3,
         index: {
           ...index,
           semanticAll: index.semantic,
@@ -9574,19 +9574,19 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
     /** @param {Record<string, any>} [options] */
     async rebuildSemanticIndex({ limit = 8, project = null, signal } = {}) {
       await assertBinding(this.binding);
-      const settings2 = await readSemanticSettings2(this.binding.vaultId);
-      if (!settings2.enabled) return { enabled: false, status: await this.request("status") };
-      const fingerprint = fingerprintFor(settings2);
+      const settings3 = await readSemanticSettings2(this.binding.vaultId);
+      if (!settings3.enabled) return { enabled: false, status: await this.request("status") };
+      const fingerprint = fingerprintFor(settings3);
       const batch = await this.request("semanticBatch", {
         fingerprint,
         project,
         limit,
-        chunkChars: settings2.chunkChars
+        chunkChars: settings3.chunkChars
       });
       if (!batch.items.length)
         return { enabled: true, processed: 0, partial: batch.partial, status: await this.request("status") };
       const embedded = await embedTexts(
-        providerConfig(settings2),
+        providerConfig(settings3),
         batch.items.map((item) => item.text),
         { signal }
       );
@@ -10047,7 +10047,7 @@ function decideSpecialistRun({
   sourceHashes = [],
   summary = "",
   automatic = false,
-  mode = "automatic",
+  mode: mode2 = "automatic",
   trusted = true,
   policy = "read-local",
   hasEvidence = false,
@@ -10069,8 +10069,8 @@ function decideSpecialistRun({
   };
   if (!trusted || policy !== "read-local")
     return { ...base, decision: "skip", reasonCode: "permission-denied" };
-  if (mode === "off") return { ...base, decision: "skip", reasonCode: "mode-disabled" };
-  if (automatic && mode !== "automatic") return { ...base, decision: "skip", reasonCode: "mode-disabled" };
+  if (mode2 === "off") return { ...base, decision: "skip", reasonCode: "mode-disabled" };
+  if (automatic && mode2 !== "automatic") return { ...base, decision: "skip", reasonCode: "mode-disabled" };
   if (duplicate) return { ...base, decision: "skip", reasonCode: "duplicate-request" };
   if (taskNeedsSpecialist === false || observedNeed === false)
     return { ...base, decision: "skip", reasonCode: "task-does-not-need-specialist" };
@@ -10308,8 +10308,8 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
     } = {}) {
       if (!profiles[role]) throw new Error("Unknown knowledge specialist role");
       const generation = epoch, reservations = used, parentSignal = ctx.signal, turnToken = budget.snapshot.turn;
-      const c = getCurrent(ctx), host = knowledgeSpecialistHost2(ctx), settings2 = await specialistSettings3();
-      budget.configure(settings2);
+      const c = getCurrent(ctx), host = knowledgeSpecialistHost2(ctx), settings3 = await specialistSettings3();
+      budget.configure(settings3);
       const signature = specialistRequestSignature({
         role,
         task,
@@ -10329,19 +10329,19 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
         sourcePaths,
         targetPath,
         automatic,
-        mode: settings2.mode,
+        mode: settings3.mode,
         trusted: !!ctx.isProjectTrusted?.(),
         policy: c.binding.subagentPolicy,
         hasEvidence: Array.isArray(sourcePaths) && sourcePaths.length > 0,
         duplicate: false,
         turnRuns: budget.snapshot.turnRuns,
-        maxRunsPerTurn: settings2.maxRunsPerTurn,
+        maxRunsPerTurn: settings3.maxRunsPerTurn,
         sessionRuns: budget.snapshot.sessionRuns,
-        maxRunsPerSession: settings2.maxRunsPerSession,
+        maxRunsPerSession: settings3.maxRunsPerSession,
         active: specialistQueueSnapshot2().active,
-        concurrency: settings2.concurrency,
+        concurrency: settings3.concurrency,
         queueLength: specialistQueueSnapshot2().queueLength,
-        queueLimit: settings2.queueLimit,
+        queueLimit: settings3.queueLimit,
         summary,
         sourceHashes
       });
@@ -10422,7 +10422,7 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
       controllers.add(controller);
       if (parentSignal?.aborted) abort();
       else parentSignal?.addEventListener("abort", abort, { once: true });
-      const deadline = setTimeout(abort, settings2.timeoutMs);
+      const deadline = setTimeout(abort, settings3.timeoutMs);
       const [name, label] = profiles[role], id2 = randomUUID8();
       let progress = {
         id: id2,
@@ -10569,7 +10569,7 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
               parentModel: ctx.model,
               capabilities,
               signal: controller.signal,
-              timeoutMs: settings2.timeoutMs,
+              timeoutMs: settings3.timeoutMs,
               onUsage: (usage) => {
                 resultUsage = resultUsage || {
                   inputTokens: 0,
@@ -10634,9 +10634,9 @@ function createKnowledgeSpecialistTools(runtime, config, specialists, ui) {
             return { ...result3, refs, search: lastSearch };
           },
           {
-            concurrency: settings2.concurrency,
-            queueLimit: settings2.queueLimit,
-            queueWaitMs: settings2.queueWaitMs
+            concurrency: settings3.concurrency,
+            queueLimit: settings3.queueLimit,
+            queueWaitMs: settings3.queueWaitMs
           }
         );
         publish({
@@ -15198,10 +15198,10 @@ function Merge(left, right) {
 }
 function Create(hidden, enumerable, options = {}) {
   Metrics.create += 1;
-  const settings2 = settings_exports.Get();
+  const settings3 = settings_exports.Get();
   const withOptions = Merge(enumerable, options);
-  const withHidden = settings2.enumerableKind ? Merge(withOptions, hidden) : MergeHidden(withOptions, hidden);
-  return settings2.immutableTypes ? Object.freeze(withHidden) : withHidden;
+  const withHidden = settings3.enumerableKind ? Merge(withOptions, hidden) : MergeHidden(withOptions, hidden);
+  return settings3.immutableTypes ? Object.freeze(withHidden) : withHidden;
 }
 
 // node_modules/typebox/build/system/memory/discard.mjs
@@ -15221,13 +15221,13 @@ function Discard(value, propertyKeys) {
 // node_modules/typebox/build/system/memory/update.mjs
 function Update(current, hidden, enumerable) {
   Metrics.update += 1;
-  const settings2 = settings_exports.Get();
+  const settings3 = settings_exports.Get();
   const result3 = Clone(current);
   for (const key of Object.keys(hidden)) {
     Object.defineProperty(result3, key, {
       configurable: true,
       writable: true,
-      enumerable: settings2.enumerableKind,
+      enumerable: settings3.enumerableKind,
       value: hidden[key]
     });
   }
@@ -21480,12 +21480,12 @@ function Errors(...args) {
     3: (context2, schema2, value2) => [context2, schema2, value2],
     2: (schema2, value2) => [{}, schema2, value2]
   });
-  const settings2 = settings_exports.Get();
+  const settings3 = settings_exports.Get();
   const locale2 = Get2();
   const errors = [];
   const stack = new Stack(context, schema);
   const errorContext = new ErrorContext((error) => {
-    if (guard_exports.IsGreaterEqualThan(errors.length, settings2.maxErrors))
+    if (guard_exports.IsGreaterEqualThan(errors.length, settings3.maxErrors))
       return;
     return errors.push({ ...error, message: locale2(error) });
   });
@@ -25150,11 +25150,54 @@ function createKnowledgePreferences(owner, capabilities, state, canWriteState) {
   };
 }
 
+// src/desktop/specialist-preferences-contract.ts
+var integer2 = (minimum, maximum) => ({ type: "integer", minimum, maximum });
+var mode = { type: "string", enum: ["automatic", "manual", "off"] };
+var limits = {
+  maxRunsPerTurn: integer2(1, 4),
+  maxRunsPerSession: integer2(1, 20),
+  maxToolOperations: integer2(1, 80),
+  concurrency: integer2(1, 4),
+  queueLimit: integer2(1, 8),
+  queueWaitMs: integer2(50, 15e3),
+  timeoutMs: integer2(50, 12e4),
+  maxTokensPerTurn: integer2(1, 24e3),
+  maxTokensPerSession: integer2(1, 12e4),
+  maxCostPerTurn: { type: "number", minimum: 0, maximum: 1 },
+  maxCostPerSession: { type: "number", minimum: 0, maximum: 5 }
+};
+var bindingRevision2 = integer2(1, Number.MAX_SAFE_INTEGER);
+var settings2 = { ...limits, mode, revision: integer2(0, Number.MAX_SAFE_INTEGER) };
+var specialistPreferencesInputSchema = { type: "null" };
+var resultProperties = {
+  ...settings2,
+  maxConcurrency: { const: 4 },
+  bindingRevision: { anyOf: [bindingRevision2, { type: "null" }] },
+  canWriteState: { type: "boolean" }
+};
+var specialistPreferencesResultSchema = {
+  type: "object",
+  properties: resultProperties,
+  required: Object.keys(resultProperties),
+  additionalProperties: false
+};
+var setSpecialistSettingsInputSchema = {
+  type: "object",
+  properties: {
+    ...settings2,
+    revision: integer2(0, Number.MAX_SAFE_INTEGER - 1),
+    bindingRevision: bindingRevision2
+  },
+  required: ["mode", "revision", "bindingRevision"],
+  additionalProperties: false
+};
+
 // src/desktop/review-operations.ts
 function createKnowledgeReviewOperations(options) {
   return {
     ...modelReviewOperations(options),
     ...semanticSettingsOperations(options),
+    ...specialistSettingsOperations(options),
     ...proposalReviewOperations(options),
     ...reviewPolicyOperations(options)
   };
@@ -25214,6 +25257,26 @@ function semanticSettingsOperations({ context, semanticPreferences }) {
       effect: "write",
       execute: async (input) => {
         const saved = await semanticPreferences.write(input);
+        context.events.changed();
+        return saved;
+      }
+    }
+  };
+}
+function specialistSettingsOperations({ context, specialistPreferences }) {
+  return {
+    specialistSettings: {
+      inputSchema: specialistPreferencesInputSchema,
+      resultSchema: specialistPreferencesResultSchema,
+      effect: "read",
+      execute: () => specialistPreferences.read()
+    },
+    setSpecialistSettings: {
+      inputSchema: setSpecialistSettingsInputSchema,
+      resultSchema: specialistPreferencesResultSchema,
+      effect: "write",
+      execute: async (input) => {
+        const saved = await specialistPreferences.write(input);
         context.events.changed();
         return saved;
       }
@@ -25365,10 +25428,10 @@ function createKnowledgeSemanticPreferences(owner, semantic, canWriteState) {
   async function snapshot() {
     const binding = await owner.config.readKnowledgeBinding({ fresh: true });
     if (!binding) return { binding: null, settings: null, canWriteState, providerExecution: "unavailable" };
-    const settings2 = await semantic.readSemanticSettings(binding.vaultId);
+    const settings3 = await semantic.readSemanticSettings(binding.vaultId);
     return owner.config.withKnowledgeBinding(binding, () => ({
       binding: { vaultId: binding.vaultId, revision: binding.revision, label: basename7(binding.vault) },
-      settings: settings2,
+      settings: settings3,
       canWriteState,
       providerExecution: "unavailable"
     }));
@@ -25502,6 +25565,29 @@ function createResourceServiceTransportFactory(context, state, lifecycle) {
         });
       return shutdown;
     }
+  };
+}
+
+// src/desktop/specialist-preferences.ts
+function createKnowledgeSpecialistPreferences(owner, specialists, canWriteState) {
+  async function snapshot() {
+    const binding = await owner.config.readKnowledgeBinding({ fresh: true });
+    const settings3 = await specialists.specialistSettings();
+    return {
+      ...settings3,
+      // The owner validates this enum, but its unchecked module infers string.
+      mode: settings3.mode,
+      bindingRevision: binding?.revision ?? null,
+      canWriteState
+    };
+  }
+  return {
+    read: () => owner.run(snapshot),
+    write: (input) => owner.run(async () => {
+      if (!canWriteState) throw new Error("Application-state write permission is required");
+      await specialists.setSpecialistSettings(input);
+      return snapshot();
+    })
   };
 }
 
@@ -25681,6 +25767,11 @@ var createDesktopRuntime = async (context) => {
     semantic,
     states[0].access === "read-write"
   );
+  const specialistPreferences = createKnowledgeSpecialistPreferences(
+    owner,
+    specialists,
+    states[0].access === "read-write"
+  );
   return {
     operations: {
       binding: bindingOperation(readKnowledgeBinding2),
@@ -25690,6 +25781,7 @@ var createDesktopRuntime = async (context) => {
         reviews,
         preferences,
         semanticPreferences,
+        specialistPreferences,
         callerProject
       }),
       overview: {
