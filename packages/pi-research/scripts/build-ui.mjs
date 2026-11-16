@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { build } from "esbuild";
 
 const root = resolve(import.meta.dirname, "..");
@@ -9,8 +9,15 @@ const check = process.argv.includes("--check");
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const manifest = JSON.parse(readFileSync(join(root, "ui/plugin.json"), "utf8"));
 if (pkg.version !== manifest.version) throw new Error("Package and UI manifest must share one version");
-if (manifest.droneUi !== 1 || manifest.main !== "bundle.js")
+if (manifest.droneUi !== 2 || manifest.main !== "bundle.js")
 	throw new Error("Unsupported research UI contract");
+
+function walk(dir) {
+	return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+		entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
+	);
+}
+const sources = walk(join(root, "ui/src")).filter((path) => /\.tsx?$/.test(path) && !/\.test\./.test(path));
 const bundled = await build({
 	absWorkingDir: root,
 	entryPoints: ["ui/src/index.tsx"],
@@ -26,9 +33,15 @@ const bundled = await build({
 const output = bundled.outputFiles[0].text;
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const inputs = Object.fromEntries(
-	["ui/src/index.tsx", "scripts/build-ui.mjs", "package.json", "plugin.manifest.json", "ui/plugin.json"].map(
-		(path) => [path, sha(readFileSync(join(root, path)))],
-	),
+	[
+		...sources,
+		join(root, "scripts/build-ui.mjs"),
+		join(root, "package.json"),
+		join(root, "plugin.manifest.json"),
+		join(root, "ui/plugin.json"),
+	]
+		.sort()
+		.map((path) => [relative(root, path), sha(readFileSync(path))]),
 );
 const buildManifest = `${JSON.stringify({ artifactSource: "ui/src/index.tsx", inputs, outputs: { "ui/bundle.js": sha(output) } }, null, 2)}\n`;
 const outputs = new Map([

@@ -3,7 +3,7 @@
 	"version": "0.3.2",
 	"displayName": "Research",
 	"description": "Research entry, citation summary and connector status for Drone Desktop.",
-	"droneUi": 1,
+	"droneUi": 2,
 	"main": "bundle.js",
 	"contributions": [
 		{
@@ -23,6 +23,12 @@
 			"region": "skills.section",
 			"export": "ResearchConnectors",
 			"title": "Research connectors"
+		},
+		{
+			"id": "research-runs",
+			"region": "panel.tab",
+			"export": "ResearchRunsCard",
+			"title": "研究运行 / Research runs"
 		}
 	]
 }

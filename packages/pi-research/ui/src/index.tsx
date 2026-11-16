@@ -1,5 +1,7 @@
 import { memo, type ReactNode } from "react";
 
+export { ResearchRunsCard } from "./ResearchRunsCard.js";
+
 type Language = "zh" | "en";
 type DroneUiRuntime = { hooks: { useLanguage: () => Language } };
 
