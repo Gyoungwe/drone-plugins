@@ -44,7 +44,7 @@
     "ui/knowledge/ZoteroLocalWriteSection.tsx": "c256162f6e489c0a0dbf2c218e8d11ebc60f6c0676716a253c4beea9d86e95d5",
     "ui/knowledge/ZoteroPanel.tsx": "a65ce417db1cfa2ec98c57c2c8d4796516ab72af5adf16769a426b1ed2ec418a",
     "ui/knowledge/artifacts.ts": "51b02c28389d4f221cc6126de8e8fb6d502cc7461377f099d124873456c72c36",
-    "ui/knowledge/copy.ts": "3ed0f4898062911ab24a4905f28111ddd87bf8974f2f0c602803ef4c0d290cc1",
+    "ui/knowledge/copy.ts": "a7850eaf2325c51dfb0a5d8f86d3348320881cc60bc51ab806a45c688ce7fb8b",
     "ui/knowledge/graph-layout.ts": "50a8eb55b8de8809accad14592b605a79ae56494af83fccc123701221f5963ad",
     "ui/knowledge/graph-model.ts": "b3328c27ec09597f93b4d3699a1b36e2ed8ceab6a63f154e219737b50624a311",
     "ui/knowledge/hooks.ts": "cd3e02c1d67cdc7764d2a28a4e9782bc5a3eaee63fd61a36dcb88d7c7922fd48",
@@ -52,6 +52,7 @@
     "ui/knowledge/line-diff.ts": "7c5808af53ea386f76892940f02e1a1269da9b27e86fa1ad34cefe661c9aa0e7",
     "ui/knowledge/nebula-model.ts": "44e63f088ffa3bad4fd9a93c238165b07853fc149448358f1ca9a2a60ec746b4",
     "ui/knowledge/note-display.ts": "22c6b1f6375acb7cd3269641b53f8182460e5c5c57cf5b2adfa8ed981ebf862a",
+    "ui/knowledge/specialist-copy.ts": "28996caee9e4d17d22921f5dea3efb9818a3a123123c4138509073184f5f6e51",
     "ui/knowledge/zotero-copy.ts": "9961f575c43456a85e4de14830dd14ebe22ef71bd9738dc849dd07fcd525ecaa",
     "ui/native-cloud-copy.ts": "72dfac97ea9cee4aefe8a03f9888c41e599d9a8091572bb00c645dce37bdae92",
     "ui/native-copy.ts": "5a3d9ac741d21e8f06444d38adf24e4673f28635ec526a9dbc8bc15dc013792d",
@@ -64,6 +65,6 @@
   },
   "outputs": {
     "ui/styles/generated.ts": "576e83bd47cbf49e03f222ac4248156f125736167cfc990ef314bf0a2348d986",
-    "ui/bundle.js": "a58ff6effeeab14759d725b8c5dd446bf9b7effb1a6603b5dbb1288bb7460d0e"
+    "ui/bundle.js": "f89a81b541b4d2a47a088e50df13ea67d2d409aef34920561b44a280af0280d2"
   }
 }
