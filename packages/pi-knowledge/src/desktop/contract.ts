@@ -1,3 +1,5 @@
+import { modelSelectionSchema } from "./model-selection-schema.js";
+
 /** Package-owned JSON view models. No host, renderer or Node dependency. */
 export type KnowledgeCoverage = "uninitialized" | "indexing" | "partial" | "ready";
 export interface KnowledgeBindingSummary {
@@ -823,11 +825,9 @@ export const modelReviewResultSchema = {
 	],
 	additionalProperties: true,
 };
+
+/** Host result validation must preserve optional model-selection provenance. */
 export const modelReviewInfoResultSchema = object({
-	selection: object({ provider: string, model: string, thinkingLevel: string, profile: string }, [
-		"provider",
-		"model",
-		"thinkingLevel",
-	]),
+	selection: modelSelectionSchema,
 	lastReview: nullable(modelReviewResultSchema),
 });
