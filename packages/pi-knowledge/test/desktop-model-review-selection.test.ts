@@ -5,6 +5,7 @@ import type {
 	PluginModelSelectionInput,
 	PluginRuntimeContext,
 } from "@gyoungwe/plugin-api/runtime";
+import { Compile } from "typebox/compile";
 import { afterEach, expect, it, vi } from "vitest";
 import type { KnowledgeBinding } from "../src/core/config.js";
 import { immutableWikiProposalHash } from "../src/core/wiki-policy.js";
@@ -191,6 +192,7 @@ async function fixture() {
 	};
 	return {
 		...broker,
+		infoResultSchema: runtime.operations.modelReviewInfo.resultSchema,
 		info: (profile?: KnowledgeModelReviewInput["profile"]) =>
 			runtime.operations.modelReviewInfo.execute({ ...input, revision: binding.revision, profile }, caller),
 		review: (profile?: KnowledgeModelReviewInput["profile"], autoApply = false) =>
@@ -205,6 +207,13 @@ async function fixture() {
 			),
 	};
 }
+
+it("returns host-shaped model review info that validates against the operation result schema", async () => {
+	const f = await fixture();
+	const result = await f.info();
+	expect(result).toEqual({ selection: reviewerSelection, lastReview: null });
+	expect(Compile(f.infoResultSchema).Check(result)).toBe(true);
+});
 
 it("requests the same optional reviewer and inherited thinking policy for info with or without profile", async () => {
 	const f = await fixture();
