@@ -12056,6 +12056,24 @@ var modelReviewInfoResultSchema = object2({
   lastReview: nullable2(modelReviewResultSchema)
 });
 
+// ../../node_modules/@gyoungwe/plugin-api/dist/runtime-agent-slot.js
+async function withPluginAgentSlot(capabilities, signal, work) {
+  const { lease } = await capabilities.call("agent.slot.acquire", {}, signal);
+  let workFailed = false;
+  try {
+    signal?.throwIfAborted();
+    return await work();
+  } catch (error) {
+    workFailed = true;
+    throw error;
+  } finally {
+    await capabilities.call("agent.slot.release", { lease }).catch((error) => {
+      if (!workFailed)
+        throw error;
+    });
+  }
+}
+
 // src/desktop/model-review.ts
 init_wiki_model_review();
 
@@ -12261,33 +12279,37 @@ function createKnowledgeModelReviewModel(owner, canWriteState, canWriteFiles) {
       return control.run(
         call.signal,
         project,
-        (resolvedProject, signal) => bound(input.revision, resolvedProject, async (service) => {
-          const initial = await selection(call);
-          const check = async () => {
-            signal.throwIfAborted();
-            const state = await call.capabilities.call("session.inspect", null);
-            if (state.agentActive)
-              throw new Error("Wait for the current conversation to finish before model review");
-            const current = await selection(call);
-            if (current.provider !== initial.provider || current.model !== initial.model || current.thinkingLevel !== initial.thinkingLevel || current.profile !== initial.profile || current.optionalProfile !== initial.optionalProfile || current.inheritedThinking !== initial.inheritedThinking)
-              throw new Error("Model selection changed; review again before applying");
-          };
-          return owner.modelReview.reviewWikiWithModel(
-            {
-              service,
-              project: resolvedProject,
-              id: input.id,
-              hash: input.expectedProposalHash,
-              binding: service.binding
-            },
-            input,
-            {
-              signal,
-              check,
-              evaluate: (request) => generateWikiModelReview(call.capabilities, initial, request)
-            }
-          );
-        })
+        (resolvedProject, signal) => withPluginAgentSlot(
+          call.capabilities,
+          signal,
+          () => bound(input.revision, resolvedProject, async (service) => {
+            const initial = await selection(call);
+            const check = async () => {
+              signal.throwIfAborted();
+              const state = await call.capabilities.call("session.inspect", null);
+              if (state.agentActive)
+                throw new Error("Wait for the current conversation to finish before model review");
+              const current = await selection(call);
+              if (current.provider !== initial.provider || current.model !== initial.model || current.thinkingLevel !== initial.thinkingLevel || current.profile !== initial.profile || current.optionalProfile !== initial.optionalProfile || current.inheritedThinking !== initial.inheritedThinking)
+                throw new Error("Model selection changed; review again before applying");
+            };
+            return owner.modelReview.reviewWikiWithModel(
+              {
+                service,
+                project: resolvedProject,
+                id: input.id,
+                hash: input.expectedProposalHash,
+                binding: service.binding
+              },
+              input,
+              {
+                signal,
+                check,
+                evaluate: (request) => generateWikiModelReview(call.capabilities, initial, request)
+              }
+            );
+          })
+        )
       );
     }
   };
@@ -25003,15 +25025,19 @@ ${request.skillText}` : "",
 
 // src/desktop/specialist-model.ts
 function createBrokerKnowledgeSpecialist(capabilities) {
-  return (request) => runKnowledgeSpecialist(
-    {
-      select: async (profile) => await capabilities.call("model.selection", {
-        optionalProfile: profile,
-        inheritedThinking: "nearest-supported"
-      }),
-      step: async (input, signal) => await capabilities.call("model.toolStep", input, signal)
-    },
-    request
+  return (request) => withPluginAgentSlot(
+    capabilities,
+    request.signal,
+    () => runKnowledgeSpecialist(
+      {
+        select: async (profile) => await capabilities.call("model.selection", {
+          optionalProfile: profile,
+          inheritedThinking: "nearest-supported"
+        }),
+        step: async (input, signal) => await capabilities.call("model.toolStep", input, signal)
+      },
+      request
+    )
   );
 }
 
