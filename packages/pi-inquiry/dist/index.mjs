@@ -4894,129 +4894,6 @@ var InquiryEventProjector = class {
   }
 };
 
-// src/event-schema.ts
-var text = typebox_exports.String({ minLength: 1, maxLength: 4096 });
-var timestamp = typebox_exports.Union([typebox_exports.Number(), text]);
-var scalar = typebox_exports.Union([typebox_exports.String({ maxLength: 8192 }), typebox_exports.Number(), typebox_exports.Boolean(), typebox_exports.Null()]);
-var parameters = typebox_exports.Record(typebox_exports.String(), scalar);
-var provenance = typebox_exports.Object(
-  {
-    containerDigests: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 128 })),
-    workflow: typebox_exports.Optional(text),
-    modules: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 128 })),
-    commandSummary: typebox_exports.Optional(text),
-    environment: typebox_exports.Optional(typebox_exports.Record(typebox_exports.String(), typebox_exports.String({ maxLength: 8192 })))
-  },
-  { additionalProperties: false }
-);
-var artifact = typebox_exports.Object(
-  {
-    id: typebox_exports.Optional(text),
-    path: text,
-    bytes: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
-    size: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
-    sha256: typebox_exports.Optional(typebox_exports.String({ pattern: "^[a-fA-F0-9]{64}$" })),
-    location: typebox_exports.Optional(typebox_exports.Union([typebox_exports.Literal("local"), typebox_exports.Literal("remote")])),
-    purpose: typebox_exports.Optional(
-      typebox_exports.Union(
-        ["input", "draft", "intermediate", "deliverable", "evidence"].map((value) => typebox_exports.Literal(value))
-      )
-    ),
-    status: typebox_exports.Optional(
-      typebox_exports.Union(
-        ["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].map(
-          (value) => typebox_exports.Literal(value)
-        )
-      )
-    ),
-    parentIds: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 256 })),
-    runId: typebox_exports.Optional(text),
-    sourceKind: typebox_exports.Optional(
-      typebox_exports.Union(["task", "run", "input", "tool", "workflow", "manual"].map((value) => typebox_exports.Literal(value)))
-    ),
-    sourceId: typebox_exports.Optional(text)
-  },
-  { additionalProperties: false }
-);
-var artifacts = typebox_exports.Array(artifact, { maxItems: 256 });
-var common = {
-  id: text,
-  projectId: typebox_exports.Optional(text),
-  sessionId: typebox_exports.Optional(text),
-  turn: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
-  codeFingerprint: typebox_exports.Optional(text),
-  parameters: typebox_exports.Optional(parameters),
-  runProvenance: typebox_exports.Optional(provenance),
-  artifacts: typebox_exports.Optional(artifacts)
-};
-var compute = typebox_exports.Object(
-  {
-    ...common,
-    jobId: text,
-    type: typebox_exports.Union(
-      ["created", "submitted", "status", "logs", "collected", "cancelled", "error"].map(
-        (value) => typebox_exports.Literal(value)
-      )
-    ),
-    at: timestamp,
-    status: typebox_exports.Optional(text),
-    cursor: typebox_exports.Optional(text),
-    detail: typebox_exports.Optional(text),
-    runId: typebox_exports.Optional(text),
-    startedAt: typebox_exports.Optional(timestamp),
-    hostId: typebox_exports.Optional(text),
-    manifest: typebox_exports.Optional(
-      typebox_exports.Object({ entries: typebox_exports.Optional(artifacts) }, { additionalProperties: false })
-    )
-  },
-  { additionalProperties: false }
-);
-var task = typebox_exports.Object(
-  {
-    ...common,
-    taskId: text,
-    runId: typebox_exports.Optional(text),
-    status: typebox_exports.Union(
-      ["succeeded", "failed", "cancelled", "blocked", "partial", "unknown"].map(
-        (value) => typebox_exports.Literal(value)
-      )
-    ),
-    at: typebox_exports.Optional(timestamp),
-    startedAt: typebox_exports.Optional(timestamp),
-    detail: typebox_exports.Optional(text),
-    manifest: typebox_exports.Optional(
-      typebox_exports.Object({ entries: typebox_exports.Optional(artifacts) }, { additionalProperties: false })
-    )
-  },
-  { additionalProperties: false }
-);
-var local = typebox_exports.Object(
-  {
-    ...common,
-    toolName: text,
-    startedAt: typebox_exports.Optional(timestamp),
-    finishedAt: typebox_exports.Optional(timestamp),
-    codeFingerprint: text,
-    parameters,
-    runProvenance: provenance,
-    outcome: typebox_exports.Union(
-      ["running", "succeeded", "failed", "blocked", "unknown"].map((value) => typebox_exports.Literal(value))
-    )
-  },
-  { additionalProperties: false }
-);
-var assertedEventWriteSchema = typebox_exports.Union([
-  typebox_exports.Object(
-    { action: typebox_exports.Literal("recordComputeEvent"), event: compute },
-    { additionalProperties: false }
-  ),
-  typebox_exports.Object({ action: typebox_exports.Literal("recordTaskTerminal"), event: task }, { additionalProperties: false }),
-  typebox_exports.Object(
-    { action: typebox_exports.Literal("recordLocalExecution"), event: local },
-    { additionalProperties: false }
-  )
-]);
-
 // src/ledger-owner.ts
 import { createHash } from "node:crypto";
 
@@ -8416,6 +8293,20 @@ function artifactProvenance(snapshot, artifactId) {
   };
 }
 
+// src/rerun-result.ts
+function rerunResult(rerun) {
+  return {
+    status: rerun.status,
+    jobId: rerun.jobId,
+    previousArtifactId: rerun.sourceArtifactId,
+    previousSha256: rerun.previousSha256,
+    ...rerun.resultArtifactId ? { artifactId: rerun.resultArtifactId } : {},
+    ...rerun.sha256 ? { sha256: rerun.sha256 } : {},
+    ...rerun.difference ? { difference: rerun.difference } : {},
+    ...rerun.error ? { error: rerun.error } : {}
+  };
+}
+
 // src/workspace.ts
 import { relative, resolve, sep } from "node:path";
 function validateWorkspaceRelativePath(path) {
@@ -8738,16 +8629,7 @@ var InquiryService = class {
     return this.rerunResult(completed);
   }
   rerunResult(rerun) {
-    return {
-      status: rerun.status,
-      jobId: rerun.jobId,
-      previousArtifactId: rerun.sourceArtifactId,
-      previousSha256: rerun.previousSha256,
-      ...rerun.resultArtifactId ? { artifactId: rerun.resultArtifactId } : {},
-      ...rerun.sha256 ? { sha256: rerun.sha256 } : {},
-      ...rerun.difference ? { difference: rerun.difference } : {},
-      ...rerun.error ? { error: rerun.error } : {}
-    };
+    return rerunResult(rerun);
   }
   /** Read-only projection used by the desktop panel. */
   async readOnlyState() {
@@ -9069,6 +8951,275 @@ var InquiryLedgerOwner = class {
   }
 };
 
+// src/event-schema.ts
+var text = typebox_exports.String({ minLength: 1, maxLength: 4096 });
+var timestamp = typebox_exports.Union([typebox_exports.Number(), text]);
+var scalar = typebox_exports.Union([typebox_exports.String({ maxLength: 8192 }), typebox_exports.Number(), typebox_exports.Boolean(), typebox_exports.Null()]);
+var parameters = typebox_exports.Record(typebox_exports.String(), scalar);
+var provenance = typebox_exports.Object(
+  {
+    containerDigests: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 128 })),
+    workflow: typebox_exports.Optional(text),
+    modules: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 128 })),
+    commandSummary: typebox_exports.Optional(text),
+    environment: typebox_exports.Optional(typebox_exports.Record(typebox_exports.String(), typebox_exports.String({ maxLength: 8192 })))
+  },
+  { additionalProperties: false }
+);
+var artifact = typebox_exports.Object(
+  {
+    id: typebox_exports.Optional(text),
+    path: text,
+    bytes: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
+    size: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
+    sha256: typebox_exports.Optional(typebox_exports.String({ pattern: "^[a-fA-F0-9]{64}$" })),
+    location: typebox_exports.Optional(typebox_exports.Union([typebox_exports.Literal("local"), typebox_exports.Literal("remote")])),
+    purpose: typebox_exports.Optional(
+      typebox_exports.Union(
+        ["input", "draft", "intermediate", "deliverable", "evidence"].map((value) => typebox_exports.Literal(value))
+      )
+    ),
+    status: typebox_exports.Optional(
+      typebox_exports.Union(
+        ["valid", "superseded", "cleanup-candidate", "archived", "pending-review"].map(
+          (value) => typebox_exports.Literal(value)
+        )
+      )
+    ),
+    parentIds: typebox_exports.Optional(typebox_exports.Array(text, { maxItems: 256 })),
+    runId: typebox_exports.Optional(text),
+    sourceKind: typebox_exports.Optional(
+      typebox_exports.Union(["task", "run", "input", "tool", "workflow", "manual"].map((value) => typebox_exports.Literal(value)))
+    ),
+    sourceId: typebox_exports.Optional(text)
+  },
+  { additionalProperties: false }
+);
+var artifacts = typebox_exports.Array(artifact, { maxItems: 256 });
+var common = {
+  id: text,
+  projectId: typebox_exports.Optional(text),
+  sessionId: typebox_exports.Optional(text),
+  turn: typebox_exports.Optional(typebox_exports.Integer({ minimum: 0 })),
+  codeFingerprint: typebox_exports.Optional(text),
+  parameters: typebox_exports.Optional(parameters),
+  runProvenance: typebox_exports.Optional(provenance),
+  artifacts: typebox_exports.Optional(artifacts)
+};
+var compute = typebox_exports.Object(
+  {
+    ...common,
+    jobId: text,
+    type: typebox_exports.Union(
+      ["created", "submitted", "status", "logs", "collected", "cancelled", "error"].map(
+        (value) => typebox_exports.Literal(value)
+      )
+    ),
+    at: timestamp,
+    status: typebox_exports.Optional(text),
+    cursor: typebox_exports.Optional(text),
+    detail: typebox_exports.Optional(text),
+    runId: typebox_exports.Optional(text),
+    startedAt: typebox_exports.Optional(timestamp),
+    hostId: typebox_exports.Optional(text),
+    manifest: typebox_exports.Optional(
+      typebox_exports.Object({ entries: typebox_exports.Optional(artifacts) }, { additionalProperties: false })
+    )
+  },
+  { additionalProperties: false }
+);
+var task = typebox_exports.Object(
+  {
+    ...common,
+    taskId: text,
+    runId: typebox_exports.Optional(text),
+    status: typebox_exports.Union(
+      ["succeeded", "failed", "cancelled", "blocked", "partial", "unknown"].map(
+        (value) => typebox_exports.Literal(value)
+      )
+    ),
+    at: typebox_exports.Optional(timestamp),
+    startedAt: typebox_exports.Optional(timestamp),
+    detail: typebox_exports.Optional(text),
+    manifest: typebox_exports.Optional(
+      typebox_exports.Object({ entries: typebox_exports.Optional(artifacts) }, { additionalProperties: false })
+    )
+  },
+  { additionalProperties: false }
+);
+var local = typebox_exports.Object(
+  {
+    ...common,
+    toolName: text,
+    startedAt: typebox_exports.Optional(timestamp),
+    finishedAt: typebox_exports.Optional(timestamp),
+    codeFingerprint: text,
+    parameters,
+    runProvenance: provenance,
+    outcome: typebox_exports.Union(
+      ["running", "succeeded", "failed", "blocked", "unknown"].map((value) => typebox_exports.Literal(value))
+    )
+  },
+  { additionalProperties: false }
+);
+var assertedEventWriteSchema = typebox_exports.Union([
+  typebox_exports.Object(
+    { action: typebox_exports.Literal("recordComputeEvent"), event: compute },
+    { additionalProperties: false }
+  ),
+  typebox_exports.Object({ action: typebox_exports.Literal("recordTaskTerminal"), event: task }, { additionalProperties: false }),
+  typebox_exports.Object(
+    { action: typebox_exports.Literal("recordLocalExecution"), event: local },
+    { additionalProperties: false }
+  )
+]);
+
+// src/runtime-schema.ts
+var name = typebox_exports.String({ minLength: 1, maxLength: 128 });
+var readMetadata = {
+  drone: { capabilities: ["research", "provenance"], readOnly: true }
+};
+var writeMetadata = { drone: { capabilities: ["research", "provenance"] } };
+var object = typebox_exports.Record(typebox_exports.String(), typebox_exports.Unknown());
+var readSchema = typebox_exports.Union([
+  typebox_exports.Object({ action: typebox_exports.Literal("status") }, { additionalProperties: false }),
+  typebox_exports.Object({ action: typebox_exports.Literal("inspect"), root: name }, { additionalProperties: false }),
+  typebox_exports.Object(
+    {
+      action: typebox_exports.Union([
+        typebox_exports.Literal("snapshot"),
+        typebox_exports.Literal("listDecisions"),
+        typebox_exports.Literal("cleanupDryRun"),
+        typebox_exports.Literal("pendingReruns")
+      ])
+    },
+    { additionalProperties: false }
+  ),
+  typebox_exports.Object(
+    {
+      action: typebox_exports.Literal("artifactProvenance"),
+      id: typebox_exports.String({ minLength: 1 })
+    },
+    { additionalProperties: false }
+  )
+]);
+var writeSchema = typebox_exports.Union([
+  assertedEventWriteSchema,
+  typebox_exports.Object(
+    {
+      action: typebox_exports.Literal("bind"),
+      root: name,
+      metadataRoot: name,
+      acknowledgeExistingData: typebox_exports.Boolean()
+    },
+    { additionalProperties: false }
+  ),
+  typebox_exports.Object(
+    {
+      action: typebox_exports.Union([
+        typebox_exports.Literal("recordArtifact"),
+        typebox_exports.Literal("recordFinding"),
+        typebox_exports.Literal("recordQuestion"),
+        typebox_exports.Literal("recordAttempt"),
+        typebox_exports.Literal("recordDecision")
+      ]),
+      record: object
+    },
+    { additionalProperties: false }
+  ),
+  typebox_exports.Object(
+    {
+      action: typebox_exports.Union([
+        typebox_exports.Literal("revokeDecision"),
+        typebox_exports.Literal("confirmDecision"),
+        typebox_exports.Literal("reviewDecisionArtifacts")
+      ]),
+      id: typebox_exports.String({ minLength: 1 }),
+      reason: typebox_exports.String({ minLength: 1 })
+    },
+    { additionalProperties: false }
+  ),
+  typebox_exports.Object(
+    {
+      action: typebox_exports.Literal("associateDecisionArtifacts"),
+      id: typebox_exports.String({ minLength: 1 }),
+      artifactIds: typebox_exports.Array(typebox_exports.String({ minLength: 1 }))
+    },
+    { additionalProperties: false }
+  ),
+  typebox_exports.Object(
+    {
+      action: typebox_exports.Literal("markRerunRunning"),
+      id: typebox_exports.String({ minLength: 1 })
+    },
+    { additionalProperties: false }
+  ),
+  typebox_exports.Object(
+    {
+      action: typebox_exports.Literal("completeRerun"),
+      id: typebox_exports.String({ minLength: 1 }),
+      outcome: typebox_exports.Union([
+        typebox_exports.Object({ error: typebox_exports.String() }, { additionalProperties: false }),
+        typebox_exports.Object({ artifact: object }, { additionalProperties: false })
+      ])
+    },
+    { additionalProperties: false }
+  ),
+  typebox_exports.Object(
+    {
+      action: typebox_exports.Union([typebox_exports.Literal("reconcile"), typebox_exports.Literal("restoreOriginal")])
+    },
+    { additionalProperties: false }
+  )
+]);
+
+// src/runtime-native.ts
+function createInquiryNativeSessionFactory(context, read, write) {
+  const createNativeSession = () => {
+    let disposed = false;
+    return {
+      toolEffects: { inquiry_read: "read", inquiry_write: "write" },
+      extension(pi) {
+        pi.registerTool({
+          name: "inquiry_read",
+          label: "Inquiry \xB7 read",
+          description: "Read only this actual workspace\u2019s explicitly bound Inquiry ledger. Imported/asserted records are not host provenance proofs.",
+          parameters: typebox_exports.Object({ request: readSchema }, { additionalProperties: false }),
+          annotations: { readOnlyHint: true },
+          ...readMetadata,
+          async execute(_id, input) {
+            if (disposed) throw new Error("Inquiry native projection is disposed");
+            const value = await read(input.request);
+            return {
+              content: [{ type: "text", text: JSON.stringify(value) }],
+              details: value
+            };
+          }
+        });
+        pi.registerTool({
+          name: "inquiry_write",
+          label: "Inquiry \xB7 write",
+          description: "Explicitly bind, update, reconcile or restore this workspace\u2019s original Inquiry SQLite ledger. Every host write still requires its own approved root, version and caller checks.",
+          parameters: typebox_exports.Object({ request: writeSchema }, { additionalProperties: false }),
+          ...writeMetadata,
+          async execute(_id, input, signal) {
+            if (disposed) throw new Error("Inquiry native projection is disposed");
+            const value = await write(input.request, signal ?? context.signal);
+            return {
+              content: [{ type: "text", text: JSON.stringify(value) }],
+              details: value
+            };
+          }
+        });
+      },
+      async dispose() {
+        disposed = true;
+      }
+    };
+  };
+  return createNativeSession;
+}
+
 // src/wasm-storage.ts
 import initSqlJs from "./sql-wasm.cjs";
 
@@ -9388,103 +9539,6 @@ async function createInquiryWasmEngine(wasmBinary) {
 }
 
 // src/runtime.ts
-var name = typebox_exports.String({ minLength: 1, maxLength: 128 });
-var readMetadata = {
-  drone: { capabilities: ["research", "provenance"], readOnly: true }
-};
-var writeMetadata = { drone: { capabilities: ["research", "provenance"] } };
-var object = typebox_exports.Record(typebox_exports.String(), typebox_exports.Unknown());
-var readSchema = typebox_exports.Union([
-  typebox_exports.Object({ action: typebox_exports.Literal("status") }, { additionalProperties: false }),
-  typebox_exports.Object({ action: typebox_exports.Literal("inspect"), root: name }, { additionalProperties: false }),
-  typebox_exports.Object(
-    {
-      action: typebox_exports.Union([
-        typebox_exports.Literal("snapshot"),
-        typebox_exports.Literal("listDecisions"),
-        typebox_exports.Literal("cleanupDryRun"),
-        typebox_exports.Literal("pendingReruns")
-      ])
-    },
-    { additionalProperties: false }
-  ),
-  typebox_exports.Object(
-    {
-      action: typebox_exports.Literal("artifactProvenance"),
-      id: typebox_exports.String({ minLength: 1 })
-    },
-    { additionalProperties: false }
-  )
-]);
-var writeSchema = typebox_exports.Union([
-  assertedEventWriteSchema,
-  typebox_exports.Object(
-    {
-      action: typebox_exports.Literal("bind"),
-      root: name,
-      metadataRoot: name,
-      acknowledgeExistingData: typebox_exports.Boolean()
-    },
-    { additionalProperties: false }
-  ),
-  typebox_exports.Object(
-    {
-      action: typebox_exports.Union([
-        typebox_exports.Literal("recordArtifact"),
-        typebox_exports.Literal("recordFinding"),
-        typebox_exports.Literal("recordQuestion"),
-        typebox_exports.Literal("recordAttempt"),
-        typebox_exports.Literal("recordDecision")
-      ]),
-      record: object
-    },
-    { additionalProperties: false }
-  ),
-  typebox_exports.Object(
-    {
-      action: typebox_exports.Union([
-        typebox_exports.Literal("revokeDecision"),
-        typebox_exports.Literal("confirmDecision"),
-        typebox_exports.Literal("reviewDecisionArtifacts")
-      ]),
-      id: typebox_exports.String({ minLength: 1 }),
-      reason: typebox_exports.String({ minLength: 1 })
-    },
-    { additionalProperties: false }
-  ),
-  typebox_exports.Object(
-    {
-      action: typebox_exports.Literal("associateDecisionArtifacts"),
-      id: typebox_exports.String({ minLength: 1 }),
-      artifactIds: typebox_exports.Array(typebox_exports.String({ minLength: 1 }))
-    },
-    { additionalProperties: false }
-  ),
-  typebox_exports.Object(
-    {
-      action: typebox_exports.Literal("markRerunRunning"),
-      id: typebox_exports.String({ minLength: 1 })
-    },
-    { additionalProperties: false }
-  ),
-  typebox_exports.Object(
-    {
-      action: typebox_exports.Literal("completeRerun"),
-      id: typebox_exports.String({ minLength: 1 }),
-      outcome: typebox_exports.Union([
-        typebox_exports.Object({ error: typebox_exports.String() }, { additionalProperties: false }),
-        typebox_exports.Object({ artifact: object }, { additionalProperties: false })
-      ])
-    },
-    { additionalProperties: false }
-  ),
-  typebox_exports.Object(
-    {
-      action: typebox_exports.Union([typebox_exports.Literal("reconcile"), typebox_exports.Literal("restoreOriginal")])
-    },
-    { additionalProperties: false }
-  )
-]);
 async function createInquiryRuntimeWithEngine(context, engine) {
   const capabilities = context.capabilities, owners = /* @__PURE__ */ new Map(), queues = /* @__PURE__ */ new Map();
   let stopped = false;
@@ -9752,48 +9806,7 @@ async function createInquiryRuntimeWithEngine(context, engine) {
       return { value, authority: "plugin-asserted-or-imported" };
     });
   };
-  const createNativeSession = () => {
-    let disposed = false;
-    return {
-      toolEffects: { inquiry_read: "read", inquiry_write: "write" },
-      extension(pi) {
-        pi.registerTool({
-          name: "inquiry_read",
-          label: "Inquiry \xB7 read",
-          description: "Read only this actual workspace\u2019s explicitly bound Inquiry ledger. Imported/asserted records are not host provenance proofs.",
-          parameters: typebox_exports.Object({ request: readSchema }, { additionalProperties: false }),
-          annotations: { readOnlyHint: true },
-          ...readMetadata,
-          async execute(_id, input) {
-            if (disposed) throw new Error("Inquiry native projection is disposed");
-            const value = await read(input.request);
-            return {
-              content: [{ type: "text", text: JSON.stringify(value) }],
-              details: value
-            };
-          }
-        });
-        pi.registerTool({
-          name: "inquiry_write",
-          label: "Inquiry \xB7 write",
-          description: "Explicitly bind, update, reconcile or restore this workspace\u2019s original Inquiry SQLite ledger. Every host write still requires its own approved root, version and caller checks.",
-          parameters: typebox_exports.Object({ request: writeSchema }, { additionalProperties: false }),
-          ...writeMetadata,
-          async execute(_id, input, signal) {
-            if (disposed) throw new Error("Inquiry native projection is disposed");
-            const value = await write(input.request, signal ?? context.signal);
-            return {
-              content: [{ type: "text", text: JSON.stringify(value) }],
-              details: value
-            };
-          }
-        });
-      },
-      async dispose() {
-        disposed = true;
-      }
-    };
-  };
+  const createNativeSession = createInquiryNativeSessionFactory(context, read, write);
   return {
     createNativeSession,
     operations: {

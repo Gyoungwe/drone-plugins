@@ -5,7 +5,6 @@ import {
 	type ArtifactRerunRecord,
 	type ArtifactRerunResult,
 	type AttemptRecord,
-	type DecisionKind,
 	type DecisionRecord,
 	type FindingRecord,
 	INQUIRY_SCHEMA_VERSION,
@@ -13,6 +12,7 @@ import {
 	type QuestionRecord,
 } from "./models.js";
 import { artifactProvenance } from "./provenance.js";
+import { rerunResult } from "./rerun-result.js";
 import type { InquiryStorage } from "./storage.js";
 import {
 	type CleanupDryRun,
@@ -25,6 +25,8 @@ import {
 	type WorkspacePromotionResult,
 	type WorkspaceRun,
 } from "./workspace.js";
+
+export { decisionRecord } from "./decision-record.js";
 
 /** Domain service used by hosts; all side effects are behind injected storage/files ports. */
 export class InquiryService {
@@ -375,16 +377,7 @@ export class InquiryService {
 	}
 
 	private rerunResult(rerun: ArtifactRerunRecord): ArtifactRerunResult {
-		return {
-			status: rerun.status,
-			jobId: rerun.jobId,
-			previousArtifactId: rerun.sourceArtifactId,
-			previousSha256: rerun.previousSha256,
-			...(rerun.resultArtifactId ? { artifactId: rerun.resultArtifactId } : {}),
-			...(rerun.sha256 ? { sha256: rerun.sha256 } : {}),
-			...(rerun.difference ? { difference: rerun.difference } : {}),
-			...(rerun.error ? { error: rerun.error } : {}),
-		};
+		return rerunResult(rerun);
 	}
 
 	/** Read-only projection used by the desktop panel. */
@@ -401,26 +394,4 @@ export class InquiryService {
 			cleanupCandidates: cleanupCandidates(snapshot),
 		};
 	}
-}
-
-export function decisionRecord(input: {
-	readonly id: string;
-	readonly projectId: string;
-	readonly kind: DecisionKind;
-	readonly summary: string;
-	readonly basis?: readonly string[];
-	readonly affectedArtifactIds?: readonly string[];
-	readonly createdAt?: string;
-}): DecisionRecord {
-	return {
-		id: input.id,
-		schemaVersion: INQUIRY_SCHEMA_VERSION,
-		projectId: input.projectId,
-		kind: input.kind,
-		summary: input.summary,
-		basis: [...new Set(input.basis ?? [])],
-		affectedArtifactIds: [...new Set(input.affectedArtifactIds ?? [])],
-		status: "active",
-		createdAt: input.createdAt ?? new Date().toISOString(),
-	};
 }
