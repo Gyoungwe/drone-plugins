@@ -1,4 +1,5 @@
 import type { PluginModelSelection, PluginRuntimeContext } from "@gyoungwe/plugin-api/runtime";
+import { withPluginAgentSlot } from "@gyoungwe/plugin-api/runtime";
 import type { createKnowledgeModelReview } from "../core/wiki-model-review.js";
 import { generateWikiModelReview } from "../core/wiki-model-review.js";
 import type {
@@ -45,42 +46,44 @@ export function createKnowledgeModelReviewModel(
 		): Promise<KnowledgeModelReviewResult> {
 			requireWrite(input.autoApply);
 			return control.run(call.signal, project, (resolvedProject, signal) =>
-				bound(input.revision, resolvedProject, async (service) => {
-					const initial = await selection(call);
-					const check = async () => {
-						signal.throwIfAborted();
-						const state = (await call.capabilities.call("session.inspect", null)) as {
-							agentActive: boolean;
+				withPluginAgentSlot(call.capabilities, signal, () =>
+					bound(input.revision, resolvedProject, async (service) => {
+						const initial = await selection(call);
+						const check = async () => {
+							signal.throwIfAborted();
+							const state = (await call.capabilities.call("session.inspect", null)) as {
+								agentActive: boolean;
+							};
+							if (state.agentActive)
+								throw new Error("Wait for the current conversation to finish before model review");
+							const current = await selection(call);
+							if (
+								current.provider !== initial.provider ||
+								current.model !== initial.model ||
+								current.thinkingLevel !== initial.thinkingLevel ||
+								current.profile !== initial.profile ||
+								current.optionalProfile !== initial.optionalProfile ||
+								current.inheritedThinking !== initial.inheritedThinking
+							)
+								throw new Error("Model selection changed; review again before applying");
 						};
-						if (state.agentActive)
-							throw new Error("Wait for the current conversation to finish before model review");
-						const current = await selection(call);
-						if (
-							current.provider !== initial.provider ||
-							current.model !== initial.model ||
-							current.thinkingLevel !== initial.thinkingLevel ||
-							current.profile !== initial.profile ||
-							current.optionalProfile !== initial.optionalProfile ||
-							current.inheritedThinking !== initial.inheritedThinking
-						)
-							throw new Error("Model selection changed; review again before applying");
-					};
-					return owner.modelReview.reviewWikiWithModel(
-						{
-							service,
-							project: resolvedProject,
-							id: input.id,
-							hash: input.expectedProposalHash,
-							binding: service.binding,
-						},
-						input,
-						{
-							signal,
-							check,
-							evaluate: (request: unknown) => generateWikiModelReview(call.capabilities, initial, request),
-						},
-					);
-				}),
+						return owner.modelReview.reviewWikiWithModel(
+							{
+								service,
+								project: resolvedProject,
+								id: input.id,
+								hash: input.expectedProposalHash,
+								binding: service.binding,
+							},
+							input,
+							{
+								signal,
+								check,
+								evaluate: (request: unknown) => generateWikiModelReview(call.capabilities, initial, request),
+							},
+						);
+					}),
+				),
 			);
 		},
 	};

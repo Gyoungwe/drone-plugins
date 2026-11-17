@@ -201,6 +201,8 @@ export async function verdictFixture(readOnly = false) {
 	const files = fileBroker();
 	const model = modelBroker();
 	async function call(name: string, input: unknown): Promise<unknown> {
+		if (name === "agent.slot.acquire") return { lease: "synthetic-agent-slot" };
+		if (name === "agent.slot.release") return { released: true };
 		if (name.startsWith("state.")) return state.call(name, input);
 		if (name.startsWith("model.") || name === "session.inspect") return model.call(name, input);
 		if (name.startsWith("resource.")) return resourceCall(name, input);
@@ -221,7 +223,9 @@ export async function verdictFixture(readOnly = false) {
 		files,
 		model,
 		input,
-		review: (request: unknown = input) => runtime.operations.modelReview.execute(request, caller),
+		caller,
+		review: (request: unknown = input, signal = caller.signal) =>
+			runtime.operations.modelReview.execute(request, { ...caller, signal }),
 		info: () => runtime.operations.modelReviewInfo.execute(input, caller),
 		dispose: () => runtime.dispose(),
 	};

@@ -152,6 +152,8 @@ function reviewBroker(candidates: ReturnType<typeof proposal>[]) {
 	const files = fileBroker();
 	const generations: ReturnType<typeof pendingGeneration>[] = [];
 	const call = vi.fn(async (name: string, input: unknown, signal?: AbortSignal): Promise<unknown> => {
+		if (name === "agent.slot.acquire") return { lease: "synthetic-agent-slot" };
+		if (name === "agent.slot.release") return { released: true };
 		if (name.startsWith("state.")) return state(name, input);
 		if (name === "session.inspect") return { agentActive: false };
 		if (name === "model.selection") return selection;

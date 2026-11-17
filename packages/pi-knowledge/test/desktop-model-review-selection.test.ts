@@ -122,6 +122,8 @@ function reviewBroker(state: ReturnType<typeof stateBroker>) {
 	const resolveReviewer = vi.fn(async (): Promise<PluginModelSelection> => reviewerSelection);
 	const generate = vi.fn(async (input: PluginModelGenerateInput) => generatedReview(input));
 	const call = vi.fn(async (name: string, input: unknown): Promise<unknown> => {
+		if (name === "agent.slot.acquire") return { lease: "synthetic-agent-slot" };
+		if (name === "agent.slot.release") return { released: true };
 		if (name.startsWith("state.")) return state(name, input);
 		if (name === "session.inspect") return { agentActive: false };
 		if (name === "model.selection") {
