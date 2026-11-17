@@ -253,6 +253,8 @@ export function createKnowledgeModelReview(runtime, config, wiki, io: WikiReview
 				}
 				return audit;
 			}
+			if (error?.name === "AbortError" || (signal?.aborted && error === signal.reason)) throw error;
+			if (error instanceof Error && diagnostic === error.message && error.cause === undefined) throw error;
 			// A raw cause would expose the same diagnostic through owner/UI error serialization.
 			throw new Error(diagnostic);
 		} finally {

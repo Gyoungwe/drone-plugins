@@ -219,6 +219,18 @@ it("excludes schema-invalid provider fields from every surfaced and persisted di
 	expect(text.map((value) => value.includes(marker))).not.toContain(true);
 });
 
+it("removes a cause even when the outer diagnostic needs no redaction", async () => {
+	const f = await fixture();
+	const failure = new Error("Synthetic review failure", {
+		cause: new Error("Synthetic provider details"),
+	});
+	f.model.generate.mockRejectedValueOnce(failure);
+	const review = f.review();
+	await expect(review).rejects.toThrow(failure.message);
+	await expect(review).rejects.not.toBe(failure);
+	await expect(review).rejects.not.toHaveProperty("cause");
+});
+
 it.each(cases.filter((scenario) => scenario.trigger !== invalidGeneration))(
 	"excludes the secret marker from errors, audits, receipts and UI text ($name)",
 	async (scenario) => {
