@@ -13,7 +13,8 @@
     "src/service.ts": "c18e3c76bb37339e1eec8816bca091f04e901a321496c1d3908945660fc9ca8c",
     "src/sqlite-storage.ts": "30b60dec10781c7512eafd22d345221652cbe2629577e64a381a10cf2434c56c",
     "src/storage-contract.ts": "d81d8ba86decabb9b344a7068b5b8d196acc5e75d814c313094b69be248380b7",
-    "src/storage.ts": "228837fa3b6733406f5d3f1220c72a82ac4674cc6199bd8ba77658efd2ebd431",
+    "src/storage-document.ts": "5c95240a9a75995d3a86944dd03bb17fd6b44616c31323e0383e206e5497006a",
+    "src/storage.ts": "68be7c57e128ea48c25dd9629984e78cfbbe8cadb3fe21bbc4c02b21b0f0e86f",
     "src/workspace.ts": "5ed0f0b5292ba5f0529e22ef47d3428c864cd7554253472ad9c1bef1e03e27ec",
     "src/domain.ts": "fb77d0e7985faf156b6488b929f0a261fdb5f001bc5d371a630850582f97dc3b",
     "../../node_modules/typebox/build/format/_registry.mjs": "f60d2bf0b9a6e0c7e999123f971694e6e21a048ee7d8da79167b3aa3acb7d86a",
@@ -693,7 +694,7 @@
     "sql.js/LICENSE": "60a3f6e4d7b29b4321359e683b36cf198d24f58e24582070f56e6fa89d5ee2be"
   },
   "outputs": {
-    "dist/host.mjs": "95a218ed275b6803359509b72792d6f153cfa03bd9e5bb0230599ad6e825faa0",
+    "dist/host.mjs": "6ecec27252b07b9cc78b09a70cec25c6f7b8a0414d3e736401b31f22425f82fa",
     "dist/domain.mjs": "add6d5e056acc8a66d8fbf344b40824a38ceb0bebb3546e985c002b0abf9d119",
     "dist/ledger-owner.mjs": "cd73351e3da6adf07e786fdd273a0e85cf7be2f91dc914b2dbd54a11c68d8a54",
     "dist/runtime.mjs": "c531211949137bc07bc30786642780988744eb2bdc267167fc6c31aa149b7519",
