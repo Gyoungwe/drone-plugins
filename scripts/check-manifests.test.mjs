@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { validatePackageManifest } from "./check-manifests.mjs";
+import { CAPABILITIES, validatePackageManifest } from "./check-manifests.mjs";
 import { credentialFailures } from "./manifest-credentials.mjs";
 
 const packageRoot = fileURLToPath(new URL("../packages/pi-analysis/", import.meta.url));
@@ -30,6 +31,14 @@ function errors(manifest = valid, pkg = packageJson, root = packageRoot) {
 }
 
 test("manifest checker accepts a complete declaration", () => assert.equal(errors(), ""));
+
+test("documented capability vocabulary matches the manifest checker", async () => {
+	const spec = await readFile(new URL("../docs/PLUGIN-SPEC.md", import.meta.url), "utf8");
+	const vocabulary = spec.match(/^### 4\.1 [^\n]+\n\n([^。\n]+)。/mu);
+	assert.ok(vocabulary, "PLUGIN-SPEC.md must include the capability vocabulary in section 4.1");
+	const documented = new Set([...vocabulary[1].matchAll(/`([^`]+)`/gu)].map((match) => match[1]));
+	assert.deepEqual(documented, CAPABILITIES);
+});
 
 test("service-only requires coexist with host capabilities and never need another plugin dependency", () => {
 	assert.equal(
