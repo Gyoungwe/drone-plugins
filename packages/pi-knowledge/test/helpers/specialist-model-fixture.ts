@@ -21,6 +21,7 @@ import { createKnowledgeSpecialistHost } from "../../src/core/specialist-host.js
 import type { SpecialistRequest } from "../../src/core/specialist-model-loop.js";
 import createDesktopRuntime from "../../src/desktop/runtime.js";
 import { createBrokerKnowledgeSpecialist } from "../../src/desktop/specialist-model.js";
+import { withAgentSlotFake } from "./agent-slot-fake.js";
 
 export const sourcePath = "Library/Methods/synthetic.md";
 export const task = "Find synthetic knowledge evidence";
@@ -128,6 +129,8 @@ function capabilityBroker(settings: Record<string, number>) {
 	const model = modelBroker();
 	const resource = resourceBroker();
 	const call = vi.fn<PluginRuntimeCapabilities["call"]>(async (name, input, signal) => {
+		if (name === "agent.slot.acquire") return { lease: "synthetic-agent-slot" };
+		if (name === "agent.slot.release") return { released: true };
 		if (name === "model.selection") return model.select();
 		// Snapshot at the transport boundary: the real loop appends to its private message array.
 		if (name === "model.toolStep")
@@ -262,7 +265,7 @@ export function reviewerFixture() {
 	);
 	const unregister = host.registerKnowledgeSpecialistHost(
 		"synthetic-reviewer",
-		createBrokerKnowledgeSpecialist({ call }),
+		createBrokerKnowledgeSpecialist(withAgentSlotFake(call)),
 	);
 	const request: SpecialistRequest = {
 		role: "reviewer",

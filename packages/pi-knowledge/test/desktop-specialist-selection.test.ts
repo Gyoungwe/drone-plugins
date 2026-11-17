@@ -9,6 +9,7 @@ import { Type } from "typebox";
 import { expect, it, vi } from "vitest";
 import type { SpecialistRequest } from "../src/core/specialist-model-loop.js";
 import { createBrokerKnowledgeSpecialist } from "../src/desktop/specialist-model.js";
+import { withAgentSlotFake } from "./helpers/agent-slot-fake.js";
 
 const selection: PluginModelSelection = Object.freeze({
 	provider: "host-provider",
@@ -58,7 +59,7 @@ it("opts specialists into the host inherited-thinking fallback with the exact se
 		.mockResolvedValueOnce(selection)
 		.mockResolvedValueOnce(toolStepResult("knowledge_submit", answer));
 
-	await createBrokerKnowledgeSpecialist({ call })(specialistRequest());
+	await createBrokerKnowledgeSpecialist(withAgentSlotFake(call))(specialistRequest());
 
 	expect(call.mock.calls.filter(([name]) => name === "model.selection")).toEqual([
 		["model.selection", { optionalProfile: "knowledge-navigator", inheritedThinking: "nearest-supported" }],
@@ -80,7 +81,7 @@ it("passes the host selection and adjusted thinking unchanged to every tool step
 		execute: read,
 	});
 
-	const result = await createBrokerKnowledgeSpecialist({ call })(request);
+	const result = await createBrokerKnowledgeSpecialist(withAgentSlotFake(call))(request);
 
 	expect(read).toHaveBeenCalledOnce();
 	const steps = call.mock.calls.filter(([name]) => name === "model.toolStep");
@@ -99,7 +100,9 @@ it("propagates a host selection rejection without running any tool step", async 
 	const rejection = new Error("Configured specialist thinking is unsupported");
 	const call = vi.fn<PluginRuntimeCapabilities["call"]>().mockRejectedValue(rejection);
 
-	await expect(createBrokerKnowledgeSpecialist({ call })(specialistRequest())).rejects.toBe(rejection);
+	await expect(createBrokerKnowledgeSpecialist(withAgentSlotFake(call))(specialistRequest())).rejects.toBe(
+		rejection,
+	);
 
 	expect(call.mock.calls.map(([name]) => name)).toEqual(["model.selection"]);
 	expect(call.mock.calls.filter(([name]) => name === "model.toolStep")).toHaveLength(0);

@@ -99,6 +99,8 @@ function reviewBroker(state: ReturnType<typeof stateBroker>) {
 		usage: { inputTokens: null, outputTokens: null, cost: null },
 	}));
 	async function call(name: string, input: unknown): Promise<unknown> {
+		if (name === "agent.slot.acquire") return { lease: "synthetic-agent-slot" };
+		if (name === "agent.slot.release") return { released: true };
 		if (name.startsWith("state.")) return state.call(name, input);
 		if (name === "session.inspect") return { agentActive: false };
 		if (name === "model.selection") return selection;

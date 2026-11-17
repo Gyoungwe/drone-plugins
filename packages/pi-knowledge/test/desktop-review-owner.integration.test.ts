@@ -1,13 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	fauxAssistantMessage,
-	fauxProvider,
-	fauxToolCall,
-	validateToolArguments,
-} from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
 import {
 	createAgentSessionFromServices,
 	createAgentSessionRuntime,
@@ -17,13 +12,13 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { PluginResourceInstance } from "@gyoungwe/plugin-api/resource";
+import type { PluginRuntimeCapabilities } from "@gyoungwe/plugin-api/runtime";
 import { expect, it } from "vitest";
 import { createKnowledgeConfigApi } from "../src/core/config.js";
-import { inspectNote, readNoteFile } from "../src/core/files.js";
 import { immutableWikiProposalHash } from "../src/core/wiki-policy.js";
 import { createLocalWikiReviewPorts } from "../src/core/wiki-review-node.js";
-import createIndexResource from "../src/desktop/index-resource.js";
 import createDesktopRuntime from "../src/desktop/runtime.js";
+import { reviewOwnerCapabilityCall } from "./helpers/review-owner-capabilities.js";
 
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 it.each([false, true])(
@@ -93,143 +88,56 @@ it.each([false, true])(
 			modelCalls = 0,
 			activeModelSignal = controller.signal;
 		const names: string[] = [];
-		// Real file/state and SQLite adapter fixture. OS sandbox and host authorization
-		// remain separate packed-host gates; no permission result is simulated as PASS.
-		const capabilities = {
-			async call(name: string, raw: unknown): Promise<unknown> {
-				if (revoked) throw new Error("Host grant revoked");
-				names.push(name);
-				const input = raw as any;
-				if (name === "caller.scope") return call.scope;
-				if (name === "session.inspect")
-					return {
-						agentActive,
-						projectTrusted: sdk.session.settingsManager.isProjectTrusted(),
-						readOnly: false,
-					};
-				// This fixture declares no task service. Production installed-source routing is covered by host gates.
-				if (name === "provider.inspect")
-					return { state: "absent", service: "task.runtime", requestedVersion: 1, provider: null };
-				if (name === "model.selection")
-					return {
-						provider: provider.provider.id,
-						model: provider.getModel().id,
-						thinkingLevel: "off",
-					};
-				if (name === "model.generate") {
-					modelCalls++;
-					const tool = {
-						name: "structured_result",
-						description: "Return JSON",
-						parameters: input.resultSchema,
-					};
-					const response = await modelRuntime.completeSimple(
-						provider.getModel(),
-						{
-							systemPrompt: input.systemPrompt,
-							messages: [{ role: "user", content: input.prompt, timestamp: Date.now() }],
-							tools: [tool],
-						},
-						{ signal: activeModelSignal, maxTokens: input.maxTokens },
-					);
-					activeModelSignal.throwIfAborted();
-					const output = response.content.find((block) => block.type === "toolCall");
-					if (!output || output.name !== tool.name) throw new Error("Expected structured result");
-					return {
-						selection: input.selection,
-						value: validateToolArguments(tool, output),
-						usage: { inputTokens: null, outputTokens: null, cost: null },
-					};
-				}
-				if (name === "roots.resolve") {
-					if (input.path === vault) return { handle: "vault-root" };
-					if (input.path === workspace) return { handle: "workspace-root" };
-					throw new Error("Root not granted");
-				}
-				if (name === "state.readJson") {
-					const doc = await io.state.read(input.path);
-					return doc ? { kind: "value", ...doc } : { kind: "missing", version: null };
-				}
-				if (name === "state.list")
-					return (await readdir(join(state, input.path), { withFileTypes: true })).map((entry) => ({
-						name: entry.name,
-						kind: entry.isFile() ? "file" : "directory",
-					}));
-				if (name === "state.ensureDirectory") {
-					await mkdir(join(state, input.path), { recursive: true });
-					return { created: true };
-				}
-				if (name === "state.writeJson") {
-					if (failNextReviewRecord && input.path.includes("/reviewed/")) {
-						failNextReviewRecord = false;
-						throw new Error("Review record write denied");
-					}
-					await io.state.write(input.path, input.value, input.expectedVersion);
-					return { kind: "value", ...(await io.state.read(input.path)) };
-				}
-				if (name === "state.removeJson") {
-					await io.state.remove(input.path, input.expectedVersion);
-					return { kind: "missing", version: null };
-				}
-				if (name === "files.readText") {
-					if (input.root === "workspace-root") {
-						const text = await readFile(join(workspace, input.path), "utf8");
-						return { text };
-					}
-					expect(input.root).toBe("vault-root");
-					const note = await readNoteFile(vault, input.path);
-					return {
-						text: note.text,
-						sha256: note.hash,
-						bytes: note.bytes,
-						version: (await inspectNote(vault, input.path)).stat,
-					};
-				}
-				if (name === "files.stat")
-					return { kind: "file", version: (await inspectNote(vault, input.path)).stat };
-				if (name === "files.list")
-					return (await readdir(join(vault, input.path), { withFileTypes: true })).map((entry) => ({
-						name: entry.name,
-						kind: entry.isDirectory() ? "directory" : entry.isSymbolicLink() ? "symlink" : "file",
-					}));
-				if (name === "files.ensureDirectory") {
-					await mkdir(join(vault, input.path), { recursive: true });
-					return { created: true };
-				}
-				if (name === "files.writeText") {
-					await io.files.write(binding, input.path, input.text, input.expectedHash, async () => {});
-					const note = (await io.files.read(binding, input.path))!;
-					return { text: note.text, sha256: note.hash, bytes: note.bytes };
-				}
-				if (name === "files.remove") {
-					await io.files.remove(binding, input.path, input.expectedHash, async () => {});
-					return { removed: true };
-				}
-				if (name === "resource.create") {
-					created++;
-					const storage = join(state, binding.vaultId);
-					await mkdir(storage, { recursive: true });
-					index = await createIndexResource({
-						parameters: input.parameters,
-						storageDirectory: storage,
-						signal: controller.signal,
-						capabilities,
-						events: {
-							changed() {
-								changed++;
-							},
-						},
-					});
-					return { handle: "index" };
-				}
-				if (name === "resource.invoke") return index!.invoke(input.operation, input.input);
-				if (name === "resource.dispose") {
-					await index!.dispose();
-					exited++;
-					return null;
-				}
-				throw new Error(`Unknown capability ${name}`);
-			},
+		const capabilities: PluginRuntimeCapabilities = {
+			call: reviewOwnerCapabilityCall.bind({
+				vault,
+				workspace,
+				state,
+				io,
+				binding,
+				controller,
+				names,
+				get revoked() {
+					return revoked;
+				},
+				get call() {
+					return call;
+				},
+				get agentActive() {
+					return agentActive;
+				},
+				get sdk() {
+					return sdk;
+				},
+				get provider() {
+					return provider;
+				},
+				get modelRuntime() {
+					return modelRuntime;
+				},
+				get activeModelSignal() {
+					return activeModelSignal;
+				},
+				recordModelCall: () => modelCalls++,
+				get failNextReviewRecord() {
+					return failNextReviewRecord;
+				},
+				set failNextReviewRecord(value) {
+					failNextReviewRecord = value;
+				},
+				recordResourceCreated: () => created++,
+				get index() {
+					return index;
+				},
+				set index(value) {
+					index = value;
+				},
+				get capabilities() {
+					return capabilities;
+				},
+				recordChanged: () => changed++,
+				recordResourceExited: () => exited++,
+			}),
 		};
 		const runtime = await createDesktopRuntime({
 			applicationId: "owner-test",
