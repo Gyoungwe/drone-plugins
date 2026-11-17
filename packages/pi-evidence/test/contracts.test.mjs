@@ -65,7 +65,7 @@ test("capsule round trip and private path rejection are fail closed", () => {
 	const capsule = createEvidenceCapsule(
 		checkpoint,
 		{ [input.sha256]: new TextEncoder().encode("hello"), [output.sha256]: "cmVzdWx0" },
-		"public",
+		"private",
 	);
 	assert.equal(validateCapsuleImport(parseCapsule(JSON.stringify(capsule))).id, checkpoint.id);
 	assert.equal(capsuleDigest(capsule).length, 64);

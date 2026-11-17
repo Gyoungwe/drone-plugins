@@ -40,11 +40,17 @@ function validateOutput(value: ReplayOutput): void {
 		throw new Error(`Invalid replay output: ${value.path}`);
 }
 
+function comparisonFields(input: object, allowed: readonly string[]): void {
+	if (Object.keys(input).some((key) => !allowed.includes(key)))
+		throw new Error("Unsupported replay comparison field");
+}
+
 /** Compare host-produced output records with frozen evidence without reading files. */
 export function verifyReplay(
 	checkpoint: EvidenceCheckpoint,
 	input: { readonly environmentFingerprint?: string; readonly outputs: readonly ReplayOutput[] },
 ): ReplayVerification {
+	comparisonFields(input, ["environmentFingerprint", "outputs"]);
 	validateCheckpoint(checkpoint);
 	const seenOutputs = new Set<string>();
 	for (const output of input.outputs) {
@@ -65,20 +71,22 @@ export function verifyReplay(
 		};
 	});
 	const expectedPaths = new Set(expected.map((artifact) => artifact.path));
-	const unexpected = input.outputs.some((output) => !expectedPaths.has(output.path));
+	const unexpected = input.outputs.filter((output) => !expectedPaths.has(output.path));
+	const differences = checks
+		.filter((check) => !check.matched)
+		.map((check) => `Output mismatch: ${check.path}`);
+	for (const output of unexpected) {
+		checks.push({ path: output.path, matched: false });
+		differences.push(`Unexpected output: ${output.path}`);
+	}
 	const environmentMatched =
 		checkpoint.environmentFingerprint !== undefined &&
 		input.environmentFingerprint === checkpoint.environmentFingerprint;
-	const reproduced =
-		environmentMatched &&
-		checks.length === expected.length &&
-		checks.every((check) => check.matched) &&
-		!unexpected;
+	if (!environmentMatched) differences.push("Environment mismatch");
+	const reproduced = differences.length === 0;
 	return {
 		status: reproduced ? "reproduced" : "failed",
-		detail: reproduced
-			? "Exact output bytes and environment matched"
-			: "Output or environment differs from frozen evidence",
+		detail: reproduced ? "Exact output bytes and environment matched" : differences.join("; "),
 		outputChecks: checks,
 		environmentMatched,
 	};
@@ -91,6 +99,7 @@ export function createReplayReceipt(input: {
 	readonly environmentFingerprint?: string;
 	readonly outputs: readonly ReplayOutput[];
 }): EvidenceReplayReceipt {
+	comparisonFields(input, ["id", "checkpoint", "completedAt", "environmentFingerprint", "outputs"]);
 	const verification = verifyReplay(input.checkpoint, {
 		environmentFingerprint: input.environmentFingerprint,
 		outputs: input.outputs,

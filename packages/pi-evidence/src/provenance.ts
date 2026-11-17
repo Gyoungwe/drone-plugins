@@ -11,7 +11,21 @@ export interface AnalysisIdentity {
 }
 
 export interface EvidenceProvenance {
-	readonly schemaVersion: 1;
+	readonly schemaVersion?: 1;
+	readonly lineage?: {
+		readonly schemaVersion: 1;
+		readonly eventId: string;
+		readonly runAttemptId?: string;
+		readonly causationId?: string;
+	};
+	readonly adapterSnapshotSha256?: string;
+	readonly toolContractSha256?: string;
+	readonly reproducibility?: {
+		readonly status: "not-assessed" | "recorded" | "verified" | "failed";
+		readonly detail: string;
+		readonly environmentFingerprint?: string;
+		readonly checkpointId?: string;
+	};
 	readonly adapter?: AnalysisIdentity;
 	readonly workflow?: AnalysisIdentity;
 	readonly method?: AnalysisIdentity;
@@ -27,7 +41,8 @@ export interface EvidenceProvenance {
 }
 
 export function validateProvenance(value: EvidenceProvenance): void {
-	if (value.schemaVersion !== 1 || !Array.isArray(value.artifacts))
+	// Host v1 provenance is untagged; portable helper records explicitly carry schemaVersion 1.
+	if ((value.schemaVersion !== undefined && value.schemaVersion !== 1) || !Array.isArray(value.artifacts))
 		throw new Error("Invalid evidence provenance");
 	assertValidArtifactManifest({ version: 1, entries: value.artifacts }, { requireIdentity: true });
 	for (const [label, digest] of [
@@ -36,6 +51,8 @@ export function validateProvenance(value: EvidenceProvenance): void {
 		["toolContractDigest", value.toolContractDigest],
 		["containerDigest", value.containerDigest],
 		["specSha256", value.specSha256],
+		["adapterSnapshotSha256", value.adapterSnapshotSha256],
+		["toolContractSha256", value.toolContractSha256],
 	] as const) {
 		if (digest !== undefined && !isSha256(digest)) throw new Error(`Invalid ${label}`);
 	}
