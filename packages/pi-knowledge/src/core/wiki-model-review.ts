@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import * as compatibilityConfig from "./config.js";
 import { canRead, validateNote } from "./files.js";
+import { redactDiagnostic } from "./redact-diagnostic.js";
 import { compatibilityKnowledgeRuntimeHost, consumeKnowledgeReviewPreview } from "./runtime-host.js";
 import { specialistSettings as compatibilitySpecialistSettings } from "./specialist-host.js";
 import type { WikiModelReviewAudit } from "./wiki-model-review-types.js";
@@ -237,8 +238,9 @@ export function createKnowledgeModelReview(runtime, config, wiki, io: WikiReview
 			}
 			return audit;
 		} catch (error) {
+			const diagnostic = redactDiagnostic(error instanceof Error ? error.message : String(error));
 			if (audit) {
-				audit = { ...audit, applyError: String(error.message).slice(0, 400) };
+				audit = { ...audit, applyError: diagnostic.slice(0, 400) };
 				try {
 					await save(audit);
 				} catch (saveError) {
@@ -251,7 +253,8 @@ export function createKnowledgeModelReview(runtime, config, wiki, io: WikiReview
 				}
 				return audit;
 			}
-			throw error;
+			// A raw cause would expose the same diagnostic through owner/UI error serialization.
+			throw new Error(diagnostic);
 		} finally {
 			state.active.delete(key);
 		}

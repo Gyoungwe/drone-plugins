@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
+import { redactDiagnostic } from "../src/core/redact-diagnostic.js";
 import type { KnowledgeModelReviewResult } from "../src/desktop/contract.js";
 import { errorFixture } from "./helpers/model-review-error-fixture.js";
 import { cleanReview, reviewPath, selection } from "./helpers/model-review-verdict-fixture.js";
@@ -197,16 +198,19 @@ const cases = [
 
 it.each(cases)("fails visibly, keeps the candidate pending and recovers ($name)", async (scenario) => {
 	const { outcome, diagnostic } = await observe(scenario.trigger, scenario.auditAllowed);
+	expect(redactDiagnostic(diagnostic).startsWith("Synthetic failure")).toBe(true);
 	if (outcome.kind === "returned") {
-		expect((outcome.value as KnowledgeModelReviewResult).applyError === diagnostic).toBe(true);
+		expect((outcome.value as KnowledgeModelReviewResult).applyError === redactDiagnostic(diagnostic)).toBe(
+			true,
+		);
 	} else if (scenario.trigger !== invalidGeneration) {
 		const expected = {
-			string: `Error: ${diagnostic}`,
+			string: `Error: ${redactDiagnostic(diagnostic)}`,
 			name: "Error",
-			message: diagnostic,
-			cause: { string: `Error: ${diagnostic}`, name: "Error", message: diagnostic },
+			message: redactDiagnostic(diagnostic),
 		};
 		expect(JSON.stringify(errorSurface(outcome.error)) === JSON.stringify(expected)).toBe(true);
+		expect(outcome.error).not.toHaveProperty("cause");
 	}
 });
 
@@ -215,8 +219,7 @@ it("excludes schema-invalid provider fields from every surfaced and persisted di
 	expect(text.map((value) => value.includes(marker))).not.toContain(true);
 });
 
-// R21: raw generation/cancellation errors and write failures leak through owner errors or applyError audits/UI.
-it.fails.each(cases.filter((scenario) => scenario.trigger !== invalidGeneration))(
+it.each(cases.filter((scenario) => scenario.trigger !== invalidGeneration))(
 	"excludes the secret marker from errors, audits, receipts and UI text ($name)",
 	async (scenario) => {
 		const { marker, text } = await observe(scenario.trigger, scenario.auditAllowed);
