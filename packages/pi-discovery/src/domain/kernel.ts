@@ -1,6 +1,18 @@
-import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { TextDecoder, TextEncoder } from "node:util";
+import {
+	DEFAULT_MAX_OUTPUT_BYTES,
+	filterKernelOutput,
+	notebookFor,
+	validClassification,
+} from "./kernel-output.js";
+import type {
+	KernelExecution,
+	KernelExport,
+	KernelSessionOptions,
+	KernelSessionStatus,
+	KernelStatus,
+	RunFileWriter,
+} from "./kernel-types.js";
 import {
 	assertValid,
 	boundedInteger,
@@ -10,117 +22,33 @@ import {
 	safeRunPath,
 } from "./validation.js";
 
-export type KernelLanguage = "python" | "r";
-export type KernelSessionStatus =
-	| "ready"
-	| "running"
-	| "closed"
-	| "idle-timeout"
-	| "needs-container"
-	| "cleanup-failed";
-export type DataClassification = "public" | "internal" | "controlled" | "restricted";
-export type KernelContentKind = "summary" | "plot" | "table" | "raw";
-
-export interface KernelRunnerCapabilities {
-	/** `container` is the only production capability. `fixture` is test-only and explicit. */
-	readonly kind: "container" | "fixture" | "unavailable";
-	readonly languages: readonly KernelLanguage[];
-	readonly networkDisabled: boolean;
-	readonly writesOnlyToRunDirectory: boolean;
-}
-
-export interface KernelRunRequest {
-	/** Cancellation completes only after the runner verifies resource cleanup. */
-	readonly signal?: AbortSignal;
-	readonly requestId: string;
-	readonly language: KernelLanguage;
-	readonly code: string;
-	readonly runDirectory: string;
-	readonly timeoutMs: number;
-	readonly maxOutputBytes: number;
-	readonly dataClassification: DataClassification;
-}
-
-export interface KernelRunOutput {
-	readonly text: string;
-	readonly contentKind: KernelContentKind;
-	readonly classification: DataClassification;
-}
-
-export interface KernelRunResult {
-	readonly exitCode: number;
-	readonly outputs: readonly KernelRunOutput[];
-	readonly durationMs: number;
-	readonly producedBytes: number;
-}
-
-/** The only execution seam exposed to a production KernelSession. It has no shell method. */
-export interface ControlledKernelRunner {
-	readonly capabilities: KernelRunnerCapabilities;
-	run(request: KernelRunRequest): Promise<KernelRunResult>;
-}
-
-export interface RunFileWriter {
-	write(path: string, content: string, mediaType: string): Promise<unknown>;
-}
-
-export interface KernelSessionOptions {
-	readonly sessionId: string;
-	readonly runDirectory: string;
-	readonly language: KernelLanguage;
-	readonly dataClassification: DataClassification;
-	readonly runner: ControlledKernelRunner;
-	readonly writer?: RunFileWriter;
-	readonly idleTimeoutMs?: number;
-	readonly executionTimeoutMs?: number;
-	readonly maxExecutions?: number;
-	readonly maxOutputBytes?: number;
-	readonly now?: () => number;
-}
-
-export interface KernelExecution {
-	readonly id: string;
-	readonly code: string;
-	readonly startedAt: string;
-	readonly finishedAt: string;
-	readonly status: "succeeded" | "failed" | "blocked";
-	readonly exitCode?: number;
-	readonly output: string;
-	readonly outputClassification: DataClassification;
-	readonly contentKinds: readonly KernelContentKind[];
-	readonly producedBytes: number;
-	readonly redactedBytes: number;
-	readonly blockedReason?: string;
-}
-
-export interface KernelExport {
-	readonly scriptPath: string;
-	readonly notebookPath: string;
-	readonly script: string;
-	readonly notebook: string;
-}
-
-export interface KernelStatus {
-	readonly sessionId: string;
-	readonly status: KernelSessionStatus;
-	readonly executionCount: number;
-	readonly remainingExecutions: number;
-	readonly expiresAt?: string;
-}
+export { filterKernelOutput } from "./kernel-output.js";
+export {
+	prepareKernel,
+	SubprocessFixtureRunner,
+	UnavailableKernelRunner,
+} from "./kernel-runners.js";
+export type {
+	ControlledKernelRunner,
+	DataClassification,
+	KernelContentKind,
+	KernelExecution,
+	KernelExport,
+	KernelLanguage,
+	KernelPreparation,
+	KernelRunnerCapabilities,
+	KernelRunOutput,
+	KernelRunRequest,
+	KernelRunResult,
+	KernelSessionOptions,
+	KernelSessionStatus,
+	KernelStatus,
+	RunFileWriter,
+} from "./kernel-types.js";
 
 const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60_000;
 const DEFAULT_EXECUTION_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_EXECUTIONS = 32;
-const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
-const encoder = new TextEncoder();
-
-function validClassification(value: unknown): value is DataClassification {
-	return value === "public" || value === "internal" || value === "controlled" || value === "restricted";
-}
-
-function validKind(value: unknown): value is KernelContentKind {
-	return value === "summary" || value === "plot" || value === "table" || value === "raw";
-}
 
 function ensureOptions(options: KernelSessionOptions): void {
 	assertValid(safeId(options.sessionId), "sessionId is invalid");
@@ -148,103 +76,6 @@ function ensureOptions(options: KernelSessionOptions): void {
 	] as const) {
 		if (value !== undefined) assertValid(boundedInteger(value, 1, 24 * 60 * 60_000), `${label} is invalid`);
 	}
-}
-
-/**
- * Filter output before it can reach a model or a UI. Controlled projects expose
- * summaries and plots only; restricted projects expose summaries only.
- */
-export function filterKernelOutput(
-	outputs: readonly KernelRunOutput[],
-	policy: DataClassification,
-	maxBytes = DEFAULT_MAX_OUTPUT_BYTES,
-): {
-	readonly text: string;
-	readonly redactedBytes: number;
-	readonly blocked: boolean;
-	readonly kinds: readonly KernelContentKind[];
-} {
-	assertValid(validClassification(policy), "invalid output policy");
-	assertValid(boundedInteger(maxBytes, 1, DEFAULT_MAX_OUTPUT_BYTES * 100), "maxBytes is invalid");
-	const accepted: string[] = [];
-	const kinds: KernelContentKind[] = [];
-	let redactedBytes = 0;
-	let blocked = false;
-	const classificationRank: Record<DataClassification, number> = {
-		public: 0,
-		internal: 1,
-		controlled: 2,
-		restricted: 3,
-	};
-	for (const item of outputs) {
-		if (
-			!validKind(item.contentKind) ||
-			!validClassification(item.classification) ||
-			!nonEmptyText(item.text, maxBytes)
-		) {
-			blocked = true;
-			continue;
-		}
-		const withinClassification = classificationRank[item.classification] <= classificationRank[policy];
-		const allowed =
-			withinClassification &&
-			(policy === "public" || policy === "internal"
-				? item.contentKind !== "raw" || item.classification === "public"
-				: policy === "controlled"
-					? item.contentKind === "summary" || item.contentKind === "plot"
-					: item.contentKind === "summary" && item.classification === "public");
-		if (!allowed) {
-			redactedBytes += encoder.encode(item.text).byteLength;
-			blocked = true;
-			continue;
-		}
-		accepted.push(item.text);
-		kinds.push(item.contentKind);
-	}
-	const text = accepted.join("\n");
-	if (encoder.encode(text).byteLength > maxBytes) {
-		const bytes = encoder.encode(text).slice(0, maxBytes);
-		redactedBytes += encoder.encode(text).byteLength - bytes.byteLength;
-		return {
-			text: new TextDecoder().decode(bytes),
-			redactedBytes,
-			blocked: true,
-			kinds,
-		};
-	}
-	return { text, redactedBytes, blocked, kinds };
-}
-
-function notebookFor(history: readonly KernelExecution[], language: KernelLanguage): string {
-	return JSON.stringify(
-		{
-			cells: history.map((execution) => ({
-				cell_type: "code",
-				execution_count: null,
-				metadata: {
-					drone: { executionId: execution.id, status: execution.status },
-				},
-				outputs: execution.output
-					? [
-							{
-								name: "stdout",
-								output_type: "stream",
-								text: `${execution.output}\n`,
-							},
-						]
-					: [],
-				source: execution.code.split("\n").map((line) => `${line}\n`),
-			})),
-			metadata: {
-				kernelspec: { language, name: language, display_name: language },
-				drone: { schemaVersion: 1 },
-			},
-			nbformat: 4,
-			nbformat_minor: 5,
-		},
-		null,
-		2,
-	);
 }
 
 export class KernelSession {
@@ -444,130 +275,5 @@ export class KernelSession {
 		if (this.state !== "ready") return;
 		this.expiresAt = this.now() + this.options.idleTimeoutMs;
 		this.idleTimer = setTimeout(() => this.close("idle-timeout"), this.options.idleTimeoutMs);
-	}
-}
-
-export type KernelPreparation =
-	| {
-			readonly status: "ready";
-			readonly capabilities: KernelRunnerCapabilities;
-	  }
-	| { readonly status: "needs-container"; readonly reason: string };
-
-/** Explicit capability gate used before creating an interactive session. */
-export function prepareKernel(runner: ControlledKernelRunner, language: KernelLanguage): KernelPreparation {
-	if (!runner?.capabilities?.languages.includes(language))
-		return { status: "needs-container", reason: "language is unavailable" };
-	if (runner.capabilities.kind !== "container")
-		return {
-			status: "needs-container",
-			reason: "a container runtime is required for production kernel execution",
-		};
-	if (!runner.capabilities.networkDisabled || !runner.capabilities.writesOnlyToRunDirectory)
-		return {
-			status: "needs-container",
-			reason: "runner sandbox guarantees are incomplete",
-		};
-	return { status: "ready", capabilities: runner.capabilities };
-}
-
-/**
- * Test-only runner. It uses an argv-only child process and never accepts a shell
- * command. It is deliberately marked `fixture`, so production preparation still
- * reports `needs-container`.
- */
-export class SubprocessFixtureRunner implements ControlledKernelRunner {
-	readonly capabilities: KernelRunnerCapabilities = {
-		kind: "fixture",
-		languages: ["python", "r"],
-		networkDisabled: true,
-		writesOnlyToRunDirectory: true,
-	};
-
-	constructor(
-		private readonly commands: Partial<Record<KernelLanguage, string>> = {
-			python: "python3",
-		},
-	) {}
-
-	run(request: KernelRunRequest): Promise<KernelRunResult> {
-		const command = this.commands[request.language];
-		if (
-			!command ||
-			(request.language === "python" && command !== "python3") ||
-			(request.language === "r" && command !== "Rscript")
-		)
-			return Promise.reject(new Error("fixture-command-not-allowlisted"));
-		const args =
-			request.language === "python" ? ["-I", "-c", request.code] : ["--vanilla", "-e", request.code];
-		const started = Date.now();
-		return new Promise((resolve, reject) => {
-			const child = spawn(command, args, {
-				cwd: request.runDirectory,
-				shell: false,
-				stdio: ["ignore", "pipe", "pipe"],
-			});
-			let stdout = "";
-			let stderr = "";
-			const append = (value: Buffer, target: "stdout" | "stderr") => {
-				const text = value.toString("utf8");
-				if (target === "stdout") stdout = `${stdout}${text}`.slice(0, request.maxOutputBytes);
-				else stderr = `${stderr}${text}`.slice(0, request.maxOutputBytes);
-			};
-			child.stdout.on("data", (value: Buffer) => append(value, "stdout"));
-			child.stderr.on("data", (value: Buffer) => append(value, "stderr"));
-			const timer = setTimeout(() => {
-				child.kill("SIGKILL");
-				reject(new Error("fixture-timeout"));
-			}, request.timeoutMs);
-			child.once("error", (error) => {
-				clearTimeout(timer);
-				reject(error);
-			});
-			child.once("close", (exitCode) => {
-				clearTimeout(timer);
-				const outputs: KernelRunOutput[] = [];
-				if (stdout) {
-					const contentKind = stdout
-						.split(/\r?\n/)
-						.every((line) => line.length === 0 || line.startsWith("[summary]"))
-						? "summary"
-						: stdout.split(/\r?\n/).every((line) => line.length === 0 || line.startsWith("[plot]"))
-							? "plot"
-							: "raw";
-					outputs.push({
-						text: stdout,
-						contentKind,
-						classification: request.dataClassification,
-					});
-				}
-				if (stderr)
-					outputs.push({
-						text: stderr,
-						contentKind: "raw",
-						classification: request.dataClassification,
-					});
-				resolve({
-					exitCode: exitCode ?? 1,
-					outputs,
-					durationMs: Date.now() - started,
-					producedBytes: encoder.encode(`${stdout}${stderr}`).byteLength,
-				});
-			});
-		});
-	}
-}
-
-/** Capability record used when Docker/Podman is absent; it never pretends to execute. */
-export class UnavailableKernelRunner implements ControlledKernelRunner {
-	readonly capabilities: KernelRunnerCapabilities = {
-		kind: "unavailable",
-		languages: ["python", "r"],
-		networkDisabled: false,
-		writesOnlyToRunDirectory: false,
-	};
-
-	run(_request: KernelRunRequest): Promise<KernelRunResult> {
-		return Promise.reject(new Error("needs-container"));
 	}
 }
