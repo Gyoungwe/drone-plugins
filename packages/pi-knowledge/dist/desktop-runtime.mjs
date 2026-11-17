@@ -11509,6 +11509,21 @@ function executeService(cloud, name, input, context, call) {
   }
 }
 
+// src/desktop/model-selection-schema.ts
+var modelSelectionSchema = {
+  type: "object",
+  properties: {
+    provider: { type: "string" },
+    model: { type: "string" },
+    thinkingLevel: { type: "string" },
+    profile: { type: "string" },
+    optionalProfile: { type: "string" },
+    inheritedThinking: { const: "nearest-supported" }
+  },
+  required: ["provider", "model", "thinkingLevel"],
+  additionalProperties: false
+};
+
 // src/desktop/contract.ts
 var string2 = { type: "string" };
 var integer = { type: "integer", minimum: 0 };
@@ -12008,11 +12023,7 @@ var modelReviewResultSchema = {
   additionalProperties: true
 };
 var modelReviewInfoResultSchema = object2({
-  selection: object2({ provider: string2, model: string2, thinkingLevel: string2, profile: string2 }, [
-    "provider",
-    "model",
-    "thinkingLevel"
-  ]),
+  selection: modelSelectionSchema,
   lastReview: nullable2(modelReviewResultSchema)
 });
 
