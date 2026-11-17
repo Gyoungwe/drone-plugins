@@ -3361,6 +3361,8 @@ function createKnowledgeModelReview(runtime, config, wiki, io, specialistSetting
         }
         return audit;
       }
+      if (error?.name === "AbortError" || signal?.aborted && error === signal.reason) throw error;
+      if (error instanceof Error && diagnostic === error.message && error.cause === void 0) throw error;
       throw new Error(diagnostic);
     } finally {
       state.active.delete(key);
