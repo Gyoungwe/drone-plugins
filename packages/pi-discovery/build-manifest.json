@@ -8,7 +8,9 @@
 		"src/domain/exploration.ts": "b313e7bcf8574163b6be75dd032082fd3c0b14c45a78178df5edb4946286a84d",
 		"src/domain/index.ts": "89efa3feb980c5e58dbc1cacc53575dbb91aa6ffe5d0b90c468554443bf3d5cb",
 		"src/domain/inquiry-port.ts": "0fb5b3ec17da3723f4828105b8c3d0837525e3c06b2fb2cf721335c1b677be43",
-		"src/domain/kernel.ts": "779e109feb627e70f1224e22c14b2cdb140bc39f5c38f1fe110afc7c25a3273a",
+		"src/domain/kernel-output.ts": "8057d3a1c388e02e624ee2d65d9e91eedaad27af4ab6045ad9138d01a0c3e51e",
+		"src/domain/kernel-runners.ts": "138af6e74024dd83ca1553b036dd4084969695ff7f7b36e09e91d31880806254",
+		"src/domain/kernel.ts": "16dd1d71385be6999ad085e5882c83ec30fef14aa78ca0e913c6f966f914fb47",
 		"src/domain/validation.ts": "08245c09a96c0a150c7694939856d6f37006f53adb064400353604f79e0719d6",
 		"src/host.ts": "492f96164728751f52012c4709ef12be1466a5fdf8861486591aadba33e433b2",
 		"src/service.ts": "0f2da44d749893e1649da8729d39040230021217ea2ffbc2844824b543357063",
@@ -19,8 +21,8 @@
 		"src/runtime.ts": "aff20bcca7934fbb50026dd72fe8c707607751227c577e2b7e7112062a24ffbf"
 	},
 	"outputs": {
-		"dist/host.mjs": "9795d1b100ede2e0e05a40ba19daf3b46764c79bba355a2d65ebc7052bfb9f3b",
-		"dist/index.mjs": "65617ba37204479b8f8ddeb6fc679cb9243a8817796da85d8219b71c64162940",
-		"dist/runtime.mjs": "2de2477e9bd36fa06fea2efd7ba2e2b2f3ec1822ca9813cedb03c7d6c420e774"
+		"dist/host.mjs": "9709b45cf9f796b09a944d86a6075e8b415dc10cd6438201cd378f5e2668c6d7",
+		"dist/index.mjs": "1f7fa90f74e07357fd888599a401651f712d34a2eaef2b88b87adb3e567d81d9",
+		"dist/runtime.mjs": "17f9c8f11eccd1913a72552508a4c9a703ce5378a6efb9b28d21f2fe7517aae2"
 	}
 }

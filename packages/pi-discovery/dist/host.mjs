@@ -540,10 +540,9 @@ async function recordDiscoveryToInquiry(port, input) {
 
 // src/domain/kernel.ts
 import { randomUUID as randomUUID2 } from "node:crypto";
+
+// src/domain/kernel-output.ts
 import { TextDecoder, TextEncoder } from "node:util";
-var DEFAULT_IDLE_TIMEOUT_MS = 15 * 6e4;
-var DEFAULT_EXECUTION_TIMEOUT_MS = 6e4;
-var DEFAULT_MAX_EXECUTIONS = 32;
 var DEFAULT_MAX_OUTPUT_BYTES = 1e6;
 var encoder = new TextEncoder();
 function validClassification(value) {
@@ -551,31 +550,6 @@ function validClassification(value) {
 }
 function validKind(value) {
   return value === "summary" || value === "plot" || value === "table" || value === "raw";
-}
-function ensureOptions(options) {
-  assertValid(safeId(options.sessionId), "sessionId is invalid");
-  assertValid(safeRunPath(options.runDirectory), "runDirectory must be a project-relative runs path");
-  assertValid(options.language === "python" || options.language === "r", "unsupported kernel language");
-  assertValid(validClassification(options.dataClassification), "invalid data classification");
-  assertValid(options.runner && typeof options.runner.run === "function", "controlled runner is required");
-  const capabilities = options.runner.capabilities;
-  assertValid(
-    capabilities.kind === "container" || capabilities.kind === "fixture" || capabilities.kind === "unavailable",
-    "invalid runner kind"
-  );
-  assertValid(capabilities.languages.includes(options.language), "runner does not support this language");
-  if (capabilities.kind !== "unavailable") {
-    assertValid(capabilities.networkDisabled, "kernel runner must disable network access");
-    assertValid(capabilities.writesOnlyToRunDirectory, "kernel runner must constrain writes to runs");
-  }
-  for (const [label, value] of [
-    ["idleTimeoutMs", options.idleTimeoutMs],
-    ["executionTimeoutMs", options.executionTimeoutMs],
-    ["maxExecutions", options.maxExecutions],
-    ["maxOutputBytes", options.maxOutputBytes]
-  ]) {
-    if (value !== void 0) assertValid(boundedInteger(value, 1, 24 * 60 * 6e4), `${label} is invalid`);
-  }
 }
 function filterKernelOutput(outputs, policy, maxBytes = DEFAULT_MAX_OUTPUT_BYTES) {
   assertValid(validClassification(policy), "invalid output policy");
@@ -648,6 +622,40 @@ function notebookFor(history, language) {
     null,
     2
   );
+}
+
+// src/domain/kernel-runners.ts
+import { TextEncoder as TextEncoder2 } from "node:util";
+var encoder2 = new TextEncoder2();
+
+// src/domain/kernel.ts
+var DEFAULT_IDLE_TIMEOUT_MS = 15 * 6e4;
+var DEFAULT_EXECUTION_TIMEOUT_MS = 6e4;
+var DEFAULT_MAX_EXECUTIONS = 32;
+function ensureOptions(options) {
+  assertValid(safeId(options.sessionId), "sessionId is invalid");
+  assertValid(safeRunPath(options.runDirectory), "runDirectory must be a project-relative runs path");
+  assertValid(options.language === "python" || options.language === "r", "unsupported kernel language");
+  assertValid(validClassification(options.dataClassification), "invalid data classification");
+  assertValid(options.runner && typeof options.runner.run === "function", "controlled runner is required");
+  const capabilities = options.runner.capabilities;
+  assertValid(
+    capabilities.kind === "container" || capabilities.kind === "fixture" || capabilities.kind === "unavailable",
+    "invalid runner kind"
+  );
+  assertValid(capabilities.languages.includes(options.language), "runner does not support this language");
+  if (capabilities.kind !== "unavailable") {
+    assertValid(capabilities.networkDisabled, "kernel runner must disable network access");
+    assertValid(capabilities.writesOnlyToRunDirectory, "kernel runner must constrain writes to runs");
+  }
+  for (const [label, value] of [
+    ["idleTimeoutMs", options.idleTimeoutMs],
+    ["executionTimeoutMs", options.executionTimeoutMs],
+    ["maxExecutions", options.maxExecutions],
+    ["maxOutputBytes", options.maxOutputBytes]
+  ]) {
+    if (value !== void 0) assertValid(boundedInteger(value, 1, 24 * 60 * 6e4), `${label} is invalid`);
+  }
 }
 var KernelSession = class {
   options;
