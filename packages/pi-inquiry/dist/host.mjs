@@ -1053,52 +1053,9 @@ var SqliteLedgerCollection = class {
   }
 };
 
-// src/storage-contract.ts
-var INQUIRY_STORAGE_IDS = Object.freeze({
-  root: "inquiry-root",
-  ledger: "inquiry-ledger"
-});
-function registerInquiryStorage(registry, rootPath) {
-  if (!rootPath.trim()) throw new Error("Inquiry storage root cannot be empty");
-  const entries = [
-    {
-      id: INQUIRY_STORAGE_IDS.root,
-      path: rootPath,
-      owner: "inquiry",
-      schema: 1,
-      sensitivity: "private"
-    },
-    {
-      id: INQUIRY_STORAGE_IDS.ledger,
-      path: `${rootPath.replace(/[\\/]$/, "")}/ledger.sqlite`,
-      owner: "inquiry/ledger",
-      schema: 1,
-      sensitivity: "private"
-    }
-  ];
-  for (const entry of entries) registry.register(entry);
-  return entries;
-}
-
-// src/storage.ts
-import { mkdirSync } from "node:fs";
+// src/storage-document.ts
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-var queues = /* @__PURE__ */ new Map();
-function enqueue(path, operation) {
-  const previous = queues.get(path) ?? Promise.resolve();
-  const next = previous.then(operation, operation);
-  const settled = next.then(
-    () => void 0,
-    () => void 0
-  );
-  queues.set(path, settled);
-  void settled.then(() => {
-    if (queues.get(path) === settled) queues.delete(path);
-  });
-  return next;
-}
 function emptyDocument(projectId) {
   return {
     schemaVersion: INQUIRY_SCHEMA_VERSION,
@@ -1172,6 +1129,52 @@ async function writeDocument(path, document) {
       throw new AggregateError([error, cleanup.reason], "Inquiry file write and cleanup failed");
     throw error;
   }
+}
+
+// src/storage-contract.ts
+var INQUIRY_STORAGE_IDS = Object.freeze({
+  root: "inquiry-root",
+  ledger: "inquiry-ledger"
+});
+function registerInquiryStorage(registry, rootPath) {
+  if (!rootPath.trim()) throw new Error("Inquiry storage root cannot be empty");
+  const entries = [
+    {
+      id: INQUIRY_STORAGE_IDS.root,
+      path: rootPath,
+      owner: "inquiry",
+      schema: 1,
+      sensitivity: "private"
+    },
+    {
+      id: INQUIRY_STORAGE_IDS.ledger,
+      path: `${rootPath.replace(/[\\/]$/, "")}/ledger.sqlite`,
+      owner: "inquiry/ledger",
+      schema: 1,
+      sensitivity: "private"
+    }
+  ];
+  for (const entry of entries) registry.register(entry);
+  return entries;
+}
+
+// src/storage.ts
+import { mkdirSync } from "node:fs";
+import { dirname as dirname2 } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+var queues = /* @__PURE__ */ new Map();
+function enqueue(path, operation) {
+  const previous = queues.get(path) ?? Promise.resolve();
+  const next = previous.then(operation, operation);
+  const settled = next.then(
+    () => void 0,
+    () => void 0
+  );
+  queues.set(path, settled);
+  void settled.then(() => {
+    if (queues.get(path) === settled) queues.delete(path);
+  });
+  return next;
 }
 var FileLedgerCollection = class {
   constructor(owner, key) {
@@ -1257,7 +1260,7 @@ var SqliteInquiryStorage = class extends CanonicalSqliteInquiryStorage {
   constructor(projectId, path) {
     if (!projectId.trim()) throw new Error("Inquiry projectId cannot be empty");
     if (!path.trim()) throw new Error("Inquiry SQLite path cannot be empty");
-    mkdirSync(dirname(path), { recursive: true });
+    mkdirSync(dirname2(path), { recursive: true });
     const database = new DatabaseSync(path);
     super(projectId, {
       exec: (sql) => database.exec(sql),
