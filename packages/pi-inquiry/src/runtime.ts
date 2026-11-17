@@ -1,9 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type {
-	PluginNativeRuntimeFactory,
-	PluginNativeRuntimeInstance,
-	PluginNativeSession,
-} from "@gyoungwe/plugin-api/native";
+import type { PluginNativeRuntimeFactory, PluginNativeRuntimeInstance } from "@gyoungwe/plugin-api/native";
 import type {
 	PluginBinaryStateReadResult,
 	PluginRuntimeFactoryContext,
@@ -11,14 +7,13 @@ import type {
 	PluginRuntimeScope,
 	PluginStateReadResult,
 } from "@gyoungwe/plugin-api/runtime";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 import {
 	type InquiryComputeEvent,
 	InquiryEventProjector,
 	type InquiryLocalExecutionEvent,
 	type InquiryTaskTerminalEvent,
 } from "./event-projection.js";
-import { assertedEventWriteSchema } from "./event-schema.js";
 import {
 	type InquiryBindingState,
 	InquiryLedgerOwner,
@@ -33,107 +28,10 @@ import type {
 	FindingRecord,
 	QuestionRecord,
 } from "./models.js";
+import { createInquiryNativeSessionFactory } from "./runtime-native.js";
+import { type ReadInput, readSchema, type WriteInput, writeSchema } from "./runtime-schema.js";
 import { createInquiryWasmEngine } from "./wasm-storage.js";
 
-const name = Type.String({ minLength: 1, maxLength: 128 });
-const readMetadata = {
-	drone: { capabilities: ["research", "provenance"], readOnly: true },
-};
-const writeMetadata = { drone: { capabilities: ["research", "provenance"] } };
-const object = Type.Record(Type.String(), Type.Unknown());
-const readSchema = Type.Union([
-	Type.Object({ action: Type.Literal("status") }, { additionalProperties: false }),
-	Type.Object({ action: Type.Literal("inspect"), root: name }, { additionalProperties: false }),
-	Type.Object(
-		{
-			action: Type.Union([
-				Type.Literal("snapshot"),
-				Type.Literal("listDecisions"),
-				Type.Literal("cleanupDryRun"),
-				Type.Literal("pendingReruns"),
-			]),
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			action: Type.Literal("artifactProvenance"),
-			id: Type.String({ minLength: 1 }),
-		},
-		{ additionalProperties: false },
-	),
-]);
-const writeSchema = Type.Union([
-	assertedEventWriteSchema,
-	Type.Object(
-		{
-			action: Type.Literal("bind"),
-			root: name,
-			metadataRoot: name,
-			acknowledgeExistingData: Type.Boolean(),
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			action: Type.Union([
-				Type.Literal("recordArtifact"),
-				Type.Literal("recordFinding"),
-				Type.Literal("recordQuestion"),
-				Type.Literal("recordAttempt"),
-				Type.Literal("recordDecision"),
-			]),
-			record: object,
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			action: Type.Union([
-				Type.Literal("revokeDecision"),
-				Type.Literal("confirmDecision"),
-				Type.Literal("reviewDecisionArtifacts"),
-			]),
-			id: Type.String({ minLength: 1 }),
-			reason: Type.String({ minLength: 1 }),
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			action: Type.Literal("associateDecisionArtifacts"),
-			id: Type.String({ minLength: 1 }),
-			artifactIds: Type.Array(Type.String({ minLength: 1 })),
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			action: Type.Literal("markRerunRunning"),
-			id: Type.String({ minLength: 1 }),
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			action: Type.Literal("completeRerun"),
-			id: Type.String({ minLength: 1 }),
-			outcome: Type.Union([
-				Type.Object({ error: Type.String() }, { additionalProperties: false }),
-				Type.Object({ artifact: object }, { additionalProperties: false }),
-			]),
-		},
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			action: Type.Union([Type.Literal("reconcile"), Type.Literal("restoreOriginal")]),
-		},
-		{ additionalProperties: false },
-	),
-]);
-type ReadInput = Static<typeof readSchema>;
-type WriteInput = Static<typeof writeSchema>;
 /** Actual optional provider implementation; all data/root/session authority remains in the host ports. */
 export async function createInquiryRuntimeWithEngine(
 	context: PluginRuntimeFactoryContext,
@@ -432,50 +330,7 @@ export async function createInquiryRuntimeWithEngine(
 			return { value, authority: "plugin-asserted-or-imported" };
 		});
 	};
-	const createNativeSession = (): PluginNativeSession => {
-		let disposed = false;
-		return {
-			toolEffects: { inquiry_read: "read", inquiry_write: "write" },
-			extension(pi) {
-				pi.registerTool({
-					name: "inquiry_read",
-					label: "Inquiry · read",
-					description:
-						"Read only this actual workspace’s explicitly bound Inquiry ledger. Imported/asserted records are not host provenance proofs.",
-					parameters: Type.Object({ request: readSchema }, { additionalProperties: false }),
-					annotations: { readOnlyHint: true },
-					...readMetadata,
-					async execute(_id, input) {
-						if (disposed) throw new Error("Inquiry native projection is disposed");
-						const value = await read(input.request);
-						return {
-							content: [{ type: "text", text: JSON.stringify(value) }],
-							details: value,
-						};
-					},
-				});
-				pi.registerTool({
-					name: "inquiry_write",
-					label: "Inquiry · write",
-					description:
-						"Explicitly bind, update, reconcile or restore this workspace’s original Inquiry SQLite ledger. Every host write still requires its own approved root, version and caller checks.",
-					parameters: Type.Object({ request: writeSchema }, { additionalProperties: false }),
-					...writeMetadata,
-					async execute(_id, input, signal) {
-						if (disposed) throw new Error("Inquiry native projection is disposed");
-						const value = await write(input.request, signal ?? context.signal);
-						return {
-							content: [{ type: "text", text: JSON.stringify(value) }],
-							details: value,
-						};
-					},
-				});
-			},
-			async dispose() {
-				disposed = true;
-			},
-		};
-	};
+	const createNativeSession = createInquiryNativeSessionFactory(context, read, write);
 
 	return {
 		createNativeSession,
