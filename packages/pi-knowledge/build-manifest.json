@@ -126,7 +126,7 @@
 		"dist/index.mjs": "8257c22b53aa99c0e7e6324e38cabfdbcde317fae7305e82947533b9eb910ca6",
 		"dist/host.mjs": "389ade254ef5297312f62237bc06d44843875ce95b89c247166f13b3f7786693",
 		"dist/host.d.ts": "fb78750585e1ad9c438741f6cfd689cc709c1d30bb86b07109a5fd487882b115",
-		"dist/desktop-runtime.mjs": "aa2d790bd0ae8629d21942b23a36135a9dc88381b0b2d1e9fdbcc3bb28b1546c",
+		"dist/desktop-runtime.mjs": "c03a065f5ee6169497aa5a62606688b2f90f283403822ce4268011e71a31abad",
 		"lib/knowledge/runtime/desktop-index.mjs": "87225858bd27bd5a038723ee29eca421cd9f05fb1764e3984d8a28df84f73ba0",
 		"lib/knowledge/runtime/worker.mjs": "eb524114e9a1ac23c8049ba66e52f55fc24ca6565d83410d2acab801da5a89d8",
 		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "02b36830b8f8f3f75199e342922e14c13da19bf1fcb3336ad5a4d3ad0d33cd71",
