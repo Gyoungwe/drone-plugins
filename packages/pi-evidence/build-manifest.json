@@ -3,7 +3,7 @@
 	"generator": "packages/pi-evidence/scripts/build.mjs",
 	"inputsSha256": "8af88f7e52fe1c1871764d2e11bf2ecdbce5e5c58e712695fb5a77d5db3c150c",
 	"outputs": {
-		"dist/index.mjs": "7bd2894d915f26517c145068b15d8b0b6ff7e00e89cf8d8f5d132cdc5e9532d6",
-		"dist/host.mjs": "e333dfe5f0347e152f62bd3ab0adece0a4b3ae7656c45e8874ce9f0ebee5cb79"
+		"dist/index.mjs": "57404a5152365c00597fbdb492b2320cb798fe889723454ba67e0c3fb2f17469",
+		"dist/host.mjs": "b9859a4078cde37d53434ec65e84c9e590c6f32bded06a3a3dfdc24034534773"
 	}
 }
