@@ -4,7 +4,8 @@
 	"inputs": {
 		"src/domain/critic.ts": "4077a9b98adbe83485720cad5128dbad30ccfe2ab78d874d7316cc21c3691b65",
 		"src/domain/deadline.ts": "934451d19985b59eadb5aff7c69bc7a9654d53da6cc375214014c2462789ad51",
-		"src/domain/evaluation.ts": "a0c9614d7fbefadd65b78b9e0d54fee7ebda9f218adc44853fbcfdf20ed4f8d2",
+		"src/domain/evaluation-metrics.ts": "2e2e37188b7b2575e3fe2ba6c56cbf8b858e6eb687f4ec4f63300aba0bac5ae9",
+		"src/domain/evaluation.ts": "4ccd14dcea79b9e0ee4d92101087460cf870c7e37968de6673078ef923895582",
 		"src/domain/exploration.ts": "b313e7bcf8574163b6be75dd032082fd3c0b14c45a78178df5edb4946286a84d",
 		"src/domain/index.ts": "89efa3feb980c5e58dbc1cacc53575dbb91aa6ffe5d0b90c468554443bf3d5cb",
 		"src/domain/inquiry-port.ts": "0fb5b3ec17da3723f4828105b8c3d0837525e3c06b2fb2cf721335c1b677be43",
@@ -13,16 +14,25 @@
 		"src/domain/kernel.ts": "16dd1d71385be6999ad085e5882c83ec30fef14aa78ca0e913c6f966f914fb47",
 		"src/domain/validation.ts": "08245c09a96c0a150c7694939856d6f37006f53adb064400353604f79e0719d6",
 		"src/host.ts": "492f96164728751f52012c4709ef12be1466a5fdf8861486591aadba33e433b2",
-		"src/service.ts": "0f2da44d749893e1649da8729d39040230021217ea2ffbc2844824b543357063",
+		"src/service-kernels.ts": "304b221779679ea1c621590cb3f9cefd7bb3187b6b84b36b0819d73b0833f3fb",
+		"src/service.ts": "d3a6e7e06c1d1a9fe2844a31d202776e9c66c96aef80d61ca01bd1a3c81c0e56",
 		"src/index.ts": "efd100f7b38809e570e5f286cc4eed78fa3f95cea82b35b2ab3f040b894c6598",
 		"src/inquiry-provider.ts": "48dcd40cf5ee4748f82fd0edcd1fae251cc665e21598b1fe772fb23b81b72872",
 		"src/native-records.ts": "104f33db050b6c4b69978c1962febf36d663274bb43ff1cfa53cbe598dc18c24",
-		"src/native-runtime.ts": "9e63a169a92dec7cf6408aaf2ceb145ffe208d1f0d812121a68bdba4a6b2e0e2",
-		"src/runtime.ts": "aff20bcca7934fbb50026dd72fe8c707607751227c577e2b7e7112062a24ffbf"
+		"src/native-runtime.ts": "376ead87cef6d2d85ef413197c267dab317a188b0f9f402b4647bcf4f0380ec4",
+		"src/native-state.ts": "a778006388320fcbe43f17271a5dd8ac442ba21e9cdc1675347c3e57a2f9f839",
+		"src/runtime-kernels.ts": "3e35d690f5d26269fb06f8876665512e4984e94463d007c918436d03f533a9cd",
+		"src/runtime-native-session.ts": "69a069bc42ee41fda8e2383b54b21cfdc42076b336fb36f0c291edb90881cc98",
+		"src/runtime-operations.ts": "38501760ca5d44554f15bcd93bdd17525ffda33867751d86c5981698c800fc95",
+		"src/runtime-owner.ts": "bb10a8a20789137d11496d69beebd4189be3251edb4755b12df64d241b5103be",
+		"src/runtime-schemas.ts": "d7760e56ece15210be9f15d357c6dd55db1287b5ad2fb9bce278c1acb4591e09",
+		"src/runtime-state.ts": "fa9f5a4650ad3e6b268611b1e26a79dc15b29108608466b77494ad7d37069019",
+		"src/runtime-workspace.ts": "5fdb028982936c2c16577e984c9c268e0b0d899c7cc48ee0d4a57023a6daa562",
+		"src/runtime.ts": "b3a69c11e711befba0efac31392595d5c4f41e488c265924565dfec8f8886f8d"
 	},
 	"outputs": {
-		"dist/host.mjs": "9709b45cf9f796b09a944d86a6075e8b415dc10cd6438201cd378f5e2668c6d7",
-		"dist/index.mjs": "1f7fa90f74e07357fd888599a401651f712d34a2eaef2b88b87adb3e567d81d9",
-		"dist/runtime.mjs": "17f9c8f11eccd1913a72552508a4c9a703ce5378a6efb9b28d21f2fe7517aae2"
+		"dist/host.mjs": "f4c50b34f728febf533d8ef89e724919354b0220a30ee93feb815f26987e44d6",
+		"dist/index.mjs": "0073b573c7b126a77c9a70cdc858318827690681eb1790ca8b18bc322b7e4653",
+		"dist/runtime.mjs": "42f87209b0b10620a274ae1768499038e4600f07f03ce4fdfbd803f9eb20d94e"
 	}
 }

@@ -1,9 +1,9 @@
 // @ts-nocheck
 // src/host.ts
-import { isAbsolute as isAbsolute2 } from "node:path";
+import { isAbsolute as isAbsolute3 } from "node:path";
 
 // src/service.ts
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute as isAbsolute2, resolve as resolve2 } from "node:path";
 
 // src/domain/deadline.ts
 async function withDeadline(operation, timeoutMs, reason) {
@@ -824,11 +824,8 @@ var KernelSession = class {
   }
 };
 
-// src/service.ts
-function safeProjectId(value) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("Invalid discovery project id");
-  return value;
-}
+// src/service-kernels.ts
+import { isAbsolute, relative, resolve } from "node:path";
 function safeSessionId(value) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("Invalid discovery session id");
   return value;
@@ -851,94 +848,25 @@ function toCapabilities(value) {
     writesOnlyToRunDirectory: value.writesOnlyToRunDirectory
   };
 }
-var FileBaselineStore = class {
-  constructor(store) {
-    this.store = store;
+var DiscoveryKernelSessions = class {
+  constructor(projectId, projectRoot, options, sessionsStore, sessionMeta, init, isDisposed) {
+    this.projectId = projectId;
+    this.projectRoot = projectRoot;
+    this.options = options;
+    this.sessionsStore = sessionsStore;
+    this.sessionMeta = sessionMeta;
+    this.init = init;
+    this.isDisposed = isDisposed;
   }
-  async put(record) {
-    const normalized = createBaseline(record);
-    const records = await this.store.read();
-    const index = records.findIndex(
-      (item) => item.metric === normalized.metric && item.datasetId === normalized.datasetId && item.datasetRevision === normalized.datasetRevision
-    );
-    if (index >= 0) records[index] = normalized;
-    else records.push(normalized);
-    await this.store.write(records);
-  }
-  async get(metric, datasetId, revision) {
-    return (await this.store.read()).find(
-      (item) => item.metric === metric && item.datasetId === datasetId && item.datasetRevision === revision
-    );
-  }
-  async list() {
-    return await this.store.read();
-  }
-};
-var DiscoveryService = class {
-  projectId;
-  projectRoot;
-  options;
-  sessionsStore;
-  criticsStore;
-  multipathStore;
-  plansStore;
-  evaluationsStore;
-  baselineStore;
   sessions = /* @__PURE__ */ new Map();
-  sessionMeta = /* @__PURE__ */ new Map();
-  critics = [];
-  multipaths = [];
-  plans = [];
-  evaluations = [];
-  initialized;
   creations = Promise.resolve();
   sessionWrites = Promise.resolve();
   sessionsRevision = 0;
   savedSessionsRevision = 0;
-  disposed = false;
   executions = /* @__PURE__ */ new Map();
   executionSignals = /* @__PURE__ */ new Map();
-  disposal;
-  constructor(options) {
-    this.projectId = safeProjectId(options.projectId);
-    if (!isAbsolute(options.projectRoot)) throw new Error("discovery projectRoot must be absolute");
-    this.projectRoot = resolve(options.projectRoot);
-    this.options = options;
-    this.sessionsStore = options.services.journal("sessions");
-    this.criticsStore = options.services.journal("critics");
-    this.multipathStore = options.services.journal("multipath");
-    this.plansStore = options.services.journal("plans");
-    this.evaluationsStore = options.services.journal("evaluations");
-    this.baselineStore = new FileBaselineStore(
-      options.services.journal("baselines")
-    );
-  }
-  async init() {
-    if (this.disposed) throw new Error("discovery service is disposed");
-    if (this.initialized) return this.initialized;
-    this.initialized = (async () => {
-      if (this.disposed) throw new Error("discovery service is disposed");
-      const [sessions, critics, multipaths, plans, evaluations] = await Promise.all([
-        this.sessionsStore.read(),
-        this.criticsStore.read(),
-        this.multipathStore.read(),
-        this.plansStore.read(),
-        this.evaluationsStore.read()
-      ]);
-      for (const session of sessions) {
-        try {
-          if (safeSessionId(session.sessionId) && session.runDirectory.startsWith("runs/"))
-            this.sessionMeta.set(session.sessionId, session);
-        } catch (error) {
-          console.warn("Ignored invalid discovery session journal entry", error);
-        }
-      }
-      this.critics.splice(0, this.critics.length, ...critics);
-      this.multipaths.splice(0, this.multipaths.length, ...multipaths);
-      this.plans.splice(0, this.plans.length, ...plans);
-      this.evaluations.splice(0, this.evaluations.length, ...evaluations);
-    })();
-    return this.initialized;
+  get disposed() {
+    return this.isDisposed();
   }
   async authorize(operation) {
     await this.options.services.authorize(operation);
@@ -1017,13 +945,6 @@ var DiscoveryService = class {
   async getKernelSession(sessionId) {
     await this.init();
     return this.sessionProjection(safeSessionId(sessionId));
-  }
-  async recordDiscovery(input) {
-    await this.init();
-    if (!this.options.services.inquiry) throw new Error("inquiry ledger is not configured");
-    if (input.projectId !== this.projectId)
-      throw new Error("discovery project does not match inquiry project");
-    await recordDiscoveryToInquiry(this.options.services.inquiry, input);
   }
   createKernelSession(input) {
     const pending = this.creations.then(() => this.createKernel(input));
@@ -1170,6 +1091,170 @@ var DiscoveryService = class {
     await this.disposeKernelSession(id);
     await this.persistSessions();
   }
+  async disposeSessions() {
+    const sessionClosures = [...this.sessions.values()].map((session) => session.close());
+    const executions = [...this.executions].map(([id, pending]) => ({
+      pending,
+      signal: this.executionSignals.get(id)
+    }));
+    const settled = await Promise.allSettled([...sessionClosures, ...executions.map((item) => item.pending)]);
+    const failures = settled.filter(
+      (result, index) => result.status === "rejected" && (index < sessionClosures.length || !executions[index - sessionClosures.length]?.signal?.aborted)
+    );
+    if (failures.length)
+      throw new AggregateError(
+        failures.map((result) => result.reason),
+        "Discovery execution cleanup failed"
+      );
+    for (const [id, session] of this.sessions) {
+      const meta = this.sessionMeta.get(id);
+      if (!meta) throw new Error("Active discovery session has no journal metadata");
+      this.sessionMeta.set(id, {
+        ...meta,
+        status: session.status.status,
+        executionCount: session.status.executionCount
+      });
+    }
+    this.sessions.clear();
+  }
+};
+
+// src/service.ts
+function safeProjectId(value) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("Invalid discovery project id");
+  return value;
+}
+var FileBaselineStore = class {
+  constructor(store) {
+    this.store = store;
+  }
+  async put(record) {
+    const normalized = createBaseline(record);
+    const records = await this.store.read();
+    const index = records.findIndex(
+      (item) => item.metric === normalized.metric && item.datasetId === normalized.datasetId && item.datasetRevision === normalized.datasetRevision
+    );
+    if (index >= 0) records[index] = normalized;
+    else records.push(normalized);
+    await this.store.write(records);
+  }
+  async get(metric, datasetId, revision) {
+    return (await this.store.read()).find(
+      (item) => item.metric === metric && item.datasetId === datasetId && item.datasetRevision === revision
+    );
+  }
+  async list() {
+    return await this.store.read();
+  }
+};
+var DiscoveryService = class {
+  projectId;
+  projectRoot;
+  options;
+  sessionsStore;
+  criticsStore;
+  multipathStore;
+  plansStore;
+  evaluationsStore;
+  baselineStore;
+  sessionMeta = /* @__PURE__ */ new Map();
+  critics = [];
+  multipaths = [];
+  plans = [];
+  evaluations = [];
+  initialized;
+  disposed = false;
+  disposal;
+  kernels;
+  constructor(options) {
+    this.projectId = safeProjectId(options.projectId);
+    if (!isAbsolute2(options.projectRoot)) throw new Error("discovery projectRoot must be absolute");
+    this.projectRoot = resolve2(options.projectRoot);
+    this.options = options;
+    this.sessionsStore = options.services.journal("sessions");
+    this.criticsStore = options.services.journal("critics");
+    this.multipathStore = options.services.journal("multipath");
+    this.plansStore = options.services.journal("plans");
+    this.evaluationsStore = options.services.journal("evaluations");
+    this.baselineStore = new FileBaselineStore(
+      options.services.journal("baselines")
+    );
+    this.kernels = new DiscoveryKernelSessions(
+      this.projectId,
+      this.projectRoot,
+      options,
+      this.sessionsStore,
+      this.sessionMeta,
+      () => this.init(),
+      () => this.disposed
+    );
+  }
+  async init() {
+    if (this.disposed) throw new Error("discovery service is disposed");
+    if (this.initialized) return this.initialized;
+    this.initialized = (async () => {
+      if (this.disposed) throw new Error("discovery service is disposed");
+      const [sessions, critics, multipaths, plans, evaluations] = await Promise.all([
+        this.sessionsStore.read(),
+        this.criticsStore.read(),
+        this.multipathStore.read(),
+        this.plansStore.read(),
+        this.evaluationsStore.read()
+      ]);
+      for (const session of sessions) {
+        try {
+          if (safeSessionId(session.sessionId) && session.runDirectory.startsWith("runs/"))
+            this.sessionMeta.set(session.sessionId, session);
+        } catch (error) {
+          console.warn("Ignored invalid discovery session journal entry", error);
+        }
+      }
+      this.critics.splice(0, this.critics.length, ...critics);
+      this.multipaths.splice(0, this.multipaths.length, ...multipaths);
+      this.plans.splice(0, this.plans.length, ...plans);
+      this.evaluations.splice(0, this.evaluations.length, ...evaluations);
+    })();
+    return this.initialized;
+  }
+  async authorize(operation) {
+    await this.options.services.authorize(operation);
+  }
+  async getCapabilities(language) {
+    return this.kernels.getCapabilities(language);
+  }
+  /** Called only by an explicit legitimate runtime reconcile operation, never by dispose. */
+  async persistObservedKernelStates() {
+    return this.kernels.persistObservedKernelStates();
+  }
+  async listKernelSessions() {
+    return this.kernels.listKernelSessions();
+  }
+  async getKernelSession(sessionId) {
+    return this.kernels.getKernelSession(sessionId);
+  }
+  async recordDiscovery(input) {
+    await this.init();
+    if (!this.options.services.inquiry) throw new Error("inquiry ledger is not configured");
+    if (input.projectId !== this.projectId)
+      throw new Error("discovery project does not match inquiry project");
+    await recordDiscoveryToInquiry(this.options.services.inquiry, input);
+  }
+  createKernelSession(input) {
+    return this.kernels.createKernelSession(input);
+  }
+  async executeKernel(sessionId, code, signal) {
+    return this.kernels.executeKernel(sessionId, code, signal);
+  }
+  async exportKernel(sessionId) {
+    return this.kernels.exportKernel(sessionId);
+  }
+  /** Resource-only shutdown: no capability, caller replacement or journal write is borrowed. */
+  async disposeKernelSession(sessionId) {
+    return this.kernels.disposeKernelSession(sessionId);
+  }
+  async closeKernelSession(sessionId) {
+    return this.kernels.closeKernelSession(sessionId);
+  }
   async createExplorationPlan(input) {
     await this.init();
     const ledger = new ExplorationBudgetLedger(input.budget);
@@ -1295,40 +1380,14 @@ var DiscoveryService = class {
   dispose() {
     if (this.disposal) return this.disposal;
     this.disposed = true;
-    this.disposal = this.disposeSessions();
+    this.disposal = this.kernels.disposeSessions();
     return this.disposal;
-  }
-  async disposeSessions() {
-    const sessionClosures = [...this.sessions.values()].map((session) => session.close());
-    const executions = [...this.executions].map(([id, pending]) => ({
-      pending,
-      signal: this.executionSignals.get(id)
-    }));
-    const settled = await Promise.allSettled([...sessionClosures, ...executions.map((item) => item.pending)]);
-    const failures = settled.filter(
-      (result, index) => result.status === "rejected" && (index < sessionClosures.length || !executions[index - sessionClosures.length]?.signal?.aborted)
-    );
-    if (failures.length)
-      throw new AggregateError(
-        failures.map((result) => result.reason),
-        "Discovery execution cleanup failed"
-      );
-    for (const [id, session] of this.sessions) {
-      const meta = this.sessionMeta.get(id);
-      if (!meta) throw new Error("Active discovery session has no journal metadata");
-      this.sessionMeta.set(id, {
-        ...meta,
-        status: session.status.status,
-        executionCount: session.status.executionCount
-      });
-    }
-    this.sessions.clear();
   }
 };
 
 // src/host.ts
 function create(input) {
-  if (!input || typeof input.projectId !== "string" || typeof input.projectRoot !== "string" || !isAbsolute2(input.projectRoot))
+  if (!input || typeof input.projectId !== "string" || typeof input.projectRoot !== "string" || !isAbsolute3(input.projectRoot))
     throw new Error("Discovery requires a project identity and absolute project root");
   if (!input.services) throw new Error("Discovery requires host-owned services");
   const service = new DiscoveryService(input);

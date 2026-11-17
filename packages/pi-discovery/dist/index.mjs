@@ -1,10 +1,10 @@
 // @ts-nocheck
 // src/native-runtime.ts
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash as createHash2, randomBytes, randomUUID as randomUUID3 } from "node:crypto";
-import { link, lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { randomBytes, randomUUID as randomUUID3 } from "node:crypto";
+import { link, lstat as lstat2, mkdir, readdir, readFile as readFile2, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, isAbsolute as isAbsolute2, join, relative as relative2, sep } from "node:path";
+import { dirname, isAbsolute as isAbsolute4, join as join2, relative as relative2, sep } from "node:path";
 import {
   ContainerSandboxRunner,
   describeContainerExecution,
@@ -14,8 +14,686 @@ import {
 } from "@gyoungwe/plugin-api/node/execution";
 import { PluginResourceReservations } from "@gyoungwe/plugin-api/node/reservations";
 
-// src/runtime.ts
+// src/native-state.ts
 import { createHash } from "node:crypto";
+import { lstat, readFile } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
+var hash = (text) => createHash("sha256").update(text).digest("hex");
+var filePath = async (root, path) => {
+  if (isAbsolute(path) || path.includes("\\") || path.includes("\0") || path !== "" && path.split("/").some((part) => !part || part === "." || part === ".."))
+    throw new Error("Expected a discovery state-relative path");
+  if ((await lstat(root)).isSymbolicLink()) throw new Error("Discovery state root contains a symlink");
+  let selected = root;
+  for (const part of path === "" ? [] : path.split("/")) {
+    selected = join(selected, part);
+    try {
+      if ((await lstat(selected)).isSymbolicLink())
+        throw new Error("Discovery state path contains a symlink");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  return selected;
+};
+var read = async (root, path) => {
+  const selected = await filePath(root, path);
+  let bytes;
+  try {
+    const metadata = await lstat(selected);
+    if (!metadata.isFile() || metadata.size > 1048576)
+      throw new Error("Discovery JSON state must be a file of at most 1 MiB");
+    bytes = await readFile(selected);
+  } catch (error) {
+    if (error.code === "ENOENT") return { kind: "missing", version: null };
+    throw error;
+  }
+  if (bytes.length > 1048576) throw new Error("Discovery JSON state exceeds 1 MiB");
+  return {
+    kind: "value",
+    value: JSON.parse(bytes.toString("utf8")),
+    version: hash(bytes.toString("utf8"))
+  };
+};
+
+// src/runtime-kernels.ts
+function createKernelOperations(context) {
+  const creator = () => creatorOwner(context);
+  const list = () => listKernels(creator);
+  const recover = (signal) => reconcile({ ...context, creatorOwner: creator, listKernels: list }, signal);
+  return {
+    listKernels: list,
+    createKernel: (input) => createKernel({ ...context, creatorOwner: creator }, input),
+    reconcile: recover,
+    executeKernel: (input, signal) => executeKernel({ creatorOwner: creator, reconcile: recover, listKernels: list }, input, signal),
+    closeKernel: (input, signal) => closeKernel({ creatorOwner: creator, reconcile: recover, listKernels: list }, input, signal)
+  };
+}
+async function creatorOwner({ workspace, findRoot, owner: owner2 }) {
+  const scope = await workspace();
+  if (scope.kind !== "session") throw new Error("Select a real creator SDK session for kernels");
+  const selected = await findRoot(scope);
+  if (!selected) throw new Error("Bind a discovery state directory before creating a logical kernel");
+  return { scope, owned: await owner2(scope, selected) };
+}
+var ownedKernel = (owned, creatorSessionId, sessionId) => {
+  const kernel = owned.kernels.get(sessionId);
+  if (!kernel || kernel.creatorSessionId !== creatorSessionId || !owned.activeKernels.has(sessionId))
+    throw new Error("Kernel belongs to another creator or is a historical record");
+  return kernel;
+};
+async function listKernels(creatorOwner2) {
+  const { scope, owned } = await creatorOwner2();
+  return {
+    kernels: (await owned.service.listKernelSessions()).map((kernel) => ({
+      ...kernel,
+      creatorSessionId: owned.kernels.get(kernel.sessionId)?.creatorSessionId ?? null,
+      ownership: !owned.activeKernels.has(kernel.sessionId) ? "historical" : owned.kernels.get(kernel.sessionId)?.creatorSessionId === scope.sessionId ? "own" : "another-creator",
+      ownershipState: owned.kernels.get(kernel.sessionId)?.status ?? "unassigned",
+      image: owned.kernels.get(kernel.sessionId)?.image ?? null,
+      logicalOnly: true
+    })),
+    intents: [...owned.intents.values()].map((intent) => ({
+      ...intent,
+      verification: owned.verifiedReceipts.has(intent.requestId) ? "host-verified-this-activation" : "historical-unverified"
+    }))
+  };
+}
+async function createKernel({ creatorOwner: creatorOwner2, capabilities }, input) {
+  const { scope, owned } = await creatorOwner2();
+  if (owned.kernels.has(input.sessionId) || await owned.service.getKernelSession(input.sessionId))
+    throw new Error("Kernel identity already exists; use a new identity");
+  if ([...owned.kernels.values()].some(
+    (item) => owned.activeKernels.has(item.sessionId) && item.runDirectory === input.runDirectory
+  ))
+    throw new Error("An active logical kernel already owns this runs directory");
+  const record = {
+    sessionId: input.sessionId,
+    creatorSessionId: scope.sessionId,
+    runDirectory: input.runDirectory,
+    image: input.image,
+    status: "creating"
+  };
+  await owned.writeMetadata((state) => ({ ...state, kernels: [...state.kernels, record] }));
+  const created = await owned.service.createKernelSession(input);
+  owned.activeKernels.add(input.sessionId);
+  await owned.writeMetadata((state) => ({
+    ...state,
+    kernels: state.kernels.map(
+      (item) => item.sessionId === input.sessionId ? { ...item, status: "active" } : item
+    )
+  }));
+  return {
+    kernel: created,
+    creatorSessionId: scope.sessionId,
+    logicalOnly: true,
+    environment: await capabilities.call("execution.describe", null)
+  };
+}
+async function reconcile({
+  creatorOwner: creatorOwner2,
+  applicationId,
+  capabilities,
+  listKernels: listKernels2
+}, signal) {
+  const { scope, owned } = await creatorOwner2();
+  for (const intent of [...owned.intents.values()].filter(
+    (item) => item.creatorSessionId === scope.sessionId
+  )) {
+    signal?.throwIfAborted();
+    if (intent.applicationId !== applicationId) {
+      await owned.writeMetadata((state) => ({
+        ...state,
+        intents: state.intents.map(
+          (item) => item.requestId === intent.requestId ? { ...item, status: "needs-recovery" } : item
+        )
+      }));
+      continue;
+    }
+    let receipt;
+    try {
+      receipt = await capabilities.call("execution.receipt", {
+        requestId: intent.requestId
+      });
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "EXECUTION_RECEIPT_NEEDS_RECOVERY")
+        throw error;
+      signal?.throwIfAborted();
+      await owned.writeMetadata((state) => ({
+        ...state,
+        intents: state.intents.map(
+          (item) => item.requestId === intent.requestId ? { ...item, status: "needs-recovery" } : item
+        )
+      }));
+      continue;
+    }
+    signal?.throwIfAborted();
+    await owned.writeMetadata((state) => ({
+      ...state,
+      intents: state.intents.map(
+        (item) => item.requestId === intent.requestId ? {
+          ...item,
+          status: receipt.kind === "missing" ? "not-accepted" : receipt.receipt.status,
+          ...receipt.kind === "value" ? { receipt: receipt.receipt } : {}
+        } : item
+      )
+    }));
+    owned.verifiedReceipts.add(intent.requestId);
+  }
+  signal?.throwIfAborted();
+  await owned.service.persistObservedKernelStates();
+  if (owned.closuresDirty) {
+    signal?.throwIfAborted();
+    await owned.writeMetadata((state) => state);
+    owned.closuresDirty = false;
+  }
+  return listKernels2();
+}
+async function executeKernel({
+  creatorOwner: creatorOwner2,
+  reconcile: reconcile2,
+  listKernels: listKernels2
+}, input, signal) {
+  const { scope, owned } = await creatorOwner2();
+  const kernel = ownedKernel(owned, scope.sessionId, input.sessionId);
+  if (kernel.status !== "active")
+    throw new Error("Kernel ownership is not active; reconcile it before execution");
+  const execution = await owned.service.executeKernel(input.sessionId, input.code, signal);
+  signal?.throwIfAborted();
+  await reconcile2(signal);
+  return { execution, ...await listKernels2() };
+}
+async function closeKernel({
+  creatorOwner: creatorOwner2,
+  reconcile: reconcile2,
+  listKernels: listKernels2
+}, input, signal) {
+  const { scope, owned } = await creatorOwner2();
+  ownedKernel(owned, scope.sessionId, input.sessionId);
+  signal?.throwIfAborted();
+  await owned.service.closeKernelSession(input.sessionId);
+  signal?.throwIfAborted();
+  await reconcile2(signal);
+  await owned.writeMetadata((state) => ({
+    ...state,
+    kernels: state.kernels.map(
+      (item) => item.sessionId === input.sessionId ? { ...item, status: "closed" } : item
+    )
+  }));
+  owned.activeKernels.delete(input.sessionId);
+  return listKernels2();
+}
+
+// src/native-records.ts
+var JOURNALS = ["sessions", "critics", "multipath", "plans", "evaluations", "baselines"];
+
+// src/runtime-schemas.ts
+var readMetadata = {
+  drone: { readOnly: true, capabilities: ["research", "analysis"] }
+};
+var writeMetadata = { drone: { capabilities: ["research", "analysis"] } };
+var nullSchema = { type: "null" };
+var objectSchema = { type: "object" };
+var bindingSchema = {
+  type: "object",
+  properties: {
+    root: { type: "string", minLength: 1 },
+    acknowledgeExistingData: { type: "boolean" }
+  },
+  required: ["root", "acknowledgeExistingData"],
+  additionalProperties: false
+};
+var planSchema = {
+  type: "object",
+  properties: {
+    id: { type: "string", minLength: 1 },
+    hypothesisId: { type: "string", minLength: 1 },
+    prior: {
+      type: "object",
+      properties: {
+        direction: { enum: ["positive", "negative", "none", "unknown"] },
+        recordedAt: { type: "string" },
+        confidence: { type: "number", minimum: 0, maximum: 1 },
+        magnitude: { type: "number", minimum: 0 }
+      },
+      required: ["direction", "recordedAt"],
+      additionalProperties: false
+    },
+    budget: {
+      type: "object",
+      properties: {
+        maxExecutions: { type: "integer", minimum: 1 },
+        maxWallTimeMs: { type: "integer", minimum: 1 },
+        maxOutputBytes: { type: "integer", minimum: 1 },
+        maxCostUnits: { type: "number", exclusiveMinimum: 0 }
+      },
+      required: ["maxExecutions", "maxWallTimeMs", "maxOutputBytes", "maxCostUnits"],
+      additionalProperties: false
+    },
+    candidates: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string", minLength: 1 },
+          statement: { type: "string", minLength: 1 },
+          surprise: { type: "number", minimum: 0, maximum: 1 },
+          estimatedCost: { type: "number", exclusiveMinimum: 0 },
+          expectedExplanationsExcluded: { type: "number", minimum: 0 },
+          credibility: { type: "number", minimum: 0, maximum: 1 }
+        },
+        required: [
+          "id",
+          "statement",
+          "surprise",
+          "estimatedCost",
+          "expectedExplanationsExcluded",
+          "credibility"
+        ],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ["id", "hypothesisId", "prior", "budget", "candidates"],
+  additionalProperties: false
+};
+var journalSchema = { type: "string", enum: JOURNALS };
+var kernelSchema = {
+  type: "object",
+  properties: {
+    sessionId: { type: "string", minLength: 1, maxLength: 128, pattern: "^[a-zA-Z0-9._-]+$" },
+    runDirectory: { type: "string", minLength: 6, pattern: "^runs/" },
+    language: { enum: ["python", "r"] },
+    image: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" },
+    dataClassification: { enum: ["public", "internal", "controlled", "restricted"] },
+    idleTimeoutMs: { type: "integer", minimum: 1, maximum: 12e4 },
+    executionTimeoutMs: { type: "integer", minimum: 1, maximum: 12e4 },
+    maxExecutions: { type: "integer", minimum: 1, maximum: 32 },
+    maxOutputBytes: { type: "integer", minimum: 1, maximum: 1e6 }
+  },
+  required: ["sessionId", "runDirectory", "language", "image", "dataClassification"],
+  additionalProperties: false
+};
+var kernelIdSchema = {
+  type: "object",
+  properties: { sessionId: kernelSchema.properties.sessionId },
+  required: ["sessionId"],
+  additionalProperties: false
+};
+var kernelExecuteSchema = {
+  type: "object",
+  properties: {
+    sessionId: kernelSchema.properties.sessionId,
+    code: { type: "string", minLength: 1, maxLength: 1e6 }
+  },
+  required: ["sessionId", "code"],
+  additionalProperties: false
+};
+var requestSchema = {
+  type: "object",
+  properties: {
+    requestId: { type: "string", minLength: 1, maxLength: 128, pattern: "^[a-zA-Z0-9._-]+$" }
+  },
+  required: ["requestId"],
+  additionalProperties: false
+};
+
+// src/runtime-native-session.ts
+var response = (details) => ({
+  content: [{ type: "text", text: JSON.stringify(details) }],
+  details
+});
+var createNativeSession = ({
+  caller,
+  listKernels: listKernels2,
+  createKernel: createKernel2,
+  executeKernel: executeKernel2,
+  closeKernel: closeKernel2,
+  reconcile: reconcile2,
+  operations,
+  recordInquiry,
+  overview,
+  list,
+  bind,
+  createPlan,
+  owners,
+  signal,
+  events
+}) => {
+  let creatorSessionId;
+  return {
+    toolEffects: {
+      discovery_status: "read",
+      discovery_list_records: "read",
+      discovery_search_records: "read",
+      discovery_bind_workspace: "write",
+      discovery_create_plan: "write",
+      discovery_execution_environment: "read",
+      discovery_execution_receipt: "read",
+      discovery_cancel_execution: "write",
+      discovery_list_kernels: "read",
+      discovery_create_kernel: "write",
+      discovery_execute_kernel: "write",
+      discovery_close_kernel: "write",
+      discovery_reconcile_executions: "write",
+      discovery_record_inquiry: "write"
+    },
+    extension(pi) {
+      const adapted = Object.create(pi);
+      adapted.registerTool = (definition) => pi.registerTool({
+        ...definition,
+        async execute(id, input, signal2, update, context) {
+          const scope = await caller();
+          if (scope.kind !== "session" || creatorSessionId && creatorSessionId !== scope.sessionId)
+            throw new Error("Native projection belongs to another SDK session");
+          creatorSessionId = scope.sessionId;
+          return definition.execute(id, input, signal2, update, context);
+        }
+      });
+      const nativePi = adapted;
+      const emptyParameters = {
+        type: "object",
+        properties: {},
+        additionalProperties: false
+      };
+      const kernelTools = [
+        ["discovery_list_kernels", emptyParameters, "read", () => listKernels2()],
+        [
+          "discovery_create_kernel",
+          kernelSchema,
+          "write",
+          (input) => createKernel2(input)
+        ],
+        [
+          "discovery_execute_kernel",
+          kernelExecuteSchema,
+          "write",
+          (input, signal2) => executeKernel2(input, signal2)
+        ],
+        [
+          "discovery_close_kernel",
+          kernelIdSchema,
+          "write",
+          (input, signal2) => closeKernel2(input, signal2)
+        ],
+        ["discovery_reconcile_executions", emptyParameters, "write", (_input, signal2) => reconcile2(signal2)]
+      ];
+      for (const [name, parameters, effect, run] of kernelTools)
+        nativePi.registerTool({
+          name,
+          label: "Discovery \xB7 logical kernel",
+          description: name === "discovery_create_kernel" ? "Create only a creator-owned logical kernel and budget; no container is started. Configured cached images and actual approval are still required for execution." : "Operate only the calling creator SDK session's discovery logical kernels and verified host receipts; historical records cannot be adopted.",
+          parameters,
+          ...effect === "read" ? readMetadata : writeMetadata,
+          async execute(_id, input, signal2) {
+            return response(await run(input, signal2));
+          }
+        });
+      for (const [name, operation, effect, description] of [
+        [
+          "discovery_execution_environment",
+          "executionDescription",
+          "read",
+          "Read only the configured Python/R cached exact image identities; never pulls or enumerates images."
+        ],
+        [
+          "discovery_execution_receipt",
+          "executionReceipt",
+          "read",
+          "Read only this live creator session's own host execution receipt; missing is not closed."
+        ],
+        [
+          "discovery_cancel_execution",
+          "cancelExecution",
+          "write",
+          "Cancel this creator's accepted execution, wait for owned cleanup and return its terminal receipt; missing is never closed."
+        ]
+      ])
+        nativePi.registerTool({
+          name,
+          label: "Discovery \xB7 execution",
+          description,
+          parameters: operations[operation].inputSchema.type === "null" ? { type: "object", properties: {}, additionalProperties: false } : requestSchema,
+          ...effect === "read" ? readMetadata : writeMetadata,
+          async execute(_id, input) {
+            return response(
+              await operations[operation].execute(operation === "executionDescription" ? null : input)
+            );
+          }
+        });
+      nativePi.registerTool({
+        name: "discovery_record_inquiry",
+        label: "Discovery \xB7 Inquiry",
+        description: "Record a discovery question and attempt through the optional versioned Inquiry provider bound to this actual workspace. Records remain asserted data. Each provider write needs its own current authorization.",
+        parameters: operations.recordInquiry.inputSchema,
+        ...writeMetadata,
+        async execute(_id, input) {
+          return response(await recordInquiry(input));
+        }
+      });
+      nativePi.registerTool({
+        name: "discovery_status",
+        label: "Discovery \xB7 status",
+        description: "Read approved discovery roots and current workspace journals; does not acquire writer ownership.",
+        parameters: {
+          type: "object",
+          properties: { root: { type: "string" } },
+          additionalProperties: false
+        },
+        ...readMetadata,
+        async execute(_id, input) {
+          return response(await overview(input.root));
+        }
+      });
+      for (const name of ["discovery_list_records", "discovery_search_records"])
+        nativePi.registerTool({
+          name,
+          label: "Discovery \xB7 records",
+          description: "Read approved current-workspace discovery journal records; observations are not independent scientific validation.",
+          parameters: operations.listRecords.inputSchema,
+          ...readMetadata,
+          async execute(_id, input) {
+            return response(await list(input));
+          }
+        });
+      nativePi.registerTool({
+        name: "discovery_bind_workspace",
+        label: "Discovery \xB7 bind",
+        description: "Explicitly bind an approved state directory to this real workspace, acknowledge any existing journals, and acquire exclusive writer ownership.",
+        parameters: bindingSchema,
+        ...writeMetadata,
+        async execute(_id, input) {
+          return response(await bind(input));
+        }
+      });
+      nativePi.registerTool({
+        name: "discovery_create_plan",
+        label: "Discovery \xB7 plan",
+        description: "Persist a ranked exploration plan in the bound workspace. Does not execute code or certify scientific validity.",
+        parameters: planSchema,
+        ...writeMetadata,
+        async execute(_id, input) {
+          return response(await createPlan(input));
+        }
+      });
+    },
+    async dispose() {
+      if (!creatorSessionId) return;
+      const closing = [...owners.values()].flatMap(
+        (owned) => [...owned.kernels.values()].filter(
+          (kernel) => kernel.creatorSessionId === creatorSessionId && owned.activeKernels.has(kernel.sessionId)
+        ).map(async (kernel) => {
+          await owned.service.disposeKernelSession(kernel.sessionId);
+          owned.activeKernels.delete(kernel.sessionId);
+          owned.kernels.set(kernel.sessionId, { ...kernel, status: "closed" });
+          owned.closuresDirty = true;
+        })
+      );
+      const results = await Promise.allSettled(closing);
+      const failures = results.filter((result) => result.status === "rejected");
+      if (failures.length)
+        throw new AggregateError(
+          failures.map((result) => result.reason),
+          "Creator kernel cleanup failed"
+        );
+      if (!signal.aborted) events.changed();
+    }
+  };
+};
+
+// src/runtime-operations.ts
+function createOperations(capabilities, workspace, kernels) {
+  return {
+    ...inquiryOperations(workspace),
+    ...workspaceOperations(workspace),
+    ...kernelOperations(kernels),
+    ...executionOperations(capabilities),
+    ...planOperations(workspace)
+  };
+}
+function inquiryOperations({ recordInquiry }) {
+  return {
+    recordInquiry: {
+      inputSchema: {
+        type: "object",
+        properties: {
+          projectId: { type: "string" },
+          questionId: { type: "string" },
+          statement: { type: "string" },
+          hypothesisId: { type: "string" },
+          prior: { type: "object" },
+          posterior: { type: "object" },
+          explanations: { type: "array", items: { type: "object" } },
+          testsPlanned: { type: "array", items: { type: "string" } },
+          attemptId: { type: "string" },
+          parameters: { type: "object" },
+          artifactIds: { type: "array", items: { type: "string" } }
+        },
+        required: [
+          "projectId",
+          "questionId",
+          "statement",
+          "prior",
+          "explanations",
+          "testsPlanned",
+          "attemptId"
+        ],
+        additionalProperties: false
+      },
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (input) => recordInquiry(input)
+    }
+  };
+}
+function workspaceOperations({ overview, bind, list }) {
+  return {
+    overview: {
+      inputSchema: nullSchema,
+      resultSchema: objectSchema,
+      effect: "read",
+      execute: () => overview()
+    },
+    bindCurrentWorkspace: {
+      inputSchema: bindingSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (input) => bind(input)
+    },
+    listRecords: {
+      inputSchema: {
+        type: "object",
+        properties: {
+          root: { type: "string" },
+          journal: journalSchema,
+          query: { type: "string", minLength: 1, maxLength: 2e3 }
+        },
+        required: ["journal"],
+        additionalProperties: false
+      },
+      resultSchema: objectSchema,
+      effect: "read",
+      execute: (input) => list(input)
+    }
+  };
+}
+function kernelOperations({
+  listKernels: listKernels2,
+  createKernel: createKernel2,
+  executeKernel: executeKernel2,
+  closeKernel: closeKernel2,
+  reconcile: reconcile2
+}) {
+  return {
+    listKernelSessions: {
+      inputSchema: nullSchema,
+      resultSchema: objectSchema,
+      effect: "read",
+      execute: () => listKernels2()
+    },
+    createKernelSession: {
+      inputSchema: kernelSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (input) => createKernel2(input)
+    },
+    executeKernel: {
+      inputSchema: kernelExecuteSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (input, context) => executeKernel2(input, context.signal)
+    },
+    closeKernelSession: {
+      inputSchema: kernelIdSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (input, context) => closeKernel2(input, context.signal)
+    },
+    reconcileExecutions: {
+      inputSchema: nullSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (_input, context) => reconcile2(context.signal)
+    }
+  };
+}
+function executionOperations(capabilities) {
+  const executionDescription = () => capabilities.call("execution.describe", null);
+  const executionReceipt = (input) => capabilities.call("execution.receipt", input);
+  const cancelExecution = (input) => capabilities.call("execution.cancel", input);
+  return {
+    executionDescription: {
+      inputSchema: nullSchema,
+      resultSchema: objectSchema,
+      effect: "read",
+      execute: () => executionDescription()
+    },
+    executionReceipt: {
+      inputSchema: requestSchema,
+      resultSchema: objectSchema,
+      effect: "read",
+      execute: executionReceipt
+    },
+    cancelExecution: {
+      inputSchema: requestSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: cancelExecution
+    }
+  };
+}
+function planOperations({ createPlan }) {
+  return {
+    createExplorationPlan: {
+      inputSchema: planSchema,
+      resultSchema: objectSchema,
+      effect: "write",
+      execute: (input) => createPlan(input)
+    }
+  };
+}
+
+// src/runtime-owner.ts
+import { createHash as createHash2 } from "node:crypto";
 
 // src/domain/deadline.ts
 async function withDeadline(operation, timeoutMs, reason) {
@@ -876,21 +1554,55 @@ function inquiryProvider(capabilities, discoveryProjectId) {
   };
 }
 
-// src/native-records.ts
-var JOURNALS = ["sessions", "critics", "multipath", "plans", "evaluations", "baselines"];
-
-// src/service.ts
-import { isAbsolute, relative, resolve } from "node:path";
-function safeProjectId(value) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("Invalid discovery project id");
+// src/runtime-state.ts
+function binding(value) {
+  const item = value;
+  if (!item || item.schemaVersion !== 1 || typeof item.workspaceId !== "string" || typeof item.workspaceDirectory !== "string" || typeof item.projectId !== "string")
+    throw new Error("Discovery workspace binding is malformed");
+  return item;
+}
+function records(value, journal) {
+  if (!Array.isArray(value) || value.some((item) => !item || typeof item !== "object" || Array.isArray(item)))
+    throw new Error(`Discovery journal ${journal} must contain an array of records`);
   return value;
 }
+function ownerMetadata(value) {
+  const item = value;
+  if (!item || item.schemaVersion !== 1 || !Array.isArray(item.kernels) || !Array.isArray(item.intents))
+    throw new Error("Discovery owner metadata is malformed");
+  for (const record of item.kernels) {
+    if (!record || typeof record.sessionId !== "string" || typeof record.creatorSessionId !== "string" || typeof record.runDirectory !== "string" || typeof record.image !== "string" || !["creating", "active", "closed", "cleanup-failed"].includes(record.status))
+      throw new Error("Discovery kernel ownership metadata is malformed");
+  }
+  for (const record of item.intents) {
+    if (!record || typeof record.requestId !== "string" || typeof record.applicationId !== "string" || typeof record.sessionId !== "string" || typeof record.creatorSessionId !== "string" || typeof record.codeSha256 !== "string" || ![
+      "pending",
+      "not-accepted",
+      "needs-recovery",
+      "accepted",
+      "succeeded",
+      "failed",
+      "cancelled",
+      "cleanup-failed"
+    ].includes(record.status))
+      throw new Error("Discovery execution intent metadata is malformed");
+  }
+  if (new Set(item.kernels.map((record) => record.sessionId)).size !== item.kernels.length || new Set(item.intents.map((record) => record.requestId)).size !== item.intents.length)
+    throw new Error("Discovery owner metadata contains duplicate identities");
+  return item;
+}
+
+// src/service.ts
+import { isAbsolute as isAbsolute3, resolve as resolve2 } from "node:path";
+
+// src/service-kernels.ts
+import { isAbsolute as isAbsolute2, relative, resolve } from "node:path";
 function safeSessionId(value) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("Invalid discovery session id");
   return value;
 }
 function safeRunDirectory(projectRoot, value) {
-  if (isAbsolute(value) || value.includes("\0"))
+  if (isAbsolute2(value) || value.includes("\0"))
     throw new Error("Discovery run directory must be relative");
   const normalized = value.replaceAll("\\", "/");
   const candidate = resolve(projectRoot, normalized);
@@ -907,94 +1619,25 @@ function toCapabilities(value) {
     writesOnlyToRunDirectory: value.writesOnlyToRunDirectory
   };
 }
-var FileBaselineStore = class {
-  constructor(store) {
-    this.store = store;
+var DiscoveryKernelSessions = class {
+  constructor(projectId, projectRoot, options, sessionsStore, sessionMeta, init, isDisposed) {
+    this.projectId = projectId;
+    this.projectRoot = projectRoot;
+    this.options = options;
+    this.sessionsStore = sessionsStore;
+    this.sessionMeta = sessionMeta;
+    this.init = init;
+    this.isDisposed = isDisposed;
   }
-  async put(record) {
-    const normalized = createBaseline(record);
-    const records2 = await this.store.read();
-    const index = records2.findIndex(
-      (item) => item.metric === normalized.metric && item.datasetId === normalized.datasetId && item.datasetRevision === normalized.datasetRevision
-    );
-    if (index >= 0) records2[index] = normalized;
-    else records2.push(normalized);
-    await this.store.write(records2);
-  }
-  async get(metric, datasetId, revision) {
-    return (await this.store.read()).find(
-      (item) => item.metric === metric && item.datasetId === datasetId && item.datasetRevision === revision
-    );
-  }
-  async list() {
-    return await this.store.read();
-  }
-};
-var DiscoveryService = class {
-  projectId;
-  projectRoot;
-  options;
-  sessionsStore;
-  criticsStore;
-  multipathStore;
-  plansStore;
-  evaluationsStore;
-  baselineStore;
   sessions = /* @__PURE__ */ new Map();
-  sessionMeta = /* @__PURE__ */ new Map();
-  critics = [];
-  multipaths = [];
-  plans = [];
-  evaluations = [];
-  initialized;
   creations = Promise.resolve();
   sessionWrites = Promise.resolve();
   sessionsRevision = 0;
   savedSessionsRevision = 0;
-  disposed = false;
   executions = /* @__PURE__ */ new Map();
   executionSignals = /* @__PURE__ */ new Map();
-  disposal;
-  constructor(options) {
-    this.projectId = safeProjectId(options.projectId);
-    if (!isAbsolute(options.projectRoot)) throw new Error("discovery projectRoot must be absolute");
-    this.projectRoot = resolve(options.projectRoot);
-    this.options = options;
-    this.sessionsStore = options.services.journal("sessions");
-    this.criticsStore = options.services.journal("critics");
-    this.multipathStore = options.services.journal("multipath");
-    this.plansStore = options.services.journal("plans");
-    this.evaluationsStore = options.services.journal("evaluations");
-    this.baselineStore = new FileBaselineStore(
-      options.services.journal("baselines")
-    );
-  }
-  async init() {
-    if (this.disposed) throw new Error("discovery service is disposed");
-    if (this.initialized) return this.initialized;
-    this.initialized = (async () => {
-      if (this.disposed) throw new Error("discovery service is disposed");
-      const [sessions, critics, multipaths, plans, evaluations] = await Promise.all([
-        this.sessionsStore.read(),
-        this.criticsStore.read(),
-        this.multipathStore.read(),
-        this.plansStore.read(),
-        this.evaluationsStore.read()
-      ]);
-      for (const session of sessions) {
-        try {
-          if (safeSessionId(session.sessionId) && session.runDirectory.startsWith("runs/"))
-            this.sessionMeta.set(session.sessionId, session);
-        } catch (error) {
-          console.warn("Ignored invalid discovery session journal entry", error);
-        }
-      }
-      this.critics.splice(0, this.critics.length, ...critics);
-      this.multipaths.splice(0, this.multipaths.length, ...multipaths);
-      this.plans.splice(0, this.plans.length, ...plans);
-      this.evaluations.splice(0, this.evaluations.length, ...evaluations);
-    })();
-    return this.initialized;
+  get disposed() {
+    return this.isDisposed();
   }
   async authorize(operation) {
     await this.options.services.authorize(operation);
@@ -1073,13 +1716,6 @@ var DiscoveryService = class {
   async getKernelSession(sessionId) {
     await this.init();
     return this.sessionProjection(safeSessionId(sessionId));
-  }
-  async recordDiscovery(input) {
-    await this.init();
-    if (!this.options.services.inquiry) throw new Error("inquiry ledger is not configured");
-    if (input.projectId !== this.projectId)
-      throw new Error("discovery project does not match inquiry project");
-    await recordDiscoveryToInquiry(this.options.services.inquiry, input);
   }
   createKernelSession(input) {
     const pending = this.creations.then(() => this.createKernel(input));
@@ -1226,6 +1862,170 @@ var DiscoveryService = class {
     await this.disposeKernelSession(id);
     await this.persistSessions();
   }
+  async disposeSessions() {
+    const sessionClosures = [...this.sessions.values()].map((session) => session.close());
+    const executions = [...this.executions].map(([id, pending]) => ({
+      pending,
+      signal: this.executionSignals.get(id)
+    }));
+    const settled = await Promise.allSettled([...sessionClosures, ...executions.map((item) => item.pending)]);
+    const failures = settled.filter(
+      (result, index) => result.status === "rejected" && (index < sessionClosures.length || !executions[index - sessionClosures.length]?.signal?.aborted)
+    );
+    if (failures.length)
+      throw new AggregateError(
+        failures.map((result) => result.reason),
+        "Discovery execution cleanup failed"
+      );
+    for (const [id, session] of this.sessions) {
+      const meta = this.sessionMeta.get(id);
+      if (!meta) throw new Error("Active discovery session has no journal metadata");
+      this.sessionMeta.set(id, {
+        ...meta,
+        status: session.status.status,
+        executionCount: session.status.executionCount
+      });
+    }
+    this.sessions.clear();
+  }
+};
+
+// src/service.ts
+function safeProjectId(value) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("Invalid discovery project id");
+  return value;
+}
+var FileBaselineStore = class {
+  constructor(store) {
+    this.store = store;
+  }
+  async put(record) {
+    const normalized = createBaseline(record);
+    const records2 = await this.store.read();
+    const index = records2.findIndex(
+      (item) => item.metric === normalized.metric && item.datasetId === normalized.datasetId && item.datasetRevision === normalized.datasetRevision
+    );
+    if (index >= 0) records2[index] = normalized;
+    else records2.push(normalized);
+    await this.store.write(records2);
+  }
+  async get(metric, datasetId, revision) {
+    return (await this.store.read()).find(
+      (item) => item.metric === metric && item.datasetId === datasetId && item.datasetRevision === revision
+    );
+  }
+  async list() {
+    return await this.store.read();
+  }
+};
+var DiscoveryService = class {
+  projectId;
+  projectRoot;
+  options;
+  sessionsStore;
+  criticsStore;
+  multipathStore;
+  plansStore;
+  evaluationsStore;
+  baselineStore;
+  sessionMeta = /* @__PURE__ */ new Map();
+  critics = [];
+  multipaths = [];
+  plans = [];
+  evaluations = [];
+  initialized;
+  disposed = false;
+  disposal;
+  kernels;
+  constructor(options) {
+    this.projectId = safeProjectId(options.projectId);
+    if (!isAbsolute3(options.projectRoot)) throw new Error("discovery projectRoot must be absolute");
+    this.projectRoot = resolve2(options.projectRoot);
+    this.options = options;
+    this.sessionsStore = options.services.journal("sessions");
+    this.criticsStore = options.services.journal("critics");
+    this.multipathStore = options.services.journal("multipath");
+    this.plansStore = options.services.journal("plans");
+    this.evaluationsStore = options.services.journal("evaluations");
+    this.baselineStore = new FileBaselineStore(
+      options.services.journal("baselines")
+    );
+    this.kernels = new DiscoveryKernelSessions(
+      this.projectId,
+      this.projectRoot,
+      options,
+      this.sessionsStore,
+      this.sessionMeta,
+      () => this.init(),
+      () => this.disposed
+    );
+  }
+  async init() {
+    if (this.disposed) throw new Error("discovery service is disposed");
+    if (this.initialized) return this.initialized;
+    this.initialized = (async () => {
+      if (this.disposed) throw new Error("discovery service is disposed");
+      const [sessions, critics, multipaths, plans, evaluations] = await Promise.all([
+        this.sessionsStore.read(),
+        this.criticsStore.read(),
+        this.multipathStore.read(),
+        this.plansStore.read(),
+        this.evaluationsStore.read()
+      ]);
+      for (const session of sessions) {
+        try {
+          if (safeSessionId(session.sessionId) && session.runDirectory.startsWith("runs/"))
+            this.sessionMeta.set(session.sessionId, session);
+        } catch (error) {
+          console.warn("Ignored invalid discovery session journal entry", error);
+        }
+      }
+      this.critics.splice(0, this.critics.length, ...critics);
+      this.multipaths.splice(0, this.multipaths.length, ...multipaths);
+      this.plans.splice(0, this.plans.length, ...plans);
+      this.evaluations.splice(0, this.evaluations.length, ...evaluations);
+    })();
+    return this.initialized;
+  }
+  async authorize(operation) {
+    await this.options.services.authorize(operation);
+  }
+  async getCapabilities(language) {
+    return this.kernels.getCapabilities(language);
+  }
+  /** Called only by an explicit legitimate runtime reconcile operation, never by dispose. */
+  async persistObservedKernelStates() {
+    return this.kernels.persistObservedKernelStates();
+  }
+  async listKernelSessions() {
+    return this.kernels.listKernelSessions();
+  }
+  async getKernelSession(sessionId) {
+    return this.kernels.getKernelSession(sessionId);
+  }
+  async recordDiscovery(input) {
+    await this.init();
+    if (!this.options.services.inquiry) throw new Error("inquiry ledger is not configured");
+    if (input.projectId !== this.projectId)
+      throw new Error("discovery project does not match inquiry project");
+    await recordDiscoveryToInquiry(this.options.services.inquiry, input);
+  }
+  createKernelSession(input) {
+    return this.kernels.createKernelSession(input);
+  }
+  async executeKernel(sessionId, code, signal) {
+    return this.kernels.executeKernel(sessionId, code, signal);
+  }
+  async exportKernel(sessionId) {
+    return this.kernels.exportKernel(sessionId);
+  }
+  /** Resource-only shutdown: no capability, caller replacement or journal write is borrowed. */
+  async disposeKernelSession(sessionId) {
+    return this.kernels.disposeKernelSession(sessionId);
+  }
+  async closeKernelSession(sessionId) {
+    return this.kernels.closeKernelSession(sessionId);
+  }
   async createExplorationPlan(input) {
     await this.init();
     const ledger = new ExplorationBudgetLedger(input.budget);
@@ -1351,148 +2151,373 @@ var DiscoveryService = class {
   dispose() {
     if (this.disposal) return this.disposal;
     this.disposed = true;
-    this.disposal = this.disposeSessions();
+    this.disposal = this.kernels.disposeSessions();
     return this.disposal;
-  }
-  async disposeSessions() {
-    const sessionClosures = [...this.sessions.values()].map((session) => session.close());
-    const executions = [...this.executions].map(([id, pending]) => ({
-      pending,
-      signal: this.executionSignals.get(id)
-    }));
-    const settled = await Promise.allSettled([...sessionClosures, ...executions.map((item) => item.pending)]);
-    const failures = settled.filter(
-      (result, index) => result.status === "rejected" && (index < sessionClosures.length || !executions[index - sessionClosures.length]?.signal?.aborted)
-    );
-    if (failures.length)
-      throw new AggregateError(
-        failures.map((result) => result.reason),
-        "Discovery execution cleanup failed"
-      );
-    for (const [id, session] of this.sessions) {
-      const meta = this.sessionMeta.get(id);
-      if (!meta) throw new Error("Active discovery session has no journal metadata");
-      this.sessionMeta.set(id, {
-        ...meta,
-        status: session.status.status,
-        executionCount: session.status.executionCount
-      });
-    }
-    this.sessions.clear();
   }
 };
 
-// src/runtime.ts
-var readMetadata = {
-  drone: { readOnly: true, capabilities: ["research", "analysis"] }
-};
-var writeMetadata = { drone: { capabilities: ["research", "analysis"] } };
-var bindingPath = "workspace-binding.json";
-var nullSchema = { type: "null" };
-var objectSchema = { type: "object" };
-var bindingSchema = {
-  type: "object",
-  properties: {
-    root: { type: "string", minLength: 1 },
-    acknowledgeExistingData: { type: "boolean" }
-  },
-  required: ["root", "acknowledgeExistingData"],
-  additionalProperties: false
-};
-var planSchema = {
-  type: "object",
-  properties: {
-    id: { type: "string", minLength: 1 },
-    hypothesisId: { type: "string", minLength: 1 },
-    prior: {
-      type: "object",
-      properties: {
-        direction: { enum: ["positive", "negative", "none", "unknown"] },
-        recordedAt: { type: "string" },
-        confidence: { type: "number", minimum: 0, maximum: 1 },
-        magnitude: { type: "number", minimum: 0 }
+// src/runtime-owner.ts
+var owner = async ({
+  owners,
+  capabilities,
+  events,
+  caller,
+  read: read2,
+  applicationId
+}, scope, root) => {
+  let current = owners.get(scope.workspaceId);
+  if (current) {
+    if (current.root !== root.root.handle)
+      throw new Error("Discovery workspace already owns another state root");
+    await current.ready;
+    return current;
+  }
+  const kernels = /* @__PURE__ */ new Map(), intents = /* @__PURE__ */ new Map();
+  const activeKernels = /* @__PURE__ */ new Set(), verifiedReceipts = /* @__PURE__ */ new Set();
+  let metadataVersion = null;
+  let metadataWrites = Promise.resolve();
+  const writeMetadata2 = (change) => {
+    const pending = metadataWrites.then(async () => {
+      const next = change({
+        schemaVersion: 1,
+        kernels: [...kernels.values()],
+        intents: [...intents.values()]
+      });
+      const written = await capabilities.call("state.writeJson", {
+        root: root.root.handle,
+        path: "owner-state.json",
+        value: next,
+        expectedVersion: metadataVersion
+      });
+      metadataVersion = written.version;
+      kernels.clear();
+      intents.clear();
+      for (const item of next.kernels) kernels.set(item.sessionId, item);
+      for (const item of next.intents) intents.set(item.requestId, item);
+      events.changed();
+    });
+    metadataWrites = pending.then(
+      () => void 0,
+      () => void 0
+    );
+    return pending;
+  };
+  const journals = /* @__PURE__ */ new Map();
+  const services = {
+    journal: (name) => ({
+      read: async () => {
+        const stored = await read2(root.root.handle, `${name}.json`);
+        journals.set(name, stored.version);
+        return stored.kind === "missing" ? [] : records(stored.value, name);
       },
-      required: ["direction", "recordedAt"],
-      additionalProperties: false
-    },
-    budget: {
-      type: "object",
-      properties: {
-        maxExecutions: { type: "integer", minimum: 1 },
-        maxWallTimeMs: { type: "integer", minimum: 1 },
-        maxOutputBytes: { type: "integer", minimum: 1 },
-        maxCostUnits: { type: "number", exclusiveMinimum: 0 }
-      },
-      required: ["maxExecutions", "maxWallTimeMs", "maxOutputBytes", "maxCostUnits"],
-      additionalProperties: false
-    },
-    candidates: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          id: { type: "string", minLength: 1 },
-          statement: { type: "string", minLength: 1 },
-          surprise: { type: "number", minimum: 0, maximum: 1 },
-          estimatedCost: { type: "number", exclusiveMinimum: 0 },
-          expectedExplanationsExcluded: { type: "number", minimum: 0 },
-          credibility: { type: "number", minimum: 0, maximum: 1 }
-        },
-        required: [
-          "id",
-          "statement",
-          "surprise",
-          "estimatedCost",
-          "expectedExplanationsExcluded",
-          "credibility"
-        ],
-        additionalProperties: false
+      write: async (value) => {
+        if (!journals.has(name)) {
+          const stored = await read2(root.root.handle, `${name}.json`);
+          journals.set(name, stored.version);
+        }
+        const written = await capabilities.call("state.writeJson", {
+          root: root.root.handle,
+          path: `${name}.json`,
+          value,
+          expectedVersion: journals.get(name)
+        });
+        journals.set(name, written.version);
+        events.changed();
       }
+    }),
+    authorize: async (operation) => {
+      const actual = await caller();
+      if (actual.kind !== "session")
+        throw new Error("Discovery mutation requires a real creator SDK session");
+      if ("sessionId" in operation) {
+        const ownership = kernels.get(operation.sessionId);
+        if (!ownership || ownership.creatorSessionId !== actual.sessionId || !activeKernels.has(operation.sessionId))
+          throw new Error("Kernel belongs to another creator or is historical");
+      }
+      await capabilities.call("state.reserve", {
+        root: root.root.handle,
+        path: ""
+      });
+    },
+    runner: async () => {
+      const environment = await capabilities.call("execution.describe", null);
+      if (environment.kind !== "container") return new UnavailableKernelRunner();
+      return {
+        capabilities: {
+          kind: "container",
+          languages: ["python", "r"],
+          networkDisabled: true,
+          writesOnlyToRunDirectory: true
+        },
+        async run(request) {
+          request.signal?.throwIfAborted();
+          const actual = await caller();
+          const ownership = [...kernels.values()].find(
+            (item) => item.runDirectory === request.runDirectory && activeKernels.has(item.sessionId)
+          );
+          if (actual.kind !== "session" || !ownership || ownership.creatorSessionId !== actual.sessionId)
+            throw new Error("Execution has no live creator-owned logical kernel");
+          const intent = {
+            requestId: request.requestId,
+            applicationId,
+            sessionId: ownership.sessionId,
+            creatorSessionId: actual.sessionId,
+            codeSha256: createHash2("sha256").update(request.code).digest("hex"),
+            status: "pending"
+          };
+          await writeMetadata2((state) => ({ ...state, intents: [...state.intents, intent] }));
+          request.signal?.throwIfAborted();
+          const executed = await capabilities.call(
+            "execution.run",
+            {
+              requestId: request.requestId,
+              language: request.language,
+              code: request.code,
+              runDirectory: request.runDirectory,
+              timeoutMs: request.timeoutMs,
+              maxOutputBytes: request.maxOutputBytes,
+              dataClassification: request.dataClassification,
+              image: ownership.image
+            },
+            request.signal
+          );
+          request.signal?.throwIfAborted();
+          await writeMetadata2((state) => ({
+            ...state,
+            intents: state.intents.map(
+              (item) => item.requestId === request.requestId ? { ...item, status: executed.receipt.status, receipt: executed.receipt } : item
+            )
+          }));
+          verifiedReceipts.add(request.requestId);
+          return executed.result;
+        }
+      };
+    },
+    inquiry: inquiryProvider(capabilities, root.binding.projectId),
+    files: {
+      prepareDirectory: async () => {
+        throw new Error("Controlled execution directory service is unavailable");
+      },
+      write: async () => {
+        throw new Error("Discovery export service is unavailable");
+      }
+    },
+    onExecution: async () => {
+      events.changed();
+    },
+    legacyJournal: async () => void 0
+  };
+  const service = new DiscoveryService({
+    projectId: root.binding.projectId,
+    projectRoot: scope.workspaceDirectory,
+    services
+  });
+  const ready = (async () => {
+    await service.init();
+    const stored = await read2(root.root.handle, "owner-state.json");
+    metadataVersion = stored.version;
+    if (stored.kind === "value") {
+      const metadata = ownerMetadata(stored.value);
+      for (const record of metadata.kernels) kernels.set(record.sessionId, record);
+      for (const record of metadata.intents) intents.set(record.requestId, record);
     }
-  },
-  required: ["id", "hypothesisId", "prior", "budget", "candidates"],
-  additionalProperties: false
+  })().catch((error) => {
+    owners.delete(scope.workspaceId);
+    throw error;
+  });
+  current = {
+    root: root.root.handle,
+    service,
+    kernels,
+    intents,
+    activeKernels,
+    verifiedReceipts,
+    ready,
+    writeMetadata: writeMetadata2,
+    closuresDirty: false
+  };
+  owners.set(scope.workspaceId, current);
+  await ready;
+  return current;
 };
-function binding(value) {
-  const item = value;
-  if (!item || item.schemaVersion !== 1 || typeof item.workspaceId !== "string" || typeof item.workspaceDirectory !== "string" || typeof item.projectId !== "string")
-    throw new Error("Discovery workspace binding is malformed");
-  return item;
+
+// src/runtime-workspace.ts
+import { createHash as createHash3 } from "node:crypto";
+var bindingPath = "workspace-binding.json";
+function createWorkspaceAccess(capabilities) {
+  const caller = () => capabilities.call("caller.scope", null);
+  const read2 = (root, path) => capabilities.call("state.readJson", { root, path });
+  const roots = () => describeRoots(capabilities, read2);
+  const workspace = () => currentWorkspace(caller);
+  const journalRecords = (root, journal) => readJournal(read2, root, journal);
+  const findRoot = (scope) => findWorkspaceRoot(roots, scope);
+  return { caller, read: read2, roots, workspace, journalRecords, findRoot };
 }
-function records(value, journal) {
-  if (!Array.isArray(value) || value.some((item) => !item || typeof item !== "object" || Array.isArray(item)))
-    throw new Error(`Discovery journal ${journal} must contain an array of records`);
-  return value;
+function createWorkspaceOperations(context) {
+  const overview = (preferredRoot) => readOverview(context, preferredRoot);
+  const bind = (input) => bindWorkspace({ ...context, overview }, input);
+  const list = (input) => listRecords(context, input);
+  const createPlan = (input) => createExplorationPlan(context, input);
+  const recordInquiry = (input) => recordDiscoveryInquiry(context, input);
+  return { overview, bind, list, createPlan, recordInquiry };
 }
-var response = (details) => ({
-  content: [{ type: "text", text: JSON.stringify(details) }],
-  details
-});
-function ownerMetadata(value) {
-  const item = value;
-  if (!item || item.schemaVersion !== 1 || !Array.isArray(item.kernels) || !Array.isArray(item.intents))
-    throw new Error("Discovery owner metadata is malformed");
-  for (const record of item.kernels) {
-    if (!record || typeof record.sessionId !== "string" || typeof record.creatorSessionId !== "string" || typeof record.runDirectory !== "string" || typeof record.image !== "string" || !["creating", "active", "closed", "cleanup-failed"].includes(record.status))
-      throw new Error("Discovery kernel ownership metadata is malformed");
+async function describeRoots(capabilities, read2) {
+  const granted = await capabilities.call(
+    "roots.describe",
+    null
+  );
+  return Promise.all(
+    granted.filter((item) => item.kind === "state").map(async (root) => {
+      const stored = await read2(root.handle, bindingPath);
+      const entries = stored.kind === "missing" ? await capabilities.call("state.list", {
+        root: root.handle,
+        path: ""
+      }) : [];
+      return {
+        root,
+        binding: stored.kind === "missing" ? null : binding(stored.value),
+        hasExistingData: stored.kind === "value" || entries.some((item) => JOURNALS.some((name) => item.name === `${name}.json`))
+      };
+    })
+  );
+}
+async function currentWorkspace(caller) {
+  const scope = await caller();
+  if (scope.kind === "application") throw new Error("Select a real workspace session before using discovery");
+  return scope;
+}
+async function readJournal(read2, root, journal) {
+  const stored = await read2(root, `${journal}.json`);
+  return stored.kind === "missing" ? [] : records(stored.value, journal);
+}
+async function findWorkspaceRoot(roots, scope) {
+  const selected = (await roots()).filter(
+    (item) => item.binding?.workspaceId === scope.workspaceId
+  );
+  if (selected.length > 1)
+    throw new Error("More than one approved discovery root is bound to this workspace");
+  return selected[0];
+}
+async function readOverview({ caller, roots, owners, journalRecords, capabilities }, preferredRoot) {
+  const scope = await caller();
+  const available = await roots();
+  const selected = scope.kind === "application" ? void 0 : available.find(
+    (item) => item.binding?.workspaceId === scope.workspaceId || !item.binding && item.root.handle === preferredRoot
+  );
+  const journals = selected ? await Promise.all(
+    JOURNALS.map(async (journal) => ({
+      journal,
+      count: (await journalRecords(selected.root.handle, journal)).length
+    }))
+  ) : [];
+  return {
+    scope,
+    readOnly: true,
+    status: journals.some((item) => item.count > 0) ? "configured" : "unconfigured",
+    readiness: scope.kind === "application" ? "select-session" : selected?.binding ? owners.has(scope.workspaceId) ? "ready" : "needs-ownership" : "needs-binding",
+    roots: available,
+    journals,
+    execution: "unavailable",
+    inquiry: await capabilities.call("provider.inspect", { alias: "inquiry" })
+  };
+}
+async function bindWorkspace({
+  workspace,
+  roots,
+  capabilities,
+  read: read2,
+  journalRecords,
+  owner: owner2,
+  events,
+  overview
+}, input) {
+  const scope = await workspace();
+  const selected = (await roots()).find((item) => item.root.handle === input.root);
+  if (!selected || selected.root.access !== "read-write")
+    throw new Error("Select an approved writable discovery state root");
+  if (selected.binding && selected.binding.workspaceId !== scope.workspaceId)
+    throw new Error("Discovery state belongs to another workspace");
+  if (!selected.binding && selected.hasExistingData && !input.acknowledgeExistingData)
+    throw new Error("Existing discovery journals require explicit acknowledgement before binding");
+  await capabilities.call("state.reserve", { root: input.root, path: "" });
+  const stored = await read2(input.root, bindingPath);
+  if (stored.kind === "value") {
+    if (binding(stored.value).workspaceId !== scope.workspaceId)
+      throw new Error("Discovery state belongs to another workspace");
+  } else {
+    const plans = await journalRecords(input.root, "plans");
+    const ids = plans.map((plan) => {
+      if (typeof plan.projectId !== "string")
+        throw new Error("Existing discovery plan has no project identity");
+      return plan.projectId;
+    });
+    const unique = [...new Set(ids)];
+    if (unique.length > 1) throw new Error("Existing discovery plans contain conflicting project identities");
+    const projectId = unique[0] ?? `discovery-${createHash3("sha256").update(scope.workspaceId).digest("hex").slice(0, 32)}`;
+    await capabilities.call("state.writeJson", {
+      root: input.root,
+      path: bindingPath,
+      value: {
+        schemaVersion: 1,
+        projectId,
+        workspaceId: scope.workspaceId,
+        workspaceDirectory: scope.workspaceDirectory
+      },
+      expectedVersion: null
+    });
   }
-  for (const record of item.intents) {
-    if (!record || typeof record.requestId !== "string" || typeof record.applicationId !== "string" || typeof record.sessionId !== "string" || typeof record.creatorSessionId !== "string" || typeof record.codeSha256 !== "string" || ![
-      "pending",
-      "not-accepted",
-      "needs-recovery",
-      "accepted",
-      "succeeded",
-      "failed",
-      "cancelled",
-      "cleanup-failed"
-    ].includes(record.status))
-      throw new Error("Discovery execution intent metadata is malformed");
-  }
-  if (new Set(item.kernels.map((record) => record.sessionId)).size !== item.kernels.length || new Set(item.intents.map((record) => record.requestId)).size !== item.intents.length)
-    throw new Error("Discovery owner metadata contains duplicate identities");
-  return item;
+  const verified = await read2(input.root, bindingPath);
+  if (verified.kind !== "value" || binding(verified.value).workspaceId !== scope.workspaceId)
+    throw new Error("Discovery workspace binding did not read back");
+  await owner2(scope, { ...selected, binding: binding(verified.value) });
+  events.changed();
+  return overview();
 }
+async function listRecords({ workspace, roots, findRoot, journalRecords }, input) {
+  const scope = await workspace();
+  const root = input.root ? (await roots()).find((item) => item.root.handle === input.root) : await findRoot(scope);
+  if (root?.binding && root.binding.workspaceId !== scope.workspaceId)
+    throw new Error("Discovery state belongs to another workspace");
+  if (!JOURNALS.includes(input.journal)) throw new Error("Unknown discovery journal");
+  if (!root)
+    return {
+      readOnly: true,
+      status: "unconfigured",
+      journal: input.journal,
+      records: [],
+      count: 0,
+      truncated: false
+    };
+  const values = await journalRecords(root.root.handle, input.journal);
+  const query = input.query?.trim().toLocaleLowerCase();
+  const matches = query ? values.filter((value) => JSON.stringify(value).toLocaleLowerCase().includes(query)) : values;
+  return {
+    readOnly: true,
+    status: "configured",
+    journal: input.journal,
+    records: matches.slice(0, 32),
+    count: matches.length,
+    truncated: matches.length > 32
+  };
+}
+async function createExplorationPlan({ workspace, findRoot, capabilities, owner: owner2 }, input) {
+  const scope = await workspace();
+  const selected = await findRoot(scope);
+  if (!selected) throw new Error("Bind a discovery state directory before creating a plan");
+  await capabilities.call("state.reserve", {
+    root: selected.root.handle,
+    path: ""
+  });
+  return (await owner2(scope, selected)).service.createExplorationPlan(input);
+}
+async function recordDiscoveryInquiry({ workspace, findRoot, owner: owner2 }, input) {
+  const scope = await workspace(), root = await findRoot(scope);
+  if (!root) throw new Error("Bind the Discovery state root first");
+  await (await owner2(scope, root)).service.recordDiscovery(input);
+  return { recorded: true, authority: "plugin-asserted-or-imported" };
+}
+
+// src/runtime.ts
 var createDiscoveryRuntime = async ({
   applicationId,
   signal,
@@ -1500,820 +2525,19 @@ var createDiscoveryRuntime = async ({
   events
 }) => {
   const owners = /* @__PURE__ */ new Map();
-  const caller = () => capabilities.call("caller.scope", null);
-  const read = (root, path) => capabilities.call("state.readJson", {
-    root,
-    path
-  });
-  const roots = async () => {
-    const granted = await capabilities.call(
-      "roots.describe",
-      null
-    );
-    return Promise.all(
-      granted.filter((item) => item.kind === "state").map(async (root) => {
-        const stored = await read(root.handle, bindingPath);
-        const entries = stored.kind === "missing" ? await capabilities.call("state.list", {
-          root: root.handle,
-          path: ""
-        }) : [];
-        return {
-          root,
-          binding: stored.kind === "missing" ? null : binding(stored.value),
-          hasExistingData: stored.kind === "value" || entries.some((item) => JOURNALS.some((name) => item.name === `${name}.json`))
-        };
-      })
-    );
+  const state = { applicationId, signal, capabilities, events, owners };
+  const access = createWorkspaceAccess(capabilities);
+  const context = {
+    ...state,
+    ...access,
+    owner: (scope, root) => owner({ ...state, ...access }, scope, root)
   };
-  const workspace = async () => {
-    const scope = await caller();
-    if (scope.kind === "application")
-      throw new Error("Select a real workspace session before using discovery");
-    return scope;
-  };
-  const journalRecords = async (root, journal) => {
-    const stored = await read(root, `${journal}.json`);
-    return stored.kind === "missing" ? [] : records(stored.value, journal);
-  };
-  const findRoot = async (scope) => {
-    const selected = (await roots()).filter(
-      (item) => item.binding?.workspaceId === scope.workspaceId
-    );
-    if (selected.length > 1)
-      throw new Error("More than one approved discovery root is bound to this workspace");
-    return selected[0];
-  };
-  const overview = async (preferredRoot) => {
-    const scope = await caller();
-    const available = await roots();
-    const selected = scope.kind === "application" ? void 0 : available.find(
-      (item) => item.binding?.workspaceId === scope.workspaceId || !item.binding && item.root.handle === preferredRoot
-    );
-    const journals = selected ? await Promise.all(
-      JOURNALS.map(async (journal) => ({
-        journal,
-        count: (await journalRecords(selected.root.handle, journal)).length
-      }))
-    ) : [];
-    return {
-      scope,
-      readOnly: true,
-      status: journals.some((item) => item.count > 0) ? "configured" : "unconfigured",
-      readiness: scope.kind === "application" ? "select-session" : selected?.binding ? owners.has(scope.workspaceId) ? "ready" : "needs-ownership" : "needs-binding",
-      roots: available,
-      journals,
-      execution: "unavailable",
-      inquiry: await capabilities.call("provider.inspect", { alias: "inquiry" })
-    };
-  };
-  const owner = async (scope, root) => {
-    let current = owners.get(scope.workspaceId);
-    if (current) {
-      if (current.root !== root.root.handle)
-        throw new Error("Discovery workspace already owns another state root");
-      await current.ready;
-      return current;
-    }
-    const kernels = /* @__PURE__ */ new Map(), intents = /* @__PURE__ */ new Map();
-    const activeKernels = /* @__PURE__ */ new Set(), verifiedReceipts = /* @__PURE__ */ new Set();
-    let metadataVersion = null;
-    let metadataWrites = Promise.resolve();
-    const writeMetadata2 = (change) => {
-      const pending = metadataWrites.then(async () => {
-        const next = change({
-          schemaVersion: 1,
-          kernels: [...kernels.values()],
-          intents: [...intents.values()]
-        });
-        const written = await capabilities.call("state.writeJson", {
-          root: root.root.handle,
-          path: "owner-state.json",
-          value: next,
-          expectedVersion: metadataVersion
-        });
-        metadataVersion = written.version;
-        kernels.clear();
-        intents.clear();
-        for (const item of next.kernels) kernels.set(item.sessionId, item);
-        for (const item of next.intents) intents.set(item.requestId, item);
-        events.changed();
-      });
-      metadataWrites = pending.then(
-        () => void 0,
-        () => void 0
-      );
-      return pending;
-    };
-    const journals = /* @__PURE__ */ new Map();
-    const services = {
-      journal: (name) => ({
-        read: async () => {
-          const stored = await read(root.root.handle, `${name}.json`);
-          journals.set(name, stored.version);
-          return stored.kind === "missing" ? [] : records(stored.value, name);
-        },
-        write: async (value) => {
-          if (!journals.has(name)) {
-            const stored = await read(root.root.handle, `${name}.json`);
-            journals.set(name, stored.version);
-          }
-          const written = await capabilities.call("state.writeJson", {
-            root: root.root.handle,
-            path: `${name}.json`,
-            value,
-            expectedVersion: journals.get(name)
-          });
-          journals.set(name, written.version);
-          events.changed();
-        }
-      }),
-      authorize: async (operation) => {
-        const actual = await caller();
-        if (actual.kind !== "session")
-          throw new Error("Discovery mutation requires a real creator SDK session");
-        if ("sessionId" in operation) {
-          const ownership = kernels.get(operation.sessionId);
-          if (!ownership || ownership.creatorSessionId !== actual.sessionId || !activeKernels.has(operation.sessionId))
-            throw new Error("Kernel belongs to another creator or is historical");
-        }
-        await capabilities.call("state.reserve", {
-          root: root.root.handle,
-          path: ""
-        });
-      },
-      runner: async () => {
-        const environment = await capabilities.call(
-          "execution.describe",
-          null
-        );
-        if (environment.kind !== "container") return new UnavailableKernelRunner();
-        return {
-          capabilities: {
-            kind: "container",
-            languages: ["python", "r"],
-            networkDisabled: true,
-            writesOnlyToRunDirectory: true
-          },
-          async run(request) {
-            request.signal?.throwIfAborted();
-            const actual = await caller();
-            const ownership = [...kernels.values()].find(
-              (item) => item.runDirectory === request.runDirectory && activeKernels.has(item.sessionId)
-            );
-            if (actual.kind !== "session" || !ownership || ownership.creatorSessionId !== actual.sessionId)
-              throw new Error("Execution has no live creator-owned logical kernel");
-            const intent = {
-              requestId: request.requestId,
-              applicationId,
-              sessionId: ownership.sessionId,
-              creatorSessionId: actual.sessionId,
-              codeSha256: createHash("sha256").update(request.code).digest("hex"),
-              status: "pending"
-            };
-            await writeMetadata2((state) => ({ ...state, intents: [...state.intents, intent] }));
-            request.signal?.throwIfAborted();
-            const executed = await capabilities.call(
-              "execution.run",
-              {
-                requestId: request.requestId,
-                language: request.language,
-                code: request.code,
-                runDirectory: request.runDirectory,
-                timeoutMs: request.timeoutMs,
-                maxOutputBytes: request.maxOutputBytes,
-                dataClassification: request.dataClassification,
-                image: ownership.image
-              },
-              request.signal
-            );
-            request.signal?.throwIfAborted();
-            await writeMetadata2((state) => ({
-              ...state,
-              intents: state.intents.map(
-                (item) => item.requestId === request.requestId ? { ...item, status: executed.receipt.status, receipt: executed.receipt } : item
-              )
-            }));
-            verifiedReceipts.add(request.requestId);
-            return executed.result;
-          }
-        };
-      },
-      inquiry: inquiryProvider(capabilities, root.binding.projectId),
-      files: {
-        prepareDirectory: async () => {
-          throw new Error("Controlled execution directory service is unavailable");
-        },
-        write: async () => {
-          throw new Error("Discovery export service is unavailable");
-        }
-      },
-      onExecution: async () => {
-        events.changed();
-      },
-      legacyJournal: async () => void 0
-    };
-    const service = new DiscoveryService({
-      projectId: root.binding.projectId,
-      projectRoot: scope.workspaceDirectory,
-      services
-    });
-    const ready = (async () => {
-      await service.init();
-      const stored = await read(root.root.handle, "owner-state.json");
-      metadataVersion = stored.version;
-      if (stored.kind === "value") {
-        const metadata = ownerMetadata(stored.value);
-        for (const record of metadata.kernels) kernels.set(record.sessionId, record);
-        for (const record of metadata.intents) intents.set(record.requestId, record);
-      }
-    })().catch((error) => {
-      owners.delete(scope.workspaceId);
-      throw error;
-    });
-    current = {
-      root: root.root.handle,
-      service,
-      kernels,
-      intents,
-      activeKernels,
-      verifiedReceipts,
-      ready,
-      writeMetadata: writeMetadata2,
-      closuresDirty: false
-    };
-    owners.set(scope.workspaceId, current);
-    await ready;
-    return current;
-  };
-  const bind = async (input) => {
-    const scope = await workspace();
-    const selected = (await roots()).find((item) => item.root.handle === input.root);
-    if (!selected || selected.root.access !== "read-write")
-      throw new Error("Select an approved writable discovery state root");
-    if (selected.binding && selected.binding.workspaceId !== scope.workspaceId)
-      throw new Error("Discovery state belongs to another workspace");
-    if (!selected.binding && selected.hasExistingData && !input.acknowledgeExistingData)
-      throw new Error("Existing discovery journals require explicit acknowledgement before binding");
-    await capabilities.call("state.reserve", { root: input.root, path: "" });
-    const stored = await read(input.root, bindingPath);
-    if (stored.kind === "value") {
-      if (binding(stored.value).workspaceId !== scope.workspaceId)
-        throw new Error("Discovery state belongs to another workspace");
-    } else {
-      const plans = await journalRecords(input.root, "plans");
-      const ids = plans.map((plan) => {
-        if (typeof plan.projectId !== "string")
-          throw new Error("Existing discovery plan has no project identity");
-        return plan.projectId;
-      });
-      const unique = [...new Set(ids)];
-      if (unique.length > 1)
-        throw new Error("Existing discovery plans contain conflicting project identities");
-      const projectId = unique[0] ?? `discovery-${createHash("sha256").update(scope.workspaceId).digest("hex").slice(0, 32)}`;
-      await capabilities.call("state.writeJson", {
-        root: input.root,
-        path: bindingPath,
-        value: {
-          schemaVersion: 1,
-          projectId,
-          workspaceId: scope.workspaceId,
-          workspaceDirectory: scope.workspaceDirectory
-        },
-        expectedVersion: null
-      });
-    }
-    const verified = await read(input.root, bindingPath);
-    if (verified.kind !== "value" || binding(verified.value).workspaceId !== scope.workspaceId)
-      throw new Error("Discovery workspace binding did not read back");
-    await owner(scope, { ...selected, binding: binding(verified.value) });
-    events.changed();
-    return overview();
-  };
-  const list = async (input) => {
-    const scope = await workspace();
-    const root = input.root ? (await roots()).find((item) => item.root.handle === input.root) : await findRoot(scope);
-    if (root?.binding && root.binding.workspaceId !== scope.workspaceId)
-      throw new Error("Discovery state belongs to another workspace");
-    if (!JOURNALS.includes(input.journal)) throw new Error("Unknown discovery journal");
-    if (!root)
-      return {
-        readOnly: true,
-        status: "unconfigured",
-        journal: input.journal,
-        records: [],
-        count: 0,
-        truncated: false
-      };
-    const values = await journalRecords(root.root.handle, input.journal);
-    const query = input.query?.trim().toLocaleLowerCase();
-    const matches = query ? values.filter((value) => JSON.stringify(value).toLocaleLowerCase().includes(query)) : values;
-    return {
-      readOnly: true,
-      status: "configured",
-      journal: input.journal,
-      records: matches.slice(0, 32),
-      count: matches.length,
-      truncated: matches.length > 32
-    };
-  };
-  const createPlan = async (input) => {
-    const scope = await workspace();
-    const selected = await findRoot(scope);
-    if (!selected) throw new Error("Bind a discovery state directory before creating a plan");
-    await capabilities.call("state.reserve", {
-      root: selected.root.handle,
-      path: ""
-    });
-    return (await owner(scope, selected)).service.createExplorationPlan(input);
-  };
-  const journalSchema = { type: "string", enum: JOURNALS };
-  const creatorOwner = async () => {
-    const scope = await workspace();
-    if (scope.kind !== "session") throw new Error("Select a real creator SDK session for kernels");
-    const selected = await findRoot(scope);
-    if (!selected) throw new Error("Bind a discovery state directory before creating a logical kernel");
-    return { scope, owned: await owner(scope, selected) };
-  };
-  const ownedKernel = (owned, creatorSessionId, sessionId) => {
-    const kernel = owned.kernels.get(sessionId);
-    if (!kernel || kernel.creatorSessionId !== creatorSessionId || !owned.activeKernels.has(sessionId))
-      throw new Error("Kernel belongs to another creator or is a historical record");
-    return kernel;
-  };
-  const listKernels = async () => {
-    const { scope, owned } = await creatorOwner();
-    return {
-      kernels: (await owned.service.listKernelSessions()).map((kernel) => ({
-        ...kernel,
-        creatorSessionId: owned.kernels.get(kernel.sessionId)?.creatorSessionId ?? null,
-        ownership: !owned.activeKernels.has(kernel.sessionId) ? "historical" : owned.kernels.get(kernel.sessionId)?.creatorSessionId === scope.sessionId ? "own" : "another-creator",
-        ownershipState: owned.kernels.get(kernel.sessionId)?.status ?? "unassigned",
-        image: owned.kernels.get(kernel.sessionId)?.image ?? null,
-        logicalOnly: true
-      })),
-      intents: [...owned.intents.values()].map((intent) => ({
-        ...intent,
-        verification: owned.verifiedReceipts.has(intent.requestId) ? "host-verified-this-activation" : "historical-unverified"
-      }))
-    };
-  };
-  const createKernel = async (input) => {
-    const { scope, owned } = await creatorOwner();
-    if (owned.kernels.has(input.sessionId) || await owned.service.getKernelSession(input.sessionId))
-      throw new Error("Kernel identity already exists; use a new identity");
-    if ([...owned.kernels.values()].some(
-      (item) => owned.activeKernels.has(item.sessionId) && item.runDirectory === input.runDirectory
-    ))
-      throw new Error("An active logical kernel already owns this runs directory");
-    const record = {
-      sessionId: input.sessionId,
-      creatorSessionId: scope.sessionId,
-      runDirectory: input.runDirectory,
-      image: input.image,
-      status: "creating"
-    };
-    await owned.writeMetadata((state) => ({ ...state, kernels: [...state.kernels, record] }));
-    const created = await owned.service.createKernelSession(input);
-    owned.activeKernels.add(input.sessionId);
-    await owned.writeMetadata((state) => ({
-      ...state,
-      kernels: state.kernels.map(
-        (item) => item.sessionId === input.sessionId ? { ...item, status: "active" } : item
-      )
-    }));
-    return {
-      kernel: created,
-      creatorSessionId: scope.sessionId,
-      logicalOnly: true,
-      environment: await capabilities.call("execution.describe", null)
-    };
-  };
-  const reconcile = async (signal2) => {
-    const { scope, owned } = await creatorOwner();
-    for (const intent of [...owned.intents.values()].filter(
-      (item) => item.creatorSessionId === scope.sessionId
-    )) {
-      signal2?.throwIfAborted();
-      if (intent.applicationId !== applicationId) {
-        await owned.writeMetadata((state) => ({
-          ...state,
-          intents: state.intents.map(
-            (item) => item.requestId === intent.requestId ? { ...item, status: "needs-recovery" } : item
-          )
-        }));
-        continue;
-      }
-      let receipt;
-      try {
-        receipt = await capabilities.call("execution.receipt", {
-          requestId: intent.requestId
-        });
-      } catch (error) {
-        if (!(error instanceof Error) || !("code" in error) || error.code !== "EXECUTION_RECEIPT_NEEDS_RECOVERY")
-          throw error;
-        signal2?.throwIfAborted();
-        await owned.writeMetadata((state) => ({
-          ...state,
-          intents: state.intents.map(
-            (item) => item.requestId === intent.requestId ? { ...item, status: "needs-recovery" } : item
-          )
-        }));
-        continue;
-      }
-      signal2?.throwIfAborted();
-      await owned.writeMetadata((state) => ({
-        ...state,
-        intents: state.intents.map(
-          (item) => item.requestId === intent.requestId ? {
-            ...item,
-            status: receipt.kind === "missing" ? "not-accepted" : receipt.receipt.status,
-            ...receipt.kind === "value" ? { receipt: receipt.receipt } : {}
-          } : item
-        )
-      }));
-      owned.verifiedReceipts.add(intent.requestId);
-    }
-    signal2?.throwIfAborted();
-    await owned.service.persistObservedKernelStates();
-    if (owned.closuresDirty) {
-      signal2?.throwIfAborted();
-      await owned.writeMetadata((state) => state);
-      owned.closuresDirty = false;
-    }
-    return listKernels();
-  };
-  const executeKernel = async (input, signal2) => {
-    const { scope, owned } = await creatorOwner();
-    const kernel = ownedKernel(owned, scope.sessionId, input.sessionId);
-    if (kernel.status !== "active")
-      throw new Error("Kernel ownership is not active; reconcile it before execution");
-    const execution = await owned.service.executeKernel(input.sessionId, input.code, signal2);
-    signal2?.throwIfAborted();
-    await reconcile(signal2);
-    return { execution, ...await listKernels() };
-  };
-  const closeKernel = async (input, signal2) => {
-    const { scope, owned } = await creatorOwner();
-    ownedKernel(owned, scope.sessionId, input.sessionId);
-    signal2?.throwIfAborted();
-    await owned.service.closeKernelSession(input.sessionId);
-    signal2?.throwIfAborted();
-    await reconcile(signal2);
-    await owned.writeMetadata((state) => ({
-      ...state,
-      kernels: state.kernels.map(
-        (item) => item.sessionId === input.sessionId ? { ...item, status: "closed" } : item
-      )
-    }));
-    owned.activeKernels.delete(input.sessionId);
-    return listKernels();
-  };
-  const kernelSchema = {
-    type: "object",
-    properties: {
-      sessionId: { type: "string", minLength: 1, maxLength: 128, pattern: "^[a-zA-Z0-9._-]+$" },
-      runDirectory: { type: "string", minLength: 6, pattern: "^runs/" },
-      language: { enum: ["python", "r"] },
-      image: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" },
-      dataClassification: { enum: ["public", "internal", "controlled", "restricted"] },
-      idleTimeoutMs: { type: "integer", minimum: 1, maximum: 12e4 },
-      executionTimeoutMs: { type: "integer", minimum: 1, maximum: 12e4 },
-      maxExecutions: { type: "integer", minimum: 1, maximum: 32 },
-      maxOutputBytes: { type: "integer", minimum: 1, maximum: 1e6 }
-    },
-    required: ["sessionId", "runDirectory", "language", "image", "dataClassification"],
-    additionalProperties: false
-  };
-  const kernelIdSchema = {
-    type: "object",
-    properties: { sessionId: kernelSchema.properties.sessionId },
-    required: ["sessionId"],
-    additionalProperties: false
-  };
-  const kernelExecuteSchema = {
-    type: "object",
-    properties: {
-      sessionId: kernelSchema.properties.sessionId,
-      code: { type: "string", minLength: 1, maxLength: 1e6 }
-    },
-    required: ["sessionId", "code"],
-    additionalProperties: false
-  };
-  const executionDescription = () => capabilities.call("execution.describe", null);
-  const executionReceipt = (input) => capabilities.call("execution.receipt", input);
-  const cancelExecution = (input) => capabilities.call("execution.cancel", input);
-  const requestSchema = {
-    type: "object",
-    properties: {
-      requestId: { type: "string", minLength: 1, maxLength: 128, pattern: "^[a-zA-Z0-9._-]+$" }
-    },
-    required: ["requestId"],
-    additionalProperties: false
-  };
-  const recordInquiry = async (input) => {
-    const scope = await workspace(), root = await findRoot(scope);
-    if (!root) throw new Error("Bind the Discovery state root first");
-    await (await owner(scope, root)).service.recordDiscovery(input);
-    return { recorded: true, authority: "plugin-asserted-or-imported" };
-  };
-  const operations = {
-    recordInquiry: {
-      inputSchema: {
-        type: "object",
-        properties: {
-          projectId: { type: "string" },
-          questionId: { type: "string" },
-          statement: { type: "string" },
-          hypothesisId: { type: "string" },
-          prior: { type: "object" },
-          posterior: { type: "object" },
-          explanations: { type: "array", items: { type: "object" } },
-          testsPlanned: { type: "array", items: { type: "string" } },
-          attemptId: { type: "string" },
-          parameters: { type: "object" },
-          artifactIds: { type: "array", items: { type: "string" } }
-        },
-        required: [
-          "projectId",
-          "questionId",
-          "statement",
-          "prior",
-          "explanations",
-          "testsPlanned",
-          "attemptId"
-        ],
-        additionalProperties: false
-      },
-      resultSchema: objectSchema,
-      effect: "write",
-      execute: (input) => recordInquiry(input)
-    },
-    overview: {
-      inputSchema: nullSchema,
-      resultSchema: objectSchema,
-      effect: "read",
-      execute: () => overview()
-    },
-    bindCurrentWorkspace: {
-      inputSchema: bindingSchema,
-      resultSchema: objectSchema,
-      effect: "write",
-      execute: (input) => bind(input)
-    },
-    listRecords: {
-      inputSchema: {
-        type: "object",
-        properties: {
-          root: { type: "string" },
-          journal: journalSchema,
-          query: { type: "string", minLength: 1, maxLength: 2e3 }
-        },
-        required: ["journal"],
-        additionalProperties: false
-      },
-      resultSchema: objectSchema,
-      effect: "read",
-      execute: (input) => list(input)
-    },
-    listKernelSessions: {
-      inputSchema: nullSchema,
-      resultSchema: objectSchema,
-      effect: "read",
-      execute: () => listKernels()
-    },
-    createKernelSession: {
-      inputSchema: kernelSchema,
-      resultSchema: objectSchema,
-      effect: "write",
-      execute: (input) => createKernel(input)
-    },
-    executeKernel: {
-      inputSchema: kernelExecuteSchema,
-      resultSchema: objectSchema,
-      effect: "write",
-      execute: (input, context) => executeKernel(input, context.signal)
-    },
-    closeKernelSession: {
-      inputSchema: kernelIdSchema,
-      resultSchema: objectSchema,
-      effect: "write",
-      execute: (input, context) => closeKernel(input, context.signal)
-    },
-    reconcileExecutions: {
-      inputSchema: nullSchema,
-      resultSchema: objectSchema,
-      effect: "write",
-      execute: (_input, context) => reconcile(context.signal)
-    },
-    executionDescription: {
-      inputSchema: nullSchema,
-      resultSchema: objectSchema,
-      effect: "read",
-      execute: () => executionDescription()
-    },
-    executionReceipt: {
-      inputSchema: requestSchema,
-      resultSchema: objectSchema,
-      effect: "read",
-      execute: executionReceipt
-    },
-    cancelExecution: {
-      inputSchema: requestSchema,
-      resultSchema: objectSchema,
-      effect: "write",
-      execute: cancelExecution
-    },
-    createExplorationPlan: {
-      inputSchema: planSchema,
-      resultSchema: objectSchema,
-      effect: "write",
-      execute: (input) => createPlan(input)
-    }
-  };
-  const createNativeSession = () => {
-    let creatorSessionId;
-    return {
-      toolEffects: {
-        discovery_status: "read",
-        discovery_list_records: "read",
-        discovery_search_records: "read",
-        discovery_bind_workspace: "write",
-        discovery_create_plan: "write",
-        discovery_execution_environment: "read",
-        discovery_execution_receipt: "read",
-        discovery_cancel_execution: "write",
-        discovery_list_kernels: "read",
-        discovery_create_kernel: "write",
-        discovery_execute_kernel: "write",
-        discovery_close_kernel: "write",
-        discovery_reconcile_executions: "write",
-        discovery_record_inquiry: "write"
-      },
-      extension(pi) {
-        const adapted = Object.create(pi);
-        adapted.registerTool = (definition) => pi.registerTool({
-          ...definition,
-          async execute(id, input, signal2, update, context) {
-            const scope = await caller();
-            if (scope.kind !== "session" || creatorSessionId && creatorSessionId !== scope.sessionId)
-              throw new Error("Native projection belongs to another SDK session");
-            creatorSessionId = scope.sessionId;
-            return definition.execute(id, input, signal2, update, context);
-          }
-        });
-        const nativePi = adapted;
-        const emptyParameters = {
-          type: "object",
-          properties: {},
-          additionalProperties: false
-        };
-        const kernelTools = [
-          ["discovery_list_kernels", emptyParameters, "read", () => listKernels()],
-          [
-            "discovery_create_kernel",
-            kernelSchema,
-            "write",
-            (input) => createKernel(input)
-          ],
-          [
-            "discovery_execute_kernel",
-            kernelExecuteSchema,
-            "write",
-            (input, signal2) => executeKernel(input, signal2)
-          ],
-          [
-            "discovery_close_kernel",
-            kernelIdSchema,
-            "write",
-            (input, signal2) => closeKernel(input, signal2)
-          ],
-          ["discovery_reconcile_executions", emptyParameters, "write", (_input, signal2) => reconcile(signal2)]
-        ];
-        for (const [name, parameters, effect, run] of kernelTools)
-          nativePi.registerTool({
-            name,
-            label: "Discovery \xB7 logical kernel",
-            description: name === "discovery_create_kernel" ? "Create only a creator-owned logical kernel and budget; no container is started. Configured cached images and actual approval are still required for execution." : "Operate only the calling creator SDK session's discovery logical kernels and verified host receipts; historical records cannot be adopted.",
-            parameters,
-            ...effect === "read" ? readMetadata : writeMetadata,
-            async execute(_id, input, signal2) {
-              return response(await run(input, signal2));
-            }
-          });
-        for (const [name, operation, effect, description] of [
-          [
-            "discovery_execution_environment",
-            "executionDescription",
-            "read",
-            "Read only the configured Python/R cached exact image identities; never pulls or enumerates images."
-          ],
-          [
-            "discovery_execution_receipt",
-            "executionReceipt",
-            "read",
-            "Read only this live creator session's own host execution receipt; missing is not closed."
-          ],
-          [
-            "discovery_cancel_execution",
-            "cancelExecution",
-            "write",
-            "Cancel this creator's accepted execution, wait for owned cleanup and return its terminal receipt; missing is never closed."
-          ]
-        ])
-          nativePi.registerTool({
-            name,
-            label: "Discovery \xB7 execution",
-            description,
-            parameters: operations[operation].inputSchema.type === "null" ? { type: "object", properties: {}, additionalProperties: false } : requestSchema,
-            ...effect === "read" ? readMetadata : writeMetadata,
-            async execute(_id, input) {
-              return response(
-                await operations[operation].execute(operation === "executionDescription" ? null : input)
-              );
-            }
-          });
-        nativePi.registerTool({
-          name: "discovery_record_inquiry",
-          label: "Discovery \xB7 Inquiry",
-          description: "Record a discovery question and attempt through the optional versioned Inquiry provider bound to this actual workspace. Records remain asserted data. Each provider write needs its own current authorization.",
-          parameters: operations.recordInquiry.inputSchema,
-          ...writeMetadata,
-          async execute(_id, input) {
-            return response(await recordInquiry(input));
-          }
-        });
-        nativePi.registerTool({
-          name: "discovery_status",
-          label: "Discovery \xB7 status",
-          description: "Read approved discovery roots and current workspace journals; does not acquire writer ownership.",
-          parameters: {
-            type: "object",
-            properties: { root: { type: "string" } },
-            additionalProperties: false
-          },
-          ...readMetadata,
-          async execute(_id, input) {
-            return response(await overview(input.root));
-          }
-        });
-        for (const name of ["discovery_list_records", "discovery_search_records"])
-          nativePi.registerTool({
-            name,
-            label: "Discovery \xB7 records",
-            description: "Read approved current-workspace discovery journal records; observations are not independent scientific validation.",
-            parameters: operations.listRecords.inputSchema,
-            ...readMetadata,
-            async execute(_id, input) {
-              return response(await list(input));
-            }
-          });
-        nativePi.registerTool({
-          name: "discovery_bind_workspace",
-          label: "Discovery \xB7 bind",
-          description: "Explicitly bind an approved state directory to this real workspace, acknowledge any existing journals, and acquire exclusive writer ownership.",
-          parameters: bindingSchema,
-          ...writeMetadata,
-          async execute(_id, input) {
-            return response(await bind(input));
-          }
-        });
-        nativePi.registerTool({
-          name: "discovery_create_plan",
-          label: "Discovery \xB7 plan",
-          description: "Persist a ranked exploration plan in the bound workspace. Does not execute code or certify scientific validity.",
-          parameters: planSchema,
-          ...writeMetadata,
-          async execute(_id, input) {
-            return response(await createPlan(input));
-          }
-        });
-      },
-      async dispose() {
-        if (!creatorSessionId) return;
-        const closing = [...owners.values()].flatMap(
-          (owned) => [...owned.kernels.values()].filter(
-            (kernel) => kernel.creatorSessionId === creatorSessionId && owned.activeKernels.has(kernel.sessionId)
-          ).map(async (kernel) => {
-            await owned.service.disposeKernelSession(kernel.sessionId);
-            owned.activeKernels.delete(kernel.sessionId);
-            owned.kernels.set(kernel.sessionId, { ...kernel, status: "closed" });
-            owned.closuresDirty = true;
-          })
-        );
-        const results = await Promise.allSettled(closing);
-        const failures = results.filter((result) => result.status === "rejected");
-        if (failures.length)
-          throw new AggregateError(
-            failures.map((result) => result.reason),
-            "Creator kernel cleanup failed"
-          );
-        if (!signal.aborted) events.changed();
-      }
-    };
-  };
+  const workspace = createWorkspaceOperations(context);
+  const kernels = createKernelOperations(context);
+  const operations = createOperations(capabilities, workspace, kernels);
   return {
     operations,
-    createNativeSession,
+    createNativeSession: () => createNativeSession({ ...state, ...access, ...workspace, ...kernels, operations }),
     async dispose() {
       await Promise.all([...owners.values()].map((item) => item.service.dispose()));
       owners.clear();
@@ -2322,7 +2546,6 @@ var createDiscoveryRuntime = async ({
 };
 
 // src/native-runtime.ts
-var hash = (text) => createHash2("sha256").update(text).digest("hex");
 async function nativeDiscoveryExtension(pi, options = {}) {
   const calls = new AsyncLocalStorage();
   const reservations = new PluginResourceReservations(options.leaseDirectory);
@@ -2331,15 +2554,15 @@ async function nativeDiscoveryExtension(pi, options = {}) {
   let cleanupFailure;
   const applicationId = randomUUID3();
   const executionKey = randomBytes(32);
-  const sourceIdentity = hash(await readFile(new URL(import.meta.url), "utf8"));
+  const sourceIdentity = hash(await readFile2(new URL(import.meta.url), "utf8"));
   let execution;
   const executionOwner = () => {
     if (!execution)
       execution = (async () => {
-        const agentRoot = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+        const agentRoot = process.env.PI_CODING_AGENT_DIR ?? join2(homedir(), ".pi", "agent");
         await mkdir(agentRoot, { recursive: true, mode: 448 });
         const storage = await NodeExecutionReceiptStorage.create(
-          join(await realpath(agentRoot), "plugin-execution-receipts"),
+          join2(await realpath(agentRoot), "plugin-execution-receipts"),
           executionKey
         );
         return new ExecutionTransactions(storage);
@@ -2382,8 +2605,8 @@ async function nativeDiscoveryExtension(pi, options = {}) {
         input.requestId
       );
     if (name === "execution.cancel") {
-      const owner = await executionOwner(), requestId = input.requestId;
-      const receipt = await owner.receipt(executionIdentity(caller), requestId);
+      const owner2 = await executionOwner(), requestId = input.requestId;
+      const receipt = await owner2.receipt(executionIdentity(caller), requestId);
       if (receipt.kind === "missing" || receipt.receipt.status !== "accepted") return receipt;
       if (!caller.context.hasUI || !await caller.context.ui.confirm(
         "Cancel owned execution",
@@ -2394,7 +2617,7 @@ Cancel accepted request ${requestId} and wait for its owned resources and termin
       ))
         throw new Error("Native execution cancellation was not approved");
       await assertExecutionCaller(caller);
-      return owner.cancel(executionIdentity(caller), requestId);
+      return owner2.cancel(executionIdentity(caller), requestId);
     }
     if (name !== "execution.run") throw new Error(`Unknown native execution capability: ${name}`);
     const request = input;
@@ -2446,41 +2669,6 @@ ${request.code}`,
     caller.signal.throwIfAborted();
     return caller;
   };
-  const filePath = async (root, path) => {
-    if (isAbsolute2(path) || path.includes("\\") || path.includes("\0") || path !== "" && path.split("/").some((part) => !part || part === "." || part === ".."))
-      throw new Error("Expected a discovery state-relative path");
-    if ((await lstat(root)).isSymbolicLink()) throw new Error("Discovery state root contains a symlink");
-    let selected = root;
-    for (const part of path === "" ? [] : path.split("/")) {
-      selected = join(selected, part);
-      try {
-        if ((await lstat(selected)).isSymbolicLink())
-          throw new Error("Discovery state path contains a symlink");
-      } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-      }
-    }
-    return selected;
-  };
-  const read = async (root, path) => {
-    const selected = await filePath(root, path);
-    let bytes;
-    try {
-      const metadata = await lstat(selected);
-      if (!metadata.isFile() || metadata.size > 1048576)
-        throw new Error("Discovery JSON state must be a file of at most 1 MiB");
-      bytes = await readFile(selected);
-    } catch (error) {
-      if (error.code === "ENOENT") return { kind: "missing", version: null };
-      throw error;
-    }
-    if (bytes.length > 1048576) throw new Error("Discovery JSON state exceeds 1 MiB");
-    return {
-      kind: "value",
-      value: JSON.parse(bytes.toString("utf8")),
-      version: hash(bytes.toString("utf8"))
-    };
-  };
   const write = async (caller, input) => {
     if (!input.path.endsWith(".json")) throw new Error("Discovery state writes require JSON files");
     const selected = await filePath(caller.root, input.path);
@@ -2493,7 +2681,7 @@ ${request.code}`,
         throw new Error("Discovery state version conflict");
     };
     await check();
-    const temporary = join(dirname(selected), `.discovery-${randomUUID3()}.tmp`);
+    const temporary = join2(dirname(selected), `.discovery-${randomUUID3()}.tmp`);
     try {
       await writeFile(temporary, bytes, { flag: "wx", mode: 384 });
       await check();
@@ -2529,7 +2717,7 @@ ${request.code}`,
         if (name.startsWith("execution.")) return executeCapability(name, input, caller);
         if (name === "roots.describe") {
           try {
-            if (!(await lstat(caller.root)).isDirectory())
+            if (!(await lstat2(caller.root)).isDirectory())
               throw new Error("Discovery state root is not a directory");
           } catch (error) {
             if (error.code === "ENOENT") return [];
@@ -2552,12 +2740,12 @@ ${request.code}`,
           return Promise.all(
             (await readdir(await filePath(caller.root, request.path))).map(async (name2) => ({
               name: name2,
-              kind: (await lstat(join(caller.root, request.path, name2))).isDirectory() ? "directory" : "file"
+              kind: (await lstat2(join2(caller.root, request.path, name2))).isDirectory() ? "directory" : "file"
             }))
           );
         if (name === "state.reserve") {
           const directory = await realpath(await filePath(caller.root, request.path));
-          if (!(await lstat(directory)).isDirectory())
+          if (!(await lstat2(directory)).isDirectory())
             throw new Error("State writer requires an existing directory");
           reservations.reserve("state-writers", [directory]);
           return { reserved: true };
@@ -2581,9 +2769,9 @@ ${request.code}`,
     signal.throwIfAborted();
     const canonical = await realpath(context.cwd);
     if (!options.stateDirectory)
-      for (const path of [join(canonical, "runs"), join(canonical, "runs", ".drone-discovery")]) {
+      for (const path of [join2(canonical, "runs"), join2(canonical, "runs", ".drone-discovery")]) {
         try {
-          if ((await lstat(path)).isSymbolicLink())
+          if ((await lstat2(path)).isSymbolicLink())
             throw new Error("Discovery state path contains a symlink");
         } catch (error) {
           if (error.code !== "ENOENT") throw error;
@@ -2593,7 +2781,7 @@ ${request.code}`,
     const workspaceId = process.platform === "darwin" || process.platform === "win32" ? canonical.replaceAll("\\", "/").toLowerCase() : canonical;
     let caller = active.get(workspaceId);
     if (!caller) {
-      const root = options.stateDirectory ? await realpath(options.stateDirectory) : join(canonical, "runs", ".drone-discovery");
+      const root = options.stateDirectory ? await realpath(options.stateDirectory) : join2(canonical, "runs", ".drone-discovery");
       if (options.stateDirectory) {
         const stored = await read(root, "workspace-binding.json");
         if (stored.kind === "value") {
@@ -2632,12 +2820,12 @@ ${request.code}`,
     for (const directory of [runs, caller.root]) {
       caller.signal.throwIfAborted();
       await mkdir(directory, { recursive: true, mode: 448 });
-      if ((await lstat(directory)).isSymbolicLink())
+      if ((await lstat2(directory)).isSymbolicLink())
         throw new Error("Discovery native state path contains a symlink");
     }
     const canonical = await realpath(caller.root);
     const outside = relative2(await realpath(caller.scope.workspaceDirectory), canonical);
-    if (isAbsolute2(outside) || outside === ".." || outside.startsWith(`..${sep}`))
+    if (isAbsolute4(outside) || outside === ".." || outside.startsWith(`..${sep}`))
       throw new Error("Discovery native state escaped the workspace");
   };
   const adapted = Object.create(pi);
@@ -2685,7 +2873,7 @@ ${request.code}`,
     const settled = await Promise.allSettled([
       native.dispose(),
       runtime.dispose(),
-      execution?.then((owner) => owner.drain())
+      execution?.then((owner2) => owner2.drain())
     ]);
     const failures = settled.filter((result) => result.status === "rejected");
     if (failures.length)
