@@ -1,25 +1,24 @@
 import type { PluginRuntimeContext } from "@gyoungwe/plugin-api/runtime";
 import { expect, vi } from "vitest";
 import createDesktopRuntime from "../../src/desktop/runtime.js";
+import { withAgentSlotFake } from "./agent-slot-fake.js";
 import { verdictFixture } from "./model-review-verdict-fixture.js";
 
 type VerdictFixture = Awaited<ReturnType<typeof verdictFixture>>;
 
 async function startOwner(base: VerdictFixture) {
-	const capabilities: PluginRuntimeContext["capabilities"] = {
-		async call(name, input) {
-			if (name.startsWith("state.")) return base.state.call(name, input);
-			if (name.startsWith("model.") || name === "session.inspect") return base.model.call(name, input);
-			if (name === "resource.create") return { handle: "synthetic-error-index" };
-			if (name === "resource.invoke") {
-				const args = input as { handle: string; operation: string };
-				expect(args.handle).toBe("synthetic-error-index");
-				expect(["status", "changed"]).toContain(args.operation);
-				return { revision: 1 };
-			}
-			return base.files.call(name, input);
-		},
-	};
+	const capabilities = withAgentSlotFake(async (name, input) => {
+		if (name.startsWith("state.")) return base.state.call(name, input);
+		if (name.startsWith("model.") || name === "session.inspect") return base.model.call(name, input);
+		if (name === "resource.create") return { handle: "synthetic-error-index" };
+		if (name === "resource.invoke") {
+			const args = input as { handle: string; operation: string };
+			expect(args.handle).toBe("synthetic-error-index");
+			expect(["status", "changed"]).toContain(args.operation);
+			return { revision: 1 };
+		}
+		return base.files.call(name, input);
+	});
 	const controller = new AbortController();
 	const runtime = await createDesktopRuntime({
 		applicationId: "model-review-errors-test",
