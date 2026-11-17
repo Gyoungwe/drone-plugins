@@ -8021,6 +8021,20 @@ function artifactProvenance(snapshot, artifactId) {
   };
 }
 
+// src/rerun-result.ts
+function rerunResult(rerun) {
+  return {
+    status: rerun.status,
+    jobId: rerun.jobId,
+    previousArtifactId: rerun.sourceArtifactId,
+    previousSha256: rerun.previousSha256,
+    ...rerun.resultArtifactId ? { artifactId: rerun.resultArtifactId } : {},
+    ...rerun.sha256 ? { sha256: rerun.sha256 } : {},
+    ...rerun.difference ? { difference: rerun.difference } : {},
+    ...rerun.error ? { error: rerun.error } : {}
+  };
+}
+
 // src/workspace.ts
 import { relative, resolve, sep } from "node:path";
 function validateWorkspaceRelativePath(path) {
@@ -8343,16 +8357,7 @@ var InquiryService = class {
     return this.rerunResult(completed);
   }
   rerunResult(rerun) {
-    return {
-      status: rerun.status,
-      jobId: rerun.jobId,
-      previousArtifactId: rerun.sourceArtifactId,
-      previousSha256: rerun.previousSha256,
-      ...rerun.resultArtifactId ? { artifactId: rerun.resultArtifactId } : {},
-      ...rerun.sha256 ? { sha256: rerun.sha256 } : {},
-      ...rerun.difference ? { difference: rerun.difference } : {},
-      ...rerun.error ? { error: rerun.error } : {}
-    };
+    return rerunResult(rerun);
   }
   /** Read-only projection used by the desktop panel. */
   async readOnlyState() {

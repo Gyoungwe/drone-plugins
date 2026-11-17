@@ -434,6 +434,20 @@ function artifactProvenance(snapshot, artifactId) {
   };
 }
 
+// src/rerun-result.ts
+function rerunResult(rerun) {
+  return {
+    status: rerun.status,
+    jobId: rerun.jobId,
+    previousArtifactId: rerun.sourceArtifactId,
+    previousSha256: rerun.previousSha256,
+    ...rerun.resultArtifactId ? { artifactId: rerun.resultArtifactId } : {},
+    ...rerun.sha256 ? { sha256: rerun.sha256 } : {},
+    ...rerun.difference ? { difference: rerun.difference } : {},
+    ...rerun.error ? { error: rerun.error } : {}
+  };
+}
+
 // src/workspace.ts
 import { relative, resolve, sep } from "node:path";
 function workspaceLayout(projectRoot) {
@@ -512,6 +526,21 @@ function workspaceIndexForSnapshot(snapshot) {
     bytes: artifact.bytes,
     purpose: artifact.purpose
   }));
+}
+
+// src/decision-record.ts
+function decisionRecord(input) {
+  return {
+    id: input.id,
+    schemaVersion: INQUIRY_SCHEMA_VERSION,
+    projectId: input.projectId,
+    kind: input.kind,
+    summary: input.summary,
+    basis: [...new Set(input.basis ?? [])],
+    affectedArtifactIds: [...new Set(input.affectedArtifactIds ?? [])],
+    status: "active",
+    createdAt: input.createdAt ?? (/* @__PURE__ */ new Date()).toISOString()
+  };
 }
 
 // src/service.ts
@@ -781,16 +810,7 @@ var InquiryService = class {
     return this.rerunResult(completed);
   }
   rerunResult(rerun) {
-    return {
-      status: rerun.status,
-      jobId: rerun.jobId,
-      previousArtifactId: rerun.sourceArtifactId,
-      previousSha256: rerun.previousSha256,
-      ...rerun.resultArtifactId ? { artifactId: rerun.resultArtifactId } : {},
-      ...rerun.sha256 ? { sha256: rerun.sha256 } : {},
-      ...rerun.difference ? { difference: rerun.difference } : {},
-      ...rerun.error ? { error: rerun.error } : {}
-    };
+    return rerunResult(rerun);
   }
   /** Read-only projection used by the desktop panel. */
   async readOnlyState() {
@@ -807,19 +827,6 @@ var InquiryService = class {
     };
   }
 };
-function decisionRecord(input) {
-  return {
-    id: input.id,
-    schemaVersion: INQUIRY_SCHEMA_VERSION,
-    projectId: input.projectId,
-    kind: input.kind,
-    summary: input.summary,
-    basis: [...new Set(input.basis ?? [])],
-    affectedArtifactIds: [...new Set(input.affectedArtifactIds ?? [])],
-    status: "active",
-    createdAt: input.createdAt ?? (/* @__PURE__ */ new Date()).toISOString()
-  };
-}
 
 // src/storage-contract.ts
 var INQUIRY_STORAGE_IDS = Object.freeze({
