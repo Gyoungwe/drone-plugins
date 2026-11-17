@@ -92,7 +92,7 @@ function normalizeEntry(entry: ArtifactManifestInputEntry): EvidenceArtifact {
 		sha256: entry.sha256 ?? "",
 		bytes: bytesOf(entry),
 		role: entry.role ?? "output",
-		...(entry.accessLevel ? { accessLevel: entry.accessLevel } : {}),
+		...(entry.accessLevel !== undefined ? { accessLevel: entry.accessLevel } : {}),
 		parentVersionIds: [...(entry.parentVersionIds ?? [])],
 		...(entry.producedByJobId ? { producedByJobId: entry.producedByJobId } : {}),
 	};
@@ -103,6 +103,32 @@ function sourceEntries(
 ): readonly ArtifactManifestInputEntry[] {
 	if (Array.isArray(manifest)) return manifest as readonly ArtifactManifestInputEntry[];
 	return (manifest as EvidenceArtifactManifest).entries;
+}
+
+function verifyArtifactMetadata(entry: EvidenceArtifact, errors: string[]): ArtifactVerification {
+	const { path, bytes } = entry;
+	let reason: ArtifactVerification["reason"] | undefined;
+	if (!isSafeEvidencePath(path)) {
+		reason =
+			path.startsWith("/") || path.startsWith("~") || /^[A-Za-z]:/.test(path)
+				? "private-path"
+				: "invalid-path";
+		errors.push(`Unsafe evidence path: ${path}`);
+	}
+	if (!Number.isSafeInteger(bytes) || bytes < 0) {
+		reason = "size-mismatch";
+		errors.push(`Invalid artifact size: ${path}`);
+	}
+	if (!isSha256(entry.sha256)) {
+		reason = "checksum-mismatch";
+		errors.push(`Invalid sha256: ${path}`);
+	}
+	if (!Array.isArray(entry.parentVersionIds)) errors.push(`Invalid parent version list: ${path}`);
+	if (entry.accessLevel !== undefined && !["public", "restricted", "private"].includes(entry.accessLevel))
+		errors.push(`Invalid artifact access level: ${path}`);
+	if (!["input", "output", "code", "environment", "review"].includes(entry.role))
+		errors.push(`Invalid artifact role: ${path}`);
+	return { path, expectedSha256: entry.sha256, ok: !reason, ...(reason ? { reason } : {}) };
 }
 
 /** Validate a manifest before a host reads or exposes any corresponding bytes. */
@@ -126,19 +152,12 @@ export function validateArtifactManifest(
 		const pathKey = path.toLocaleLowerCase("en-US");
 		const bytes = entry.bytes;
 		totalBytes += Number.isFinite(bytes) ? bytes : 0;
-		let reason: ArtifactVerification["reason"] | undefined;
-		if (!isSafeEvidencePath(path)) {
-			reason =
-				path.startsWith("/") || path.startsWith("~") || /^[A-Za-z]:/.test(path)
-					? "private-path"
-					: "invalid-path";
-			errors.push(`Unsafe evidence path: ${path}`);
-		}
+		const verification = verifyArtifactMetadata(entry, errors);
 		if (
 			paths.has(pathKey) ||
 			[...paths].some((known) => known.startsWith(`${pathKey}/`) || pathKey.startsWith(`${known}/`))
 		) {
-			reason = "invalid-path";
+			Object.assign(verification, { ok: false, reason: "invalid-path" });
 			errors.push(`Duplicate or conflicting evidence path: ${path}`);
 		}
 		paths.add(pathKey);
@@ -146,31 +165,17 @@ export function validateArtifactManifest(
 			errors.push(`Invalid or duplicate artifact identity: ${path}`);
 		}
 		versions.add(entry.versionId);
-		if (!Number.isSafeInteger(bytes) || bytes < 0) {
-			reason = "size-mismatch";
-			errors.push(`Invalid artifact size: ${path}`);
-		}
-		if (!isSha256(entry.sha256)) {
-			reason = "checksum-mismatch";
-			errors.push(`Invalid sha256: ${path}`);
-		}
-		if (!Array.isArray(entry.parentVersionIds)) errors.push(`Invalid parent version list: ${path}`);
-		if (!["input", "output", "code", "environment", "review"].includes(entry.role)) {
-			errors.push(`Invalid artifact role: ${path}`);
-		}
 		const expected = expectedByPath.get(path);
 		if (expected?.bytes !== undefined && bytes > expected.bytes)
 			errors.push(`Artifact exceeds expected size: ${path}`);
-		verifications.push({ path, expectedSha256: entry.sha256, ok: !reason, ...(reason ? { reason } : {}) });
+		verifications.push(verification);
 	}
 	if (options.maxTotalBytes !== undefined && totalBytes > options.maxTotalBytes)
 		errors.push(`Artifacts exceed ${options.maxTotalBytes} bytes`);
 	if (totalBytes > EVIDENCE_CAPSULE_LIMIT) errors.push("Evidence exceeds capsule limit");
 	if (objectManifest && objectManifest.totalBytes !== undefined && objectManifest.totalBytes !== totalBytes)
 		errors.push("Artifact manifest totalBytes mismatch");
-	const result = verifications as unknown as ArtifactManifestValidation & readonly ArtifactVerification[];
-	Object.assign(result, { valid: errors.length === 0, errors, entries, totalBytes });
-	return result;
+	return Object.assign(verifications, { valid: errors.length === 0, errors, entries, totalBytes });
 }
 
 export function assertValidArtifactManifest(

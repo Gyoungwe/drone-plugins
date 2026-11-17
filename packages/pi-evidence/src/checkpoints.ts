@@ -1,11 +1,9 @@
 import {
 	assertValidArtifactManifest,
-	EVIDENCE_CAPSULE_LIMIT,
 	type EvidenceAccessLevel,
 	type EvidenceArtifact,
 	type EvidenceArtifactRole,
 	isSafeBranchId,
-	isSafeEvidencePath,
 } from "./artifacts.js";
 import { digestJson, isSha256 } from "./digest.js";
 import { type EvidenceProvenance, validateProvenance } from "./provenance.js";
@@ -33,10 +31,19 @@ export interface EvidenceAnalysisSnapshot {
 	readonly capabilities?: readonly string[];
 	readonly adapter?: { readonly id: string; readonly version: string };
 	readonly provenance?: EvidenceProvenance;
+	readonly readiness?: {
+		readonly ok: boolean;
+		readonly inferentialClaimsAllowed: boolean;
+		readonly gates: readonly unknown[];
+		readonly warnings: readonly string[];
+	} | null;
 	readonly review?: {
 		readonly approved: boolean;
 		readonly detail: string;
 		readonly limitations: readonly string[];
+		readonly reportPath?: string;
+		readonly checks?: readonly { readonly id: string; readonly passed: boolean; readonly detail: string }[];
+		readonly modelStatus?: "approved" | "rejected" | "unavailable";
 	};
 	readonly publicationRequested?: boolean;
 	readonly events?: readonly { readonly type: string; readonly at: string; readonly detail?: string }[];
@@ -50,9 +57,10 @@ export interface FrozenEvidenceFile {
 export type FrozenFile = FrozenEvidenceFile;
 
 export interface EvidenceLineage {
+	readonly schemaVersion: 1;
 	readonly eventId: string;
 	readonly runAttemptId?: string;
-	readonly parentEventId?: string;
+	readonly causationId?: string;
 }
 
 export interface EvidenceCheckpoint {
@@ -78,34 +86,25 @@ export interface EvidenceBranch {
 }
 
 function checkpointBody(value: Omit<EvidenceCheckpoint, "id">): Omit<EvidenceCheckpoint, "id"> {
-	const { lineage: _lineage, analysis, ...rest } = value;
-	const { provenance, ...analysisRest } = analysis;
-	const checkpointProvenance = provenance
-		? (({ lineage: _lineage, ...withoutLineage }) => withoutLineage)(
-				provenance as EvidenceProvenance & { readonly lineage?: unknown },
-			)
-		: undefined;
-	const contentAnalysis: EvidenceAnalysisSnapshot = {
-		version: analysisRest.version,
-		id: analysisRest.id,
-		question: analysisRest.question,
-		assay: analysisRest.assay,
-		mode: analysisRest.mode,
-		...(analysisRest.stage ? { stage: analysisRest.stage } : {}),
-		...(analysisRest.status ? { status: analysisRest.status } : {}),
-		...(analysisRest.capabilities ? { capabilities: [...analysisRest.capabilities] } : {}),
-		...(analysisRest.adapter ? { adapter: { ...analysisRest.adapter } } : {}),
-		...(checkpointProvenance ? { provenance: checkpointProvenance } : {}),
-		...(analysisRest.review
-			? { review: { ...analysisRest.review, limitations: [...analysisRest.review.limitations] } }
-			: {}),
-		...(analysisRest.publicationRequested !== undefined
-			? { publicationRequested: analysisRest.publicationRequested }
-			: {}),
-		...(analysisRest.events ? { events: analysisRest.events.map((event) => ({ ...event })) } : {}),
-	};
-	const files = [...value.files].sort((left, right) => left.artifact.path.localeCompare(right.artifact.path));
-	return { ...rest, files, analysis: contentAnalysis as EvidenceAnalysisSnapshot };
+	const { lineage: _lineage, analysis, ...content } = value;
+	const { provenance } = analysis;
+	if (!provenance) return { ...content, analysis };
+	const { lineage: _provenanceLineage, ...provenanceContent } = provenance;
+	return { ...content, analysis: { ...analysis, provenance: provenanceContent } };
+}
+
+// Check imported JSON recursively: nested metadata must never smuggle live authority.
+function rejectAuthorization(value: unknown, path: readonly string[] = []): void {
+	if (value === null || typeof value !== "object") return;
+	for (const [key, child] of Object.entries(value)) {
+		// Host v1 scientific review approval is evidence, never an execution grant.
+		if (
+			/approval|grant|authoriz|consent|approved/iu.test(key) &&
+			!(path.length === 2 && path[0] === "analysis" && path[1] === "review" && key === "approved")
+		)
+			throw new Error("Evidence JSON cannot carry authorization");
+		rejectAuthorization(child, [...path, key]);
+	}
 }
 
 export function checkpointId(value: Omit<EvidenceCheckpoint, "id">): string {
@@ -124,22 +123,38 @@ function validateAnalysis(value: EvidenceAnalysisSnapshot): void {
 		(value.mode !== "exploratory" && value.mode !== "inferential")
 	)
 		throw new Error("Invalid evidence analysis snapshot");
-	const rawAnalysis = value as unknown as Record<string, unknown>;
-	if ("branchOf" in rawAnalysis || "workspace" in rawAnalysis)
-		throw new Error("Evidence analysis snapshot cannot contain host workspace state");
+	if ("workspace" in value) throw new Error("Evidence analysis snapshot cannot contain host workspace state");
 	if (value.provenance) validateProvenance(value.provenance);
 	if (value.events?.some((event) => typeof event.at !== "string" || typeof event.type !== "string"))
 		throw new Error("Invalid analysis event");
 }
 
+function validateLineage(value: EvidenceLineage): void {
+	if (
+		Object.keys(value).some(
+			(key) => !["schemaVersion", "eventId", "causationId", "runAttemptId"].includes(key),
+		)
+	)
+		throw new Error("Unexpected causal envelope field");
+	if (value.schemaVersion !== 1) throw new Error("Invalid causal envelope schemaVersion");
+	for (const label of ["eventId", "causationId", "runAttemptId"] as const) {
+		const id = value[label];
+		if (label !== "eventId" && id === undefined) continue;
+		if (typeof id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id))
+			throw new Error(`Invalid causal envelope ${label}`);
+	}
+	if (value.causationId === value.eventId) throw new Error("An event cannot cause itself");
+}
+
 export function validateCheckpoint(checkpoint: EvidenceCheckpoint): void {
+	rejectAuthorization(checkpoint);
 	const { id, ...body } = checkpoint;
 	if (checkpoint.schemaVersion !== 1 || id !== checkpointId(body))
 		throw new Error("Checkpoint manifest checksum mismatch");
 	validateAnalysis(checkpoint.analysis);
 	if (Number.isNaN(Date.parse(checkpoint.createdAt))) throw new Error("Invalid checkpoint timestamp");
-	if (checkpoint.lineage && (!checkpoint.lineage.eventId || checkpoint.lineage.eventId.includes("/")))
-		throw new Error("Invalid checkpoint lineage");
+	if (checkpoint.lineage) validateLineage(checkpoint.lineage);
+	if (checkpoint.analysis.provenance?.lineage) validateLineage(checkpoint.analysis.provenance.lineage);
 	if (
 		checkpoint.environmentFingerprint !== undefined &&
 		(typeof checkpoint.environmentFingerprint !== "string" || checkpoint.environmentFingerprint.length > 512)
@@ -147,18 +162,13 @@ export function validateCheckpoint(checkpoint: EvidenceCheckpoint): void {
 		throw new Error("Invalid environment fingerprint");
 	if (!Array.isArray(checkpoint.files) || checkpoint.files.length === 0 || checkpoint.files.length > 10000)
 		throw new Error("Invalid evidence files");
-	const validation = assertValidArtifactManifest(
+	assertValidArtifactManifest(
 		{ version: 1, entries: checkpoint.files.map((file) => file.artifact) },
 		{ requireIdentity: true },
 	);
-	if ((validation.totalBytes ?? 0) > EVIDENCE_CAPSULE_LIMIT)
-		throw new Error("Evidence exceeds capsule limit");
 	const kinds = new Set(["input", "output", "code", "environment", "review"]);
 	for (const file of checkpoint.files) {
-		if (!kinds.has(file.kind) || file.kind !== file.artifact.role)
-			throw new Error("Evidence file kind does not match artifact role");
-		if (!isSafeEvidencePath(file.artifact.path) || !isSha256(file.artifact.sha256))
-			throw new Error("Invalid frozen artifact");
+		if (!kinds.has(file.kind)) throw new Error("Invalid evidence kind");
 	}
 }
 
@@ -168,7 +178,7 @@ export function createCheckpoint(
 	const body: Omit<EvidenceCheckpoint, "id"> = {
 		schemaVersion: 1,
 		...input,
-		files: [...input.files].sort((left, right) => left.artifact.path.localeCompare(right.artifact.path)),
+		files: [...input.files].sort((left, right) => (left.artifact.path < right.artifact.path ? -1 : 1)),
 	};
 	const checkpoint: EvidenceCheckpoint = { ...body, id: checkpointId(body) };
 	validateCheckpoint(checkpoint);
@@ -181,6 +191,8 @@ export function createBranch(input: {
 	readonly createdAt: string;
 	readonly status?: EvidenceBranchStatus;
 }): EvidenceBranch {
+	if ("format" in input.checkpoint && input.checkpoint.format === "drone-evidence-attestation")
+		throw new Error("Attestation capsules are verify-only and cannot be forked");
 	if (!isSafeBranchId(input.id)) throw new Error("Unsafe evidence branch id");
 	validateCheckpoint(input.checkpoint);
 	if (Number.isNaN(Date.parse(input.createdAt))) throw new Error("Invalid branch timestamp");
@@ -230,7 +242,7 @@ export function toEvidenceAnalysisSnapshot(context: AnalysisContextLike): Eviden
 		status: context.status,
 		capabilities: context.capabilities ? [...context.capabilities] : [],
 		...(context.adapter ? { adapter: { ...context.adapter } } : {}),
-		...(context.provenance ? { provenance: context.provenance as unknown as EvidenceProvenance } : {}),
+		...(context.provenance ? { provenance: context.provenance } : {}),
 		...(context.review
 			? {
 					review: {

@@ -9,7 +9,6 @@ export function stableJson(value: unknown): string {
 	if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(",")}]`;
 	const object = value as Record<string, unknown>;
 	return `{${Object.keys(object)
-		.filter((key) => object[key] !== undefined)
 		.sort()
 		.map((key) => `${JSON.stringify(key)}:${stableJson(object[key])}`)
 		.join(",")}}`;
