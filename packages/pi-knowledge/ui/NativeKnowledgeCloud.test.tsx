@@ -17,6 +17,7 @@ const available: CloudStatusResult = {
 	configured: true,
 	credentialSource: "saved",
 	savedConfigured: true,
+	endpoint: { state: "ready", url: "http://10.126.126.1:8080", source: "default" },
 };
 function client(status = available) {
 	return {
@@ -97,6 +98,7 @@ it.each(["zh", "en"] as const)(
 				configured: false,
 				credentialSource: null,
 				savedConfigured: false,
+				endpoint: available.endpoint,
 			},
 			available,
 			{ ...available, credentialSource: "env", savedConfigured: false },
@@ -108,7 +110,9 @@ it.each(["zh", "en"] as const)(
 				view = mount(runtime);
 			await screen.findByText(t[status.status]);
 			expect(runtime.invoke.mock.calls).toEqual([["cloudStatus", null]]);
-			expect(screen.getByText(t.httpWarning)).toBeDefined();
+			expect(Boolean(screen.queryByText(t.httpWarning))).toBe(
+				status.endpoint?.state === "ready" && status.endpoint.url.startsWith("http:"),
+			);
 			if (status.reason) expect(screen.getByText(t.reasons[status.reason])).toBeDefined();
 			if (status.credentialSource) expect(screen.getByText(t[status.credentialSource])).toBeDefined();
 			else expect(view.container.querySelector("[data-testid=cloud-source]")).toBeNull();
@@ -195,7 +199,6 @@ it.each(["zh", "en"] as const)(
 		expect(screen.queryByText(/private-runtime-detail/)).toBeNull();
 	},
 );
-
 it.each(["pull", "push"] as const)(
 	"previews both hashes and sends that preview for %s; path changes clear it",
 	async (mode) => {
@@ -232,7 +235,6 @@ it.each(["pull", "push"] as const)(
 			expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
 	},
 );
-
 it.each(["local", "remote"] as const)(
 	"requires explicit %s conflict resolution with a fresh preview",
 	async (resolution) => {
@@ -273,7 +275,6 @@ it.each(["local", "remote"] as const)(
 		});
 	},
 );
-
 it("previews missing notes as null hashes and versions without sending note content", async () => {
 	const runtime = client();
 	const view = await ready(runtime);

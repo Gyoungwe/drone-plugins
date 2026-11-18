@@ -77,7 +77,11 @@ export class CloudDav {
 		try {
 			return await this.http.request(input);
 		} catch (error) {
-			if (error instanceof CloudError && error.code === "forbidden") throw error;
+			if (
+				error instanceof CloudError &&
+				["forbidden", "endpoint_changed", "invalid_endpoint", "host_unsupported"].includes(error.code)
+			)
+				throw error;
 			// A thrown port request has no known HTTP outcome; never expose transport details.
 			throw new CloudError("offline");
 		}

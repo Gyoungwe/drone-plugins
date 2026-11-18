@@ -44,6 +44,8 @@ async function fixture(status: unknown = { slots: { webdav: slot } }) {
 			: response(200, "fake remote", { ETag: '"v1"' }),
 	);
 	const call = vi.fn(async (name: string, input: unknown, _signal?: AbortSignal) => {
+		if (name === "config.endpoint")
+			return { state: "ready", endpoint: "http://10.126.126.1:8080", source: "default" };
 		if (name === "credentials.status") {
 			if (state.status instanceof Error) throw state.status;
 			return state.status;
@@ -96,7 +98,10 @@ it.each(unavailable)("gates every operation on %s without network IO", async (_n
 			);
 		else expect(result).toEqual({ status: "failed", reason });
 	}
-	expect(f.call.mock.calls.map(([name]) => name)).toEqual(Array(6).fill("credentials.status"));
+	expect(f.call.mock.calls.filter(([name]) => name === "credentials.status").map(([name]) => name)).toEqual(
+		Array(6).fill("credentials.status"),
+	);
+	expect(f.call.mock.calls.filter(([name]) => name === "config.endpoint")).toHaveLength(6);
 	expect(f.network).not.toHaveBeenCalled();
 	expect(JSON.stringify(await f.invoke("cloudStatus"))).not.toContain("fake-private");
 });
@@ -277,6 +282,7 @@ it.each(["env", "saved"])(
 			configured: true,
 			credentialSource: source,
 			savedConfigured: false,
+			endpoint: { state: "ready", url: "http://10.126.126.1:8080", source: "default" },
 		});
 		f.state.status = { slots: { webdav: { configured: true, authentication: "http-basic-digest" } } };
 		expect(await f.invoke("cloudStatus")).toEqual({
@@ -285,6 +291,7 @@ it.each(["env", "saved"])(
 			configured: true,
 			credentialSource: null,
 			savedConfigured: null,
+			endpoint: { state: "ready", url: "http://10.126.126.1:8080", source: "default" },
 		});
 		f.state.status = { slots: { webdav: { ...slot, configured: false } } };
 		expect(await f.invoke("cloudWrite")).toEqual({ status: "failed", reason: "not_configured" });

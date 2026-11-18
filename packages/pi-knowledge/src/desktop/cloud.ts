@@ -9,7 +9,10 @@ export type CloudErrorCode =
 	| "forbidden"
 	| "not_found"
 	| "conflict"
-	| "protocol";
+	| "protocol"
+	| "invalid_endpoint"
+	| "endpoint_changed"
+	| "host_unsupported";
 
 export class CloudError extends Error {
 	constructor(
@@ -93,6 +96,7 @@ function decodeNote(bytes: Uint8Array): string {
 
 function writeFailure(error: unknown, putStarted: boolean): Pick<CloudWriteResult, "status" | "reason"> {
 	if (!(error instanceof CloudError)) throw error;
+	if (["endpoint_changed", "invalid_endpoint", "host_unsupported"].includes(error.code)) throw error;
 	if (error.code === "conflict") return { status: "conflict", reason: error.code };
 	if (error.code === "forbidden" || error.code === "unauthorized")
 		return { status: "forbidden", reason: error.code };
@@ -162,6 +166,7 @@ export class CloudService {
 			note = await this.read(path);
 		} catch (error) {
 			if (!(error instanceof CloudError)) throw error;
+			if (["endpoint_changed", "invalid_endpoint", "host_unsupported"].includes(error.code)) throw error;
 			return false;
 		}
 		return note.hash === hash;

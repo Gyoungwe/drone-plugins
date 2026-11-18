@@ -1,16 +1,20 @@
 import type { CloudErrorCode, CloudNote, CloudWriteResult } from "./cloud.js";
 import type { CloudSyncInput, CloudSyncResult } from "./cloud-sync.js";
 
-export type CloudRuntimeErrorCode = CloudErrorCode | "host_unsupported";
+export type CloudRuntimeErrorCode = CloudErrorCode;
 export interface CloudFailure {
 	status: "failed";
 	reason: CloudRuntimeErrorCode;
 }
 export type CloudOperationResult<T> = { status: "ok"; result: T } | CloudFailure;
 export type CloudStatusInput = null;
+export type CloudEndpoint =
+	| { state: "ready"; url: string; source: "default" | "env" }
+	| { state: "invalid"; reason: "invalid_endpoint" };
 export interface CloudStatusResult {
 	status: "available" | "unavailable" | "not_configured";
-	reason: "host_unsupported" | "not_configured" | null;
+	reason: "host_unsupported" | "not_configured" | "invalid_endpoint" | null;
+	endpoint: CloudEndpoint | null;
 	configured: boolean;
 	credentialSource: "env" | "saved" | null;
 	savedConfigured: boolean | null;
@@ -41,7 +45,17 @@ const object = (properties: Record<string, object>, required = Object.keys(prope
 const string = { type: "string" };
 const boolean = { type: "boolean" };
 const nullable = (schema: object) => ({ anyOf: [schema, { type: "null" }] });
-const codes = ["not_configured", "offline", "unauthorized", "forbidden", "not_found", "conflict", "protocol"];
+const codes = [
+	"not_configured",
+	"offline",
+	"unauthorized",
+	"forbidden",
+	"not_found",
+	"conflict",
+	"protocol",
+	"invalid_endpoint",
+	"endpoint_changed",
+];
 const failure = object({ status: { const: "failed" }, reason: { enum: [...codes, "host_unsupported"] } });
 const result = (schema: object) => ({
 	anyOf: [object({ status: { const: "ok" }, result: schema }), failure],
@@ -52,7 +66,13 @@ const version = { type: "string", maxLength: 1024 };
 export const cloudStatusInputSchema = { type: "null" };
 export const cloudStatusResultSchema = object({
 	status: { enum: ["available", "unavailable", "not_configured"] },
-	reason: nullable({ enum: ["host_unsupported", "not_configured"] }),
+	reason: nullable({ enum: ["host_unsupported", "not_configured", "invalid_endpoint"] }),
+	endpoint: nullable({
+		anyOf: [
+			object({ state: { const: "ready" }, url: string, source: { enum: ["default", "env"] } }),
+			object({ state: { const: "invalid" }, reason: { const: "invalid_endpoint" } }),
+		],
+	}),
 	configured: boolean,
 	credentialSource: nullable({ enum: ["env", "saved"] }),
 	savedConfigured: nullable(boolean),

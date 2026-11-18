@@ -4,14 +4,9 @@ import type {
 	PluginStateReadResult,
 } from "@gyoungwe/plugin-api/runtime";
 import { parseKnowledgeBinding } from "../core/config.js";
-import {
-	CloudError,
-	type CloudHttp,
-	type CloudVault,
-	DEFAULT_WEBDAV_ENDPOINT,
-	DEFAULT_WEBDAV_USERNAME,
-} from "./cloud.js";
+import { CloudError, type CloudHttp, type CloudVault, DEFAULT_WEBDAV_USERNAME } from "./cloud.js";
 import type { CloudStatusResult } from "./cloud-contract.js";
+import { endpointCapabilityError, readCloudEndpoint } from "./cloud-endpoint.js";
 import { cloudNotePath } from "./cloud-paths.js";
 
 interface CredentialSlot {
@@ -25,21 +20,26 @@ export async function cloudAvailability(
 	capabilities: PluginRuntimeCapabilities,
 	signal: AbortSignal,
 ): Promise<CloudStatusResult> {
+	const endpoint = await readCloudEndpoint(capabilities, signal);
+	const unavailable = {
+		status: "unavailable",
+		configured: false,
+		credentialSource: null,
+		savedConfigured: null,
+		endpoint,
+	} as const;
+	if (endpoint === null) return { ...unavailable, reason: "host_unsupported" };
+	if (endpoint.state === "invalid") return { ...unavailable, reason: "invalid_endpoint" };
 	let status: { slots?: Record<string, CredentialSlot> };
 	try {
 		status = (await capabilities.call("credentials.status", null, signal)) as typeof status;
 	} catch {
 		// Hosts before W2 expose no credential metadata; status must never probe to discover support.
-		return {
-			status: "unavailable",
-			reason: "host_unsupported",
-			configured: false,
-			credentialSource: null,
-			savedConfigured: null,
-		};
+		return { ...unavailable, reason: "host_unsupported" };
 	}
 	const slot = status.slots?.webdav;
 	const metadata = {
+		endpoint,
 		configured: slot?.configured ?? false,
 		credentialSource: slot?.source ?? null,
 		savedConfigured: slot?.savedConfigured ?? null,
@@ -65,7 +65,11 @@ interface NetworkResult {
 	base64: string;
 }
 
-export function createCloudHttp(capabilities: PluginRuntimeCapabilities, signal: AbortSignal): CloudHttp {
+export function createCloudHttp(
+	capabilities: PluginRuntimeCapabilities,
+	signal: AbortSignal,
+	endpoint: string,
+): CloudHttp {
 	return {
 		async request(input) {
 			const read = input.method === "GET" || input.method === "PROPFIND";
@@ -78,7 +82,7 @@ export function createCloudHttp(capabilities: PluginRuntimeCapabilities, signal:
 					read ? "network.read" : "network.write",
 					{
 						method: input.method,
-						url: `${DEFAULT_WEBDAV_ENDPOINT}/${input.path}`,
+						url: `${endpoint}/${input.path}`,
 						headers,
 						...(input.body === undefined ? {} : { bodyBase64: Buffer.from(input.body).toString("base64") }),
 						credential: "webdav",
@@ -96,6 +100,8 @@ export function createCloudHttp(capabilities: PluginRuntimeCapabilities, signal:
 				)) as NetworkResult;
 			} catch (error) {
 				// Capability diagnostics can contain remote content; only safe domain codes cross this port.
+				const mapped = endpointCapabilityError(error);
+				if (mapped) throw mapped;
 				throw new CloudError(denied(error) ? "forbidden" : "offline");
 			}
 			return {
