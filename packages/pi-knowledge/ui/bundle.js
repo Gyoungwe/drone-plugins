@@ -312,7 +312,10 @@ import { useState as useState2 } from "react";
 var zh2 = {
   title: "\u4E91\u7AEF\u77E5\u8BC6\u5E93\uFF08WebDAV\uFF09",
   hint: "\u4E91\u7AEF\u9700\u8981\u624B\u52A8\u68C0\u67E5\u5E76\u6309\u6B21\u8BFB\u5199\uFF1B\u672C\u5730\u77E5\u8BC6\u5E93\u76EE\u5F55\u4ECD\u662F\u5F53\u524D\u8BBE\u5907\u7684\u5DE5\u4F5C\u526F\u672C\uFF0C\u4E0D\u63D0\u4F9B\u5B9E\u65F6\u955C\u50CF\u3002",
-  httpWarning: "\u5C40\u57DF\u7F51\u5730\u5740 http://10.126.126.1:8080 \u4F7F\u7528\u672A\u52A0\u5BC6\u7684 HTTP\uFF1B\u8BF7\u4EC5\u5728\u53EF\u4FE1\u7F51\u7EDC\u4E2D\u4F7F\u7528\u3002",
+  effectiveEndpoint: "\u751F\u6548\u5730\u5740",
+  endpointDefault: "\u4F7F\u7528\u9ED8\u8BA4\u5730\u5740\u3002",
+  endpointEnv: "\u5730\u5740\u6765\u81EA\u73AF\u5883\u53D8\u91CF DRONE_WEBDAV_ENDPOINT\u3002",
+  httpWarning: "\u5F53\u524D\u5730\u5740\u4F7F\u7528\u672A\u52A0\u5BC6\u7684 HTTP\uFF1B\u8BF7\u4EC5\u5728\u53EF\u4FE1\u7F51\u7EDC\u4E2D\u4F7F\u7528\u3002",
   available: "\u4E91\u7AEF\u529F\u80FD\u53EF\u7528\uFF08\u8FDE\u63A5\u5C1A\u9700\u624B\u52A8\u68C0\u67E5\uFF09",
   not_configured: "\u5C1A\u672A\u914D\u7F6E\u4E91\u7AEF\u51ED\u636E",
   unavailable: "\u4E91\u7AEF\u529F\u80FD\u4E0D\u53EF\u7528",
@@ -352,7 +355,9 @@ var zh2 = {
   },
   reasons: {
     not_configured: "\u8BF7\u5728 Drone \u8BBE\u7F6E \u2192 UI \u63D2\u4EF6 \u2192 \u63D2\u4EF6\u51ED\u636E\u4E2D\u8BBE\u7F6E\u201CWebDAV \u4E91\u7AEF\u77E5\u8BC6\u5E93\u5BC6\u7801\u201D\uFF0C\u6216\u8BBE\u7F6E\u73AF\u5883\u53D8\u91CF DRONE_WEBDAV_PASSWORD\u3002",
-    host_unsupported: "\u6B64 Drone \u7248\u672C\u5C1A\u4E0D\u80FD\u53D1\u9001 WebDAV \u51ED\u636E\uFF1B\u8BF7\u66F4\u65B0 Drone\u3002",
+    invalid_endpoint: "DRONE_WEBDAV_ENDPOINT \u65E0\u6548\uFF1B\u4E91\u7AEF\u64CD\u4F5C\u5DF2\u505C\u7528\u3002\u8BF7\u8BBE\u7F6E\u5E26\u660E\u786E\u7AEF\u53E3\u3001\u65E0\u51ED\u636E\u548C\u8DEF\u5F84\u53C2\u6570\u7684 HTTP(S) \u6839\u5730\u5740\uFF0C\u7136\u540E\u91CD\u542F Drone\u3002",
+    endpoint_changed: "WebDAV \u5730\u5740\u5DF2\u53D8\u5316\uFF1B\u8BF7\u5237\u65B0\u72B6\u6001\u540E\u91CD\u8BD5\u3002",
+    host_unsupported: "\u6B64 Drone \u7248\u672C\u5C1A\u4E0D\u652F\u6301 WebDAV \u5730\u5740\u914D\u7F6E\uFF1B\u8BF7\u66F4\u65B0 Drone\u3002",
     offline: "\u65E0\u6CD5\u8FDE\u63A5\u4E91\u7AEF\uFF0C\u8BF7\u68C0\u67E5\u7F51\u7EDC\u3002",
     unauthorized: "\u4E91\u7AEF\u8BA4\u8BC1\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5 Drone \u4E2D\u7684\u51ED\u636E\u8BBE\u7F6E\u3002",
     forbidden: "\u6B64\u64CD\u4F5C\u672A\u83B7\u6388\u6743\u3002",
@@ -369,7 +374,10 @@ var zh2 = {
 var en2 = {
   title: "Cloud knowledge (WebDAV)",
   hint: "Cloud access uses manual checks and one-time reads/writes; the local knowledge-base folder remains this device's working copy without a real-time mirror.",
-  httpWarning: "The LAN endpoint http://10.126.126.1:8080 uses unencrypted HTTP; use it only on a trusted network.",
+  effectiveEndpoint: "Effective endpoint",
+  endpointDefault: "Using the default endpoint.",
+  endpointEnv: "Endpoint from environment variable DRONE_WEBDAV_ENDPOINT.",
+  httpWarning: "The current endpoint uses unencrypted HTTP; use it only on a trusted network.",
   available: "Cloud available (check the connection manually)",
   not_configured: "Cloud credentials not configured",
   unavailable: "Cloud unavailable",
@@ -409,7 +417,9 @@ var en2 = {
   },
   reasons: {
     not_configured: "Set the \u201CWebDAV cloud knowledge password\u201D in Drone settings \u2192 UI plugins \u2192 Plugin credentials, or set the DRONE_WEBDAV_PASSWORD environment variable.",
-    host_unsupported: "This Drone version cannot send WebDAV credentials yet; update Drone.",
+    invalid_endpoint: "DRONE_WEBDAV_ENDPOINT is invalid; cloud operations are disabled. Set an HTTP(S) root URL with an explicit port and no credentials or path parameters, then restart Drone.",
+    endpoint_changed: "The WebDAV endpoint changed. Refresh status and try again.",
+    host_unsupported: "This Drone version does not support WebDAV endpoint configuration yet; update Drone.",
     offline: "Cannot reach the cloud. Check the network.",
     unauthorized: "Cloud authentication failed. Check the credentials in Drone.",
     forbidden: "This operation was not authorized.",
@@ -589,6 +599,16 @@ function CloudDisclosure({ status }) {
     status.credentialSource === "env" && status.savedConfigured === true && /* @__PURE__ */ jsx3("p", { children: t.savedUnused })
   ] });
 }
+function CloudEndpointDisclosure({ endpoint }) {
+  const t = useNativeKnowledgeCloudText();
+  if (endpoint?.state !== "ready") return null;
+  return /* @__PURE__ */ jsxs3("div", { children: [
+    /* @__PURE__ */ jsx3("p", { children: t.effectiveEndpoint }),
+    /* @__PURE__ */ jsx3("p", { style: { userSelect: "text", overflowWrap: "anywhere" }, children: endpoint.url }),
+    /* @__PURE__ */ jsx3("p", { children: endpoint.source === "env" ? t.endpointEnv : t.endpointDefault }),
+    endpoint.url.startsWith("http:") && /* @__PURE__ */ jsx3("p", { className: "text-warn", children: t.httpWarning })
+  ] });
+}
 function useCloudConnection({ client, observationRevision, bindingRevision }) {
   const [status, setStatus] = useState3(null);
   const [initialized, setInitialized] = useState3(null);
@@ -630,8 +650,8 @@ function NativeKnowledgeCloud(props) {
       "aria-label": t.title,
       children: [
         /* @__PURE__ */ jsx3("h3", { className: "text-sm font-medium", children: t.title }),
+        status && /* @__PURE__ */ jsx3(CloudEndpointDisclosure, { endpoint: status.endpoint }),
         /* @__PURE__ */ jsx3("p", { children: t.hint }),
-        /* @__PURE__ */ jsx3("p", { className: "text-warn", children: t.httpWarning }),
         status && /* @__PURE__ */ jsx3(CloudDisclosure, { status }),
         requests.busy && /* @__PURE__ */ jsx3("p", { role: "status", children: t.loading }),
         requests.error !== null && /* @__PURE__ */ jsx3("p", { role: "alert", children: cloudReason(t, requests.error) }),
