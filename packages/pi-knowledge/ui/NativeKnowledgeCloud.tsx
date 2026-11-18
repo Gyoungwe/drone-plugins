@@ -41,6 +41,19 @@ function CloudDisclosure({ status }: { status: CloudStatusResult }) {
 	);
 }
 
+function CloudEndpointDisclosure({ endpoint }: Pick<CloudStatusResult, "endpoint">) {
+	const t = useNativeKnowledgeCloudText();
+	if (endpoint?.state !== "ready") return null;
+	return (
+		<div>
+			<p>{t.effectiveEndpoint}</p>
+			<p style={{ userSelect: "text", overflowWrap: "anywhere" }}>{endpoint.url}</p>
+			<p>{endpoint.source === "env" ? t.endpointEnv : t.endpointDefault}</p>
+			{endpoint.url.startsWith("http:") && <p className="text-warn">{t.httpWarning}</p>}
+		</div>
+	);
+}
+
 interface CloudProps {
 	client: PluginUiRuntimeClient;
 	observationRevision: number;
@@ -91,8 +104,8 @@ export function NativeKnowledgeCloud(props: CloudProps) {
 			aria-label={t.title}
 		>
 			<h3 className="text-sm font-medium">{t.title}</h3>
+			{status && <CloudEndpointDisclosure endpoint={status.endpoint} />}
 			<p>{t.hint}</p>
-			<p className="text-warn">{t.httpWarning}</p>
 			{status && <CloudDisclosure status={status} />}
 			{requests.busy && <p role="status">{t.loading}</p>}
 			{requests.error !== null && <p role="alert">{cloudReason(t, requests.error)}</p>}

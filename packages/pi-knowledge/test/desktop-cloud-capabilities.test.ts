@@ -35,6 +35,8 @@ function capabilityFixture() {
 	const locals = new Map<string, string>();
 	const state = vaultState();
 	const call = vi.fn(async (name: string, input: unknown, _signal?: AbortSignal): Promise<unknown> => {
+		if (name === "config.endpoint")
+			return { state: "ready", endpoint: "http://10.126.126.1:8080", source: "default" };
 		const request = input as {
 			root: string;
 			path: string;
@@ -137,7 +139,7 @@ it("strips reserved request headers and normalizes response header names", async
 		headers: { ETag: '"fake"', "Last-Modified": "fake-date" },
 		base64: Buffer.from("fake").toString("base64"),
 	}));
-	const http = createCloudHttp({ call }, new AbortController().signal);
+	const http = createCloudHttp({ call }, new AbortController().signal, "http://10.126.126.1:8080");
 	expect(
 		await http.request({
 			method: "GET",

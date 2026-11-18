@@ -32,15 +32,20 @@ export function withCloudOperations(factory: PluginNativeRuntimeFactory): Plugin
 				resultSchema,
 				effect,
 				async execute(input, call) {
-					const status = await cloudAvailability(call.capabilities, call.signal);
-					if (name === "cloudStatus") return status;
-					if (status.reason !== null) return { status: "failed", reason: status.reason };
-					const cloud = new CloudService({ http: createCloudHttp(call.capabilities, call.signal) });
 					try {
+						const status = await cloudAvailability(call.capabilities, call.signal);
+						if (name === "cloudStatus") return status;
+						if (status.reason !== null) return { status: "failed", reason: status.reason };
+						if (status.endpoint?.state !== "ready") throw new Error("Cloud endpoint is not ready");
+						const endpoint = status.endpoint.url;
+						const cloud = new CloudService({
+							endpoint,
+							http: createCloudHttp(call.capabilities, call.signal, endpoint),
+						});
 						const result = await executeService(cloud, name, input, context, call);
 						return { status: "ok", result };
 					} catch (error) {
-						if (!(error instanceof CloudError)) throw error;
+						if (name === "cloudStatus" || !(error instanceof CloudError)) throw error;
 						return { status: "failed", reason: error.code };
 					}
 				},

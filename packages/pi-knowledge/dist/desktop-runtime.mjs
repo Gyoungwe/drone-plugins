@@ -10894,7 +10894,8 @@ var CloudDav = class {
     try {
       return await this.http.request(input);
     } catch (error) {
-      if (error instanceof CloudError && error.code === "forbidden") throw error;
+      if (error instanceof CloudError && ["forbidden", "endpoint_changed", "invalid_endpoint", "host_unsupported"].includes(error.code))
+        throw error;
       throw new CloudError("offline");
     }
   }
@@ -10983,6 +10984,7 @@ function decodeNote(bytes) {
 }
 function writeFailure(error, putStarted) {
   if (!(error instanceof CloudError)) throw error;
+  if (["endpoint_changed", "invalid_endpoint", "host_unsupported"].includes(error.code)) throw error;
   if (error.code === "conflict") return { status: "conflict", reason: error.code };
   if (error.code === "forbidden" || error.code === "unauthorized")
     return { status: "forbidden", reason: error.code };
@@ -11042,6 +11044,7 @@ var CloudService = class {
       note = await this.read(path2);
     } catch (error) {
       if (!(error instanceof CloudError)) throw error;
+      if (["endpoint_changed", "invalid_endpoint", "host_unsupported"].includes(error.code)) throw error;
       return false;
     }
     return note.hash === hash4;
@@ -11088,21 +11091,206 @@ var CloudService = class {
 
 // src/desktop/cloud-capabilities.ts
 init_config();
+
+// ../../node_modules/@gyoungwe/plugin-api/dist/analysis-lifecycle-record-validation.js
+function plainObject(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (prototype === Object.prototype || prototype === null) && Reflect.ownKeys(value).length === Object.keys(value).length && Object.values(Object.getOwnPropertyDescriptors(value)).every((field2) => Object.hasOwn(field2, "value"));
+}
+function shape(required, optional = {}) {
+  return (value) => plainObject(value) && Object.entries(required).every(([key, check]) => Object.hasOwn(value, key) && check(value[key])) && Object.keys(value).every((key) => Object.hasOwn(required, key) || Object.hasOwn(optional, key) && optional[key]?.(value[key]) === true);
+}
+function array(check) {
+  return (value) => {
+    if (!Array.isArray(value) || Object.keys(value).length !== value.length)
+      return false;
+    if (Reflect.ownKeys(value).length !== value.length + 1)
+      return false;
+    if (!Object.values(Object.getOwnPropertyDescriptors(value)).every((field2) => Object.hasOwn(field2, "value")))
+      return false;
+    for (let index = 0; index < value.length; index++) {
+      if (!Object.hasOwn(value, index) || !check(value[index]))
+        return false;
+    }
+    return true;
+  };
+}
+function dictionary(check) {
+  return (value) => plainObject(value) && Object.values(value).every(check);
+}
+function oneOf(...values) {
+  return (value) => values.includes(value);
+}
+var text2 = (value) => typeof value === "string";
+var boolean = oneOf(true, false);
+var finite = (value) => typeof value === "number" && Number.isFinite(value);
+var strings = array(text2);
+var identity = shape({ id: text2, version: text2 });
+var stages = oneOf("intake", "design", "readiness", "execution", "review", "delivery", "completed");
+var capability = oneOf("knowledge", "research", "analysis", "literature", "writing", "planning", "coding", "web", "files", "visualization", "external");
+var gate = shape({
+  code: oneOf("scientific-ambiguity", "missing-data", "missing-biological-replicates", "reference-mismatch", "unsupported-method", "unsupported-assay", "compute-authorization-required", "destructive-operation-requires-review", "publication-requires-review"),
+  severity: oneOf("pause", "block"),
+  message: text2,
+  evidenceKey: text2
+});
+var readiness = shape({
+  ok: boolean,
+  inferentialClaimsAllowed: boolean,
+  gates: array(gate),
+  warnings: strings
+});
+var causalId = (value) => text2(value) && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
+var lineageShape = shape({ schemaVersion: oneOf(1), eventId: causalId }, { causationId: causalId, runAttemptId: causalId });
+var lineage = (value) => lineageShape(value) && value.eventId !== value.causationId;
+var artifact = shape({
+  artifactId: text2,
+  versionId: text2,
+  path: text2,
+  sha256: text2,
+  bytes: finite,
+  role: oneOf("input", "output", "review"),
+  parentVersionIds: strings
+}, { accessLevel: oneOf("public", "restricted", "private"), producedByJobId: text2 });
+var executionContext = shape({
+  schemaVersion: oneOf(1),
+  revision: text2,
+  observedAt: text2,
+  source: oneOf("runner", "host", "replay"),
+  values: dictionary((value) => value === null || text2(value) || boolean(value) || finite(value))
+});
+var provenance = shape({
+  adapter: identity,
+  workflow: identity,
+  method: identity,
+  specSha256: text2,
+  artifacts: array(artifact),
+  reproducibility: shape({ status: oneOf("not-assessed", "recorded", "verified", "failed"), detail: text2 }, { environmentFingerprint: text2, checkpointId: text2 })
+}, { adapterSnapshotSha256: text2, toolContractSha256: text2, executionContext, lineage });
+var review = shape({ approved: boolean, detail: text2, limitations: strings }, {
+  reportPath: text2,
+  checks: array(shape({ id: text2, passed: boolean, detail: text2 })),
+  modelStatus: oneOf("approved", "rejected", "unavailable")
+});
+var event = shape({
+  type: oneOf("created", "design-recorded", "readiness-assessed", "execution-approved", "execution-finished", "review-finished", "delivered", "paused", "resumed"),
+  at: text2
+}, { detail: text2 });
+var context = shape({
+  version: oneOf(1),
+  id: text2,
+  question: text2,
+  assay: text2,
+  mode: oneOf("exploratory", "inferential"),
+  stage: stages,
+  status: oneOf("active", "paused", "blocked", "completed"),
+  capabilities: array(capability),
+  readiness: (value) => value === null || readiness(value),
+  publicationRequested: boolean,
+  events: array(event)
+}, {
+  adapter: identity,
+  branchOf: shape({ analysisId: text2, checkpointId: text2, workspace: text2 }),
+  review,
+  provenance
+});
+var binding = shape({
+  jobId: text2,
+  specSha256: text2,
+  adapter: identity,
+  workflow: identity,
+  method: identity,
+  adapterSnapshotSha256: text2,
+  toolContractSha256: text2,
+  requiredOutputs: strings,
+  inputs: array(artifact)
+}, { executionContext, lineage });
+var ledger = shape({ version: oneOf(1), runs: dictionary(context) }, { bindings: dictionary(binding) });
+
+// ../../node_modules/@gyoungwe/plugin-api/dist/runtime-agent-slot.js
+async function withPluginAgentSlot(capabilities, signal, work) {
+  const { lease } = await capabilities.call("agent.slot.acquire", {}, signal);
+  let workFailed = false;
+  try {
+    signal?.throwIfAborted();
+    return await work();
+  } catch (error) {
+    workFailed = true;
+    throw error;
+  } finally {
+    await capabilities.call("agent.slot.release", { lease }).catch((error) => {
+      if (!workFailed)
+        throw error;
+    });
+  }
+}
+
+// ../../node_modules/@gyoungwe/plugin-api/dist/runtime-config.js
+async function readPluginEndpointConfiguration(capabilities, input, signal) {
+  return await capabilities.call("config.endpoint", input, signal);
+}
+
+// src/desktop/cloud-endpoint.ts
+function endpointCapabilityError(error) {
+  if (error === null || typeof error !== "object") return null;
+  if ("code" in error && error.code === "EPLUGINENDPOINTCHANGED" || "message" in error && error.message === "EPLUGINENDPOINTCHANGED")
+    return new CloudError("endpoint_changed");
+  if ("message" in error && error.message === "Plugin capability is not registered: config.endpoint")
+    return new CloudError("host_unsupported");
+  return null;
+}
+function endpointMetadata(result3) {
+  if (result3 !== null && typeof result3 === "object" && "state" in result3 && "endpoint" in result3 && "source" in result3) {
+    if (result3.state === "invalid" && result3.endpoint === null && result3.source === "env" && "reason" in result3 && result3.reason === "invalid_endpoint")
+      return { state: "invalid", reason: "invalid_endpoint" };
+    if (result3.state === "ready" && typeof result3.endpoint === "string" && (result3.source === "default" || result3.source === "env")) {
+      let url;
+      try {
+        url = new URL(result3.endpoint);
+      } catch {
+        throw new Error("Invalid WebDAV endpoint configuration");
+      }
+      if (["http:", "https:"].includes(url.protocol) && result3.endpoint === url.origin)
+        return { state: "ready", url: result3.endpoint, source: result3.source };
+    }
+  }
+  throw new Error("Invalid WebDAV endpoint configuration");
+}
+async function readCloudEndpoint(capabilities, signal) {
+  let result3;
+  try {
+    result3 = await readPluginEndpointConfiguration(capabilities, { slot: "webdav" }, signal);
+  } catch (error) {
+    const mapped = endpointCapabilityError(error);
+    if (mapped?.code === "host_unsupported") return null;
+    throw mapped ?? error;
+  }
+  return endpointMetadata(result3);
+}
+
+// src/desktop/cloud-capabilities.ts
 async function cloudAvailability(capabilities, signal) {
+  const endpoint2 = await readCloudEndpoint(capabilities, signal);
+  const unavailable = {
+    status: "unavailable",
+    configured: false,
+    credentialSource: null,
+    savedConfigured: null,
+    endpoint: endpoint2
+  };
+  if (endpoint2 === null) return { ...unavailable, reason: "host_unsupported" };
+  if (endpoint2.state === "invalid") return { ...unavailable, reason: "invalid_endpoint" };
   let status;
   try {
     status = await capabilities.call("credentials.status", null, signal);
   } catch {
-    return {
-      status: "unavailable",
-      reason: "host_unsupported",
-      configured: false,
-      credentialSource: null,
-      savedConfigured: null
-    };
+    return { ...unavailable, reason: "host_unsupported" };
   }
   const slot = status.slots?.webdav;
   const metadata = {
+    endpoint: endpoint2,
     configured: slot?.configured ?? false,
     credentialSource: slot?.source ?? null,
     savedConfigured: slot?.savedConfigured ?? null
@@ -11119,7 +11307,7 @@ function denied(error) {
   const { code = "", message = "" } = capabilityError(error);
   return /denied|declined|not authorized|forbidden|EACCES|EPERM/i.test(`${code} ${message}`);
 }
-function createCloudHttp(capabilities, signal) {
+function createCloudHttp(capabilities, signal, endpoint2) {
   return {
     async request(input) {
       const read = input.method === "GET" || input.method === "PROPFIND";
@@ -11132,7 +11320,7 @@ function createCloudHttp(capabilities, signal) {
           read ? "network.read" : "network.write",
           {
             method: input.method,
-            url: `${DEFAULT_WEBDAV_ENDPOINT}/${input.path}`,
+            url: `${endpoint2}/${input.path}`,
             headers,
             ...input.body === void 0 ? {} : { bodyBase64: Buffer.from(input.body).toString("base64") },
             credential: "webdav",
@@ -11144,6 +11332,8 @@ function createCloudHttp(capabilities, signal) {
           signal
         );
       } catch (error) {
+        const mapped = endpointCapabilityError(error);
+        if (mapped) throw mapped;
         throw new CloudError(denied(error) ? "forbidden" : "offline");
       }
       return {
@@ -11250,9 +11440,19 @@ var object = (properties, required = Object.keys(properties)) => ({
   additionalProperties: false
 });
 var string = { type: "string" };
-var boolean = { type: "boolean" };
+var boolean2 = { type: "boolean" };
 var nullable = (schema) => ({ anyOf: [schema, { type: "null" }] });
-var codes = ["not_configured", "offline", "unauthorized", "forbidden", "not_found", "conflict", "protocol"];
+var codes = [
+  "not_configured",
+  "offline",
+  "unauthorized",
+  "forbidden",
+  "not_found",
+  "conflict",
+  "protocol",
+  "invalid_endpoint",
+  "endpoint_changed"
+];
 var failure = object({ status: { const: "failed" }, reason: { enum: [...codes, "host_unsupported"] } });
 var result = (schema) => ({
   anyOf: [object({ status: { const: "ok" }, result: schema }), failure]
@@ -11263,13 +11463,19 @@ var version = { type: "string", maxLength: 1024 };
 var cloudStatusInputSchema = { type: "null" };
 var cloudStatusResultSchema = object({
   status: { enum: ["available", "unavailable", "not_configured"] },
-  reason: nullable({ enum: ["host_unsupported", "not_configured"] }),
-  configured: boolean,
+  reason: nullable({ enum: ["host_unsupported", "not_configured", "invalid_endpoint"] }),
+  endpoint: nullable({
+    anyOf: [
+      object({ state: { const: "ready" }, url: string, source: { enum: ["default", "env"] } }),
+      object({ state: { const: "invalid" }, reason: { const: "invalid_endpoint" } })
+    ]
+  }),
+  configured: boolean2,
   credentialSource: nullable({ enum: ["env", "saved"] }),
-  savedConfigured: nullable(boolean)
+  savedConfigured: nullable(boolean2)
 });
 var cloudProbeInputSchema = { type: "null" };
-var cloudProbeResultSchema = result(object({ initialized: boolean }));
+var cloudProbeResultSchema = result(object({ initialized: boolean2 }));
 var cloudInitializeInputSchema = { type: "null" };
 var cloudInitializeResultSchema = cloudProbeResultSchema;
 var cloudReadInputSchema = object({ path });
@@ -11319,7 +11525,7 @@ var cloudSyncInputSchema = object(
 var cloudSyncResultSchema = result(
   object({
     mode: { enum: ["pull", "push"] },
-    completed: boolean,
+    completed: boolean2,
     items: {
       type: "array",
       items: object({
@@ -11497,15 +11703,20 @@ function withCloudOperations(factory) {
         resultSchema,
         effect,
         async execute(input, call) {
-          const status = await cloudAvailability(call.capabilities, call.signal);
-          if (name === "cloudStatus") return status;
-          if (status.reason !== null) return { status: "failed", reason: status.reason };
-          const cloud = new CloudService({ http: createCloudHttp(call.capabilities, call.signal) });
           try {
+            const status = await cloudAvailability(call.capabilities, call.signal);
+            if (name === "cloudStatus") return status;
+            if (status.reason !== null) return { status: "failed", reason: status.reason };
+            if (status.endpoint?.state !== "ready") throw new Error("Cloud endpoint is not ready");
+            const endpoint2 = status.endpoint.url;
+            const cloud = new CloudService({
+              endpoint: endpoint2,
+              http: createCloudHttp(call.capabilities, call.signal, endpoint2)
+            });
             const result3 = await executeService(cloud, name, input, context2, call);
             return { status: "ok", result: result3 };
           } catch (error) {
-            if (!(error instanceof CloudError)) throw error;
+            if (name === "cloudStatus" || !(error instanceof CloudError)) throw error;
             return { status: "failed", reason: error.code };
           }
         }
@@ -11621,8 +11832,8 @@ var searchResultSchema = object2({
     })
   }
 });
-var boolean2 = { type: "boolean" };
-var array = (items) => ({ type: "array", items });
+var boolean3 = { type: "boolean" };
+var array2 = (items) => ({ type: "array", items });
 var record = (additionalProperties) => ({
   type: "object",
   additionalProperties
@@ -11639,7 +11850,7 @@ var snippetProperties = {
   startLine: bindingRevision,
   endLine: integer,
   totalLines: integer,
-  truncated: boolean2
+  truncated: boolean3
 };
 var snippetSchema = object2(snippetProperties);
 var recentNoteSchema = object2({
@@ -11670,7 +11881,7 @@ var readNoteResultSchema = {
       hash: string2,
       ...snippetProperties,
       humanReview: nullable2(snippetSchema),
-      pending: array(object2({ kind: string2, revision: integer }))
+      pending: array2(object2({ kind: string2, revision: integer }))
     })
   ]
 };
@@ -11682,15 +11893,15 @@ var linksResultSchema = object2({
   ...readScope,
   path: string2,
   title: string2,
-  outgoing: array(object2({ path: string2, title: string2, exists: boolean2 })),
-  incoming: array(object2({ path: string2, title: string2, exists: boolean2 }))
+  outgoing: array2(object2({ path: string2, title: string2, exists: boolean3 })),
+  incoming: array2(object2({ path: string2, title: string2, exists: boolean3 }))
 });
 var graphInputSchema = object2(
   {
     revision: bindingRevision,
     limit: { type: "integer", minimum: 10, maximum: 500 },
     view: { enum: ["semantic", "all"] },
-    mergeMirrors: boolean2
+    mergeMirrors: boolean3
   },
   ["revision"]
 );
@@ -11700,7 +11911,7 @@ var graphNodeProperties = {
   title: string2,
   kind: string2,
   degree: integer,
-  warnings: array(string2)
+  warnings: array2(string2)
 };
 var semanticNodeSchema = object2(
   {
@@ -11708,43 +11919,43 @@ var semanticNodeSchema = object2(
     nodeType: {
       enum: ["note", "wiki", "navigation", "mirror", "infrastructure", "memory"]
     },
-    isInfrastructure: boolean2,
+    isInfrastructure: boolean3,
     community: { type: "integer", minimum: -1 },
     x: { type: "number" },
     y: { type: "number" },
-    mirrors: array(string2),
+    mirrors: array2(string2),
     contentType: string2,
-    isMain: boolean2,
-    sharedWith: array(string2)
+    isMain: boolean3,
+    sharedWith: array2(string2)
   },
   ["path", "title", "kind", "degree", "nodeType", "isInfrastructure", "community", "x", "y"]
 );
 var graphResultSchema = object2({
   ...readScope,
-  nodes: array(object2(graphNodeProperties, ["path", "title", "kind", "degree"])),
-  edges: array(edgeSchema),
+  nodes: array2(object2(graphNodeProperties, ["path", "title", "kind", "degree"])),
+  edges: array2(edgeSchema),
   totalNotes: integer,
   semantic: object2({
-    nodes: array(semanticNodeSchema),
-    edges: array(edgeSchema),
+    nodes: array2(semanticNodeSchema),
+    edges: array2(edgeSchema),
     totalNotes: integer,
     view: { enum: ["semantic", "all"] },
-    mergeMirrors: boolean2,
-    relations: array(
+    mergeMirrors: boolean3,
+    relations: array2(
       object2({
         source: string2,
         target: string2,
         type: { enum: ["link", "directory", "duplicate"] }
       })
     ),
-    duplicates: array(object2({ canonical: string2, duplicate: string2 })),
+    duplicates: array2(object2({ canonical: string2, duplicate: string2 })),
     communities: record({ type: "integer", minimum: -1 }),
     layout: record(object2({ x: { type: "number" }, y: { type: "number" } })),
     health: object2({
       isolated: integer,
       duplicates: integer,
       infrastructure: integer,
-      truncated: boolean2,
+      truncated: boolean3,
       candidateNodes: integer,
       candidateLimit: integer
     })
@@ -11760,7 +11971,7 @@ var jobsInputSchema = object2(
 );
 var jobsResultSchema = object2({
   ...readScope,
-  items: array(
+  items: array2(
     object2({
       key: string2,
       kind: string2,
@@ -11784,10 +11995,10 @@ var recentByCategoryInputSchema = object2(
 var recentByCategoryResultSchema = object2({
   ...readScope,
   groups: object2({
-    paper: array(recentNoteSchema),
-    software: array(recentNoteSchema),
-    method: array(recentNoteSchema),
-    idea: array(recentNoteSchema)
+    paper: array2(recentNoteSchema),
+    software: array2(recentNoteSchema),
+    method: array2(recentNoteSchema),
+    idea: array2(recentNoteSchema)
   }),
   counts: object2({
     paper: integer,
@@ -11812,7 +12023,7 @@ var preferencesResultSchema = object2({
       updatedAt: string2
     })
   ),
-  canWriteState: boolean2,
+  canWriteState: boolean3,
   reviewPolicy: object2({
     mode: reviewModeSchema,
     persistedMode: nullable2(reviewModeSchema),
@@ -11839,7 +12050,7 @@ var reviewsInputSchema = object2(
 var reviewsResultSchema = object2({
   bindingRevision,
   project: nullable2(string2),
-  items: array(
+  items: array2(
     object2({
       id: proposalId,
       path: string2,
@@ -11847,11 +12058,11 @@ var reviewsResultSchema = object2({
       status: string2,
       proposalHash,
       expiresAt: integer,
-      expired: boolean2,
-      bindingChanged: boolean2
+      expired: boolean3,
+      bindingChanged: boolean3
     })
   ),
-  problems: array(object2({ id: string2, error: string2 })),
+  problems: array2(object2({ id: string2, error: string2 })),
   total: integer,
   offset: integer,
   nextOffset: nullable2(integer)
@@ -11873,7 +12084,7 @@ var previewReviewResultSchema = object2({
   before: string2,
   after: string2,
   protectedText: string2,
-  sources: array(
+  sources: array2(
     object2(
       {
         path: string2,
@@ -11881,17 +12092,17 @@ var previewReviewResultSchema = object2({
         startLine: bindingRevision,
         endLine: bindingRevision,
         excerptHash: string2,
-        paperDois: array(string2),
+        paperDois: array2(string2),
         currentHash: nullable2(string2),
-        changed: boolean2,
+        changed: boolean3,
         error: nullable2(string2)
       },
       ["path", "hash", "startLine", "endLine", "excerptHash", "currentHash", "changed", "error"]
     )
   ),
-  expired: boolean2,
-  targetChanged: boolean2,
-  canApply: boolean2,
+  expired: boolean3,
+  targetChanged: boolean3,
+  canApply: boolean3,
   expiresAt: integer,
   scientificallyVerified: { const: false }
 });
@@ -11904,7 +12115,7 @@ var rejectReviewResultSchema = object2({
   id: proposalId,
   status: { const: "rejected" },
   vaultWritten: { const: false },
-  reviewRecorded: boolean2
+  reviewRecorded: boolean3
 });
 var applyReviewInputSchema = object2({
   revision: bindingRevision,
@@ -11916,19 +12127,19 @@ var applyReviewResultSchema = object2({
   status: { const: "applied" },
   path: { type: "string", minLength: 1 },
   vaultWritten: { const: true },
-  reviewRecorded: boolean2,
-  indexed: boolean2,
-  recovered: boolean2,
+  reviewRecorded: boolean3,
+  indexed: boolean3,
+  recovered: boolean3,
   recordError: nullable2(string2),
   indexError: nullable2(string2)
 });
 var semanticConfigProperties = {
-  enabled: boolean2,
+  enabled: boolean3,
   provider: { enum: ["none", "ollama", "openai-compatible"] },
   baseUrl: string2,
   model: string2,
   credentialEnv: string2,
-  remoteConsent: boolean2,
+  remoteConsent: boolean3,
   timeoutMs: { type: "integer", minimum: 500, maximum: 3e4 },
   chunkChars: { type: "integer", minimum: 256, maximum: 8e3 },
   minSimilarity: { type: "number", minimum: 0, maximum: 1 }
@@ -11949,7 +12160,7 @@ var semanticPreferencesResultSchema = object2({
       "updatedAt"
     ])
   ),
-  canWriteState: boolean2,
+  canWriteState: boolean3,
   providerExecution: { const: "unavailable" }
 });
 var setSemanticSettingsInputSchema = object2({
@@ -11961,7 +12172,7 @@ var reviewHistoryInputSchema = object2({ revision: bindingRevision });
 var reviewHistoryResultSchema = object2({
   bindingRevision,
   project: string2,
-  items: array(
+  items: array2(
     object2({
       id: proposalId,
       path: string2,
@@ -11984,7 +12195,7 @@ var modelReviewInputSchema = object2(
     id: proposalId,
     expectedProposalHash: proposalHash,
     acknowledged: { const: true },
-    autoApply: boolean2,
+    autoApply: boolean3,
     profile: modelReviewProfile
   },
   ["revision", "id", "expectedProposalHash", "acknowledged", "autoApply"]
@@ -12015,16 +12226,16 @@ var modelReviewResultSchema = {
     completedAt: integer,
     verdict: { enum: ["approve", "needs-human", "reject"] },
     summary: string2,
-    cautions: array(string2),
-    checks: { type: "object", additionalProperties: boolean2 },
-    source_paths: array(string2),
-    canAutoApply: boolean2,
-    autoApplyAuthorized: boolean2,
-    applied: boolean2,
+    cautions: array2(string2),
+    checks: { type: "object", additionalProperties: boolean3 },
+    source_paths: array2(string2),
+    canAutoApply: boolean3,
+    autoApplyAuthorized: boolean3,
+    applied: boolean3,
     humanReviewed: { const: false },
     scientificallyVerified: { const: false },
     usage: modelReviewUsageSchema,
-    partial: boolean2,
+    partial: boolean3,
     applyError: string2,
     auditSaveError: string2,
     writeResult: { type: "object" }
@@ -12055,141 +12266,6 @@ var modelReviewInfoResultSchema = object2({
   selection: modelSelectionSchema,
   lastReview: nullable2(modelReviewResultSchema)
 });
-
-// ../../node_modules/@gyoungwe/plugin-api/dist/analysis-lifecycle-record-validation.js
-function plainObject(value) {
-  if (typeof value !== "object" || value === null || Array.isArray(value))
-    return false;
-  const prototype = Object.getPrototypeOf(value);
-  return (prototype === Object.prototype || prototype === null) && Reflect.ownKeys(value).length === Object.keys(value).length && Object.values(Object.getOwnPropertyDescriptors(value)).every((field2) => Object.hasOwn(field2, "value"));
-}
-function shape(required, optional = {}) {
-  return (value) => plainObject(value) && Object.entries(required).every(([key, check]) => Object.hasOwn(value, key) && check(value[key])) && Object.keys(value).every((key) => Object.hasOwn(required, key) || Object.hasOwn(optional, key) && optional[key]?.(value[key]) === true);
-}
-function array2(check) {
-  return (value) => {
-    if (!Array.isArray(value) || Object.keys(value).length !== value.length)
-      return false;
-    if (Reflect.ownKeys(value).length !== value.length + 1)
-      return false;
-    if (!Object.values(Object.getOwnPropertyDescriptors(value)).every((field2) => Object.hasOwn(field2, "value")))
-      return false;
-    for (let index = 0; index < value.length; index++) {
-      if (!Object.hasOwn(value, index) || !check(value[index]))
-        return false;
-    }
-    return true;
-  };
-}
-function dictionary(check) {
-  return (value) => plainObject(value) && Object.values(value).every(check);
-}
-function oneOf(...values) {
-  return (value) => values.includes(value);
-}
-var text2 = (value) => typeof value === "string";
-var boolean3 = oneOf(true, false);
-var finite = (value) => typeof value === "number" && Number.isFinite(value);
-var strings = array2(text2);
-var identity = shape({ id: text2, version: text2 });
-var stages = oneOf("intake", "design", "readiness", "execution", "review", "delivery", "completed");
-var capability = oneOf("knowledge", "research", "analysis", "literature", "writing", "planning", "coding", "web", "files", "visualization", "external");
-var gate = shape({
-  code: oneOf("scientific-ambiguity", "missing-data", "missing-biological-replicates", "reference-mismatch", "unsupported-method", "unsupported-assay", "compute-authorization-required", "destructive-operation-requires-review", "publication-requires-review"),
-  severity: oneOf("pause", "block"),
-  message: text2,
-  evidenceKey: text2
-});
-var readiness = shape({
-  ok: boolean3,
-  inferentialClaimsAllowed: boolean3,
-  gates: array2(gate),
-  warnings: strings
-});
-var causalId = (value) => text2(value) && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
-var lineageShape = shape({ schemaVersion: oneOf(1), eventId: causalId }, { causationId: causalId, runAttemptId: causalId });
-var lineage = (value) => lineageShape(value) && value.eventId !== value.causationId;
-var artifact = shape({
-  artifactId: text2,
-  versionId: text2,
-  path: text2,
-  sha256: text2,
-  bytes: finite,
-  role: oneOf("input", "output", "review"),
-  parentVersionIds: strings
-}, { accessLevel: oneOf("public", "restricted", "private"), producedByJobId: text2 });
-var executionContext = shape({
-  schemaVersion: oneOf(1),
-  revision: text2,
-  observedAt: text2,
-  source: oneOf("runner", "host", "replay"),
-  values: dictionary((value) => value === null || text2(value) || boolean3(value) || finite(value))
-});
-var provenance = shape({
-  adapter: identity,
-  workflow: identity,
-  method: identity,
-  specSha256: text2,
-  artifacts: array2(artifact),
-  reproducibility: shape({ status: oneOf("not-assessed", "recorded", "verified", "failed"), detail: text2 }, { environmentFingerprint: text2, checkpointId: text2 })
-}, { adapterSnapshotSha256: text2, toolContractSha256: text2, executionContext, lineage });
-var review = shape({ approved: boolean3, detail: text2, limitations: strings }, {
-  reportPath: text2,
-  checks: array2(shape({ id: text2, passed: boolean3, detail: text2 })),
-  modelStatus: oneOf("approved", "rejected", "unavailable")
-});
-var event = shape({
-  type: oneOf("created", "design-recorded", "readiness-assessed", "execution-approved", "execution-finished", "review-finished", "delivered", "paused", "resumed"),
-  at: text2
-}, { detail: text2 });
-var context = shape({
-  version: oneOf(1),
-  id: text2,
-  question: text2,
-  assay: text2,
-  mode: oneOf("exploratory", "inferential"),
-  stage: stages,
-  status: oneOf("active", "paused", "blocked", "completed"),
-  capabilities: array2(capability),
-  readiness: (value) => value === null || readiness(value),
-  publicationRequested: boolean3,
-  events: array2(event)
-}, {
-  adapter: identity,
-  branchOf: shape({ analysisId: text2, checkpointId: text2, workspace: text2 }),
-  review,
-  provenance
-});
-var binding = shape({
-  jobId: text2,
-  specSha256: text2,
-  adapter: identity,
-  workflow: identity,
-  method: identity,
-  adapterSnapshotSha256: text2,
-  toolContractSha256: text2,
-  requiredOutputs: strings,
-  inputs: array2(artifact)
-}, { executionContext, lineage });
-var ledger = shape({ version: oneOf(1), runs: dictionary(context) }, { bindings: dictionary(binding) });
-
-// ../../node_modules/@gyoungwe/plugin-api/dist/runtime-agent-slot.js
-async function withPluginAgentSlot(capabilities, signal, work) {
-  const { lease } = await capabilities.call("agent.slot.acquire", {}, signal);
-  let workFailed = false;
-  try {
-    signal?.throwIfAborted();
-    return await work();
-  } catch (error) {
-    workFailed = true;
-    throw error;
-  } finally {
-    await capabilities.call("agent.slot.release", { lease }).catch((error) => {
-      if (!workFailed)
-        throw error;
-    });
-  }
-}
 
 // src/desktop/model-review.ts
 init_wiki_model_review();

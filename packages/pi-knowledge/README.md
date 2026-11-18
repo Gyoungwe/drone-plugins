@@ -35,6 +35,9 @@ The managed runtime adds `cloudStatus`, `cloudProbe`, `cloudInitialize`, `cloudR
 and types; `cloud-runtime.ts` registers them and `cloud-capabilities.ts` adapts the
 domain ports to caller-scoped host capabilities. Sync is manual and transfers only
 explicitly selected notes, with preview/binding checks, CAS and write readback.
+`cloud-endpoint.ts` resolves and validates the host's endpoint metadata at the
+capability boundary. Each operation reads `config.endpoint` afresh for the `webdav`
+slot; its answer supplies both the service origin and every request destination.
 
 The cloud UI lives in Knowledge settings; set its password in Drone's plugin credentials settings.
 
@@ -42,7 +45,13 @@ Enter the host-kept WebDAV password in Drone settings → UI plugins → Plugin
 credentials. The host's `DRONE_WEBDAV_PASSWORD` overrides the saved password; the
 plugin never reads either value. This flow requires a host supporting
 `authentication: "http-basic-digest"`; older hosts report unavailable without any
-network request. Status never probes. Defaults remain `http://10.126.126.1:8080`,
+network request. The endpoint also requires host support for `config.endpoint`;
+unsupported hosts cannot perform cloud operations. Invalid `DRONE_WEBDAV_ENDPOINT`
+configuration disables operations without falling back to the default or sending
+requests. A host endpoint-change error requires refreshing status before retrying.
+Knowledge settings displays the effective origin and its default/environment
+source separately from the password source, even without a configured password.
+Status never probes. Defaults remain `http://10.126.126.1:8080`,
 username `gaoyangwei`, folder `Drone-Knowledge`. **Plain HTTP does not encrypt
 credentials or note contents in transit.** Network writes use the host's existing
 approval dialog; local pull writes require the selected writable Vault root.

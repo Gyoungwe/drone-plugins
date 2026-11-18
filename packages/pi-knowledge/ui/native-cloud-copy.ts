@@ -3,7 +3,10 @@ import { useLanguage } from "./runtime-api";
 export const zh = {
 	title: "云端知识库（WebDAV）",
 	hint: "云端需要手动检查并按次读写；本地知识库目录仍是当前设备的工作副本，不提供实时镜像。",
-	httpWarning: "局域网地址 http://10.126.126.1:8080 使用未加密的 HTTP；请仅在可信网络中使用。",
+	effectiveEndpoint: "生效地址",
+	endpointDefault: "使用默认地址。",
+	endpointEnv: "地址来自环境变量 DRONE_WEBDAV_ENDPOINT。",
+	httpWarning: "当前地址使用未加密的 HTTP；请仅在可信网络中使用。",
 	available: "云端功能可用（连接尚需手动检查）",
 	not_configured: "尚未配置云端凭据",
 	unavailable: "云端功能不可用",
@@ -44,7 +47,10 @@ export const zh = {
 	reasons: {
 		not_configured:
 			"请在 Drone 设置 → UI 插件 → 插件凭据中设置“WebDAV 云端知识库密码”，或设置环境变量 DRONE_WEBDAV_PASSWORD。",
-		host_unsupported: "此 Drone 版本尚不能发送 WebDAV 凭据；请更新 Drone。",
+		invalid_endpoint:
+			"DRONE_WEBDAV_ENDPOINT 无效；云端操作已停用。请设置带明确端口、无凭据和路径参数的 HTTP(S) 根地址，然后重启 Drone。",
+		endpoint_changed: "WebDAV 地址已变化；请刷新状态后重试。",
+		host_unsupported: "此 Drone 版本尚不支持 WebDAV 地址配置；请更新 Drone。",
 		offline: "无法连接云端，请检查网络。",
 		unauthorized: "云端认证失败，请检查 Drone 中的凭据设置。",
 		forbidden: "此操作未获授权。",
@@ -61,8 +67,10 @@ export const zh = {
 export const en: typeof zh = {
 	title: "Cloud knowledge (WebDAV)",
 	hint: "Cloud access uses manual checks and one-time reads/writes; the local knowledge-base folder remains this device's working copy without a real-time mirror.",
-	httpWarning:
-		"The LAN endpoint http://10.126.126.1:8080 uses unencrypted HTTP; use it only on a trusted network.",
+	effectiveEndpoint: "Effective endpoint",
+	endpointDefault: "Using the default endpoint.",
+	endpointEnv: "Endpoint from environment variable DRONE_WEBDAV_ENDPOINT.",
+	httpWarning: "The current endpoint uses unencrypted HTTP; use it only on a trusted network.",
 	available: "Cloud available (check the connection manually)",
 	not_configured: "Cloud credentials not configured",
 	unavailable: "Cloud unavailable",
@@ -103,7 +111,10 @@ export const en: typeof zh = {
 	reasons: {
 		not_configured:
 			"Set the “WebDAV cloud knowledge password” in Drone settings → UI plugins → Plugin credentials, or set the DRONE_WEBDAV_PASSWORD environment variable.",
-		host_unsupported: "This Drone version cannot send WebDAV credentials yet; update Drone.",
+		invalid_endpoint:
+			"DRONE_WEBDAV_ENDPOINT is invalid; cloud operations are disabled. Set an HTTP(S) root URL with an explicit port and no credentials or path parameters, then restart Drone.",
+		endpoint_changed: "The WebDAV endpoint changed. Refresh status and try again.",
+		host_unsupported: "This Drone version does not support WebDAV endpoint configuration yet; update Drone.",
 		offline: "Cannot reach the cloud. Check the network.",
 		unauthorized: "Cloud authentication failed. Check the credentials in Drone.",
 		forbidden: "This operation was not authorized.",
