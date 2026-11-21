@@ -45,7 +45,7 @@
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/deliverable-review.ts": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/experience-store.ts": 4,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/host.ts": 1,
-	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/index-runtime.ts": 6,
+	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/index-runtime.ts": 4,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/ingest-frontmatter.ts": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/ingest-policy.ts": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/metacognitive-policy.ts": 1,
