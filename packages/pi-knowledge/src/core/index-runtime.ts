@@ -17,6 +17,14 @@ import { reconcileInBatches } from "./reconcile-batch.js";
 import { buildKnowledgeSearchExpression, tokenizeKnowledgeText } from "./search-policy.js";
 import { createSemanticModel } from "./semantic-model.js";
 import { createSemanticScanState, scanSemanticBatch } from "./semantic-scan.js";
+import {
+	cosineSimilarity,
+	decodeVector,
+	encodeVector,
+	storedVectorNorm,
+	vectorNorm,
+} from "./vector-codec.js";
+import { migrateVectorStorageOnOpen } from "./vector-migration.js";
 import { createWriteBatcher } from "./write-batch.js";
 
 /**
@@ -59,8 +67,8 @@ export async function createKnowledgeIndexRuntime(
 	CREATE TABLE IF NOT EXISTS problems(path TEXT PRIMARY KEY, message TEXT NOT NULL);
 	CREATE TABLE IF NOT EXISTS semantic_chunks(
 	 path TEXT NOT NULL, chunk_index INTEGER NOT NULL, hash TEXT NOT NULL, fingerprint TEXT NOT NULL,
-	 mtime TEXT NOT NULL, vector TEXT NOT NULL, dimension INTEGER NOT NULL,
-	 start_char INTEGER, end_char INTEGER,
+	 mtime TEXT NOT NULL, vector BLOB NOT NULL, dimension INTEGER NOT NULL,
+	 start_char INTEGER, end_char INTEGER, norm REAL,
 	 PRIMARY KEY(path,chunk_index,hash,fingerprint)
 	);
 	CREATE INDEX IF NOT EXISTS semantic_chunks_lookup ON semantic_chunks(fingerprint,hash,path);
@@ -97,14 +105,15 @@ export async function createKnowledgeIndexRuntime(
 		db.exec("ALTER TABLE semantic_chunks ADD COLUMN start_char INTEGER");
 	if (!semanticColumns.includes("end_char"))
 		db.exec("ALTER TABLE semantic_chunks ADD COLUMN end_char INTEGER");
+	if (!semanticColumns.includes("norm")) db.exec("ALTER TABLE semantic_chunks ADD COLUMN norm REAL");
 	if (semanticColumns.includes("text")) {
 		db.exec(`BEGIN IMMEDIATE;
 	DROP INDEX IF EXISTS semantic_chunks_lookup;
 	ALTER TABLE semantic_chunks RENAME TO semantic_chunks_legacy;
 	CREATE TABLE semantic_chunks(
 	 path TEXT NOT NULL, chunk_index INTEGER NOT NULL, hash TEXT NOT NULL, fingerprint TEXT NOT NULL,
-	 mtime TEXT NOT NULL, vector TEXT NOT NULL, dimension INTEGER NOT NULL,
-	 start_char INTEGER, end_char INTEGER,
+	 mtime TEXT NOT NULL, vector BLOB NOT NULL, dimension INTEGER NOT NULL,
+	 start_char INTEGER, end_char INTEGER, norm REAL,
 	 PRIMARY KEY(path,chunk_index,hash,fingerprint)
 	);
 	INSERT INTO semantic_chunks(path,chunk_index,hash,fingerprint,mtime,vector,dimension)
@@ -113,6 +122,8 @@ export async function createKnowledgeIndexRuntime(
 	CREATE INDEX IF NOT EXISTS semantic_chunks_lookup ON semantic_chunks(fingerprint,hash,path);
 	COMMIT;`);
 	}
+	// KP2 — rewrite the JSON text vectors as Float32 blobs; see vector-migration.ts.
+	migrateVectorStorageOnOpen(db);
 	let revision = Number(db.prepare("SELECT value FROM meta WHERE key='revision'").get().value);
 	let scan = null,
 		coverage = "uninitialized",
@@ -682,17 +693,18 @@ export async function createKnowledgeIndexRuntime(
 				if (meta && Number(meta.dimension) !== vector.length)
 					throw new Error("Semantic fingerprint dimension mismatch");
 				db.prepare(
-					"INSERT OR REPLACE INTO semantic_chunks(path,chunk_index,hash,fingerprint,mtime,vector,dimension,start_char,end_char) VALUES(?,?,?,?,?,?,?,?,?)",
+					"INSERT OR REPLACE INTO semantic_chunks(path,chunk_index,hash,fingerprint,mtime,vector,dimension,start_char,end_char,norm) VALUES(?,?,?,?,?,?,?,?,?,?)",
 				).run(
 					item.path,
 					item.chunkIndex,
 					item.hash,
 					fingerprint,
 					item.mtime,
-					JSON.stringify(vector),
+					encodeVector(vector),
 					vector.length,
 					Number.isInteger(item.startChar) ? item.startChar : null,
 					Number.isInteger(item.endChar) ? item.endChar : null,
+					vectorNorm(vector),
 				);
 			}
 			if (dimension !== null)
@@ -728,7 +740,7 @@ export async function createKnowledgeIndexRuntime(
 		/** @type {any[]} */
 		const rows = db
 			.prepare(
-				"SELECT s.path,s.hash,s.vector,s.dimension,s.chunk_index,s.start_char,s.end_char,n.title,n.kind FROM semantic_chunks s JOIN notes n ON n.path=s.path AND n.hash=s.hash WHERE s.fingerprint=? AND (n.scope='shared' OR n.scope=?) AND n.kind!='explainer' ORDER BY s.path LIMIT 5000",
+				"SELECT s.path,s.hash,s.vector,s.dimension,s.norm,s.chunk_index,s.start_char,s.end_char,n.title,n.kind FROM semantic_chunks s JOIN notes n ON n.path=s.path AND n.hash=s.hash WHERE s.fingerprint=? AND (n.scope='shared' OR n.scope=?) AND n.kind!='explainer' ORDER BY s.path LIMIT 5000",
 			)
 			.all(fingerprint, args.project || "");
 		const totalEligible = Number(
@@ -741,28 +753,16 @@ export async function createKnowledgeIndexRuntime(
 		const best = new Map();
 		for (const row of rows) {
 			if (row.dimension !== query.length) continue;
-			let vector;
+			let vector: number[];
 			try {
-				vector = JSON.parse(row.vector);
+				vector = decodeVector({ bytes: row.vector, dimension: row.dimension });
 			} catch {
 				continue;
 			}
-			if (!Array.isArray(vector) || vector.length !== query.length) continue;
-			let dot = 0,
-				qa = 0,
-				va = 0;
-			for (let i = 0; i < query.length; i++) {
-				const q = query[i],
-					v = vector[i];
-				if (typeof v !== "number" || !Number.isFinite(v)) {
-					va = Number.NaN;
-					break;
-				}
-				dot += q * v;
-				qa += q * q;
-				va += v * v;
-			}
-			const score = dot / Math.sqrt(qa * va);
+			if (vector.length !== query.length) continue;
+			// KP2 — the stored norm replaces measuring the vector.
+			const norm = storedVectorNorm(vector, { bytes: row.vector, dimension: row.dimension }, row.norm);
+			const score = cosineSimilarity(query, vector, norm);
 			if (!Number.isFinite(score) || score < minSimilarity) continue;
 			const current = best.get(row.path);
 			if (!current || score > current.score)
