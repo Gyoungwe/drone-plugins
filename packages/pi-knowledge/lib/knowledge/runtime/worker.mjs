@@ -420,17 +420,19 @@ function emptyCounts() {
 }
 function createCategoryCountCache() {
   const counts = createRevisionCache();
+  let scans = 0;
   function categoryCounts(revision, load, project) {
     const scope = project === void 0 ? "*" : project;
     const cached = counts.get(revision, scope);
     if (cached) return { ...cached };
+    scans++;
     const result = emptyCounts();
     for (const note of load())
       if (project === void 0 || canRead(note.path, project)) result[noteCategory(note)]++;
     counts.set(revision, scope, result);
     return { ...result };
   }
-  return { categoryCounts };
+  return { categoryCounts, scans: () => scans };
 }
 
 // src/core/graph-retrieval.ts
@@ -875,6 +877,100 @@ function createSemanticModel(input, options = {}) {
   };
 }
 
+// src/core/semantic-scan.ts
+var SCAN_WINDOW = 32;
+function createSemanticScanState() {
+  return { cursors: /* @__PURE__ */ new Map() };
+}
+function scanKey(fingerprint, scope) {
+  return `${fingerprint}\0${scope}`;
+}
+function semanticCursor(state, fingerprint, scope, revision) {
+  const key = scanKey(fingerprint, scope);
+  const cursor = state.cursors.get(key);
+  if (!cursor) {
+    const fresh = { path: "", revision };
+    state.cursors.set(key, fresh);
+    return fresh;
+  }
+  if (cursor.revision !== revision) {
+    cursor.path = "";
+    cursor.revision = revision;
+  }
+  return cursor;
+}
+function semanticMissingNotes(db, fingerprint, scope, chunkChars, afterPath, limit) {
+  return db.prepare(
+    `SELECT n.path,n.title,n.hash,n.signature,length(n.body) bodyLength,
+	     (SELECT count(*) FROM semantic_chunks s
+	        WHERE s.path=n.path AND s.hash=n.hash AND s.fingerprint=?) stored
+	     FROM notes n
+	     WHERE (n.scope='shared' OR n.scope=?) AND n.kind NOT IN ('navigation','explainer')
+	       AND n.path > ?
+	       AND (SELECT count(*) FROM semantic_chunks s
+	            WHERE s.path=n.path AND s.hash=n.hash AND s.fingerprint=?)
+	           < min(64, CASE WHEN length(n.body)=0 THEN 0
+	                         ELSE (length(n.body)+CAST(? AS INTEGER)-1)/CAST(? AS INTEGER) END)
+	     ORDER BY n.path LIMIT ?`
+  ).all(fingerprint, scope, afterPath, fingerprint, chunkChars, chunkChars, limit);
+}
+async function scanSemanticBatch(state, db, request, hooks) {
+  const { fingerprint, scope, limit, chunkChars } = request;
+  const cursor = semanticCursor(state, fingerprint, scope, request.revision);
+  const items = [];
+  let after = cursor.path;
+  let handled = cursor.path;
+  while (true) {
+    if (items.length >= limit) {
+      cursor.path = handled;
+      return { items, partial: true };
+    }
+    const window = semanticMissingNotes(db, fingerprint, scope, chunkChars, after, SCAN_WINDOW);
+    if (!window.length) break;
+    after = window[window.length - 1].path;
+    for (const row of window) {
+      if (items.length >= limit) {
+        cursor.path = handled;
+        return { items, partial: true };
+      }
+      if (/(?:^|\/)(?:Runs|Explainers)\//i.test(row.path)) continue;
+      if (!hooks.canRead(row.path, request.project)) continue;
+      let current;
+      try {
+        current = await hooks.updatePath(row.path);
+      } catch {
+        continue;
+      }
+      if (!current || current.hash !== row.hash || current.signature !== row.signature) continue;
+      const chunks = splitKnowledgeChunks(current.body, chunkChars);
+      let produced = 0;
+      for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+        if (hooks.isStored(row.path, chunkIndex, row.hash, fingerprint)) continue;
+        if (items.length >= limit) {
+          cursor.path = handled;
+          return { items, partial: true };
+        }
+        if (row.path > handled) handled = row.path;
+        const chunk = chunks[chunkIndex];
+        const startChar = chunkIndex * chunkChars;
+        items.push({
+          path: row.path,
+          chunkIndex,
+          hash: current.hash,
+          mtime: current.signature,
+          text: chunk,
+          startChar,
+          endChar: startChar + chunk.length
+        });
+        produced++;
+      }
+      if (produced && row.path > handled) handled = row.path;
+    }
+  }
+  cursor.path = handled;
+  return { items, partial: false };
+}
+
 // src/core/index-runtime.ts
 async function createKnowledgeIndexRuntime(options, files, transport) {
   await mkdir(dirname(options.database), { recursive: true, mode: 448 });
@@ -1250,7 +1346,7 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       jobs: Number(db.prepare("SELECT count(*) count FROM jobs").get().count),
       problems: db.prepare("SELECT * FROM problems ORDER BY path LIMIT 20").all(),
       categoryCounts: categoryCounts(),
-      stats: { ...stats },
+      stats: { ...stats, categoryScans: categoryCountsCache.scans() },
       semantic: {
         vectors: Number(db.prepare("SELECT count(*) count FROM semantic_chunks").get().count),
         paths: Number(db.prepare("SELECT count(DISTINCT path) count FROM semantic_chunks").get().count)
@@ -1258,6 +1354,7 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     };
   }
   const categoryCountsCache = createCategoryCountCache();
+  const semanticScanState = createSemanticScanState();
   function categoryCounts(project = void 0) {
     const load = () => db.prepare("SELECT path,body FROM notes WHERE kind IN ('note','wiki')").all();
     return categoryCountsCache.categoryCounts(revision, load, project);
@@ -1410,42 +1507,21 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     const limit = Math.max(1, Math.min(16, Math.floor(args.limit || 8)));
     const chunkChars = Math.max(256, Math.min(8e3, Math.floor(args.chunkChars || 1200)));
     const scope = args.project || "";
-    const rows = db.prepare(`SELECT path,title,body,hash,signature,scope,kind FROM notes
-	    WHERE (scope='shared' OR scope=?) AND kind NOT IN ('navigation','explainer') ORDER BY path`).all(scope);
-    const items = [];
-    for (const row of rows) {
-      let current;
-      try {
-        if (!canRead(row.path, args.project)) continue;
-        if (/(?:^|\/)(?:Runs|Explainers)\//i.test(row.path)) continue;
-        current = await updatePath(row.path);
-        if (!current || current.hash !== row.hash || current.signature !== row.signature) continue;
-      } catch {
-        continue;
+    const scan2 = await scanSemanticBatch(
+      semanticScanState,
+      db,
+      { fingerprint, project: args.project, scope, revision, limit, chunkChars },
+      {
+        canRead: (path, project) => canRead(path, project),
+        updatePath,
+        isStored: (path, chunkIndex, hash2, fp) => Boolean(
+          db.prepare(
+            "SELECT 1 FROM semantic_chunks WHERE path=? AND chunk_index=? AND hash=? AND fingerprint=? LIMIT 1"
+          ).get(path, chunkIndex, hash2, fp)
+        )
       }
-      const chunks = splitKnowledgeChunks(current.body, chunkChars);
-      for (let index = 0; index < chunks.length; index++) {
-        const chunk = chunks[index];
-        const found = db.prepare(
-          "SELECT 1 FROM semantic_chunks WHERE path=? AND chunk_index=? AND hash=? AND fingerprint=? LIMIT 1"
-        ).get(row.path, index, row.hash, fingerprint);
-        if (found) continue;
-        if (items.length >= limit) {
-          return { items, partial: true, nextCursor: null };
-        }
-        const startChar = index * chunkChars;
-        items.push({
-          path: row.path,
-          chunkIndex: index,
-          hash: current.hash,
-          mtime: current.signature,
-          text: chunk,
-          startChar,
-          endChar: startChar + chunk.length
-        });
-      }
-    }
-    return { items, partial: false, nextCursor: null };
+    );
+    return { items: scan2.items, partial: scan2.partial, nextCursor: null };
   }
   function semanticStore(args) {
     const fingerprint = String(args.fingerprint || "");
