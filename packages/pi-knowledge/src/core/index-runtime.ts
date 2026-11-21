@@ -11,10 +11,26 @@ import type { KnowledgeIndexFiles, KnowledgeIndexTransport } from "./index-runti
 import { parseFrontmatter } from "./ingest-frontmatter.js";
 import { noteCategory } from "./note-category.js";
 import { noteDisplayTitle } from "./note-title.js";
+import { prepareNote } from "./note-write.js";
+import { applyUpdate, createNoteWriteSink } from "./note-write-runtime.js";
 import { recentByCategory as groupRecentByCategory } from "./recent-by-category.js";
+import { reconcileInBatches } from "./reconcile-batch.js";
 import { buildKnowledgeSearchExpression, tokenizeKnowledgeText } from "./search-policy.js";
 import { createSemanticModel } from "./semantic-model.js";
 import { createSemanticScanState, scanSemanticBatch } from "./semantic-scan.js";
+import { createWriteBatcher } from "./write-batch.js";
+
+/**
+ * The statement that writes one note row.
+ *
+ * KP4 — the cold path runs this once per note, so it is prepared once and
+ * reused.
+ */
+const UPSERT_NOTE = [
+	"INSERT INTO notes(path,title,body,hash,signature,scope,kind,bytes) VALUES(?,?,?,?,?,?,?,?)",
+	"ON CONFLICT(path) DO UPDATE SET title=excluded.title,body=excluded.body,hash=excluded.hash,",
+	"signature=excluded.signature,scope=excluded.scope,kind=excluded.kind,bytes=excluded.bytes",
+].join(" ");
 
 /** One algorithm shared by the native worker and the Desktop resource process. */
 export async function createKnowledgeIndexRuntime(
@@ -111,7 +127,17 @@ export async function createKnowledgeIndexRuntime(
 	let closePromise;
 	const dirty = new Set(),
 		inflight = new Map();
-	const stats = { bodyReads: 0, metadataChecks: 0, reconciliations: 0, changes: 0, searches: 0 };
+	const stats = {
+		bodyReads: 0,
+		metadataChecks: 0,
+		reconciliations: 0,
+		changes: 0,
+		searches: 0,
+		// KP4 — the number of transactions the write path committed.  A cold
+		// index used to commit one transaction per note; the count is what
+		// the guard pins, because it does not change with the machine.
+		transactions: 0,
+	};
 	const graphSnapshots = createRevisionCache<Record<string, unknown>>();
 	const statements = {
 		get: db.prepare("SELECT * FROM notes WHERE path=?"),
@@ -126,11 +152,17 @@ export async function createKnowledgeIndexRuntime(
 		job: db.prepare(
 			"INSERT INTO jobs VALUES(?,?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET revision=excluded.revision,updated=excluded.updated",
 		),
+		// KP4 — the cold path runs these once per note, so they are prepared
+		// once and reused.  Re-preparing a statement costs a parse per note.
+		upsertNote: db.prepare(UPSERT_NOTE),
+		insertSearch: db.prepare("INSERT INTO search(rowid,title,terms) VALUES(?,?,?)"),
+		setSignature: db.prepare("UPDATE notes SET signature=? WHERE path=?"),
+		dependents: db.prepare("SELECT source FROM links WHERE target=?"),
+		revision: db.prepare("SELECT value FROM meta WHERE key='revision'"),
+		bumpRevision: db.prepare("UPDATE meta SET value=value+1 WHERE key='revision' RETURNING value"),
 	};
 	function bump() {
-		revision = Number(
-			db.prepare("UPDATE meta SET value=value+1 WHERE key='revision' RETURNING value").get().value,
-		);
+		revision = Number(statements.bumpRevision.get().value);
 	}
 	function job(kind, path, scope) {
 		statements.job.run(`${kind}:${path}`, kind, path, scope, revision, new Date().toISOString());
@@ -162,118 +194,66 @@ export async function createKnowledgeIndexRuntime(
 			if (!/(?:^|\/)Wiki\//.test(path)) job("evidence-review", path, scope);
 		}
 		/** @type {any[]} */
-		const dependents = db.prepare("SELECT source FROM links WHERE target=?").all(path);
+		const dependents = statements.dependents.all(path);
 		for (const { source } of dependents)
 			if (/(?:^|\/)Wiki\//.test(source) && !source.endsWith("/Index.md"))
 				job("wiki-review", source, noteScope(source));
 		if (previous && previous.scope !== scope)
 			job("navigation", `Projects/${previous.scope}/Index.md`, previous.scope);
 	}
-	function internalLinks(path, text) {
-		const out = new Set();
-		for (const match of text.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g)) {
-			let target = match[1].trim();
-			if (!target.includes("/")) {
-				// Only unambiguous root or sibling links are treated as dependency edges.
-				target =
-					["Home", "Index", "Context"].includes(target) && target !== "Home"
-						? `${path.split("/").slice(0, -1).join("/")}/${target}`
-						: target;
-			}
-			if (!target.endsWith(".md")) target += ".md";
-			try {
-				validateNote(target);
-				out.add(target);
-			} catch {
-				/* unsafe/external link: never followed */
-			}
+	/**
+	 * Reads a note and works out what its write needs.
+	 *
+	 * This phase does the filesystem work and awaits; it holds no lock and
+	 * touches no transaction.
+	 */
+	async function prepareUpdate(path, force) {
+		const previous = statements.get.get(path) ?? null;
+		try {
+			stats.metadataChecks++;
+			const info = await files.inspect(path);
+			if (!force && previous?.signature === info.signature) return { kind: "unchanged", path, previous };
+			const file = await files.read(path);
+			stats.bodyReads++;
+			if (previous?.hash === file.hash) return { kind: "signature", path, previous, file };
+			return { kind: "write", path, note: prepareNote(path, previous, file) };
+		} catch (error) {
+			return { kind: "remove", path, previous, error };
 		}
-		return out;
 	}
+
+	/**
+	 * KP4 — the note write is split into a prepare phase and an apply phase,
+	 * so the reconcile can group several notes into one transaction.
+	 */
+	const writeRuntime = {
+		statements,
+		bump: () => bump(),
+		changed: (path, previous) => changed(path, previous),
+	};
+	const writeSink = createNoteWriteSink(writeRuntime);
+
+	/**
+	 * Reads one note and writes it.
+	 *
+	 * The note is read outside the transaction and written inside it, so the
+	 * transaction is held for the statements alone.
+	 */
 	async function updatePath(path, force = false) {
 		validateNote(path);
 		if (inflight.has(path)) return inflight.get(path);
 		const task = (async () => {
-			const previous = statements.get.get(path);
+			const update = await prepareUpdate(path, force);
+			const batcher = createWriteBatcher((sql) => db.exec(sql));
+			const transaction = batcher.begin();
 			try {
-				stats.metadataChecks++;
-				const info = await files.inspect(path);
-				if (!force && previous?.signature === info.signature) return previous;
-				const file = await files.read(path);
-				stats.bodyReads++;
-				if (previous?.hash === file.hash) {
-					db.prepare("UPDATE notes SET signature=? WHERE path=?").run(file.signature, path);
-					statements.clearProblem.run(path);
-					return statements.get.get(path);
-				}
-				const title = noteDisplayTitle(file.text, path);
-				const kind = /(?:^|\/)(?:Index|Context|Home)\.md$/i.test(path)
-					? "navigation"
-					: /(?:^|\/)Wiki\//.test(path)
-						? "wiki"
-						: path.startsWith("Library/Explainers/")
-							? "explainer"
-							: "note";
-				db.exec("BEGIN IMMEDIATE");
-				try {
-					// Re-read inside the write lock: another worker on the same database may have
-					// indexed this path after `previous` was read, so `previous` can be stale.
-					const current = statements.get.get(path);
-					if (current) statements.removeFts.run(current.id);
-					if (current && (current.hash !== file.hash || current.signature !== file.signature))
-						statements.semanticDelete.run(path);
-					db.prepare(`INSERT INTO notes(path,title,body,hash,signature,scope,kind,bytes) VALUES(?,?,?,?,?,?,?,?)
-	          ON CONFLICT(path) DO UPDATE SET title=excluded.title,body=excluded.body,hash=excluded.hash,
-	          signature=excluded.signature,scope=excluded.scope,kind=excluded.kind,bytes=excluded.bytes`).run(
-						path,
-						title,
-						file.text,
-						file.hash,
-						file.signature,
-						noteScope(path),
-						kind,
-						file.bytes,
-					);
-					const row = statements.get.get(path);
-					statements.removeFts.run(row.id);
-					db.prepare("INSERT INTO search(rowid,title,terms) VALUES(?,?,?)").run(
-						row.id,
-						tokenizeKnowledgeText(title).join(" "),
-						tokenizeKnowledgeText(file.text).join(" "),
-					);
-					statements.links.run(path);
-					for (const target of internalLinks(path, file.text)) statements.addLink.run(path, target);
-					statements.clearProblem.run(path);
-					bump();
-					changed(path, previous);
-					db.exec("COMMIT");
-					return row;
-				} catch (error) {
-					db.exec("ROLLBACK");
-					revision = Number(db.prepare("SELECT value FROM meta WHERE key='revision'").get().value);
-					throw error;
-				}
+				const row = applyUpdate(update, transaction, writeRuntime, writeSink);
+				batcher.commit();
+				stats.transactions++;
+				return row;
 			} catch (error) {
-				// Unreadable/symlinked/deleted notes must not remain in search as stale evidence.
-				if (previous) {
-					db.exec("BEGIN IMMEDIATE");
-					try {
-						const current = statements.get.get(path);
-						if (current) statements.removeFts.run(current.id);
-						statements.remove.run(path);
-						statements.semanticDelete.run(path);
-						statements.links.run(path);
-						bump();
-						changed(path, previous);
-						db.exec("COMMIT");
-					} catch (inner) {
-						db.exec("ROLLBACK");
-						throw inner;
-					}
-				}
-				if (["ENOENT", "ENOTDIR"].includes(error.code)) statements.clearProblem.run(path);
-				else statements.problem.run(path, String(error.message).slice(0, 400));
-				if (["ENOENT", "ENOTDIR"].includes(error.code)) return null;
+				batcher.rollback();
+				revision = Number(statements.revision.get().value);
 				throw error;
 			}
 		})();
@@ -304,30 +284,41 @@ export async function createKnowledgeIndexRuntime(
 				initial = db.prepare("SELECT path FROM notes").all();
 			let n = 0,
 				interrupted = false;
+			// KP4 — the cold path groups its notes into one transaction
+			// instead of one transaction per note.
+			//
+			// The notes are *prepared* first — that phase reads the
+			// filesystem and awaits — and only then applied, so the
+			// transaction is held for the statements alone and never spans
+			// an `await`.  A note the user changed while the app was running
+			// is therefore never rolled back with a batch.
+			const sink = {
+				prepare: (path) => prepareUpdate(path, force),
+				apply: (update, transaction) => applyUpdate(update, transaction, writeRuntime, writeSink),
+				problem: (path, message) => statements.problem.run(path, message),
+				committed: () => stats.transactions++,
+				exec: (sql) => db.exec(sql),
+			};
 			try {
-				for await (const path of walk("")) {
-					seen.add(path);
-					try {
-						await updatePath(path, force);
-					} catch {
-						/* per-file problem is visible in status */
-					}
-					if (++n % 24 === 0) await yieldTurn();
-				}
+				// The walk is consumed once: the batcher reads each path and
+				// the seen set records it as it goes.
+				await reconcileInBatches(walk(""), {
+					...sink,
+					prepare: async (path) => {
+						seen.add(path);
+						return prepareUpdate(path, force);
+					},
+				});
 			} catch (error) {
 				interrupted = true;
 				statements.problem.run("<inventory>", String(error.message));
 			}
 			if (!interrupted) {
 				statements.clearProblem.run("<inventory>");
-				for (const { path } of initial)
-					if (!seen.has(path)) {
-						try {
-							await updatePath(path, true);
-						} catch {
-							/* excluded or unreadable: already invalidated */
-						}
-					}
+				const removed = (async function* () {
+					for (const { path } of initial) if (!seen.has(path)) yield path;
+				})();
+				await reconcileInBatches(removed, { ...sink, prepare: (path) => prepareUpdate(path, true) });
 				lastReconciledAt = new Date().toISOString();
 			}
 			coverage = interrupted ? "partial" : "ready";
