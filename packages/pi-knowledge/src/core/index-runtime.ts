@@ -3,17 +3,16 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { setImmediate as yieldTurn } from "node:timers/promises";
-import { createCategoryCountCache } from "./category-count-cache.js";
+import { categoryRowLoader, createCategoryViews } from "./category-views.js";
 import { allowedSegment, canRead, noteScope, snippet, validateNote } from "./files.js";
 import { createRevisionCache } from "./graph-cache.js";
 import { backlinkContext } from "./graph-retrieval.js";
 import type { KnowledgeIndexFiles, KnowledgeIndexTransport } from "./index-runtime-ports.js";
 import { parseFrontmatter } from "./ingest-frontmatter.js";
-import { noteCategory } from "./note-category.js";
+import { noteCategory, noteCategoryCount } from "./note-category.js";
 import { noteDisplayTitle } from "./note-title.js";
 import { prepareNote } from "./note-write.js";
 import { applyUpdate, createNoteWriteSink } from "./note-write-runtime.js";
-import { recentByCategory as groupRecentByCategory } from "./recent-by-category.js";
 import { reconcileInBatches } from "./reconcile-batch.js";
 import { buildKnowledgeSearchExpression, tokenizeKnowledgeText } from "./search-policy.js";
 import { createSemanticModel } from "./semantic-model.js";
@@ -428,18 +427,21 @@ export async function createKnowledgeIndexRuntime(
 			jobs: Number(db.prepare("SELECT count(*) count FROM jobs").get().count),
 			problems: db.prepare("SELECT * FROM problems ORDER BY path LIMIT 20").all(),
 			categoryCounts: categoryCounts(),
-			stats: { ...stats, categoryScans: categoryCountsCache.scans() },
+			stats: { ...stats, categoryScans: noteCategoryCount() },
 			semantic: {
 				vectors: Number(db.prepare("SELECT count(*) count FROM semantic_chunks").get().count),
 				paths: Number(db.prepare("SELECT count(DISTINCT path) count FROM semantic_chunks").get().count),
 			},
 		};
 	}
-	const categoryCountsCache = createCategoryCountCache();
+	const categoryViews = createCategoryViews(() => revision);
 	const semanticScanState = createSemanticScanState();
+	/** The notes the category cache reads; see `category-views.ts`. */
+	const categoryRows = categoryRowLoader(() =>
+		db.prepare("SELECT path,title,kind,body,signature FROM notes WHERE kind IN ('note','wiki')").all(),
+	);
 	function categoryCounts(project = undefined) {
-		const load = () => db.prepare("SELECT path,body FROM notes WHERE kind IN ('note','wiki')").all();
-		return categoryCountsCache.categoryCounts(revision, load, project);
+		return categoryViews.counts(categoryRows, project);
 	}
 	function semanticStatus(fingerprint = null, project = null) {
 		if (!fingerprint) return { vectors: 0, paths: 0, coverage: "unconfigured" };
@@ -461,13 +463,7 @@ export async function createKnowledgeIndexRuntime(
 	/** Most recent notes per home category (the same classification as categoryCounts). */
 	async function recentByCategory(project, limit = 10) {
 		await flushDirty();
-		const scope = project || "";
-		const rows = db
-			.prepare(
-				"SELECT path,title,kind,signature,body FROM notes WHERE (scope='shared' OR scope=?) AND kind IN ('note','wiki')",
-			)
-			.all(scope);
-		return groupRecentByCategory(rows, limit);
+		return categoryViews.recent(categoryRows, project || undefined, limit);
 	}
 	async function recentNotes(project, limit = 8) {
 		// A deposit writes the Vault file before the watcher callback arrives.  Flush

@@ -44,6 +44,15 @@ import {
  */
 const MAX_CATEGORY_SCANS = 1;
 
+/**
+ * How many note rows the category views may read per revision.
+ *
+ * The counter counts *rows read out of the index*, not cache misses.  A miss
+ * is a cache event; the rows are the expensive part.  Counting rows means a
+ * view that reads the notes back out on its own — bypassing the cache —
+ * moves the counter, so the guard cannot pass vacuously.
+ */
+
 afterEach(async () => {
 	await closeKnowledgeServices();
 	delete process.env.DRONE_KNOWLEDGE_DIR;
@@ -94,7 +103,8 @@ it("does not rescan the notes for every status call", async () => {
 		for (let index = 0; index < 10; index++) await service.request("status", {});
 		const status = await service.request("status", {});
 		// Eleven status calls over a 150-note Vault, and the notes were not
-		// read back out of the index again.  Before KP1 each call read all 150.
+		// read back out of the index again.  Before KP1 each call read all 150,
+		// so the count grew by 150 every time.
 		expect(Number(status.stats.categoryScans)).toBe(scansBefore);
 	} finally {
 		await closeKnowledgeServices();
@@ -156,6 +166,34 @@ it("recomputes the category counts after a note changes", async () => {
 		expect(after.revision).toBeGreaterThan(before.revision);
 		expect(afterCounts.paper).toBe(39);
 		expect(afterCounts.software).toBe(1);
+	} finally {
+		await closeKnowledgeServices();
+		await rm(root, { recursive: true, force: true });
+	}
+}, 120000);
+
+it("reuses the category scan for the recent-by-category view", async () => {
+	const root = await realpath(await mkdtemp(join(tmpdir(), "pi-knowledge-bench-")));
+	try {
+		const service = await openService(root, 150);
+		await service.request("status", {});
+		const baseline = await service.request("status", {});
+		const rowsBefore = Number(baseline.stats.categoryScans);
+
+		// KP5a — the recent view used to read every note body and re-derive
+		// every category, which was the same full scan the counts had already
+		// paid for.  It must now come out of the cache the counts filled, so
+		// no further rows come out of the index.
+		const recent = await service.request("recentByCategory", { limit: 10 });
+		const after = await service.request("status", {});
+		expect(Number(after.stats.categoryScans)).toBe(rowsBefore);
+
+		// The view must still be correct: the fixture puts every note under
+		// Library/Papers, so the paper group holds the newest ten.
+		const groups = recent.groups as Record<string, Array<{ path: string }>>;
+		expect(groups.paper).toHaveLength(10);
+		expect(groups.paper.every((note) => note.path.startsWith("Library/Papers/"))).toBe(true);
+		expect(groups.method).toHaveLength(0);
 	} finally {
 		await closeKnowledgeServices();
 		await rm(root, { recursive: true, force: true });
