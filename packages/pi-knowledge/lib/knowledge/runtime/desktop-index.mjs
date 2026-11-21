@@ -340,7 +340,12 @@ function keywordCategory(value) {
   if (/idea|hypothes|想法|假设/.test(value)) return "idea";
   return "other";
 }
+var classifications = { count: 0 };
+function noteCategoryCount() {
+  return classifications.count;
+}
 function noteCategory(row) {
+  classifications.count++;
   const type = String(parseFrontmatter(row.body).data?.type || "").trim().toLowerCase();
   if (type) return keywordCategory(type);
   const segments = row.path.toLowerCase().split("/");
@@ -358,21 +363,81 @@ function noteCategory(row) {
 function emptyCounts() {
   return { paper: 0, software: 0, method: 0, idea: 0, other: 0 };
 }
+function updatedAt(signature) {
+  return Number.parseFloat(String(signature ?? "").split(":", 1)[0]) || 0;
+}
 function createCategoryCountCache() {
   const counts = createRevisionCache();
-  let scans = 0;
-  function categoryCounts(revision, load, project) {
+  const notes = createRevisionCache();
+  function scan(revision, load, project) {
     const scope = project === void 0 ? "*" : project;
-    const cached = counts.get(revision, scope);
-    if (cached) return { ...cached };
-    scans++;
+    const cachedCounts = counts.get(revision, scope);
+    const cachedNotes = notes.get(revision, scope);
+    if (cachedCounts && cachedNotes) return { counts: cachedCounts, notes: cachedNotes };
     const result = emptyCounts();
-    for (const note of load())
-      if (project === void 0 || canRead(note.path, project)) result[noteCategory(note)]++;
+    const categorized = [];
+    for (const note of load()) {
+      if (project !== void 0 && !canRead(note.path, project)) continue;
+      const category = noteCategory(note);
+      result[category]++;
+      categorized.push({
+        path: note.path,
+        title: note.title ?? note.path,
+        kind: note.kind ?? "note",
+        category,
+        updatedAt: updatedAt(note.signature)
+      });
+    }
     counts.set(revision, scope, result);
-    return { ...result };
+    notes.set(revision, scope, categorized);
+    return { counts: result, notes: categorized };
   }
-  return { categoryCounts, scans: () => scans };
+  function categoryCounts(revision, load, project) {
+    return { ...scan(revision, load, project).counts };
+  }
+  function categorizedNotes(revision, load, project) {
+    return scan(revision, load, project).notes;
+  }
+  return { categoryCounts, categorizedNotes };
+}
+
+// src/core/category-views.ts
+function categoryRowLoader(query) {
+  return () => query();
+}
+function groupRecentByCategory(notes, limit = 10) {
+  const groups = {
+    paper: [],
+    software: [],
+    method: [],
+    idea: []
+  };
+  for (const note of notes) {
+    if (note.category === "other") continue;
+    groups[note.category].push({
+      path: note.path,
+      title: note.title,
+      kind: note.kind,
+      updatedAt: note.updatedAt
+    });
+  }
+  const max = Math.max(1, Math.min(24, Math.floor(limit || 10)));
+  for (const key of Object.keys(groups))
+    groups[key] = groups[key].sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, max);
+  return groups;
+}
+function createCategoryViews(readRevision) {
+  const cache = createCategoryCountCache();
+  function counts(load, project) {
+    return cache.categoryCounts(readRevision(), load, project);
+  }
+  function notes(load, project) {
+    return cache.categorizedNotes(readRevision(), load, project);
+  }
+  function recent(load, project, limit) {
+    return groupRecentByCategory(notes(load, project), limit);
+  }
+  return { counts, notes, recent };
 }
 
 // src/core/graph-retrieval.ts
@@ -571,30 +636,6 @@ function applyUpdate(update, transaction, runtime, sink) {
   }
   transaction.within(() => applyNoteWrite(update.note, sink));
   return statements.get.get(update.note.path) ?? null;
-}
-
-// src/core/recent-by-category.ts
-function recentByCategory(rows, limit = 10) {
-  const groups = {
-    paper: [],
-    software: [],
-    method: [],
-    idea: []
-  };
-  for (const row of rows) {
-    const category = noteCategory(row);
-    if (category === "other") continue;
-    groups[category].push({
-      path: row.path,
-      title: row.title,
-      kind: row.kind,
-      updatedAt: Number.parseFloat(String(row.signature).split(":", 1)[0]) || 0
-    });
-  }
-  const max = Math.max(1, Math.min(24, Math.floor(limit || 10)));
-  for (const key of Object.keys(groups))
-    groups[key] = groups[key].sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, max);
-  return groups;
 }
 
 // src/core/write-batch.ts
@@ -1453,18 +1494,20 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       jobs: Number(db.prepare("SELECT count(*) count FROM jobs").get().count),
       problems: db.prepare("SELECT * FROM problems ORDER BY path LIMIT 20").all(),
       categoryCounts: categoryCounts(),
-      stats: { ...stats, categoryScans: categoryCountsCache.scans() },
+      stats: { ...stats, categoryScans: noteCategoryCount() },
       semantic: {
         vectors: Number(db.prepare("SELECT count(*) count FROM semantic_chunks").get().count),
         paths: Number(db.prepare("SELECT count(DISTINCT path) count FROM semantic_chunks").get().count)
       }
     };
   }
-  const categoryCountsCache = createCategoryCountCache();
+  const categoryViews = createCategoryViews(() => revision);
   const semanticScanState = createSemanticScanState();
+  const categoryRows = categoryRowLoader(
+    () => db.prepare("SELECT path,title,kind,body,signature FROM notes WHERE kind IN ('note','wiki')").all()
+  );
   function categoryCounts(project = void 0) {
-    const load = () => db.prepare("SELECT path,body FROM notes WHERE kind IN ('note','wiki')").all();
-    return categoryCountsCache.categoryCounts(revision, load, project);
+    return categoryViews.counts(categoryRows, project);
   }
   function semanticStatus(fingerprint = null, project = null) {
     if (!fingerprint) return { vectors: 0, paths: 0, coverage: "unconfigured" };
@@ -1479,13 +1522,9 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       "SELECT * FROM jobs WHERE (scope='shared' OR scope=?) AND (? IS NULL OR kind=?) ORDER BY updated DESC LIMIT ?"
     ).all(project || "", kind, kind, limit);
   }
-  async function recentByCategory2(project, limit = 10) {
+  async function recentByCategory(project, limit = 10) {
     await flushDirty();
-    const scope = project || "";
-    const rows = db.prepare(
-      "SELECT path,title,kind,signature,body FROM notes WHERE (scope='shared' OR scope=?) AND kind IN ('note','wiki')"
-    ).all(scope);
-    return recentByCategory(rows, limit);
+    return categoryViews.recent(categoryRows, project || void 0, limit);
   }
   async function recentNotes(project, limit = 8) {
     await flushDirty();
@@ -2036,7 +2075,7 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     if (op === "recentNotes") return { items: await recentNotes(args.project, args.limit), revision };
     if (op === "recentByCategory")
       return {
-        groups: await recentByCategory2(args.project, args.limit),
+        groups: await recentByCategory(args.project, args.limit),
         counts: categoryCounts(args.project),
         revision
       };
