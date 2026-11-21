@@ -415,30 +415,6 @@ function noteDisplayTitle(text, path) {
   return heading || title || path.split("/").at(-1)?.replace(/\.md$/i, "") || path;
 }
 
-// src/core/recent-by-category.ts
-function recentByCategory(rows, limit = 10) {
-  const groups = {
-    paper: [],
-    software: [],
-    method: [],
-    idea: []
-  };
-  for (const row of rows) {
-    const category = noteCategory(row);
-    if (category === "other") continue;
-    groups[category].push({
-      path: row.path,
-      title: row.title,
-      kind: row.kind,
-      updatedAt: Number.parseFloat(String(row.signature).split(":", 1)[0]) || 0
-    });
-  }
-  const max = Math.max(1, Math.min(24, Math.floor(limit || 10)));
-  for (const key of Object.keys(groups))
-    groups[key] = groups[key].sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, max);
-  return groups;
-}
-
 // src/core/search-policy.ts
 function tokenizeKnowledgeText(text) {
   const words = String(text).normalize("NFKC").toLowerCase().match(/[a-z0-9][a-z0-9._+-]*|[\p{Script=Han}]+/gu) || [];
@@ -471,6 +447,229 @@ function splitKnowledgeChunks(text, maxChars = 1200) {
   for (let start = 0; start < text.length && chunks.length < 64; start += maxChars)
     chunks.push(text.slice(start, start + maxChars));
   return chunks;
+}
+
+// src/core/note-write.ts
+function internalLinks(path, text) {
+  const out = /* @__PURE__ */ new Set();
+  for (const match of text.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g)) {
+    let target = match[1].trim();
+    if (!target.includes("/")) {
+      target = ["Home", "Index", "Context"].includes(target) && target !== "Home" ? `${path.split("/").slice(0, -1).join("/")}/${target}` : target;
+    }
+    if (!target.endsWith(".md")) target += ".md";
+    try {
+      validateNote(target);
+      out.add(target);
+    } catch {
+    }
+  }
+  return out;
+}
+function noteKind(path) {
+  if (/(?:^|\/)(?:Index|Context|Home)\.md$/i.test(path)) return "navigation";
+  if (/(?:^|\/)Wiki\//.test(path)) return "wiki";
+  if (path.startsWith("Library/Explainers/")) return "explainer";
+  return "note";
+}
+function prepareNote(path, previous, file) {
+  const title = noteDisplayTitle(file.text, path);
+  return {
+    path,
+    previous,
+    file,
+    title,
+    kind: noteKind(path),
+    scope: noteScope(path),
+    terms: tokenizeKnowledgeText(file.text).join(" "),
+    titleTerms: tokenizeKnowledgeText(title).join(" "),
+    links: [...internalLinks(path, file.text)]
+  };
+}
+function applyNoteWrite(note, sink) {
+  const { path, file } = note;
+  const current = sink.get(path);
+  if (current) sink.removeFts(current.id);
+  if (current && (current.hash !== file.hash || current.signature !== file.signature))
+    sink.semanticDelete(path);
+  sink.upsertNote(note);
+  const row = sink.get(path);
+  if (!row) return;
+  sink.removeFts(row.id);
+  sink.insertSearch(row.id, note.titleTerms, note.terms);
+  sink.clearLinks(path);
+  for (const target of note.links) sink.addLink(path, target);
+  sink.clearProblem(path);
+  sink.bump();
+  sink.changed(path, note.previous);
+}
+function applySignatureUpdate(path, file, sink, setSignature) {
+  setSignature(path, file.signature);
+  sink.clearProblem(path);
+}
+function applyNoteRemoval(path, previous, sink) {
+  if (!previous) return;
+  const current = sink.get(path);
+  if (current) sink.removeFts(current.id);
+  sink.remove(path);
+  sink.semanticDelete(path);
+  sink.clearLinks(path);
+  sink.bump();
+  sink.changed(path, previous);
+}
+
+// src/core/note-write-runtime.ts
+function createNoteWriteSink(runtime) {
+  const { statements } = runtime;
+  return {
+    get: (path) => statements.get.get(path) ?? null,
+    removeFts: (id) => statements.removeFts.run(id),
+    remove: (path) => statements.remove.run(path),
+    semanticDelete: (path) => statements.semanticDelete.run(path),
+    upsertNote: (note) => {
+      statements.upsertNote.run(
+        note.path,
+        note.title,
+        note.file.text,
+        note.file.hash,
+        note.file.signature,
+        note.scope,
+        note.kind,
+        note.file.bytes
+      );
+    },
+    insertSearch: (id, titleTerms, terms) => statements.insertSearch.run(id, titleTerms, terms),
+    clearLinks: (path) => statements.links.run(path),
+    addLink: (path, target) => statements.addLink.run(path, target),
+    clearProblem: (path) => statements.clearProblem.run(path),
+    bump: () => runtime.bump(),
+    changed: (path, previous) => runtime.changed(path, previous)
+  };
+}
+function applyUpdate(update, transaction, runtime, sink) {
+  const { statements } = runtime;
+  if (update.kind === "unchanged") return statements.get.get(update.path) ?? null;
+  if (update.kind === "signature") {
+    transaction.within(
+      () => applySignatureUpdate(
+        update.path,
+        update.file,
+        sink,
+        (path, signature) => statements.setSignature.run(signature, path)
+      )
+    );
+    return statements.get.get(update.path) ?? null;
+  }
+  if (update.kind === "remove") {
+    const path = update.path;
+    transaction.within(() => applyNoteRemoval(path, update.previous, sink));
+    const error = update.error;
+    const code = error.code ?? "";
+    if (["ENOENT", "ENOTDIR"].includes(code)) statements.clearProblem.run(path);
+    else statements.problem.run(path, String(error.message).slice(0, 400));
+    return null;
+  }
+  transaction.within(() => applyNoteWrite(update.note, sink));
+  return statements.get.get(update.note.path) ?? null;
+}
+
+// src/core/recent-by-category.ts
+function recentByCategory(rows, limit = 10) {
+  const groups = {
+    paper: [],
+    software: [],
+    method: [],
+    idea: []
+  };
+  for (const row of rows) {
+    const category = noteCategory(row);
+    if (category === "other") continue;
+    groups[category].push({
+      path: row.path,
+      title: row.title,
+      kind: row.kind,
+      updatedAt: Number.parseFloat(String(row.signature).split(":", 1)[0]) || 0
+    });
+  }
+  const max = Math.max(1, Math.min(24, Math.floor(limit || 10)));
+  for (const key of Object.keys(groups))
+    groups[key] = groups[key].sort((left, right) => right.updatedAt - left.updatedAt || left.path.localeCompare(right.path)).slice(0, max);
+  return groups;
+}
+
+// src/core/write-batch.ts
+var BATCH_LIMIT = 64;
+function createWriteBatcher(exec) {
+  let open2 = false;
+  let commits = 0;
+  let writes = 0;
+  function begin() {
+    return {
+      get open() {
+        return open2;
+      },
+      within(work) {
+        if (!open2) {
+          exec("BEGIN IMMEDIATE");
+          open2 = true;
+        }
+        work();
+        writes++;
+      }
+    };
+  }
+  function commit() {
+    if (!open2) return;
+    try {
+      exec("COMMIT");
+    } finally {
+      open2 = false;
+      commits++;
+    }
+  }
+  function rollback() {
+    if (!open2) return;
+    try {
+      exec("ROLLBACK");
+    } finally {
+      open2 = false;
+    }
+  }
+  return {
+    begin,
+    commit,
+    rollback,
+    commits: () => commits,
+    writes: () => writes
+  };
+}
+
+// src/core/reconcile-batch.ts
+async function reconcileInBatches(paths, sink) {
+  const batcher = createWriteBatcher((sql) => sink.exec(sql));
+  const batch = batcher.begin();
+  const prepared = [];
+  const flush = () => {
+    if (!prepared.length) return;
+    const group = prepared.splice(0, prepared.length);
+    try {
+      batch.within(() => {
+        for (const update of group) sink.apply(update, batch);
+      });
+      batcher.commit();
+      sink.committed();
+    } catch (error) {
+      batcher.rollback();
+      const message = String(error.message).slice(0, 400);
+      for (const update of group) sink.problem(update.path ?? update.note?.path ?? "", message);
+    }
+  };
+  for await (const path of paths) {
+    const update = await sink.prepare(path);
+    prepared.push(update);
+    if (prepared.length >= BATCH_LIMIT) flush();
+  }
+  flush();
 }
 
 // src/core/semantic-model.ts
@@ -912,6 +1111,11 @@ async function scanSemanticBatch(state, db, request, hooks) {
 }
 
 // src/core/index-runtime.ts
+var UPSERT_NOTE = [
+  "INSERT INTO notes(path,title,body,hash,signature,scope,kind,bytes) VALUES(?,?,?,?,?,?,?,?)",
+  "ON CONFLICT(path) DO UPDATE SET title=excluded.title,body=excluded.body,hash=excluded.hash,",
+  "signature=excluded.signature,scope=excluded.scope,kind=excluded.kind,bytes=excluded.bytes"
+].join(" ");
 async function createKnowledgeIndexRuntime(options, files, transport) {
   await mkdir(dirname(options.database), { recursive: true, mode: 448 });
   const db = new DatabaseSync(options.database, { timeout: 1500 });
@@ -991,7 +1195,17 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
   const flushes = /* @__PURE__ */ new Set();
   let closePromise;
   const dirty = /* @__PURE__ */ new Set(), inflight = /* @__PURE__ */ new Map();
-  const stats = { bodyReads: 0, metadataChecks: 0, reconciliations: 0, changes: 0, searches: 0 };
+  const stats = {
+    bodyReads: 0,
+    metadataChecks: 0,
+    reconciliations: 0,
+    changes: 0,
+    searches: 0,
+    // KP4 — the number of transactions the write path committed.  A cold
+    // index used to commit one transaction per note; the count is what
+    // the guard pins, because it does not change with the machine.
+    transactions: 0
+  };
   const graphSnapshots = createRevisionCache();
   const statements = {
     get: db.prepare("SELECT * FROM notes WHERE path=?"),
@@ -1005,12 +1219,18 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     semanticDelete: db.prepare("DELETE FROM semantic_chunks WHERE path=?"),
     job: db.prepare(
       "INSERT INTO jobs VALUES(?,?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET revision=excluded.revision,updated=excluded.updated"
-    )
+    ),
+    // KP4 — the cold path runs these once per note, so they are prepared
+    // once and reused.  Re-preparing a statement costs a parse per note.
+    upsertNote: db.prepare(UPSERT_NOTE),
+    insertSearch: db.prepare("INSERT INTO search(rowid,title,terms) VALUES(?,?,?)"),
+    setSignature: db.prepare("UPDATE notes SET signature=? WHERE path=?"),
+    dependents: db.prepare("SELECT source FROM links WHERE target=?"),
+    revision: db.prepare("SELECT value FROM meta WHERE key='revision'"),
+    bumpRevision: db.prepare("UPDATE meta SET value=value+1 WHERE key='revision' RETURNING value")
   };
   function bump() {
-    revision = Number(
-      db.prepare("UPDATE meta SET value=value+1 WHERE key='revision' RETURNING value").get().value
-    );
+    revision = Number(statements.bumpRevision.get().value);
   }
   function job(kind, path, scope) {
     statements.job.run(`${kind}:${path}`, kind, path, scope, revision, (/* @__PURE__ */ new Date()).toISOString());
@@ -1036,104 +1256,48 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       );
       if (!/(?:^|\/)Wiki\//.test(path)) job("evidence-review", path, scope);
     }
-    const dependents = db.prepare("SELECT source FROM links WHERE target=?").all(path);
+    const dependents = statements.dependents.all(path);
     for (const { source } of dependents)
       if (/(?:^|\/)Wiki\//.test(source) && !source.endsWith("/Index.md"))
         job("wiki-review", source, noteScope(source));
     if (previous && previous.scope !== scope)
       job("navigation", `Projects/${previous.scope}/Index.md`, previous.scope);
   }
-  function internalLinks(path, text) {
-    const out = /* @__PURE__ */ new Set();
-    for (const match of text.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g)) {
-      let target = match[1].trim();
-      if (!target.includes("/")) {
-        target = ["Home", "Index", "Context"].includes(target) && target !== "Home" ? `${path.split("/").slice(0, -1).join("/")}/${target}` : target;
-      }
-      if (!target.endsWith(".md")) target += ".md";
-      try {
-        validateNote(target);
-        out.add(target);
-      } catch {
-      }
+  async function prepareUpdate(path, force) {
+    const previous = statements.get.get(path) ?? null;
+    try {
+      stats.metadataChecks++;
+      const info = await files.inspect(path);
+      if (!force && previous?.signature === info.signature) return { kind: "unchanged", path, previous };
+      const file = await files.read(path);
+      stats.bodyReads++;
+      if (previous?.hash === file.hash) return { kind: "signature", path, previous, file };
+      return { kind: "write", path, note: prepareNote(path, previous, file) };
+    } catch (error) {
+      return { kind: "remove", path, previous, error };
     }
-    return out;
   }
+  const writeRuntime = {
+    statements,
+    bump: () => bump(),
+    changed: (path, previous) => changed(path, previous)
+  };
+  const writeSink = createNoteWriteSink(writeRuntime);
   async function updatePath(path, force = false) {
     validateNote(path);
     if (inflight.has(path)) return inflight.get(path);
     const task = (async () => {
-      const previous = statements.get.get(path);
+      const update = await prepareUpdate(path, force);
+      const batcher = createWriteBatcher((sql) => db.exec(sql));
+      const transaction = batcher.begin();
       try {
-        stats.metadataChecks++;
-        const info = await files.inspect(path);
-        if (!force && previous?.signature === info.signature) return previous;
-        const file = await files.read(path);
-        stats.bodyReads++;
-        if (previous?.hash === file.hash) {
-          db.prepare("UPDATE notes SET signature=? WHERE path=?").run(file.signature, path);
-          statements.clearProblem.run(path);
-          return statements.get.get(path);
-        }
-        const title = noteDisplayTitle(file.text, path);
-        const kind = /(?:^|\/)(?:Index|Context|Home)\.md$/i.test(path) ? "navigation" : /(?:^|\/)Wiki\//.test(path) ? "wiki" : path.startsWith("Library/Explainers/") ? "explainer" : "note";
-        db.exec("BEGIN IMMEDIATE");
-        try {
-          const current = statements.get.get(path);
-          if (current) statements.removeFts.run(current.id);
-          if (current && (current.hash !== file.hash || current.signature !== file.signature))
-            statements.semanticDelete.run(path);
-          db.prepare(`INSERT INTO notes(path,title,body,hash,signature,scope,kind,bytes) VALUES(?,?,?,?,?,?,?,?)
-	          ON CONFLICT(path) DO UPDATE SET title=excluded.title,body=excluded.body,hash=excluded.hash,
-	          signature=excluded.signature,scope=excluded.scope,kind=excluded.kind,bytes=excluded.bytes`).run(
-            path,
-            title,
-            file.text,
-            file.hash,
-            file.signature,
-            noteScope(path),
-            kind,
-            file.bytes
-          );
-          const row = statements.get.get(path);
-          statements.removeFts.run(row.id);
-          db.prepare("INSERT INTO search(rowid,title,terms) VALUES(?,?,?)").run(
-            row.id,
-            tokenizeKnowledgeText(title).join(" "),
-            tokenizeKnowledgeText(file.text).join(" ")
-          );
-          statements.links.run(path);
-          for (const target of internalLinks(path, file.text)) statements.addLink.run(path, target);
-          statements.clearProblem.run(path);
-          bump();
-          changed(path, previous);
-          db.exec("COMMIT");
-          return row;
-        } catch (error) {
-          db.exec("ROLLBACK");
-          revision = Number(db.prepare("SELECT value FROM meta WHERE key='revision'").get().value);
-          throw error;
-        }
+        const row = applyUpdate(update, transaction, writeRuntime, writeSink);
+        batcher.commit();
+        stats.transactions++;
+        return row;
       } catch (error) {
-        if (previous) {
-          db.exec("BEGIN IMMEDIATE");
-          try {
-            const current = statements.get.get(path);
-            if (current) statements.removeFts.run(current.id);
-            statements.remove.run(path);
-            statements.semanticDelete.run(path);
-            statements.links.run(path);
-            bump();
-            changed(path, previous);
-            db.exec("COMMIT");
-          } catch (inner) {
-            db.exec("ROLLBACK");
-            throw inner;
-          }
-        }
-        if (["ENOENT", "ENOTDIR"].includes(error.code)) statements.clearProblem.run(path);
-        else statements.problem.run(path, String(error.message).slice(0, 400));
-        if (["ENOENT", "ENOTDIR"].includes(error.code)) return null;
+        batcher.rollback();
+        revision = Number(statements.revision.get().value);
         throw error;
       }
     })();
@@ -1162,28 +1326,31 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     scan = (async () => {
       const seen = /* @__PURE__ */ new Set(), initial = db.prepare("SELECT path FROM notes").all();
       let n = 0, interrupted = false;
+      const sink = {
+        prepare: (path) => prepareUpdate(path, force),
+        apply: (update, transaction) => applyUpdate(update, transaction, writeRuntime, writeSink),
+        problem: (path, message) => statements.problem.run(path, message),
+        committed: () => stats.transactions++,
+        exec: (sql) => db.exec(sql)
+      };
       try {
-        for await (const path of walk("")) {
-          seen.add(path);
-          try {
-            await updatePath(path, force);
-          } catch {
+        await reconcileInBatches(walk(""), {
+          ...sink,
+          prepare: async (path) => {
+            seen.add(path);
+            return prepareUpdate(path, force);
           }
-          if (++n % 24 === 0) await yieldTurn();
-        }
+        });
       } catch (error) {
         interrupted = true;
         statements.problem.run("<inventory>", String(error.message));
       }
       if (!interrupted) {
         statements.clearProblem.run("<inventory>");
-        for (const { path } of initial)
-          if (!seen.has(path)) {
-            try {
-              await updatePath(path, true);
-            } catch {
-            }
-          }
+        const removed = (async function* () {
+          for (const { path } of initial) if (!seen.has(path)) yield path;
+        })();
+        await reconcileInBatches(removed, { ...sink, prepare: (path) => prepareUpdate(path, true) });
         lastReconciledAt = (/* @__PURE__ */ new Date()).toISOString();
       }
       coverage = interrupted ? "partial" : "ready";
