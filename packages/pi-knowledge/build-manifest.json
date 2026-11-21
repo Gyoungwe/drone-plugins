@@ -4,6 +4,7 @@
 	"artifactSource": "source",
 	"sourceHashes": {
 		"src/core/capability-discovery.ts": "962bef1c1c6e9e30d585af8d2f4ce0f31766fde9ec4afea11365be8ea79d31ef",
+		"src/core/category-count-cache.ts": "f2aaee0ca4236bbe8e3b4df0822a4e9e597ff1332415e04be338395e1d907440",
 		"src/core/claim-conflicts.ts": "41f93500278f5c001dc09fada205ea36ff66a21bbb54e2253f2aa2c352ef9af3",
 		"src/core/config.ts": "64422dc4ece4ba5f76f925189f384f8c585986c21c62a68fb20beddd5268a7ac",
 		"src/core/daily-discovery-prompt.ts": "c28637942e1fd1c36a91c4dfb50a04a983a1e3bd7200d18d3f77ac2d520874f4",
@@ -20,7 +21,7 @@
 		"src/core/host.ts": "c82138edb3319a6f302456243b928a165aa67a367262c3c39209dd6bebbf6c30",
 		"src/core/index-runtime-local.ts": "e5f5a2320e8ff9c6eef6ea44aa73e834e3d99916e3daf0a9395bd6ea0fba5f37",
 		"src/core/index-runtime-ports.ts": "d5c2ede0f7707f8f7d03c815db75a5f6654fbf1b2f566b88272d99f13958ee03",
-		"src/core/index-runtime.ts": "d3b2ee28fea0830eee122f656c6214bcaa5f3b9ffc0a4cf8c31cd9372053df5c",
+		"src/core/index-runtime.ts": "1506b29488777dc9a0ebddb99d55db178c80933c57c908cb6a5a11ef589bd1da",
 		"src/core/index.ts": "d3b33feae9cee491948dae42ca9094c36ed3245c3a833412e78730a04ed223b5",
 		"src/core/ingest-frontmatter.ts": "c5df8d8b0afc003436817dcf543223e71553370dbf26db3abf0b19700e86e1f8",
 		"src/core/ingest-identity.ts": "08a1020ef7846f40c35f34fcc0edf9da5f550c4e3a69260e1047fcb6a1bbd34d",
@@ -124,13 +125,13 @@
 		"src/maintenance/run.ts": "4348b7e966f704713addce7eb20805d8684a3555387ed4a56d8bd81c8ddb2c3a"
 	},
 	"outputs": {
-		"dist/index.mjs": "8257c22b53aa99c0e7e6324e38cabfdbcde317fae7305e82947533b9eb910ca6",
-		"dist/host.mjs": "389ade254ef5297312f62237bc06d44843875ce95b89c247166f13b3f7786693",
+		"dist/index.mjs": "300ada0c0a4678675c38e500f1bade9f79167f49a241c2a1516479bc192414f3",
+		"dist/host.mjs": "aa31421959e41fcaa18616a8f9e8f6258240ca1316f62f06afb94ae431afcecd",
 		"dist/host.d.ts": "fb78750585e1ad9c438741f6cfd689cc709c1d30bb86b07109a5fd487882b115",
-		"dist/desktop-runtime.mjs": "eb3f856032a62529053f5d4211d3df9cbdef8aed36da8494aca3d5130778b67a",
-		"lib/knowledge/runtime/desktop-index.mjs": "87225858bd27bd5a038723ee29eca421cd9f05fb1764e3984d8a28df84f73ba0",
-		"lib/knowledge/runtime/worker.mjs": "eb524114e9a1ac23c8049ba66e52f55fc24ca6565d83410d2acab801da5a89d8",
-		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "2ab40a9d402b8e9ca1b78e69f437d4e06458388153ac3187029886ad574c44b7",
+		"dist/desktop-runtime.mjs": "b10bb3a2977c5c09c211c9c4bb5df926be216ff74b62ae83b4a7c0cdb6cfdd1a",
+		"lib/knowledge/runtime/desktop-index.mjs": "33807c78a3dcae147a99f817fff7ed6a9d9782590f6f5b2492ec64b91b04af48",
+		"lib/knowledge/runtime/worker.mjs": "2599e7f470fb543240deeacf93e90aeb4e3f2a793d848d2cddf982dcb82a7abf",
+		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "e94b32b7634f8dddbf5f7e4833b44af08483d28d45387c53cf91afc3d6a30015",
 		"ui/bundle.js": "187d0080db5553f3a0f4abbcaa323a258cdfdbbcbb5a26ef61c28e6d51242fe0",
 		"ui/build-manifest.json": "2c82c32fffe262dedbc3a895c10420e074e3ae936b54ec15e22b076fe4dc2816"
 	},

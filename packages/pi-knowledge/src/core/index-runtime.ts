@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { setImmediate as yieldTurn } from "node:timers/promises";
+import { createCategoryCountCache } from "./category-count-cache.js";
 import { allowedSegment, canRead, noteScope, snippet, validateNote } from "./files.js";
 import { createRevisionCache } from "./graph-cache.js";
 import { backlinkContext } from "./graph-retrieval.js";
@@ -446,11 +447,10 @@ export async function createKnowledgeIndexRuntime(
 			},
 		};
 	}
+	const categoryCountsCache = createCategoryCountCache();
 	function categoryCounts(project = undefined) {
-		const counts = { paper: 0, software: 0, method: 0, idea: 0, other: 0 };
-		for (const row of db.prepare("SELECT path,body,kind FROM notes WHERE kind IN ('note','wiki')").all())
-			if (project === undefined || canRead(row.path, project)) counts[noteCategory(row)]++;
-		return counts;
+		const load = () => db.prepare("SELECT path,body FROM notes WHERE kind IN ('note','wiki')").all();
+		return categoryCountsCache.categoryCounts(revision, load, project);
 	}
 	function semanticStatus(fingerprint = null, project = null) {
 		if (!fingerprint) return { vectors: 0, paths: 0, coverage: "unconfigured" };

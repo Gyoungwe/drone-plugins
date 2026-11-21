@@ -31,8 +31,11 @@ import {
  * same on both Vaults, so the ratio collapses toward 1.
  */
 
-/** Measured at 7.2–7.5 on the 150/900-note fixture.  KP1 lowers this to 3. */
-const MAX_STATUS_SCALING = 8;
+/**
+ * Measured at 7.2–7.5 before KP1, and at ~1.0 after it.  The ceiling is 3:
+ * a cached count costs the same on both Vaults, so the ratio collapses toward 1.
+ */
+const MAX_STATUS_SCALING = 3;
 
 afterEach(async () => {
 	await closeKnowledgeServices();
@@ -98,8 +101,8 @@ it("does not rescale the status cost with the note count", async () => {
 	const small = await medianStatusMs(150);
 	const large = await medianStatusMs(900);
 	// A full-table category scan costs six times as much on the large Vault
-	// (measured: ~7.5x on this fixture).  A cached count costs about the same
-	// on both, so the ratio collapses toward 1 once KP1 lands.
+	// (measured: ~7.5x before KP1).  The per-revision cache makes the count
+	// cost the same on both, so the ratio collapses toward 1.
 	expect(large / Math.max(small, 0.001)).toBeLessThan(MAX_STATUS_SCALING);
 }, 300000);
 
@@ -130,6 +133,33 @@ it("does not re-read note bodies on an unchanged reconcile", async () => {
 		// Item 6 of the issue records this cost as a required security check, so
 		// the guard pins that it stays a metadata check.
 		expect(after.stats.bodyReads).toBe(before.stats.bodyReads);
+	} finally {
+		await closeKnowledgeServices();
+		await rm(root, { recursive: true, force: true });
+	}
+}, 120000);
+
+it("recomputes the category counts after a note changes", async () => {
+	const root = await realpath(await mkdtemp(join(tmpdir(), "pi-knowledge-bench-")));
+	try {
+		const service = await openService(root, 40);
+		const before = await service.request("status", {});
+		const beforeCounts = before.categoryCounts as Record<string, number>;
+		// The fixture puts every note under Library/Papers, so they are papers.
+		expect(beforeCounts.paper).toBe(40);
+
+		// Retype one note into a different category and let the index notice.
+		const note = join(root, "Vault/Library/Papers/note-00000.md");
+		await writeFile(note, "---\ntype: software\n---\n\nmarker0 topic0 material\n\n");
+		await service.request("reconcile", { force: true });
+
+		const after = await service.request("status", {});
+		const afterCounts = after.categoryCounts as Record<string, number>;
+		// The cache is keyed by the index revision, so a changed note must
+		// invalidate it — otherwise the counts would go stale silently.
+		expect(after.revision).toBeGreaterThan(before.revision);
+		expect(afterCounts.paper).toBe(39);
+		expect(afterCounts.software).toBe(1);
 	} finally {
 		await closeKnowledgeServices();
 		await rm(root, { recursive: true, force: true });
