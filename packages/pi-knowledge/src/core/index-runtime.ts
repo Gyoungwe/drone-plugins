@@ -12,12 +12,9 @@ import { parseFrontmatter } from "./ingest-frontmatter.js";
 import { noteCategory } from "./note-category.js";
 import { noteDisplayTitle } from "./note-title.js";
 import { recentByCategory as groupRecentByCategory } from "./recent-by-category.js";
-import {
-	buildKnowledgeSearchExpression,
-	splitKnowledgeChunks,
-	tokenizeKnowledgeText,
-} from "./search-policy.js";
+import { buildKnowledgeSearchExpression, tokenizeKnowledgeText } from "./search-policy.js";
 import { createSemanticModel } from "./semantic-model.js";
+import { createSemanticScanState, scanSemanticBatch } from "./semantic-scan.js";
 
 /** One algorithm shared by the native worker and the Desktop resource process. */
 export async function createKnowledgeIndexRuntime(
@@ -440,7 +437,7 @@ export async function createKnowledgeIndexRuntime(
 			jobs: Number(db.prepare("SELECT count(*) count FROM jobs").get().count),
 			problems: db.prepare("SELECT * FROM problems ORDER BY path LIMIT 20").all(),
 			categoryCounts: categoryCounts(),
-			stats: { ...stats },
+			stats: { ...stats, categoryScans: categoryCountsCache.scans() },
 			semantic: {
 				vectors: Number(db.prepare("SELECT count(*) count FROM semantic_chunks").get().count),
 				paths: Number(db.prepare("SELECT count(DISTINCT path) count FROM semantic_chunks").get().count),
@@ -448,6 +445,7 @@ export async function createKnowledgeIndexRuntime(
 		};
 	}
 	const categoryCountsCache = createCategoryCountCache();
+	const semanticScanState = createSemanticScanState();
 	function categoryCounts(project = undefined) {
 		const load = () => db.prepare("SELECT path,body FROM notes WHERE kind IN ('note','wiki')").all();
 		return categoryCountsCache.categoryCounts(revision, load, project);
@@ -641,47 +639,24 @@ export async function createKnowledgeIndexRuntime(
 		const limit = Math.max(1, Math.min(16, Math.floor(args.limit || 8)));
 		const chunkChars = Math.max(256, Math.min(8_000, Math.floor(args.chunkChars || 1200)));
 		const scope = args.project || "";
-		/** @type {any[]} */
-		const rows = db
-			.prepare(`SELECT path,title,body,hash,signature,scope,kind FROM notes
-	    WHERE (scope='shared' OR scope=?) AND kind NOT IN ('navigation','explainer') ORDER BY path`)
-			.all(scope);
-		const items = [];
-		for (const row of rows) {
-			let current;
-			try {
-				if (!canRead(row.path, args.project)) continue;
-				if (/(?:^|\/)(?:Runs|Explainers)\//i.test(row.path)) continue;
-				current = await updatePath(row.path);
-				if (!current || current.hash !== row.hash || current.signature !== row.signature) continue;
-			} catch {
-				continue;
-			}
-			const chunks = splitKnowledgeChunks(current.body, chunkChars);
-			for (let index = 0; index < chunks.length; index++) {
-				const chunk = chunks[index];
-				const found = db
-					.prepare(
-						"SELECT 1 FROM semantic_chunks WHERE path=? AND chunk_index=? AND hash=? AND fingerprint=? LIMIT 1",
-					)
-					.get(row.path, index, row.hash, fingerprint);
-				if (found) continue;
-				if (items.length >= limit) {
-					return { items, partial: true, nextCursor: null };
-				}
-				const startChar = index * chunkChars;
-				items.push({
-					path: row.path,
-					chunkIndex: index,
-					hash: current.hash,
-					mtime: current.signature,
-					text: chunk,
-					startChar,
-					endChar: startChar + chunk.length,
-				});
-			}
-		}
-		return { items, partial: false, nextCursor: null };
+		const scan = await scanSemanticBatch(
+			semanticScanState,
+			db,
+			{ fingerprint, project: args.project, scope, revision, limit, chunkChars },
+			{
+				canRead: (path, project) => canRead(path, project),
+				updatePath,
+				isStored: (path, chunkIndex, hash, fp) =>
+					Boolean(
+						db
+							.prepare(
+								"SELECT 1 FROM semantic_chunks WHERE path=? AND chunk_index=? AND hash=? AND fingerprint=? LIMIT 1",
+							)
+							.get(path, chunkIndex, hash, fp),
+					),
+			},
+		);
+		return { items: scan.items, partial: scan.partial, nextCursor: null };
 	}
 	function semanticStore(args) {
 		const fingerprint = String(args.fingerprint || "");

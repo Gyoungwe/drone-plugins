@@ -321,7 +321,7 @@
 	"suspicious/noExplicitAny\tpackages/pi-research/test/evidence-loop.test.ts": 3,
 	"suspicious/noExplicitAny\tpackages/pi-research/test/research-loop.test.ts": 9,
 	"suspicious/noExplicitAny\tpackages/pi-workbench/src/index.ts": 1,
-	"suspicious/noImplicitAnyLet\tpackages/pi-knowledge/src/core/index-runtime.ts": 8,
+	"suspicious/noImplicitAnyLet\tpackages/pi-knowledge/src/core/index-runtime.ts": 7,
 	"suspicious/noImplicitAnyLet\tpackages/pi-knowledge/src/core/maintenance-topic.ts": 1,
 	"suspicious/noImplicitAnyLet\tpackages/pi-knowledge/src/core/publication.ts": 5,
 	"suspicious/noImplicitAnyLet\tpackages/pi-knowledge/src/core/service.ts": 4,

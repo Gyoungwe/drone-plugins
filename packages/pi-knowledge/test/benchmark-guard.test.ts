@@ -1,7 +1,6 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { performance } from "node:perf_hooks";
 import { Worker } from "node:worker_threads";
 import { afterEach, expect, it } from "vitest";
 import {
@@ -32,10 +31,18 @@ import {
  */
 
 /**
- * Measured at 7.2–7.5 before KP1, and at ~1.0 after it.  The ceiling is 3:
- * a cached count costs the same on both Vaults, so the ratio collapses toward 1.
+ * How many times the notes may be read back out of the index to count them.
+ *
+ * This is a *count*, not a duration.  A count does not change with the
+ * machine's speed or with how busy it is, so the guard cannot flake on a
+ * loaded CI runner — a wall-clock ratio can, because scheduler contention
+ * inflates one of the two measurements and not the other.
+ *
+ * Before KP1 every `status()` read every note body, so the count grew with
+ * the Vault.  After KP1 the count is one per revision, whatever the Vault
+ * holds, so the ceiling is one scan per revision.
  */
-const MAX_STATUS_SCALING = 3;
+const MAX_CATEGORY_SCANS = 1;
 
 afterEach(async () => {
 	await closeKnowledgeServices();
@@ -75,35 +82,24 @@ async function openService(root: string, noteCount: number) {
 	return service;
 }
 
-/**
- * The median `status()` time over a Vault of `noteCount` notes.  The median
- * keeps a single scheduling hiccup from deciding the result.
- */
-async function medianStatusMs(noteCount: number, samples = 21): Promise<number> {
+it("does not rescan the notes for every status call", async () => {
 	const root = await realpath(await mkdtemp(join(tmpdir(), "pi-knowledge-bench-")));
 	try {
-		const service = await openService(root, noteCount);
-		const timings: number[] = [];
-		for (let index = 0; index < samples; index++) {
-			const start = performance.now();
-			await service.request("status", {});
-			timings.push(performance.now() - start);
-		}
-		timings.sort((a, b) => a - b);
-		return timings[Math.floor(timings.length / 2)];
+		const service = await openService(root, 150);
+		// The reconcile in `openService` advances the revision, so the first
+		// status call after it populates the cache.  Later calls read it.
+		await service.request("status", {});
+		const baseline = await service.request("status", {});
+		const scansBefore = Number(baseline.stats.categoryScans);
+		for (let index = 0; index < 10; index++) await service.request("status", {});
+		const status = await service.request("status", {});
+		// Eleven status calls over a 150-note Vault, and the notes were not
+		// read back out of the index again.  Before KP1 each call read all 150.
+		expect(Number(status.stats.categoryScans)).toBe(scansBefore);
 	} finally {
 		await closeKnowledgeServices();
 		await rm(root, { recursive: true, force: true });
 	}
-}
-
-it("does not rescale the status cost with the note count", async () => {
-	const small = await medianStatusMs(150);
-	const large = await medianStatusMs(900);
-	// A full-table category scan costs six times as much on the large Vault
-	// (measured: ~7.5x before KP1).  The per-revision cache makes the count
-	// cost the same on both, so the ratio collapses toward 1.
-	expect(large / Math.max(small, 0.001)).toBeLessThan(MAX_STATUS_SCALING);
 }, 300000);
 
 it("keeps the category counts complete", async () => {

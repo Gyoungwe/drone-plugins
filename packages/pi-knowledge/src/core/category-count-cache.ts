@@ -27,6 +27,14 @@ function emptyCounts(): KnowledgeCategoryCounts {
  */
 export function createCategoryCountCache() {
 	const counts = createRevisionCache<KnowledgeCategoryCounts>();
+	/**
+	 * How many times the notes were read back out of the index to count them.
+	 *
+	 * This is the operation the cache removes, and it is counted rather than
+	 * timed: a count does not change with the machine's speed or its load, so
+	 * a guard on it cannot flake on a busy CI runner.
+	 */
+	let scans = 0;
 
 	/**
 	 * The counts for one scope.  `undefined` counts every note; a project
@@ -45,6 +53,7 @@ export function createCategoryCountCache() {
 		const cached = counts.get(revision, scope);
 		if (cached) return { ...cached };
 
+		scans++;
 		const result = emptyCounts();
 		for (const note of load())
 			if (project === undefined || canRead(note.path, project)) result[noteCategory(note)]++;
@@ -52,5 +61,5 @@ export function createCategoryCountCache() {
 		return { ...result };
 	}
 
-	return { categoryCounts };
+	return { categoryCounts, scans: () => scans };
 }
