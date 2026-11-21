@@ -97,22 +97,6 @@ function createRevisionCache() {
   };
 }
 
-// src/core/graph-retrieval.ts
-function backlinkContext(body, target, max = 240) {
-  const bare = target.split("/").at(-1)?.replace(/\.md$/, "") || target;
-  const full = target.replace(/\.md$/, "");
-  for (const line of String(body || "").split(/\r?\n/)) {
-    for (const m of line.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g)) {
-      const t = (m[1] || "").trim().replace(/\.md$/, "");
-      if (t === full || t.toLowerCase() === bare.toLowerCase()) {
-        const s = line.trim();
-        return s.length > max ? `${s.slice(0, max - 1)}\u2026` : s;
-      }
-    }
-  }
-  return void 0;
-}
-
 // src/core/ingest-identity.ts
 import { createHash as createHash2 } from "node:crypto";
 
@@ -368,6 +352,41 @@ function noteCategory(row) {
       return keywordCategory(directory);
   }
   return keywordCategory(filename);
+}
+
+// src/core/category-count-cache.ts
+function emptyCounts() {
+  return { paper: 0, software: 0, method: 0, idea: 0, other: 0 };
+}
+function createCategoryCountCache() {
+  const counts = createRevisionCache();
+  function categoryCounts(revision, load, project) {
+    const scope = project === void 0 ? "*" : project;
+    const cached = counts.get(revision, scope);
+    if (cached) return { ...cached };
+    const result = emptyCounts();
+    for (const note of load())
+      if (project === void 0 || canRead(note.path, project)) result[noteCategory(note)]++;
+    counts.set(revision, scope, result);
+    return { ...result };
+  }
+  return { categoryCounts };
+}
+
+// src/core/graph-retrieval.ts
+function backlinkContext(body, target, max = 240) {
+  const bare = target.split("/").at(-1)?.replace(/\.md$/, "") || target;
+  const full = target.replace(/\.md$/, "");
+  for (const line of String(body || "").split(/\r?\n/)) {
+    for (const m of line.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g)) {
+      const t = (m[1] || "").trim().replace(/\.md$/, "");
+      if (t === full || t.toLowerCase() === bare.toLowerCase()) {
+        const s = line.trim();
+        return s.length > max ? `${s.slice(0, max - 1)}\u2026` : s;
+      }
+    }
+  }
+  return void 0;
 }
 
 // src/core/note-title.ts
@@ -1178,11 +1197,10 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       }
     };
   }
+  const categoryCountsCache = createCategoryCountCache();
   function categoryCounts(project = void 0) {
-    const counts = { paper: 0, software: 0, method: 0, idea: 0, other: 0 };
-    for (const row of db.prepare("SELECT path,body,kind FROM notes WHERE kind IN ('note','wiki')").all())
-      if (project === void 0 || canRead(row.path, project)) counts[noteCategory(row)]++;
-    return counts;
+    const load = () => db.prepare("SELECT path,body FROM notes WHERE kind IN ('note','wiki')").all();
+    return categoryCountsCache.categoryCounts(revision, load, project);
   }
   function semanticStatus(fingerprint = null, project = null) {
     if (!fingerprint) return { vectors: 0, paths: 0, coverage: "unconfigured" };
