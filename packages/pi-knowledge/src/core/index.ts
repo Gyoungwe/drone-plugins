@@ -1,4 +1,5 @@
 export { type CapabilityKnowledgeSourcePort, readCapabilitySources } from "./capability-discovery.js";
+export { groupRecentByCategory as recentByCategory } from "./category-views.js";
 export {
 	type ClaimComparison,
 	type ClaimSetComparison,
@@ -179,7 +180,6 @@ export {
 	publicationNotice,
 	publicationNotices,
 } from "./publication-policy.js";
-export { recentByCategory } from "./recent-by-category.js";
 export * from "./related-notes.js";
 export {
 	checkKnowledgeReceiptFreshness,
