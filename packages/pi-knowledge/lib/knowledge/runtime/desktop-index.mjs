@@ -1151,6 +1151,104 @@ async function scanSemanticBatch(state, db, request, hooks) {
   return { items, partial: false };
 }
 
+// src/core/vector-codec.ts
+var FLOAT32_BYTES = 4;
+function encodeVector(vector) {
+  const bytes = new Uint8Array(vector.length * FLOAT32_BYTES);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < vector.length; index++)
+    view.setFloat32(index * FLOAT32_BYTES, vector[index], true);
+  return bytes;
+}
+function vectorNorm(vector) {
+  let sum = 0;
+  for (const component of vector) sum += component * component;
+  return Math.sqrt(sum);
+}
+function decodeVector(row) {
+  if (typeof row.bytes === "string") {
+    const parsed = JSON.parse(row.bytes);
+    if (!Array.isArray(parsed)) throw new Error("Stored vector is not an array");
+    return parsed.map((component) => Number(component));
+  }
+  const view = new DataView(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength);
+  const values = [];
+  for (let index = 0; index < row.dimension; index++)
+    values.push(view.getFloat32(index * FLOAT32_BYTES, true));
+  return values;
+}
+function storedVectorNorm(decoded, row, norm) {
+  if (typeof row.bytes !== "string" && typeof norm === "number" && Number.isFinite(norm)) return norm;
+  return vectorNorm(decoded);
+}
+function cosineSimilarity(query, stored, storedNorm) {
+  let dot = 0;
+  let queryNorm = 0;
+  for (let index = 0; index < query.length; index++) {
+    const q = query[index];
+    const v = stored[index];
+    if (typeof q !== "number" || !Number.isFinite(q) || typeof v !== "number" || !Number.isFinite(v))
+      return Number.NaN;
+    dot += q * v;
+    queryNorm += q * q;
+  }
+  return dot / Math.sqrt(queryNorm * storedNorm * storedNorm);
+}
+
+// src/core/vector-migration.ts
+function migrateVectorStorage(database, statements) {
+  const rows = statements.legacy.all();
+  let migrated = 0;
+  let skipped = 0;
+  for (const row of rows) {
+    let components;
+    try {
+      components = decodeVector({ bytes: row.vector, dimension: row.dimension });
+    } catch {
+      skipped++;
+      continue;
+    }
+    if (components.length !== row.dimension) {
+      skipped++;
+      continue;
+    }
+    const norm = vectorNorm(components);
+    if (!Number.isFinite(norm) || !(norm > 0)) {
+      skipped++;
+      continue;
+    }
+    statements.update.run(
+      encodeVector(components),
+      norm,
+      row.path,
+      row.chunk_index,
+      row.hash,
+      row.fingerprint
+    );
+    migrated++;
+  }
+  return { migrated, skipped };
+}
+function migrateVectorStorageOnOpen(database) {
+  const legacy = database.prepare(
+    "SELECT path,chunk_index,hash,fingerprint,vector,dimension FROM semantic_chunks WHERE typeof(vector)='text'"
+  ).all();
+  if (!legacy.length) return { migrated: 0, skipped: 0 };
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const update = database.prepare(
+      "UPDATE semantic_chunks SET vector=?, norm=? WHERE path=? AND chunk_index=? AND hash=? AND fingerprint=?"
+    );
+    const result = migrateVectorStorage(database, { legacy: { all: () => legacy }, update });
+    database.exec("COMMIT");
+    if (result.migrated) database.prepare("INSERT OR REPLACE INTO meta VALUES('vectorStorage',1)").run();
+    return result;
+  } catch {
+    database.exec("ROLLBACK");
+    return { migrated: 0, skipped: legacy.length };
+  }
+}
+
 // src/core/index-runtime.ts
 var UPSERT_NOTE = [
   "INSERT INTO notes(path,title,body,hash,signature,scope,kind,bytes) VALUES(?,?,?,?,?,?,?,?)",
@@ -1180,8 +1278,8 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
 	CREATE TABLE IF NOT EXISTS problems(path TEXT PRIMARY KEY, message TEXT NOT NULL);
 	CREATE TABLE IF NOT EXISTS semantic_chunks(
 	 path TEXT NOT NULL, chunk_index INTEGER NOT NULL, hash TEXT NOT NULL, fingerprint TEXT NOT NULL,
-	 mtime TEXT NOT NULL, vector TEXT NOT NULL, dimension INTEGER NOT NULL,
-	 start_char INTEGER, end_char INTEGER,
+	 mtime TEXT NOT NULL, vector BLOB NOT NULL, dimension INTEGER NOT NULL,
+	 start_char INTEGER, end_char INTEGER, norm REAL,
 	 PRIMARY KEY(path,chunk_index,hash,fingerprint)
 	);
 	CREATE INDEX IF NOT EXISTS semantic_chunks_lookup ON semantic_chunks(fingerprint,hash,path);
@@ -1213,14 +1311,15 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     db.exec("ALTER TABLE semantic_chunks ADD COLUMN start_char INTEGER");
   if (!semanticColumns.includes("end_char"))
     db.exec("ALTER TABLE semantic_chunks ADD COLUMN end_char INTEGER");
+  if (!semanticColumns.includes("norm")) db.exec("ALTER TABLE semantic_chunks ADD COLUMN norm REAL");
   if (semanticColumns.includes("text")) {
     db.exec(`BEGIN IMMEDIATE;
 	DROP INDEX IF EXISTS semantic_chunks_lookup;
 	ALTER TABLE semantic_chunks RENAME TO semantic_chunks_legacy;
 	CREATE TABLE semantic_chunks(
 	 path TEXT NOT NULL, chunk_index INTEGER NOT NULL, hash TEXT NOT NULL, fingerprint TEXT NOT NULL,
-	 mtime TEXT NOT NULL, vector TEXT NOT NULL, dimension INTEGER NOT NULL,
-	 start_char INTEGER, end_char INTEGER,
+	 mtime TEXT NOT NULL, vector BLOB NOT NULL, dimension INTEGER NOT NULL,
+	 start_char INTEGER, end_char INTEGER, norm REAL,
 	 PRIMARY KEY(path,chunk_index,hash,fingerprint)
 	);
 	INSERT INTO semantic_chunks(path,chunk_index,hash,fingerprint,mtime,vector,dimension)
@@ -1229,6 +1328,7 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
 	CREATE INDEX IF NOT EXISTS semantic_chunks_lookup ON semantic_chunks(fingerprint,hash,path);
 	COMMIT;`);
   }
+  migrateVectorStorageOnOpen(db);
   let revision = Number(db.prepare("SELECT value FROM meta WHERE key='revision'").get().value);
   let scan = null, coverage = "uninitialized", lastReconciledAt = null, watching = false, timer = null, _closed = false;
   let fullScanRequested = false;
@@ -1695,17 +1795,18 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
         if (meta && Number(meta.dimension) !== vector.length)
           throw new Error("Semantic fingerprint dimension mismatch");
         db.prepare(
-          "INSERT OR REPLACE INTO semantic_chunks(path,chunk_index,hash,fingerprint,mtime,vector,dimension,start_char,end_char) VALUES(?,?,?,?,?,?,?,?,?)"
+          "INSERT OR REPLACE INTO semantic_chunks(path,chunk_index,hash,fingerprint,mtime,vector,dimension,start_char,end_char,norm) VALUES(?,?,?,?,?,?,?,?,?,?)"
         ).run(
           item.path,
           item.chunkIndex,
           item.hash,
           fingerprint,
           item.mtime,
-          JSON.stringify(vector),
+          encodeVector(vector),
           vector.length,
           Number.isInteger(item.startChar) ? item.startChar : null,
-          Number.isInteger(item.endChar) ? item.endChar : null
+          Number.isInteger(item.endChar) ? item.endChar : null,
+          vectorNorm(vector)
         );
       }
       if (dimension !== null)
@@ -1729,7 +1830,7 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       throw new Error("Invalid semantic similarity threshold");
     const query = args.vector, limit = Math.max(1, Math.min(12, Math.floor(args.limit || 5)));
     const rows = db.prepare(
-      "SELECT s.path,s.hash,s.vector,s.dimension,s.chunk_index,s.start_char,s.end_char,n.title,n.kind FROM semantic_chunks s JOIN notes n ON n.path=s.path AND n.hash=s.hash WHERE s.fingerprint=? AND (n.scope='shared' OR n.scope=?) AND n.kind!='explainer' ORDER BY s.path LIMIT 5000"
+      "SELECT s.path,s.hash,s.vector,s.dimension,s.norm,s.chunk_index,s.start_char,s.end_char,n.title,n.kind FROM semantic_chunks s JOIN notes n ON n.path=s.path AND n.hash=s.hash WHERE s.fingerprint=? AND (n.scope='shared' OR n.scope=?) AND n.kind!='explainer' ORDER BY s.path LIMIT 5000"
     ).all(fingerprint, args.project || "");
     const totalEligible = Number(
       db.prepare(
@@ -1741,23 +1842,13 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       if (row.dimension !== query.length) continue;
       let vector;
       try {
-        vector = JSON.parse(row.vector);
+        vector = decodeVector({ bytes: row.vector, dimension: row.dimension });
       } catch {
         continue;
       }
-      if (!Array.isArray(vector) || vector.length !== query.length) continue;
-      let dot = 0, qa = 0, va = 0;
-      for (let i = 0; i < query.length; i++) {
-        const q = query[i], v = vector[i];
-        if (typeof v !== "number" || !Number.isFinite(v)) {
-          va = Number.NaN;
-          break;
-        }
-        dot += q * v;
-        qa += q * q;
-        va += v * v;
-      }
-      const score = dot / Math.sqrt(qa * va);
+      if (vector.length !== query.length) continue;
+      const norm = storedVectorNorm(vector, { bytes: row.vector, dimension: row.dimension }, row.norm);
+      const score = cosineSimilarity(query, vector, norm);
       if (!Number.isFinite(score) || score < minSimilarity) continue;
       const current = best.get(row.path);
       if (!current || score > current.score)
