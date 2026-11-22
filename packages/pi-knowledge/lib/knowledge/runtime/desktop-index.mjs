@@ -456,6 +456,48 @@ function backlinkContext(body, target, max = 240) {
   return void 0;
 }
 
+// src/core/link-resolver.ts
+function createLinkResolver(database, canRead2) {
+  function resolve(target, project) {
+    const exact = database.prepare("SELECT path FROM notes WHERE path=?").get(target);
+    if (exact && (project === void 0 || canRead2(target, project))) return target;
+    if (target.includes("/")) return null;
+    const rows = project === void 0 ? database.prepare("SELECT path FROM notes WHERE filename=? LIMIT 2").all(target) : database.prepare("SELECT path FROM notes WHERE filename=? AND (scope='shared' OR scope=?) LIMIT 2").all(target, project || "");
+    return rows.length === 1 ? rows[0].path : null;
+  }
+  function lookupPlan() {
+    return database.prepare("EXPLAIN QUERY PLAN SELECT path FROM notes WHERE filename=? LIMIT 2").all("").map((row) => String(row.detail ?? "")).join(" ");
+  }
+  return { resolve, lookupPlan };
+}
+
+// src/core/note-filename.ts
+function noteFilename(path) {
+  const separator = path.lastIndexOf("/");
+  if (separator < 0) return "";
+  return path.slice(separator + 1);
+}
+function backfillNoteFilenames(database) {
+  const rows = database.prepare("SELECT path FROM notes WHERE filename = ''").all();
+  if (!rows.length) return 0;
+  const update = database.prepare("UPDATE notes SET filename=? WHERE path=?");
+  for (const row of rows) update.run(noteFilename(String(row.path)), String(row.path));
+  return rows.length;
+}
+function ensureNoteFilenameColumn(database) {
+  const columns = database.prepare("PRAGMA table_info(notes)").all().map((column) => String(column.name ?? ""));
+  if (columns.includes("filename")) return;
+  database.exec("ALTER TABLE notes ADD COLUMN filename TEXT NOT NULL DEFAULT ''");
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    backfillNoteFilenames(database);
+    database.exec("COMMIT");
+  } catch {
+    database.exec("ROLLBACK");
+  }
+  database.exec("CREATE INDEX IF NOT EXISTS notes_filename ON notes(filename)");
+}
+
 // src/core/note-title.ts
 var clean = (value) => typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 200) : "";
 function looksLikeFileName(title) {
@@ -600,7 +642,8 @@ function createNoteWriteSink(runtime) {
         note.file.signature,
         note.scope,
         note.kind,
-        note.file.bytes
+        note.file.bytes,
+        noteFilename(note.path)
       );
     },
     insertSearch: (id, titleTerms, terms) => statements.insertSearch.run(id, titleTerms, terms),
@@ -1251,9 +1294,9 @@ function migrateVectorStorageOnOpen(database) {
 
 // src/core/index-runtime.ts
 var UPSERT_NOTE = [
-  "INSERT INTO notes(path,title,body,hash,signature,scope,kind,bytes) VALUES(?,?,?,?,?,?,?,?)",
+  "INSERT INTO notes(path,title,body,hash,signature,scope,kind,bytes,filename) VALUES(?,?,?,?,?,?,?,?,?)",
   "ON CONFLICT(path) DO UPDATE SET title=excluded.title,body=excluded.body,hash=excluded.hash,",
-  "signature=excluded.signature,scope=excluded.scope,kind=excluded.kind,bytes=excluded.bytes"
+  "signature=excluded.signature,scope=excluded.scope,kind=excluded.kind,bytes=excluded.bytes,filename=excluded.filename"
 ].join(" ");
 async function createKnowledgeIndexRuntime(options, files, transport) {
   await mkdir(dirname(options.database), { recursive: true, mode: 448 });
@@ -1266,11 +1309,12 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
 	INSERT OR IGNORE INTO meta VALUES('revision',0);
 	CREATE TABLE IF NOT EXISTS notes(id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE,
 	 title TEXT NOT NULL, body TEXT NOT NULL, hash TEXT NOT NULL, signature TEXT NOT NULL,
-	 scope TEXT NOT NULL, kind TEXT NOT NULL, bytes INTEGER NOT NULL);
+	 scope TEXT NOT NULL, kind TEXT NOT NULL, bytes INTEGER NOT NULL, filename TEXT NOT NULL DEFAULT '');
 	CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(title, terms, tokenize='unicode61');
 	CREATE TABLE IF NOT EXISTS links(source TEXT NOT NULL, target TEXT NOT NULL, PRIMARY KEY(source,target));
 	CREATE INDEX IF NOT EXISTS links_target ON links(target);
 	CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope,kind);
+	CREATE INDEX IF NOT EXISTS notes_filename ON notes(filename);
 	CREATE TABLE IF NOT EXISTS jobs(key TEXT PRIMARY KEY, kind TEXT NOT NULL, path TEXT NOT NULL,
 	 scope TEXT NOT NULL, revision INTEGER NOT NULL, updated TEXT NOT NULL);
 	CREATE INDEX IF NOT EXISTS jobs_scope_updated ON jobs(scope,updated DESC);
@@ -1312,6 +1356,7 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
   if (!semanticColumns.includes("end_char"))
     db.exec("ALTER TABLE semantic_chunks ADD COLUMN end_char INTEGER");
   if (!semanticColumns.includes("norm")) db.exec("ALTER TABLE semantic_chunks ADD COLUMN norm REAL");
+  ensureNoteFilenameColumn(db);
   if (semanticColumns.includes("text")) {
     db.exec(`BEGIN IMMEDIATE;
 	DROP INDEX IF EXISTS semantic_chunks_lookup;
@@ -1594,7 +1639,12 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       jobs: Number(db.prepare("SELECT count(*) count FROM jobs").get().count),
       problems: db.prepare("SELECT * FROM problems ORDER BY path LIMIT 20").all(),
       categoryCounts: categoryCounts(),
-      stats: { ...stats, categoryScans: noteCategoryCount() },
+      stats: {
+        ...stats,
+        categoryScans: noteCategoryCount(),
+        // KP5b — the plan the bare-link lookup runs under.
+        linkLookupPlan: linkResolver.lookupPlan()
+      },
       semantic: {
         vectors: Number(db.prepare("SELECT count(*) count FROM semantic_chunks").get().count),
         paths: Number(db.prepare("SELECT count(DISTINCT path) count FROM semantic_chunks").get().count)
@@ -1872,12 +1922,8 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
       nextCursor: null
     };
   }
-  function resolveLinkTarget(target, project = void 0) {
-    if (statements.get.get(target) && (project === void 0 || canRead(target, project))) return target;
-    if (target.includes("/")) return null;
-    const rows = project === void 0 ? db.prepare("SELECT path FROM notes WHERE path LIKE ? LIMIT 2").all(`%/${target}`) : db.prepare("SELECT path FROM notes WHERE path LIKE ? AND (scope='shared' OR scope=?) LIMIT 2").all(`%/${target}`, project || "");
-    return rows.length === 1 ? rows[0].path : null;
-  }
+  const linkResolver = createLinkResolver(db, canRead);
+  const resolveLinkTarget = linkResolver.resolve;
   function noteTitle(path) {
     return db.prepare("SELECT title FROM notes WHERE path=?").get(path)?.title || path.split("/").at(-1).slice(0, -3);
   }
