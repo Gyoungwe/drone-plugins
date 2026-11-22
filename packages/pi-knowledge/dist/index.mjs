@@ -8,6 +8,113 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// src/core/files.ts
+import { createHash } from "node:crypto";
+import { constants } from "node:fs";
+import { lstat, open, realpath } from "node:fs/promises";
+import { isAbsolute, join, relative, sep } from "node:path";
+function allowedSegment(name) {
+  return !!name && !name.startsWith(".") && !OMIT.has(name) && !/^(?:secrets?|credentials?|id_rsa|id_ed25519)(?:[.\-_]|$)/i.test(name);
+}
+function validateNote(path) {
+  if (typeof path !== "string" || isAbsolute(path) || path.includes("\\") || !path.endsWith(".md") || !path.split("/").every(allowedSegment))
+    throw new Error("Expected an allowed Vault-relative Markdown path");
+  const first = path.split("/")[0] ?? "";
+  if (RESERVED.some((name) => name.toLowerCase() === first.toLowerCase() && name !== first))
+    throw new Error("Reserved Vault directories require canonical casing");
+  return path;
+}
+function noteScope(path) {
+  const parts = path.split("/");
+  return path.startsWith("Projects/") && parts.length > 2 ? parts[1] ?? "shared" : "shared";
+}
+function canRead(path, project) {
+  const scope = noteScope(path);
+  return scope === "shared" || scope === project;
+}
+function fileVersion(stat4) {
+  return `${stat4.mtimeMs}:${stat4.ctimeMs}:${stat4.size}:${stat4.ino}`;
+}
+async function safeNotePath(vault, path) {
+  validateNote(path);
+  let full = vault;
+  for (const part of path.split("/")) {
+    full = join(full, part);
+    if ((await lstat(full)).isSymbolicLink()) throw new Error("Knowledge reads do not follow symlinks");
+  }
+  const actual = await realpath(full);
+  const rel = relative(vault, actual);
+  if (!rel || isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep}`))
+    throw new Error("Note is outside the bound Vault");
+  return actual;
+}
+async function inspectNote(vault, path) {
+  const full = await safeNotePath(vault, path);
+  const stat4 = await lstat(full);
+  if (!stat4.isFile()) throw new Error("Expected a regular note");
+  return { full, stat: stat4, signature: fileVersion(stat4) };
+}
+async function closeQuietly(handle) {
+  try {
+    await handle.close();
+  } catch {
+  }
+}
+async function readNoteFile(vault, path) {
+  const { full } = await inspectNote(vault, path);
+  const handle = await open(full, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+  try {
+    const before = await handle.stat();
+    if (!before.isFile() || before.size > MAX_NOTE_BYTES)
+      throw new Error("Note exceeds the 1 MiB indexing limit");
+    const buffer = Buffer.alloc(Number(before.size) + 1);
+    let offset = 0;
+    while (offset < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+      if (!bytesRead) break;
+      offset += bytesRead;
+    }
+    const after = await handle.stat();
+    const current = await inspectNote(vault, path);
+    if (fileVersion(before) !== fileVersion(after) || fileVersion(after) !== current.signature || offset !== before.size)
+      throw new Error("Note changed while reading; retry against its latest version");
+    const bytes = buffer.subarray(0, offset);
+    return {
+      path,
+      text: bytes.toString("utf8"),
+      hash: createHash("sha256").update(bytes).digest("hex"),
+      signature: fileVersion(after),
+      bytes: offset
+    };
+  } catch (error) {
+    await closeQuietly(handle);
+    throw error;
+  } finally {
+    await closeQuietly(handle);
+  }
+}
+var MAX_NOTE_BYTES, OMIT, RESERVED;
+var init_files = __esm({
+  "src/core/files.ts"() {
+    "use strict";
+    MAX_NOTE_BYTES = 1024 * 1024;
+    OMIT = /* @__PURE__ */ new Set([
+      "node_modules",
+      "dist",
+      "build",
+      "out",
+      "coverage",
+      "vendor",
+      "venv",
+      "__pycache__",
+      "Attachments",
+      "Templates",
+      "_template"
+    ]);
+    RESERVED = ["Projects", "Library", "Wiki", "Attachments", "Templates", "Indexes", "Inbox"];
+  }
+});
+
 // src/core/claim-conflicts.ts
 function direction(claim) {
   if (claim.direction) return claim.direction;
@@ -157,9 +264,9 @@ __export(config_exports, {
   withKnowledgeBinding: () => withKnowledgeBinding
 });
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { createHash as createHash3, randomUUID } from "node:crypto";
+import { mkdir, readFile, realpath as realpath2, rename, writeFile } from "node:fs/promises";
+import { basename, isAbsolute as isAbsolute2, join as join2, resolve } from "node:path";
 function createKnowledgeConfigState() {
   return { local: new AsyncLocalStorage(), queues: /* @__PURE__ */ new Map() };
 }
@@ -169,17 +276,17 @@ function errorCode(error) {
 function knowledgeDirectory() {
   const value = process.env.DRONE_KNOWLEDGE_DIR;
   if (!value) return null;
-  if (!isAbsolute(value)) throw new Error("DRONE_KNOWLEDGE_DIR must be absolute");
+  if (!isAbsolute2(value)) throw new Error("DRONE_KNOWLEDGE_DIR must be absolute");
   return resolve(value);
 }
 function projectIdentity(cwd, configured) {
   if (typeof configured === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(configured)) return configured;
   const path = resolve(cwd);
   const stem = basename(path).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "project";
-  return `${stem}-${createHash("sha256").update(path).digest("hex").slice(0, 10)}`;
+  return `${stem}-${createHash3("sha256").update(path).digest("hex").slice(0, 10)}`;
 }
 function validateBinding(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1 || !isAbsolute(String(value.vault || "")) || !/^[a-f0-9]{24}$/.test(String(value.vaultId || "")) || !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !["project", "literature", "hybrid"].includes(String(value.profile)) || !["run-only", "verified", "rich"].includes(String(value.depositMode)) || !["none", "read-local"].includes(String(value.subagentPolicy)) || typeof value.updatedAt !== "string")
+  if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1 || !isAbsolute2(String(value.vault || "")) || !/^[a-f0-9]{24}$/.test(String(value.vaultId || "")) || !Number.isSafeInteger(value.revision) || Number(value.revision) < 1 || !["project", "literature", "hybrid"].includes(String(value.profile)) || !["run-only", "verified", "rich"].includes(String(value.depositMode)) || !["none", "read-local"].includes(String(value.subagentPolicy)) || typeof value.updatedAt !== "string")
     throw new Error("Invalid application knowledge binding; no project fallback was used");
 }
 function parseKnowledgeBinding(value) {
@@ -191,7 +298,7 @@ async function readKnowledgeBindingWithState(state, directory, { fresh = false }
   if (!directory) return null;
   let value;
   try {
-    value = JSON.parse((await readFile(join(directory, "binding.json"), "utf8")).replace(/^\uFEFF/, ""));
+    value = JSON.parse((await readFile(join2(directory, "binding.json"), "utf8")).replace(/^\uFEFF/, ""));
   } catch (error) {
     if (errorCode(error) === "ENOENT") return null;
     throw new Error(
@@ -211,11 +318,11 @@ async function saveKnowledgeBindingWithState(state, directory, input, expectedRe
     const current = await readKnowledgeBindingWithState(state, directory, { fresh: true });
     if (expectedRevision !== null && (current?.revision || 0) !== expectedRevision)
       throw new Error("Knowledge binding changed while confirming; review the new binding");
-    const vault = await realpath(input.vault);
+    const vault = await realpath2(input.vault);
     const value = {
       version: 1,
       vault,
-      vaultId: createHash("sha256").update(vault).digest("hex").slice(0, 24),
+      vaultId: createHash3("sha256").update(vault).digest("hex").slice(0, 24),
       revision: (current?.revision || 0) + 1,
       profile: input.profile,
       depositMode: input.depositMode,
@@ -224,10 +331,10 @@ async function saveKnowledgeBindingWithState(state, directory, input, expectedRe
     };
     validateBinding(value);
     await mkdir(directory, { recursive: true, mode: 448 });
-    const temporary = join(directory, `binding.${randomUUID()}.tmp`);
+    const temporary = join2(directory, `binding.${randomUUID()}.tmp`);
     await writeFile(temporary, `${JSON.stringify(value, null, 2)}
 `, { mode: 384, flag: "wx" });
-    await rename(temporary, join(directory, "binding.json"));
+    await rename(temporary, join2(directory, "binding.json"));
     return value;
   });
   state.queues.set(directory, operation);
@@ -250,7 +357,7 @@ async function withKnowledgeBinding(binding, operation) {
   return withKnowledgeBindingWithState(defaultState, knowledgeDirectory(), binding, operation);
 }
 function createKnowledgeConfigApi(state = createKnowledgeConfigState(), directory = knowledgeDirectory()) {
-  if (directory !== null && !isAbsolute(directory)) throw new Error("Knowledge directory must be absolute");
+  if (directory !== null && !isAbsolute2(directory)) throw new Error("Knowledge directory must be absolute");
   const fixedDirectory = directory === null ? null : resolve(directory);
   return {
     knowledgeDirectory: () => fixedDirectory,
@@ -528,113 +635,6 @@ var init_runtime_host = __esm({
   }
 });
 
-// src/core/files.ts
-import { createHash as createHash5 } from "node:crypto";
-import { constants } from "node:fs";
-import { lstat as lstat2, open, realpath as realpath2 } from "node:fs/promises";
-import { isAbsolute as isAbsolute3, join as join5, relative as relative3, sep as sep3 } from "node:path";
-function allowedSegment(name) {
-  return !!name && !name.startsWith(".") && !OMIT.has(name) && !/^(?:secrets?|credentials?|id_rsa|id_ed25519)(?:[.\-_]|$)/i.test(name);
-}
-function validateNote(path) {
-  if (typeof path !== "string" || isAbsolute3(path) || path.includes("\\") || !path.endsWith(".md") || !path.split("/").every(allowedSegment))
-    throw new Error("Expected an allowed Vault-relative Markdown path");
-  const first = path.split("/")[0] ?? "";
-  if (RESERVED2.some((name) => name.toLowerCase() === first.toLowerCase() && name !== first))
-    throw new Error("Reserved Vault directories require canonical casing");
-  return path;
-}
-function noteScope(path) {
-  const parts = path.split("/");
-  return path.startsWith("Projects/") && parts.length > 2 ? parts[1] ?? "shared" : "shared";
-}
-function canRead(path, project) {
-  const scope = noteScope(path);
-  return scope === "shared" || scope === project;
-}
-function fileVersion(stat4) {
-  return `${stat4.mtimeMs}:${stat4.ctimeMs}:${stat4.size}:${stat4.ino}`;
-}
-async function safeNotePath(vault, path) {
-  validateNote(path);
-  let full = vault;
-  for (const part of path.split("/")) {
-    full = join5(full, part);
-    if ((await lstat2(full)).isSymbolicLink()) throw new Error("Knowledge reads do not follow symlinks");
-  }
-  const actual = await realpath2(full);
-  const rel = relative3(vault, actual);
-  if (!rel || isAbsolute3(rel) || rel === ".." || rel.startsWith(`..${sep3}`))
-    throw new Error("Note is outside the bound Vault");
-  return actual;
-}
-async function inspectNote(vault, path) {
-  const full = await safeNotePath(vault, path);
-  const stat4 = await lstat2(full);
-  if (!stat4.isFile()) throw new Error("Expected a regular note");
-  return { full, stat: stat4, signature: fileVersion(stat4) };
-}
-async function closeQuietly(handle) {
-  try {
-    await handle.close();
-  } catch {
-  }
-}
-async function readNoteFile(vault, path) {
-  const { full } = await inspectNote(vault, path);
-  const handle = await open(full, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
-  try {
-    const before = await handle.stat();
-    if (!before.isFile() || before.size > MAX_NOTE_BYTES)
-      throw new Error("Note exceeds the 1 MiB indexing limit");
-    const buffer = Buffer.alloc(Number(before.size) + 1);
-    let offset = 0;
-    while (offset < buffer.length) {
-      const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
-      if (!bytesRead) break;
-      offset += bytesRead;
-    }
-    const after = await handle.stat();
-    const current = await inspectNote(vault, path);
-    if (fileVersion(before) !== fileVersion(after) || fileVersion(after) !== current.signature || offset !== before.size)
-      throw new Error("Note changed while reading; retry against its latest version");
-    const bytes = buffer.subarray(0, offset);
-    return {
-      path,
-      text: bytes.toString("utf8"),
-      hash: createHash5("sha256").update(bytes).digest("hex"),
-      signature: fileVersion(after),
-      bytes: offset
-    };
-  } catch (error) {
-    await closeQuietly(handle);
-    throw error;
-  } finally {
-    await closeQuietly(handle);
-  }
-}
-var MAX_NOTE_BYTES, OMIT, RESERVED2;
-var init_files = __esm({
-  "src/core/files.ts"() {
-    "use strict";
-    MAX_NOTE_BYTES = 1024 * 1024;
-    OMIT = /* @__PURE__ */ new Set([
-      "node_modules",
-      "dist",
-      "build",
-      "out",
-      "coverage",
-      "vendor",
-      "venv",
-      "__pycache__",
-      "Attachments",
-      "Templates",
-      "_template"
-    ]);
-    RESERVED2 = ["Projects", "Library", "Wiki", "Attachments", "Templates", "Indexes", "Inbox"];
-  }
-});
-
 // src/core/flow-cards.ts
 function statusTone(status) {
   const value = String(status || "");
@@ -720,7 +720,7 @@ var init_flow_cards = __esm({
 });
 
 // src/core/review-policy-storage.ts
-import { createHash as createHash6, randomUUID as randomUUID3 } from "node:crypto";
+import { createHash as createHash7, randomUUID as randomUUID3 } from "node:crypto";
 import { mkdir as mkdir3, readFile as readFile5, rename as rename3, unlink as unlink2, writeFile as writeFile3 } from "node:fs/promises";
 import { join as join6 } from "node:path";
 function createLocalReviewPolicyStorage(config) {
@@ -746,7 +746,7 @@ function createLocalReviewPolicyStorage(config) {
     return {
       kind: "value",
       value,
-      version: createHash6("sha256").update(bytes).digest("hex")
+      version: createHash7("sha256").update(bytes).digest("hex")
     };
   }
   return {
@@ -1637,7 +1637,7 @@ __export(topic_memory_exports, {
   topicRunHash: () => topicRunHash,
   updateTopic: () => updateTopic
 });
-import { createHash as createHash10, randomUUID as randomUUID10 } from "node:crypto";
+import { createHash as createHash11, randomUUID as randomUUID10 } from "node:crypto";
 import { lstat as lstat6, mkdir as mkdir7, readFile as readFile9, realpath as realpath4, rename as rename6, unlink as unlink5, writeFile as writeFile7 } from "node:fs/promises";
 import { dirname as dirname4, isAbsolute as isAbsolute5, join as join12, relative as relative6, resolve as resolve6, sep as sep6 } from "node:path";
 function projectKey2(project) {
@@ -2276,7 +2276,7 @@ var init_topic_memory = __esm({
       maxConflicts: 32,
       maxFileBytes: 512 * 1024
     });
-    digest3 = (value) => createHash10("sha256").update(String(value)).digest("hex");
+    digest3 = (value) => createHash11("sha256").update(String(value)).digest("hex");
     text2 = (value, limit) => String(value ?? "").normalize("NFKC").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, limit);
     slug = (value) => text2(value, 160).toLowerCase().replace(/[^a-z0-9\u0080-\uffff]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 96) || "topic";
     ({ createTopicMemory, listTopics, readTopic, updateTopic, archiveTopic } = createTopicMemoryApi(
@@ -2312,7 +2312,7 @@ var init_redact_diagnostic = __esm({
 });
 
 // src/core/wiki-policy.ts
-import { createHash as createHash11 } from "node:crypto";
+import { createHash as createHash12 } from "node:crypto";
 function targetWikiPath(path, project) {
   if (typeof path !== "string")
     throw new Error("Target must be a shared or current-project Wiki page, not navigation");
@@ -2326,7 +2326,7 @@ function targetWikiPath(path, project) {
   return path;
 }
 function immutableWikiProposalHash(proposal) {
-  return createHash11("sha256").update(
+  return createHash12("sha256").update(
     JSON.stringify({
       id: proposal.id,
       vaultId: proposal.vaultId,
@@ -2373,7 +2373,7 @@ var init_wiki_policy = __esm({
 });
 
 // src/core/layout.ts
-import { createHash as createHash12, randomUUID as randomUUID11 } from "node:crypto";
+import { createHash as createHash13, randomUUID as randomUUID11 } from "node:crypto";
 import { constants as constants2 } from "node:fs";
 import { link, lstat as lstat7, mkdir as mkdir8, open as open2, realpath as realpath5, rename as rename7, unlink as unlink6, writeFile as writeFile8 } from "node:fs/promises";
 import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute6, join as join13, relative as relative7, resolve as resolve7, sep as sep7 } from "node:path";
@@ -2404,7 +2404,7 @@ var init_layout = __esm({
 });
 
 // src/core/wiki-review-node.ts
-import { createHash as createHash13, randomUUID as randomUUID12 } from "node:crypto";
+import { createHash as createHash14, randomUUID as randomUUID12 } from "node:crypto";
 import { link as link2, lstat as lstat8, mkdir as mkdir9, readdir as readdir2, readFile as readFile10, rename as rename8, rm, unlink as unlink7, writeFile as writeFile9 } from "node:fs/promises";
 import { basename as basename3, dirname as dirname6, join as join14 } from "node:path";
 async function renameWithRetry(from, to, options = {}) {
@@ -2525,13 +2525,13 @@ var init_wiki_review_node = __esm({
     "use strict";
     init_files();
     init_layout();
-    digest4 = (text4) => createHash13("sha256").update(text4).digest("hex");
+    digest4 = (text4) => createHash14("sha256").update(text4).digest("hex");
     RENAME_RETRY_CODES = /* @__PURE__ */ new Set(["EPERM", "EACCES", "EBUSY"]);
   }
 });
 
 // src/core/wiki-review-reader.ts
-import { createHash as createHash14 } from "node:crypto";
+import { createHash as createHash15 } from "node:crypto";
 function createWikiReviewReader(storage, currentNote) {
   async function loadProposal(service, id2, project) {
     if (typeof id2 !== "string" || !/^[0-9a-f-]{36}$/.test(id2)) throw new Error("Invalid Wiki proposal id");
@@ -2644,7 +2644,7 @@ var init_wiki_review_reader = __esm({
     init_wiki_policy();
     MAX_PENDING = 100;
     MAX_AGE = 24 * 60 * 60 * 1e3;
-    digest5 = (text4) => createHash14("sha256").update(text4).digest("hex");
+    digest5 = (text4) => createHash15("sha256").update(text4).digest("hex");
   }
 });
 
@@ -2663,7 +2663,7 @@ __export(wiki_review_exports, {
   validateWikiSourcePaths: () => validateWikiSourcePaths,
   wikiHistory: () => wikiHistory
 });
-import { createHash as createHash15, randomUUID as randomUUID13 } from "node:crypto";
+import { createHash as createHash16, randomUUID as randomUUID13 } from "node:crypto";
 function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui, io) {
   const { runRuntimeExclusive: runRuntimeExclusive2 } = runtime;
   const { withKnowledgeBinding: withKnowledgeBinding2 } = config;
@@ -2671,7 +2671,7 @@ function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui, io) {
   const { invalidateKnowledgeUi: invalidateKnowledgeUi2 } = ui;
   const AUTOMATIC_AUTHORITY = Symbol("host-automatic-wiki");
   const START2 = "<!-- pi-agent:managed:start -->", END2 = "<!-- pi-agent:managed:end -->";
-  const digest6 = (text4) => createHash15("sha256").update(text4).digest("hex");
+  const digest6 = (text4) => createHash16("sha256").update(text4).digest("hex");
   const MAX_PENDING2 = 100, MAX_AGE2 = 24 * 60 * 60 * 1e3;
   async function exclusive(key, operation) {
     return runRuntimeExclusive2("wiki-review", key, operation);
@@ -3379,13 +3379,38 @@ var init_wiki_model_review = __esm({
 // src/extension/knowledge-extension.ts
 import { Worker } from "node:worker_threads";
 
+// src/core/category-count-cache.ts
+init_files();
+
+// src/core/ingest-identity.ts
+import { createHash as createHash2 } from "node:crypto";
+
+// src/core/ingest-frontmatter.ts
+var KNOWLEDGE_TYPES = [
+  "paper",
+  "method",
+  "software",
+  "dataset",
+  "concept",
+  "entity",
+  "idea",
+  "claim",
+  "evidence",
+  "decision",
+  "question",
+  "wiki"
+];
+var RUN_RESULT_TYPES = ["run", "artifact", "explainer"];
+var NOTE_TYPES = [...KNOWLEDGE_TYPES, ...RUN_RESULT_TYPES];
+var MAX_FRONTMATTER_CHARS = 64 * 1024;
+
 // src/core/index.ts
 init_claim_conflicts();
 init_config();
 
 // src/core/daily-discovery.ts
 import { readdir, readFile as readFile2, stat } from "node:fs/promises";
-import { join as join2, relative, sep } from "node:path";
+import { join as join3, relative as relative2, sep as sep2 } from "node:path";
 var DAILY_DISCOVERY_LIMITS = {
   maxScannedFiles: 4e3,
   maxNoteBytes: 256 * 1024,
@@ -3406,11 +3431,11 @@ var DAILY_DISCOVERY_SYSTEM = [
 ].join("\n");
 
 // src/core/deliverable-review.ts
-import { createHash as createHash2 } from "node:crypto";
+import { createHash as createHash4 } from "node:crypto";
 
 // src/core/delivery-claims.ts
-import { createHash as createHash3 } from "node:crypto";
-var digest = (text4) => createHash3("sha256").update(text4).digest("hex");
+import { createHash as createHash5 } from "node:crypto";
+var digest = (text4) => createHash5("sha256").update(text4).digest("hex");
 function summaryDeliveryClaims(details, markdown) {
   const receipt = details.delivery_receipt;
   if (!receipt || receipt.version !== 1 || receipt.semanticAssessment?.status !== "model-assessed" || receipt.bodySha256 !== digest(`${markdown.trim()}
@@ -3444,9 +3469,9 @@ function summaryDeliveryClaims(details, markdown) {
 // src/core/experience-store.ts
 init_config();
 init_runtime_host();
-import { createHash as createHash4, randomUUID as randomUUID2 } from "node:crypto";
-import { lstat, mkdir as mkdir2, readFile as readFile3, rename as rename2, unlink, writeFile as writeFile2 } from "node:fs/promises";
-import { isAbsolute as isAbsolute2, join as join3, relative as relative2, resolve as resolve2, sep as sep2 } from "node:path";
+import { createHash as createHash6, randomUUID as randomUUID2 } from "node:crypto";
+import { lstat as lstat2, mkdir as mkdir2, readFile as readFile3, rename as rename2, unlink, writeFile as writeFile2 } from "node:fs/promises";
+import { isAbsolute as isAbsolute3, join as join4, relative as relative3, resolve as resolve2, sep as sep3 } from "node:path";
 var EXPERIENCE_VERSION = 1;
 var EXPERIENCE_LIMITS = Object.freeze({
   maxRecords: 128,
@@ -3471,7 +3496,7 @@ var EXPERIENCE_LIMITS = Object.freeze({
   maxSchedulerJobIdChars: 180,
   maxQueryChars: 200
 });
-var HASH = (value) => createHash4("sha256").update(value).digest("hex");
+var HASH = (value) => createHash6("sha256").update(value).digest("hex");
 var now = () => (/* @__PURE__ */ new Date()).toISOString();
 function text(value, limit) {
   if (typeof value !== "string" && typeof value !== "number") return "";
@@ -3641,7 +3666,7 @@ function normalizeArtifact(value) {
   if (!sha256) return null;
   const bytes = typeof item.bytes === "number" && Number.isSafeInteger(item.bytes) && item.bytes >= 0 ? item.bytes : void 0;
   const pathValue = text(item.path, 240).replaceAll("\\", "/");
-  const safePath = pathValue && !isAbsolute2(pathValue) && !pathValue.split("/").includes("..") && !/(?:^|\/)(?:\.env(?:\.[^/]*)?|auth\.json|credentials(?:\.json)?|\.ssh|\.git)(?:\/|$)/i.test(pathValue) ? pathValue : "";
+  const safePath = pathValue && !isAbsolute3(pathValue) && !pathValue.split("/").includes("..") && !/(?:^|\/)(?:\.env(?:\.[^/]*)?|auth\.json|credentials(?:\.json)?|\.ssh|\.git)(?:\/|$)/i.test(pathValue) ? pathValue : "";
   return {
     ...safePath ? { path: safePath } : {},
     sha256,
@@ -3772,19 +3797,19 @@ function normalizeRecord(value, vaultId, project, hostId) {
   return result2;
 }
 function pathFor(directory, vaultId, project, hostId) {
-  if (!isAbsolute2(directory)) throw new Error("Experience directory must be absolute");
-  return join3(resolve2(directory), vaultId, "experience", project, `${hostId}.json`);
+  if (!isAbsolute3(directory)) throw new Error("Experience directory must be absolute");
+  return join4(resolve2(directory), vaultId, "experience", project, `${hostId}.json`);
 }
 async function ensureSafePath(directory, path) {
   const root = resolve2(directory);
-  const relativePath = relative2(root, resolve2(path));
-  if (isAbsolute2(relativePath) || relativePath === ".." || relativePath.startsWith(`..${sep2}`))
+  const relativePath = relative3(root, resolve2(path));
+  if (isAbsolute3(relativePath) || relativePath === ".." || relativePath.startsWith(`..${sep3}`))
     throw new Error("Experience path escapes knowledge directory");
   let current = root;
-  for (const segment of relativePath.split(sep2).slice(0, -1)) {
-    current = join3(current, segment);
+  for (const segment of relativePath.split(sep3).slice(0, -1)) {
+    current = join4(current, segment);
     try {
-      const stat4 = await lstat(current);
+      const stat4 = await lstat2(current);
       if (stat4.isSymbolicLink()) throw new Error("Experience path cannot traverse symlinks");
       if (!stat4.isDirectory()) throw new Error("Experience path parent must be a directory");
     } catch (error) {
@@ -3795,7 +3820,7 @@ async function ensureSafePath(directory, path) {
 }
 async function readDocument(path, vaultId, project, hostId) {
   try {
-    const stat4 = await lstat(path);
+    const stat4 = await lstat2(path);
     if (stat4.isSymbolicLink() || !stat4.isFile()) throw new Error("Experience file must be a regular file");
     if (stat4.size > EXPERIENCE_LIMITS.maxFileBytes) throw new Error("Experience file exceeds size limit");
     return validateDocument(JSON.parse(await readFile3(path, "utf8")), vaultId, project, hostId);
@@ -4067,12 +4092,12 @@ async function searchExperiences(options) {
 init_config();
 import { readFile as readFile4 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join as join4, resolve as resolve3 } from "node:path";
+import { join as join5, resolve as resolve3 } from "node:path";
 var SESSION_PROJECT_ENTRY = "drone-session-project-v1";
 var SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-var RESERVED = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9]|shared)$/;
+var RESERVED2 = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9]|shared)$/;
 function isProjectSlug(value) {
-  return typeof value === "string" && value.length <= 96 && SLUG.test(value) && !RESERVED.test(value);
+  return typeof value === "string" && value.length <= 96 && SLUG.test(value) && !RESERVED2.test(value);
 }
 function normalizeProjectSlug(input) {
   if (typeof input !== "string") return null;
@@ -4083,7 +4108,7 @@ function workspaceProjectId(cwd, configured) {
   return projectIdentity(cwd, isProjectSlug(configured) ? configured : void 0);
 }
 function dailyWorkspaceDir(home = homedir()) {
-  return join4(home, ".drone", "daily");
+  return join5(home, ".drone", "daily");
 }
 function samePath(a, b) {
   const left = resolve3(a).replace(/[\\/]+$/, "");
@@ -4136,7 +4161,7 @@ function resolveProjectIdentity(input) {
 }
 async function readConfiguredProject(cwd) {
   try {
-    const parsed = JSON.parse(await readFile4(join4(cwd, ".pi", "research-workspace.json"), "utf8"));
+    const parsed = JSON.parse(await readFile4(join5(cwd, ".pi", "research-workspace.json"), "utf8"));
     if (parsed && typeof parsed === "object" && "knowledgeProjectId" in parsed)
       return parsed.knowledgeProjectId;
   } catch {
@@ -4242,7 +4267,7 @@ __export(semantic_settings_exports, {
   validateSemanticConfig: () => validateSemanticConfig
 });
 init_config();
-import { createHash as createHash7, randomUUID as randomUUID4 } from "node:crypto";
+import { createHash as createHash8, randomUUID as randomUUID4 } from "node:crypto";
 import { lstat as lstat3, mkdir as mkdir4, readFile as readFile6, rename as rename4, unlink as unlink3, writeFile as writeFile4 } from "node:fs/promises";
 import { dirname as dirname2, join as join7 } from "node:path";
 var MAX_FILE_BYTES = 256 * 1024;
@@ -4464,7 +4489,7 @@ function localSemanticStorage(directory) {
       throw error;
     }
     if (Buffer.byteLength(raw) > MAX_FILE_BYTES) throw new Error("Semantic settings file is too large");
-    return { kind: "value", value: JSON.parse(raw), version: createHash7("sha256").update(raw).digest("hex") };
+    return { kind: "value", value: JSON.parse(raw), version: createHash8("sha256").update(raw).digest("hex") };
   }
   const queues = /* @__PURE__ */ new Map();
   return {
@@ -4517,7 +4542,7 @@ __export(service_exports, {
 });
 init_config();
 init_files();
-import { createHash as createHash8, randomUUID as randomUUID6 } from "node:crypto";
+import { createHash as createHash9, randomUUID as randomUUID6 } from "node:crypto";
 import { relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
 
 // src/core/graph-retrieval.ts
@@ -5140,7 +5165,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
     };
   }
   function fingerprintFor(settings2) {
-    return createHash8("sha256").update(`${settings2.provider}\0${settings2.baseUrl}\0${settings2.model}\0${settings2.chunkChars || 1200}`).digest("hex");
+    return createHash9("sha256").update(`${settings2.provider}\0${settings2.baseUrl}\0${settings2.model}\0${settings2.chunkChars || 1200}`).digest("hex");
   }
   function awaitSemanticDeadline(operation, controller) {
     let onAbort;
@@ -5230,7 +5255,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
         this.tickets.set(ticket, {
           cwd: resolve4(cwd),
           project,
-          queryHash: createHash8("sha256").update(query).digest("hex"),
+          queryHash: createHash9("sha256").update(query).digest("hex"),
           query,
           navigation,
           linkedWiki: [...linkedWiki],
@@ -5303,7 +5328,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
           hash: page.hash,
           startLine: page.startLine,
           endLine: page.endLine,
-          excerptHash: createHash8("sha256").update(page.text).digest("hex")
+          excerptHash: createHash9("sha256").update(page.text).digest("hex")
         };
         state.reads.delete(path);
         state.reads.set(path, receipt);
@@ -6143,9 +6168,9 @@ import { randomUUID as randomUUID9 } from "node:crypto";
 import { lstat as lstat5, readFile as readFile8 } from "node:fs/promises";
 
 // src/core/orchestration-policy.ts
-import { createHash as createHash9 } from "node:crypto";
+import { createHash as createHash10 } from "node:crypto";
 var clean = (value, limit = 120) => [...String(value || "")].map((char) => char.charCodeAt(0) < 32 ? " " : char).join("").trim().slice(0, limit);
-var digest2 = (value) => createHash9("sha256").update(String(value || "")).digest("hex").slice(0, 24);
+var digest2 = (value) => createHash10("sha256").update(String(value || "")).digest("hex").slice(0, 24);
 function specialistRequestSignature({
   role,
   task = "",
@@ -6897,7 +6922,7 @@ init_wiki_review();
 init_wiki_review_node();
 
 // src/core/writer-lease.ts
-import { createHash as createHash16, randomUUID as randomUUID15 } from "node:crypto";
+import { createHash as createHash17, randomUUID as randomUUID15 } from "node:crypto";
 import {
   closeSync,
   fstatSync,
@@ -6974,7 +6999,7 @@ function acquireKnowledgeWriterLease(input, leaseDirectory = join15(homedir2(), 
   };
   try {
     for (const resource of resources) {
-      const key = createHash16("sha256").update(resource).digest("hex");
+      const key = createHash17("sha256").update(resource).digest("hex");
       locks.push(acquireFile(join15(leaseDirectory, `${key}.lock`)));
     }
   } catch (error) {
@@ -7100,12 +7125,12 @@ init_layout();
 // src/core/maintenance.ts
 init_files();
 init_layout();
-import { createHash as createHash17, randomUUID as randomUUID16 } from "node:crypto";
+import { createHash as createHash18, randomUUID as randomUUID16 } from "node:crypto";
 import { mkdir as mkdir10, rename as rename9, writeFile as writeFile10 } from "node:fs/promises";
 import { dirname as dirname8 } from "node:path";
 var START = "<!-- pi-agent:managed:start -->";
 var END = "<!-- pi-agent:managed:end -->";
-var hash2 = (text4) => createHash17("sha256").update(text4).digest("hex");
+var hash2 = (text4) => createHash18("sha256").update(text4).digest("hex");
 async function updateNavigation(vault, path, heading, body) {
   if (!["Home.md", "Wiki/Index.md", "Library/Index.md"].includes(path) && !/^Projects\/[a-z0-9-]+\/Index\.md$/.test(path))
     throw new Error("Not an allowed navigation target");
@@ -7443,28 +7468,6 @@ function evaluateMetacognitivePublication(answer, snapshot) {
   }
   return { ok: failures.length === 0, failures, warnings, findings: findingEvidence };
 }
-
-// src/core/ingest-identity.ts
-import { createHash as createHash18 } from "node:crypto";
-
-// src/core/ingest-frontmatter.ts
-var KNOWLEDGE_TYPES = [
-  "paper",
-  "method",
-  "software",
-  "dataset",
-  "concept",
-  "entity",
-  "idea",
-  "claim",
-  "evidence",
-  "decision",
-  "question",
-  "wiki"
-];
-var RUN_RESULT_TYPES = ["run", "artifact", "explainer"];
-var NOTE_TYPES = [...KNOWLEDGE_TYPES, ...RUN_RESULT_TYPES];
-var MAX_FRONTMATTER_CHARS = 64 * 1024;
 
 // src/core/publication.ts
 var publication_exports = {};

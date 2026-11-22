@@ -227,6 +227,43 @@ it("returns no chunks once the whole vault is embedded", async () => {
 	}
 }, 120000);
 
+it("hands out every chunk of a note the batch stopped inside", async () => {
+	const root = await realpath(await mkdtemp(join(tmpdir(), "pi-knowledge-semantic-")));
+	try {
+		// One note whose body splits into several chunks.  A batch of one
+		// chunk fills inside the note, so the scan has to come back to it.
+		const vault = join(root, "Vault");
+		await mkdir(join(vault, "Library/Papers"), { recursive: true });
+		await writeFile(join(vault, "Library/Papers/last.md"), `# Last\n${"z".repeat(700)}`);
+		const runtime = await openRuntime(root, 0);
+		const fingerprint = "f".repeat(64);
+		const seen: Array<[string, number]> = [];
+		for (let batch = 0; batch < 16; batch++) {
+			const next = await runtime.request<ScanBatch>("semanticBatch", {
+				fingerprint,
+				limit: 1,
+				chunkChars: 256,
+			});
+			if (!next.items.length) break;
+			seen.push([next.items[0].path, next.items[0].chunkIndex]);
+			await runtime.request("semanticStore", {
+				fingerprint,
+				items: next.items.map((item) => ({ ...item, vector: new Array(8).fill(0.5) })),
+			});
+		}
+		// Every chunk of the note has to be handed out, in order and exactly
+		// once.  A scan that dropped the note after the first chunk would
+		// hand out chunk 0 and nothing else.
+		expect(seen).toEqual([
+			["Library/Papers/last.md", 0],
+			["Library/Papers/last.md", 1],
+			["Library/Papers/last.md", 2],
+		]);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+}, 120000);
+
 it("re-embeds a note whose body changed after it was indexed", async () => {
 	const root = await realpath(await mkdtemp(join(tmpdir(), "pi-knowledge-semantic-")));
 	try {

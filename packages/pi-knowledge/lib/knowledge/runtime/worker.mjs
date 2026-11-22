@@ -1181,24 +1181,35 @@ function semanticCursor(state, fingerprint, scope, revision) {
   const key = scanKey(fingerprint, scope);
   const cursor = state.cursors.get(key);
   if (!cursor) {
-    const fresh = { path: "", revision };
+    const fresh = {
+      path: "",
+      chunk: 0,
+      body: "",
+      hash: "",
+      signature: "",
+      revision
+    };
     state.cursors.set(key, fresh);
     return fresh;
   }
   if (cursor.revision !== revision) {
     cursor.path = "";
+    cursor.chunk = 0;
+    cursor.body = "";
+    cursor.hash = "";
+    cursor.signature = "";
     cursor.revision = revision;
   }
   return cursor;
 }
-function semanticMissingNotes(db, fingerprint, scope, chunkChars, afterPath, limit) {
+function semanticMissingNotes(db, fingerprint, scope, chunkChars, afterPath, limit, includeAfter = false) {
   return db.prepare(
     `SELECT n.path,n.title,n.hash,n.signature,length(n.body) bodyLength,
 	     (SELECT count(*) FROM semantic_chunks s
 	        WHERE s.path=n.path AND s.hash=n.hash AND s.fingerprint=?) stored
 	     FROM notes n
 	     WHERE (n.scope='shared' OR n.scope=?) AND n.kind NOT IN ('navigation','explainer')
-	       AND n.path > ?
+	       AND n.path ${includeAfter ? ">=" : ">"} ?
 	       AND (SELECT count(*) FROM semantic_chunks s
 	            WHERE s.path=n.path AND s.hash=n.hash AND s.fingerprint=?)
 	           < min(64, CASE WHEN length(n.body)=0 THEN 0
@@ -1206,60 +1217,90 @@ function semanticMissingNotes(db, fingerprint, scope, chunkChars, afterPath, lim
 	     ORDER BY n.path LIMIT ?`
   ).all(fingerprint, scope, afterPath, fingerprint, chunkChars, chunkChars, limit);
 }
+async function scanNote(row, items, limit, chunkChars, fingerprint, cursor, hooks) {
+  const resume = row.path === cursor.path && cursor.chunk > 0 ? cursor.chunk : 0;
+  let current;
+  if (resume > 0 && cursor.hash === row.hash && cursor.signature === row.signature) {
+    current = { body: cursor.body, hash: cursor.hash, signature: cursor.signature };
+  } else {
+    try {
+      current = await hooks.updatePath(row.path);
+    } catch {
+      return "skipped";
+    }
+  }
+  if (!current || current.hash !== row.hash || current.signature !== row.signature) return "skipped";
+  const chunks = splitKnowledgeChunks(current.body, chunkChars);
+  const pending = [];
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+    if (!hooks.isStored(row.path, chunkIndex, row.hash, fingerprint)) pending.push(chunkIndex);
+  }
+  let produced = 0;
+  for (const chunkIndex of pending) {
+    if (chunkIndex < resume) continue;
+    if (items.length >= limit) {
+      cursor.path = row.path;
+      cursor.chunk = chunkIndex;
+      cursor.body = current.body;
+      cursor.hash = current.hash;
+      cursor.signature = current.signature;
+      return "partial";
+    }
+    const chunk = chunks[chunkIndex];
+    const startChar = chunkIndex * chunkChars;
+    items.push({
+      path: row.path,
+      chunkIndex,
+      hash: current.hash,
+      mtime: current.signature,
+      text: chunk,
+      startChar,
+      endChar: startChar + chunk.length
+    });
+    produced++;
+  }
+  return produced === pending.length ? "full" : "partial";
+}
 async function scanSemanticBatch(state, db, request, hooks) {
   const { fingerprint, scope, limit, chunkChars } = request;
   const cursor = semanticCursor(state, fingerprint, scope, request.revision);
   const items = [];
-  let after = cursor.path;
   let handled = cursor.path;
+  let handledChunk = cursor.chunk;
+  let after = cursor.path;
+  let inside = cursor.chunk > 0;
   while (true) {
     if (items.length >= limit) {
       cursor.path = handled;
+      cursor.chunk = handledChunk;
       return { items, partial: true };
     }
-    const window = semanticMissingNotes(db, fingerprint, scope, chunkChars, after, SCAN_WINDOW);
+    const window = semanticMissingNotes(db, fingerprint, scope, chunkChars, after, SCAN_WINDOW, inside);
     if (!window.length) break;
     after = window[window.length - 1].path;
+    inside = false;
     for (const row of window) {
       if (items.length >= limit) {
         cursor.path = handled;
+        cursor.chunk = handledChunk;
         return { items, partial: true };
       }
       if (/(?:^|\/)(?:Runs|Explainers)\//i.test(row.path)) continue;
       if (!hooks.canRead(row.path, request.project)) continue;
-      let current;
-      try {
-        current = await hooks.updatePath(row.path);
-      } catch {
+      const outcome = await scanNote(row, items, limit, chunkChars, fingerprint, cursor, hooks);
+      if (outcome === "skipped") continue;
+      if (outcome === "full") {
+        if (row.path > handled) {
+          handled = row.path;
+          handledChunk = 0;
+        }
         continue;
       }
-      if (!current || current.hash !== row.hash || current.signature !== row.signature) continue;
-      const chunks = splitKnowledgeChunks(current.body, chunkChars);
-      let produced = 0;
-      for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-        if (hooks.isStored(row.path, chunkIndex, row.hash, fingerprint)) continue;
-        if (items.length >= limit) {
-          cursor.path = handled;
-          return { items, partial: true };
-        }
-        if (row.path > handled) handled = row.path;
-        const chunk = chunks[chunkIndex];
-        const startChar = chunkIndex * chunkChars;
-        items.push({
-          path: row.path,
-          chunkIndex,
-          hash: current.hash,
-          mtime: current.signature,
-          text: chunk,
-          startChar,
-          endChar: startChar + chunk.length
-        });
-        produced++;
-      }
-      if (produced && row.path > handled) handled = row.path;
+      return { items, partial: true };
     }
   }
   cursor.path = handled;
+  cursor.chunk = handledChunk;
   return { items, partial: false };
 }
 
