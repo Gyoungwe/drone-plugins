@@ -1,3 +1,4 @@
+import { noteFilename } from "./note-filename.js";
 import {
 	applyNoteRemoval,
 	applyNoteWrite,
@@ -79,6 +80,7 @@ export function createNoteWriteSink(runtime: NoteWriteRuntime): NoteWriteSink {
 				note.scope,
 				note.kind,
 				note.file.bytes,
+				noteFilename(note.path),
 			);
 		},
 		insertSearch: (id, titleTerms, terms) => statements.insertSearch.run(id, titleTerms, terms),

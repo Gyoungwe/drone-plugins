@@ -9,7 +9,9 @@ import { createRevisionCache } from "./graph-cache.js";
 import { backlinkContext } from "./graph-retrieval.js";
 import type { KnowledgeIndexFiles, KnowledgeIndexTransport } from "./index-runtime-ports.js";
 import { parseFrontmatter } from "./ingest-frontmatter.js";
+import { createLinkResolver } from "./link-resolver.js";
 import { noteCategory, noteCategoryCount } from "./note-category.js";
+import { ensureNoteFilenameColumn } from "./note-filename.js";
 import { noteDisplayTitle } from "./note-title.js";
 import { prepareNote } from "./note-write.js";
 import { applyUpdate, createNoteWriteSink } from "./note-write-runtime.js";
@@ -34,9 +36,9 @@ import { createWriteBatcher } from "./write-batch.js";
  * reused.
  */
 const UPSERT_NOTE = [
-	"INSERT INTO notes(path,title,body,hash,signature,scope,kind,bytes) VALUES(?,?,?,?,?,?,?,?)",
+	"INSERT INTO notes(path,title,body,hash,signature,scope,kind,bytes,filename) VALUES(?,?,?,?,?,?,?,?,?)",
 	"ON CONFLICT(path) DO UPDATE SET title=excluded.title,body=excluded.body,hash=excluded.hash,",
-	"signature=excluded.signature,scope=excluded.scope,kind=excluded.kind,bytes=excluded.bytes",
+	"signature=excluded.signature,scope=excluded.scope,kind=excluded.kind,bytes=excluded.bytes,filename=excluded.filename",
 ].join(" ");
 
 /** One algorithm shared by the native worker and the Desktop resource process. */
@@ -55,11 +57,12 @@ export async function createKnowledgeIndexRuntime(
 	INSERT OR IGNORE INTO meta VALUES('revision',0);
 	CREATE TABLE IF NOT EXISTS notes(id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE,
 	 title TEXT NOT NULL, body TEXT NOT NULL, hash TEXT NOT NULL, signature TEXT NOT NULL,
-	 scope TEXT NOT NULL, kind TEXT NOT NULL, bytes INTEGER NOT NULL);
+	 scope TEXT NOT NULL, kind TEXT NOT NULL, bytes INTEGER NOT NULL, filename TEXT NOT NULL DEFAULT '');
 	CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(title, terms, tokenize='unicode61');
 	CREATE TABLE IF NOT EXISTS links(source TEXT NOT NULL, target TEXT NOT NULL, PRIMARY KEY(source,target));
 	CREATE INDEX IF NOT EXISTS links_target ON links(target);
 	CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope,kind);
+	CREATE INDEX IF NOT EXISTS notes_filename ON notes(filename);
 	CREATE TABLE IF NOT EXISTS jobs(key TEXT PRIMARY KEY, kind TEXT NOT NULL, path TEXT NOT NULL,
 	 scope TEXT NOT NULL, revision INTEGER NOT NULL, updated TEXT NOT NULL);
 	CREATE INDEX IF NOT EXISTS jobs_scope_updated ON jobs(scope,updated DESC);
@@ -106,6 +109,8 @@ export async function createKnowledgeIndexRuntime(
 	if (!semanticColumns.includes("end_char"))
 		db.exec("ALTER TABLE semantic_chunks ADD COLUMN end_char INTEGER");
 	if (!semanticColumns.includes("norm")) db.exec("ALTER TABLE semantic_chunks ADD COLUMN norm REAL");
+	// KP5b — the filename column and its index; see `note-filename.ts`.
+	ensureNoteFilenameColumn(db);
 	if (semanticColumns.includes("text")) {
 		db.exec(`BEGIN IMMEDIATE;
 	DROP INDEX IF EXISTS semantic_chunks_lookup;
@@ -438,7 +443,12 @@ export async function createKnowledgeIndexRuntime(
 			jobs: Number(db.prepare("SELECT count(*) count FROM jobs").get().count),
 			problems: db.prepare("SELECT * FROM problems ORDER BY path LIMIT 20").all(),
 			categoryCounts: categoryCounts(),
-			stats: { ...stats, categoryScans: noteCategoryCount() },
+			stats: {
+				...stats,
+				categoryScans: noteCategoryCount(),
+				// KP5b — the plan the bare-link lookup runs under.
+				linkLookupPlan: linkResolver.lookupPlan(),
+			},
 			semantic: {
 				vectors: Number(db.prepare("SELECT count(*) count FROM semantic_chunks").get().count),
 				paths: Number(db.prepare("SELECT count(DISTINCT path) count FROM semantic_chunks").get().count),
@@ -788,21 +798,10 @@ export async function createKnowledgeIndexRuntime(
 			nextCursor: null,
 		};
 	}
-	/**
-	 * 链接解析：全路径 [[Library/Papers/x]] 直接对应；只写笔记名的 [[x]] 按文件名唯一匹配。
-	 * 返回 null 表示目标不在库里（未建的笔记或外部链接）。
-	 */
-	function resolveLinkTarget(target, project = undefined) {
-		if (statements.get.get(target) && (project === undefined || canRead(target, project))) return target;
-		if (target.includes("/")) return null;
-		const rows =
-			project === undefined
-				? db.prepare("SELECT path FROM notes WHERE path LIKE ? LIMIT 2").all(`%/${target}`)
-				: db
-						.prepare("SELECT path FROM notes WHERE path LIKE ? AND (scope='shared' OR scope=?) LIMIT 2")
-						.all(`%/${target}`, project || "");
-		return rows.length === 1 ? rows[0].path : null;
-	}
+	// KP5b — a bare `[[name]]` link is resolved through the filename index
+	// rather than by matching every path.  See `link-resolver.ts`.
+	const linkResolver = createLinkResolver(db, canRead);
+	const resolveLinkTarget = linkResolver.resolve;
 	function noteTitle(path) {
 		return (
 			db.prepare("SELECT title FROM notes WHERE path=?").get(path)?.title ||
