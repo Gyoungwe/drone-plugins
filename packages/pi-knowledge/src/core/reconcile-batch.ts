@@ -60,7 +60,18 @@ export async function reconcileInBatches<T extends PreparedUpdate>(
 		const group = prepared.splice(0, prepared.length);
 		try {
 			batch.within(() => {
-				for (const update of group) sink.apply(update, batch);
+				for (const update of group) {
+					// A note that cannot be read is a fault of that note
+					// alone: it must not cost the group its other notes.
+					// The fault is recorded and the note is left out; the
+					// group still commits.
+					try {
+						sink.apply(update, batch);
+					} catch (error) {
+						const path = update.path ?? update.note?.path ?? "";
+						sink.problem(path, String((error as Error).message).slice(0, 400));
+					}
+				}
 			});
 			batcher.commit();
 			sink.committed();

@@ -100,6 +100,12 @@ export function createNoteWriteSink(runtime: NoteWriteRuntime): NoteWriteSink {
  *
  * An unreadable note is recorded as a problem and does not fail the group:
  * one bad file must not cost the whole batch its other notes.
+ *
+ * A note that is simply gone is the one exception.  A file that cannot be
+ * read for any other reason — a symlink, a permission error, a path that
+ * escapes the Vault — is a fault, not an absence, and the fault is raised
+ * again.  Swallowing it would report the note as missing, and the caller
+ * would read a symlinked note as if it had never been indexed.
  */
 export function applyUpdate(
 	update: NoteUpdate,
@@ -119,11 +125,15 @@ export function applyUpdate(
 	}
 	if (update.kind === "remove") {
 		const path: string = update.path;
-		transaction.within(() => applyNoteRemoval(path, update.previous, sink));
 		const error = update.error;
 		const code = error.code ?? "";
-		if (["ENOENT", "ENOTDIR"].includes(code)) statements.clearProblem.run(path);
+		const gone = ["ENOENT", "ENOTDIR"].includes(code);
+		if (gone) statements.clearProblem.run(path);
 		else statements.problem.run(path, String(error.message).slice(0, 400));
+		transaction.within(() => applyNoteRemoval(path, update.previous, sink));
+		// A note that is gone leaves the index quietly; a note that cannot be
+		// read is a fault, and the fault belongs to the caller.
+		if (!gone) throw error;
 		return null;
 	}
 	transaction.within(() => applyNoteWrite(update.note, sink));
