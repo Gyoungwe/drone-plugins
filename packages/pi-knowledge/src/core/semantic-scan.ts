@@ -54,8 +54,28 @@ export interface SemanticNoteRow {
 
 /** The position of the scan, and the revision that made it valid. */
 export interface SemanticScanCursor {
-	/** Every eligible note at or before this path is fully embedded. */
+	/** Every eligible note before this path is fully embedded. */
 	path: string;
+	/**
+	 * The next chunk to hand out inside `path`.
+	 *
+	 * A batch can fill in the middle of a note, so the scan has to be able to
+	 * come back to that note and continue with the chunk it stopped at.  A
+	 * cursor that only knew the path would have to re-read the note from its
+	 * first chunk, which is what KP3 removed.
+	 */
+	chunk: number;
+	/**
+	 * The note the scan stopped inside, and the body it read.
+	 *
+	 * The scan has to come back to the note it stopped in, and reading it
+	 * again would cost the inspection KP3 removed.  The body is cached
+	 * instead, and the cache is safe: a note whose file changed moves the
+	 * index revision, and a revision change drops the cursor.
+	 */
+	body: string;
+	hash: string;
+	signature: string;
 	/** The index revision this cursor was established at. */
 	revision: number;
 }
@@ -122,12 +142,23 @@ function semanticCursor(
 	const key = scanKey(fingerprint, scope);
 	const cursor = state.cursors.get(key);
 	if (!cursor) {
-		const fresh: SemanticScanCursor = { path: "", revision };
+		const fresh: SemanticScanCursor = {
+			path: "",
+			chunk: 0,
+			body: "",
+			hash: "",
+			signature: "",
+			revision,
+		};
 		state.cursors.set(key, fresh);
 		return fresh;
 	}
 	if (cursor.revision !== revision) {
 		cursor.path = "";
+		cursor.chunk = 0;
+		cursor.body = "";
+		cursor.hash = "";
+		cursor.signature = "";
 		cursor.revision = revision;
 	}
 	return cursor;
@@ -146,6 +177,10 @@ function semanticCursor(
  *
  * `afterPath` skips the confirmed-complete prefix.  It is only an
  * optimisation: the filter above decides what is missing.
+ *
+ * `includeAfter` keeps the note at `afterPath` itself in the result.  It is
+ * set when the cursor sits *inside* a note: the note still owes the chunks
+ * after the cursor's position, so it must be returned again.
  */
 export function semanticMissingNotes(
 	db: SemanticScanDb,
@@ -154,6 +189,7 @@ export function semanticMissingNotes(
 	chunkChars: number,
 	afterPath: string,
 	limit: number,
+	includeAfter = false,
 ): SemanticNoteRow[] {
 	return db
 		.prepare(
@@ -162,7 +198,7 @@ export function semanticMissingNotes(
 	        WHERE s.path=n.path AND s.hash=n.hash AND s.fingerprint=?) stored
 	     FROM notes n
 	     WHERE (n.scope='shared' OR n.scope=?) AND n.kind NOT IN ('navigation','explainer')
-	       AND n.path > ?
+	       AND n.path ${includeAfter ? ">=" : ">"} ?
 	       AND (SELECT count(*) FROM semantic_chunks s
 	            WHERE s.path=n.path AND s.hash=n.hash AND s.fingerprint=?)
 	           < min(64, CASE WHEN length(n.body)=0 THEN 0
@@ -170,6 +206,89 @@ export function semanticMissingNotes(
 	     ORDER BY n.path LIMIT ?`,
 		)
 		.all(fingerprint, scope, afterPath, fingerprint, chunkChars, chunkChars, limit);
+}
+
+/**
+ * Hands out the chunks of one note that are not stored yet.
+ *
+ * The result is one of three words:
+ *
+ * - `skipped` — the note needs nothing, or it could not be read;
+ * - `full` — every missing chunk of the note was handed to the caller;
+ * - `partial` — the batch filled inside the note, and the cursor now sits
+ *   inside it.
+ *
+ * The cursor is updated in place when the batch fills, so the next call
+ * resumes at the chunk it stopped at.  The body is kept with it, so the next
+ * call does not read the file again.
+ */
+async function scanNote(
+	row: SemanticNoteRow,
+	items: SemanticScanItem[],
+	limit: number,
+	chunkChars: number,
+	fingerprint: string,
+	cursor: SemanticScanCursor,
+	hooks: SemanticScanHooks,
+): Promise<"skipped" | "full" | "partial"> {
+	// The note needs chunks, so it has to be read and verified.
+	//
+	// The note the scan stopped inside is a special case: its body was
+	// already read, and reading it again would cost the inspection KP3
+	// removed.  The cached body is safe to reuse, because a note whose file
+	// changed moves the index revision, and a revision change drops the
+	// cursor.
+	const resume = row.path === cursor.path && cursor.chunk > 0 ? cursor.chunk : 0;
+	let current: { body: string; hash: string; signature: string } | null;
+	if (resume > 0 && cursor.hash === row.hash && cursor.signature === row.signature) {
+		current = { body: cursor.body, hash: cursor.hash, signature: cursor.signature };
+	} else {
+		try {
+			current = await hooks.updatePath(row.path);
+		} catch {
+			return "skipped";
+		}
+	}
+	if (!current || current.hash !== row.hash || current.signature !== row.signature) return "skipped";
+
+	const chunks = splitKnowledgeChunks(current.body, chunkChars);
+	// The chunks of this note that are not stored yet.  The list is
+	// collected first, because the cursor may only move past the note once
+	// every one of them has been handed to the caller.
+	const pending: number[] = [];
+	for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+		if (!hooks.isStored(row.path, chunkIndex, row.hash, fingerprint)) pending.push(chunkIndex);
+	}
+	// The chunks before the cursor were handed over already, so they are not
+	// handed over twice.
+	let produced = 0;
+	for (const chunkIndex of pending) {
+		if (chunkIndex < resume) continue;
+		if (items.length >= limit) {
+			// The batch filled inside this note.  The note is not finished, so
+			// the cursor stops *inside* it.  The body is kept so the next call
+			// does not read the file again.
+			cursor.path = row.path;
+			cursor.chunk = chunkIndex;
+			cursor.body = current.body;
+			cursor.hash = current.hash;
+			cursor.signature = current.signature;
+			return "partial";
+		}
+		const chunk = chunks[chunkIndex];
+		const startChar = chunkIndex * chunkChars;
+		items.push({
+			path: row.path,
+			chunkIndex,
+			hash: current.hash,
+			mtime: current.signature,
+			text: chunk,
+			startChar,
+			endChar: startChar + chunk.length,
+		});
+		produced++;
+	}
+	return produced === pending.length ? "full" : "partial";
 }
 
 /**
@@ -189,12 +308,18 @@ export async function scanSemanticBatch(
 	const cursor = semanticCursor(state, fingerprint, scope, request.revision);
 
 	const items: SemanticScanItem[] = [];
-	let after = cursor.path;
-	// The cursor only ever moves forward, and only past a note the scan has
-	// fully handled.  The missing-chunks query is what guarantees
-	// completeness, so a cursor that lags behind costs a slower scan but
-	// never a missing chunk.
+	// The note the scan is inside, and the chunk it will hand out next.  The
+	// cursor only ever moves forward, and only past a note the scan has fully
+	// handled.  The missing-chunks query is what guarantees completeness, so
+	// a cursor that lags behind costs a slower scan but never a missing
+	// chunk.
 	let handled = cursor.path;
+	let handledChunk = cursor.chunk;
+	// The path the query starts after.  It is the cursor's path, unless the
+	// cursor sits *inside* a note — then the note is still owed chunks, so
+	// the query has to return it again.
+	let after = cursor.path;
+	let inside = cursor.chunk > 0;
 
 	while (true) {
 		// The limit is checked *before* the next note is inspected. Inspecting a
@@ -202,69 +327,47 @@ export async function scanSemanticBatch(
 		// batch will not produce chunks for must not be touched at all.
 		if (items.length >= limit) {
 			cursor.path = handled;
+			cursor.chunk = handledChunk;
 			return { items, partial: true };
 		}
-		const window = semanticMissingNotes(db, fingerprint, scope, chunkChars, after, SCAN_WINDOW);
+		const window = semanticMissingNotes(db, fingerprint, scope, chunkChars, after, SCAN_WINDOW, inside);
 		if (!window.length) break;
 		after = window[window.length - 1].path;
+		inside = false;
 
 		for (const row of window) {
 			if (items.length >= limit) {
 				cursor.path = handled;
+				cursor.chunk = handledChunk;
 				return { items, partial: true };
 			}
 			if (/(?:^|\/)(?:Runs|Explainers)\//i.test(row.path)) continue;
 			if (!hooks.canRead(row.path, request.project)) continue;
-
-			// The note needs chunks, so it has to be read and verified.
-			let current: { body: string; hash: string; signature: string } | null;
-			try {
-				current = await hooks.updatePath(row.path);
-			} catch {
+			const outcome = await scanNote(row, items, limit, chunkChars, fingerprint, cursor, hooks);
+			if (outcome === "skipped") continue;
+			if (outcome === "full") {
+				// The cursor may move past a note whose every missing chunk was
+				// handed to the caller: the store lands before the next call, so
+				// by then the note owes nothing.
+				//
+				// A note that still owes chunks must stay ahead of the cursor.
+				// The query skips the notes before the cursor, so a cursor that
+				// moved past an unfinished note would lose that note's remaining
+				// chunks for good — the query would never return it again, and no
+				// error would say so.
+				if (row.path > handled) {
+					handled = row.path;
+					handledChunk = 0;
+				}
 				continue;
 			}
-			if (!current || current.hash !== row.hash || current.signature !== row.signature) continue;
-
-			const chunks = splitKnowledgeChunks(current.body, chunkChars);
-			let produced = 0;
-			for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-				if (hooks.isStored(row.path, chunkIndex, row.hash, fingerprint)) continue;
-				if (items.length >= limit) {
-					// The batch filled inside this note.  The note is not
-					// finished, so the cursor stops before it and the next
-					// call resumes at it.
-					cursor.path = handled;
-					return { items, partial: true };
-				}
-				// The note is being handled, so the cursor may move past it
-				// even if the batch fills mid-note.  The missing-chunks query
-				// is what guarantees completeness; it returns this note again
-				// until the store lands, but the query skips a note whose
-				// chunks are all stored without inspecting it on disk.
-				if (row.path > handled) handled = row.path;
-				const chunk = chunks[chunkIndex];
-				const startChar = chunkIndex * chunkChars;
-				items.push({
-					path: row.path,
-					chunkIndex,
-					hash: current.hash,
-					mtime: current.signature,
-					text: chunk,
-					startChar,
-					endChar: startChar + chunk.length,
-				});
-				produced++;
-			}
-			// The note's chunks were either already stored or handed to the
-			// caller, so the scan is done with it.  The cursor may advance past
-			// it even though the store has not run yet: the missing-chunks
-			// query is what guarantees completeness, and it would return this
-			// note again until the store lands.  Returning it is cheap — the
-			// query skips it without an inspection — while *not* advancing
-			// would make the next call re-inspect it.
-			if (produced && row.path > handled) handled = row.path;
+			// The batch filled inside the note, so the cursor stops *inside*
+			// it — `scanNote` has already put it there — and the next call
+			// resumes at the chunk it stopped at.
+			return { items, partial: true };
 		}
 	}
 	cursor.path = handled;
+	cursor.chunk = handledChunk;
 	return { items, partial: false };
 }
