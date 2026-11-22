@@ -12543,6 +12543,31 @@ function parseModelReviewCommandInput(args) {
 // src/extension/knowledge-extension.ts
 import { Worker } from "node:worker_threads";
 
+// src/core/category-count-cache.ts
+init_files();
+
+// src/core/ingest-identity.ts
+import { createHash as createHash14 } from "node:crypto";
+
+// src/core/ingest-frontmatter.ts
+var KNOWLEDGE_TYPES = [
+  "paper",
+  "method",
+  "software",
+  "dataset",
+  "concept",
+  "entity",
+  "idea",
+  "claim",
+  "evidence",
+  "decision",
+  "question",
+  "wiki"
+];
+var RUN_RESULT_TYPES = ["run", "artifact", "explainer"];
+var NOTE_TYPES = [...KNOWLEDGE_TYPES, ...RUN_RESULT_TYPES];
+var MAX_FRONTMATTER_CHARS = 64 * 1024;
+
 // src/core/index.ts
 init_claim_conflicts();
 init_config();
@@ -12570,11 +12595,11 @@ var DAILY_DISCOVERY_SYSTEM = [
 ].join("\n");
 
 // src/core/deliverable-review.ts
-import { createHash as createHash14 } from "node:crypto";
+import { createHash as createHash15 } from "node:crypto";
 
 // src/core/delivery-claims.ts
-import { createHash as createHash15 } from "node:crypto";
-var digest5 = (text5) => createHash15("sha256").update(text5).digest("hex");
+import { createHash as createHash16 } from "node:crypto";
+var digest5 = (text5) => createHash16("sha256").update(text5).digest("hex");
 function summaryDeliveryClaims(details, markdown) {
   const receipt = details.delivery_receipt;
   if (!receipt || receipt.version !== 1 || receipt.semanticAssessment?.status !== "model-assessed" || receipt.bodySha256 !== digest5(`${markdown.trim()}
@@ -12608,7 +12633,7 @@ function summaryDeliveryClaims(details, markdown) {
 // src/core/experience-store.ts
 init_config();
 init_runtime_host();
-import { createHash as createHash16, randomUUID as randomUUID14 } from "node:crypto";
+import { createHash as createHash17, randomUUID as randomUUID14 } from "node:crypto";
 import { lstat as lstat8, mkdir as mkdir9, readFile as readFile9, rename as rename8, unlink as unlink7, writeFile as writeFile9 } from "node:fs/promises";
 import { isAbsolute as isAbsolute6, join as join13, relative as relative7, resolve as resolve6, sep as sep7 } from "node:path";
 var EXPERIENCE_VERSION = 1;
@@ -12635,7 +12660,7 @@ var EXPERIENCE_LIMITS = Object.freeze({
   maxSchedulerJobIdChars: 180,
   maxQueryChars: 200
 });
-var HASH = (value) => createHash16("sha256").update(value).digest("hex");
+var HASH = (value) => createHash17("sha256").update(value).digest("hex");
 var now = () => (/* @__PURE__ */ new Date()).toISOString();
 function text3(value, limit) {
   if (typeof value !== "string" && typeof value !== "number") return "";
@@ -13357,7 +13382,7 @@ init_wiki_review();
 init_wiki_review_node();
 
 // src/core/writer-lease.ts
-import { createHash as createHash17, randomUUID as randomUUID15 } from "node:crypto";
+import { createHash as createHash18, randomUUID as randomUUID15 } from "node:crypto";
 import {
   closeSync,
   fstatSync,
@@ -13378,12 +13403,12 @@ init_layout();
 // src/core/maintenance.ts
 init_files();
 init_layout();
-import { createHash as createHash18, randomUUID as randomUUID16 } from "node:crypto";
+import { createHash as createHash19, randomUUID as randomUUID16 } from "node:crypto";
 import { mkdir as mkdir10, rename as rename9, writeFile as writeFile10 } from "node:fs/promises";
 import { dirname as dirname8 } from "node:path";
 var START = "<!-- pi-agent:managed:start -->";
 var END = "<!-- pi-agent:managed:end -->";
-var hash3 = (text5) => createHash18("sha256").update(text5).digest("hex");
+var hash3 = (text5) => createHash19("sha256").update(text5).digest("hex");
 async function updateNavigation(vault, path2, heading, body) {
   if (!["Home.md", "Wiki/Index.md", "Library/Index.md"].includes(path2) && !/^Projects\/[a-z0-9-]+\/Index\.md$/.test(path2))
     throw new Error("Not an allowed navigation target");
@@ -13721,28 +13746,6 @@ function evaluateMetacognitivePublication(answer, snapshot) {
   }
   return { ok: failures.length === 0, failures, warnings, findings: findingEvidence };
 }
-
-// src/core/ingest-identity.ts
-import { createHash as createHash19 } from "node:crypto";
-
-// src/core/ingest-frontmatter.ts
-var KNOWLEDGE_TYPES = [
-  "paper",
-  "method",
-  "software",
-  "dataset",
-  "concept",
-  "entity",
-  "idea",
-  "claim",
-  "evidence",
-  "decision",
-  "question",
-  "wiki"
-];
-var RUN_RESULT_TYPES = ["run", "artifact", "explainer"];
-var NOTE_TYPES = [...KNOWLEDGE_TYPES, ...RUN_RESULT_TYPES];
-var MAX_FRONTMATTER_CHARS = 64 * 1024;
 
 // src/core/publication.ts
 var publication_exports = {};
@@ -24840,12 +24843,12 @@ function createKnowledgeReadModel(owner) {
     project,
     (service) => service.request("uiJobs", { project, offset: input.offset ?? 0, limit: input.limit ?? 20 })
   );
-  const recentByCategory2 = (input, project) => boundRead(
+  const recentByCategory = (input, project) => boundRead(
     input,
     project,
     (service) => service.request("recentByCategory", { project, limit: input.limit ?? 10 })
   );
-  return { overview, search, readNote, links, graph, jobs, recentByCategory: recentByCategory2 };
+  return { overview, search, readNote, links, graph, jobs, recentByCategory };
 }
 
 // src/desktop/native.ts
