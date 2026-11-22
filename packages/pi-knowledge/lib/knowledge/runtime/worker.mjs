@@ -730,11 +730,13 @@ function applyUpdate(update, transaction, runtime, sink) {
   }
   if (update.kind === "remove") {
     const path = update.path;
-    transaction.within(() => applyNoteRemoval(path, update.previous, sink));
     const error = update.error;
     const code = error.code ?? "";
-    if (["ENOENT", "ENOTDIR"].includes(code)) statements.clearProblem.run(path);
+    const gone = ["ENOENT", "ENOTDIR"].includes(code);
+    if (gone) statements.clearProblem.run(path);
     else statements.problem.run(path, String(error.message).slice(0, 400));
+    transaction.within(() => applyNoteRemoval(path, update.previous, sink));
+    if (!gone) throw error;
     return null;
   }
   transaction.within(() => applyNoteWrite(update.note, sink));
@@ -798,7 +800,14 @@ async function reconcileInBatches(paths, sink) {
     const group = prepared.splice(0, prepared.length);
     try {
       batch.within(() => {
-        for (const update of group) sink.apply(update, batch);
+        for (const update of group) {
+          try {
+            sink.apply(update, batch);
+          } catch (error) {
+            const path = update.path ?? update.note?.path ?? "";
+            sink.problem(path, String(error.message).slice(0, 400));
+          }
+        }
       });
       batcher.commit();
       sink.committed();
