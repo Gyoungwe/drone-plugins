@@ -266,8 +266,12 @@ it("declares the exact WebDAV slot, destination and host custody disclosure", ()
 			header: "Authorization",
 			fields: [],
 			authentication: "http-basic-digest",
+			custody: "host-environment",
 		},
 	]);
+	expect(manifest.drone.networkPolicy).toEqual({
+		runtimeEndpoint: { allowed: true, credentialSlot: "webdav" },
+	});
 	expect(manifest.permissions.network).toEqual(["configured-services", "10.126.126.1:8080"]);
 	expect(manifest.permissions.credentials).toEqual(["host-kept WebDAV password (drone.credentials)"]);
 });

@@ -100,7 +100,7 @@ function managedHost({
 	return { call, requests };
 }
 
-it("declares the agreed local credential without changing the Web API slot", () => {
+it("declares the agreed local credential under host custody without changing the Web API slot", () => {
 	expect(manifest.drone.credentials).toEqual([
 		{
 			slot: "zotero-web",
@@ -115,6 +115,7 @@ it("declares the agreed local credential without changing the Web API slot", () 
 			hosts: ["127.0.0.1:23119"],
 			header: "Zotero-API-Key",
 			fields: ["serverId"],
+			custody: "host-environment",
 		},
 	]);
 	expect(ZOTERO_LOCAL_CREDENTIAL).toEqual({
