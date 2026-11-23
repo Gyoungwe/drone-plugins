@@ -17,10 +17,17 @@
 				"hosts": ["10.126.126.1:8080"],
 				"header": "Authorization",
 				"fields": [],
-				"authentication": "http-basic-digest"
+				"authentication": "http-basic-digest",
+				"custody": "host-environment"
 			}
 		],
 		"deliveryProjection": "required",
+		"networkPolicy": {
+			"runtimeEndpoint": {
+				"allowed": true,
+				"credentialSlot": "webdav"
+			}
+		},
 		"nativeChildSessions": "read-only",
 		"requires": {
 			"tasks": {
