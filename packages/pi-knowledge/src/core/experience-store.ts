@@ -885,7 +885,7 @@ export function createExperienceStore(options: ExperienceStoreOptions): Experien
 				hostId,
 				revision: current.revision + 1,
 				updatedAt: now(),
-				records: next.document.records.slice(-EXPERIENCE_LIMITS.maxRecords),
+				records: next.document.records.slice(0, EXPERIENCE_LIMITS.maxRecords),
 			};
 			const document = validateDocument(candidate, vaultId, project, hostId);
 			await atomicWrite(path, document);
@@ -1045,7 +1045,7 @@ export function createExperienceStore(options: ExperienceStoreOptions): Experien
 				if (scheduler) record.scheduler = scheduler;
 				if (schedulerJobId) record.schedulerJobId = schedulerJobId;
 				if (artifactRefs.length) record.artifactRefs = artifactRefs;
-				if (!existing) document.records.unshift(record);
+				document.records = [record, ...document.records.filter((item) => item.id !== record.id)];
 				return {
 					document,
 					result: { classification: existing ? ("updated" as const) : ("new" as const), record },
