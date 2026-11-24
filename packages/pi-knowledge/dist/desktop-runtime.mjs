@@ -2336,6 +2336,29 @@ var init_redact_diagnostic = __esm({
 
 // src/core/wiki-policy.ts
 import { createHash as createHash8 } from "node:crypto";
+function checkWikiProposalId(id2) {
+  if (typeof id2 !== "string" || !/^[0-9a-f-]{36}$/.test(id2)) throw new Error("Invalid Wiki proposal id");
+}
+function checkSources(paths, accepts) {
+  if (!Array.isArray(paths) || !paths.length || paths.length > 12)
+    throw Object.assign(
+      new Error("source_paths: supply 1\u201312 Vault-relative Markdown notes already read this turn"),
+      {
+        code: "source-note-required",
+        field: "source_paths"
+      }
+    );
+  for (let index = 0; index < paths.length; index++) {
+    if (!accepts(paths, index)) {
+      throw Object.assign(
+        new Error(
+          `source_paths[${index}]: expected a Vault-relative Markdown source note (for example Library/Papers/source.md), not a workspace PDF or URL. Read the corresponding source note first; changing the Wiki target path cannot fix this field.`
+        ),
+        { code: "source-note-required", field: `source_paths[${index}]`, retryable: false }
+      );
+    }
+  }
+}
 function targetWikiPath(path2, project) {
   if (typeof path2 !== "string")
     throw new Error("Target must be a shared or current-project Wiki page, not navigation");
@@ -2349,7 +2372,7 @@ function targetWikiPath(path2, project) {
   return path2;
 }
 function immutableWikiProposalHash(proposal) {
-  return createHash8("sha256").update(
+  return wikiContentHash(
     JSON.stringify({
       id: proposal.id,
       vaultId: proposal.vaultId,
@@ -2363,7 +2386,7 @@ function immutableWikiProposalHash(proposal) {
       after: proposal.after,
       sources: proposal.sources
     })
-  ).digest("hex");
+  );
 }
 function managedParts(text5) {
   const start = text5.indexOf(MANAGED_START);
@@ -2386,17 +2409,152 @@ function stripManagedHeader(body, pageTitle) {
   }
   return text5;
 }
-var MANAGED_START, MANAGED_END;
+function withManagedWikiBlock(original, title, body) {
+  const block = `${MANAGED_START}
+${body}
+${MANAGED_END}`;
+  if (original === null)
+    return `---
+type: wiki
+status: unverified
+---
+
+# ${title}
+
+${block}
+
+## Human review
+
+`;
+  const { start, end } = managedParts(original);
+  return start < 0 ? `${original}${original.endsWith("\n") ? "\n" : "\n\n"}${block}
+` : original.slice(0, start) + block + original.slice(end + MANAGED_END.length);
+}
+var MANAGED_START, MANAGED_END, MAX_PENDING_WIKI_PROPOSALS, WIKI_PROPOSAL_MAX_AGE, wikiContentHash;
 var init_wiki_policy = __esm({
   "src/core/wiki-policy.ts"() {
     "use strict";
     MANAGED_START = "<!-- pi-agent:managed:start -->";
     MANAGED_END = "<!-- pi-agent:managed:end -->";
+    MAX_PENDING_WIKI_PROPOSALS = 100;
+    WIKI_PROPOSAL_MAX_AGE = 24 * 60 * 60 * 1e3;
+    wikiContentHash = (text5) => createHash8("sha256").update(text5).digest("hex");
+  }
+});
+
+// src/core/wiki-review-draft.ts
+import { randomUUID as randomUUID10 } from "node:crypto";
+function validateWikiSourcePaths(paths) {
+  checkSources(paths, (entries, index) => {
+    try {
+      validateNote(entries[index]);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+function readWikiDraft(input, sources, path2) {
+  if (sources.some((source) => source.path === path2 || /[[\]#|\r\n]/.test(source.path)))
+    throw new Error("A Wiki cannot cite itself or an ambiguous link path");
+  if (sources.every(
+    (source) => /(?:^|\/)Wiki\//.test(source.path) || /(?:^|\/)(?:Home|Index|Context)\.md$/.test(source.path)
+  ))
+    throw new Error("Read at least one underlying evidence/source note, not only Wiki or navigation");
+  const { title, markdown, rationale } = input;
+  if (typeof title !== "string" || !title.trim() || title.length > 200 || /[\r\n]/.test(title))
+    throw new Error("A single-line Wiki title is required");
+  if (!isDraftMarkdown(markdown, 24e3))
+    throw new Error("Wiki candidate must contain 1\u201324000 characters and no managed markers");
+  if (typeof rationale !== "string" || !rationale.trim() || rationale.length > 1e3)
+    throw new Error("A concise change rationale is required");
+  return { title, markdown, rationale };
+}
+function isDraftMarkdown(markdown, maxLength) {
+  return typeof markdown === "string" && !!markdown.trim() && markdown.length <= maxLength && !markdown.includes("<!-- pi-agent:managed:");
+}
+function proposedText(original, title, body, refs) {
+  return withManagedWikiBlock(original, title, `${body}
+
+## Sources
+${refs}`.trim());
+}
+function sourceReferences(sources) {
+  return sources.map(
+    (source) => `- [[${source.path.slice(0, -3)}]] \xB7 lines ${source.startLine}\u2013${source.endLine} \xB7 sha256 ${source.hash}`
+  ).join("\n");
+}
+function sealWikiDraft(proposal) {
+  return {
+    ...proposal,
+    afterHash: wikiContentHash(proposal.after),
+    proposalHash: immutableWikiProposalHash(proposal)
+  };
+}
+function buildWikiDraft(binding2, project, path2, { title, markdown, rationale }, original, sources) {
+  if (original && original.bytes > 64 * 1024)
+    throw new Error("Existing Wiki exceeds the bounded review size; split it before editing");
+  if (original && managedParts(original.text).body.length > 24e3)
+    throw new Error("Existing generated block exceeds the review size");
+  const refs = sourceReferences(sources);
+  const after = proposedText(original?.text ?? null, title.trim(), stripManagedHeader(markdown), refs);
+  return sealWikiDraft({
+    id: randomUUID10(),
+    status: "pending",
+    vaultId: binding2.vaultId,
+    bindingRevision: binding2.revision,
+    project,
+    path: path2,
+    title: title.trim(),
+    rationale: rationale.trim(),
+    createdAt: Date.now(),
+    sources,
+    before: original?.text ?? null,
+    beforeHash: original?.hash ?? null,
+    after
+  });
+}
+function mergeWikiDraft(proposal, newSources, markdown, rationale) {
+  const byPath = new Map(proposal.sources.map((source) => [source.path, source]));
+  for (const source of newSources) byPath.set(source.path, source);
+  const sources = [...byPath.values()];
+  if (sources.length > 12)
+    throw new Error(
+      "Pending topic reached the 12-source review budget; review it before adding another round"
+    );
+  if (!isDraftMarkdown(markdown, 12e3))
+    throw new Error("Incremental topic summary must contain 1\u201312000 characters and no managed markers");
+  if (typeof rationale !== "string" || !rationale.trim() || rationale.length > 1e3)
+    throw new Error("A concise merge rationale is required");
+  const prior = managedParts(proposal.after).body.replace(/\n\n## Sources\n[\s\S]*$/, "").trim();
+  const update = `## Research update \xB7 ${(/* @__PURE__ */ new Date()).toISOString()}
+
+${stripManagedHeader(markdown)}`;
+  const merged = [prior, update].filter(Boolean).join("\n\n");
+  if (merged.length > 22e3)
+    throw new Error("Pending topic synthesis is too large; review it before adding another round");
+  const refs = sourceReferences(sources);
+  const after = proposedText(proposal.before, proposal.title, merged, refs);
+  return sealWikiDraft({
+    ...proposal,
+    createdAt: Date.now(),
+    rationale: `${proposal.rationale}
+
+Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
+    sources,
+    after
+  });
+}
+var init_wiki_review_draft = __esm({
+  "src/core/wiki-review-draft.ts"() {
+    "use strict";
+    init_files();
+    init_wiki_policy();
   }
 });
 
 // src/core/layout.ts
-import { createHash as createHash9, randomUUID as randomUUID10 } from "node:crypto";
+import { createHash as createHash9, randomUUID as randomUUID11 } from "node:crypto";
 import { constants as constants2 } from "node:fs";
 import { link, lstat as lstat6, mkdir as mkdir7, open as open2, realpath as realpath5, rename as rename6, unlink as unlink5, writeFile as writeFile7 } from "node:fs/promises";
 import { basename as basename2, dirname as dirname4, isAbsolute as isAbsolute5, join as join10, relative as relative5, resolve as resolve5, sep as sep5 } from "node:path";
@@ -2427,7 +2585,7 @@ var init_layout = __esm({
 });
 
 // src/core/wiki-review-node.ts
-import { createHash as createHash10, randomUUID as randomUUID11 } from "node:crypto";
+import { createHash as createHash10, randomUUID as randomUUID12 } from "node:crypto";
 import { link as link2, lstat as lstat7, mkdir as mkdir8, readdir, readFile as readFile7, rename as rename7, rm, unlink as unlink6, writeFile as writeFile8 } from "node:fs/promises";
 import { basename as basename3, dirname as dirname5, join as join11 } from "node:path";
 async function renameWithRetry(from, to, options = {}) {
@@ -2470,7 +2628,7 @@ function createLocalWikiReviewPorts(config) {
     async write(path2, value, expectedVersion) {
       const full = await statePath(path2);
       await mkdir8(dirname5(full), { recursive: true, mode: 448 });
-      const temporary = join11(dirname5(full), `.${randomUUID11()}.tmp`);
+      const temporary = join11(dirname5(full), `.${randomUUID12()}.tmp`);
       const text5 = `${JSON.stringify(value, null, 2)}
 `;
       await writeFile8(temporary, text5, { flag: "wx", mode: 384 });
@@ -2517,7 +2675,7 @@ function createLocalWikiReviewPorts(config) {
           throw new Error("Wiki parent must be a regular directory");
       }
       const full = await containedVaultFile(binding2.vault, path2);
-      const temporary = join11(dirname5(full), `.${basename3(full)}.${randomUUID11()}.tmp`);
+      const temporary = join11(dirname5(full), `.${basename3(full)}.${randomUUID12()}.tmp`);
       const mode2 = expectedHash === null ? 384 : (await lstat7(full)).mode & 511;
       await writeFile8(temporary, text5, { flag: "wx", mode: mode2 });
       try {
@@ -2554,10 +2712,9 @@ var init_wiki_review_node = __esm({
 });
 
 // src/core/wiki-review-reader.ts
-import { createHash as createHash11 } from "node:crypto";
 function createWikiReviewReader(storage, currentNote) {
   async function loadProposal(service, id2, project) {
-    if (typeof id2 !== "string" || !/^[0-9a-f-]{36}$/.test(id2)) throw new Error("Invalid Wiki proposal id");
+    checkWikiProposalId(id2);
     const base = `${service.binding.vaultId}/wiki-review`;
     const pending = await storage.read(`${base}/pending/${id2}.json`);
     const p = pending === void 0 ? await storage.read(`${base}/reviewed/${id2}.json`) : pending;
@@ -2566,7 +2723,7 @@ function createWikiReviewReader(storage, currentNote) {
     if (p.id !== id2 || p.project !== project || p.vaultId !== service.binding.vaultId || p.bindingRevision !== service.binding.revision)
       throw new Error("Proposal belongs to a different project or binding");
     targetWikiPath(p.path, project);
-    if (immutableWikiProposalHash(p) !== p.proposalHash || digest4(p.after) !== p.afterHash || (p.before === null ? p.beforeHash !== null : digest4(p.before) !== p.beforeHash))
+    if (immutableWikiProposalHash(p) !== p.proposalHash || wikiContentHash(p.after) !== p.afterHash || (p.before === null ? p.beforeHash !== null : wikiContentHash(p.before) !== p.beforeHash))
       throw new Error("Wiki proposal content changed");
     return p;
   }
@@ -2585,7 +2742,7 @@ function createWikiReviewReader(storage, currentNote) {
         error: null
       });
     }
-    const expired = now2 > p.createdAt + MAX_AGE, targetChanged = (target?.hash ?? null) !== p.beforeHash && target?.hash !== p.afterHash;
+    const expired = now2 > p.createdAt + WIKI_PROPOSAL_MAX_AGE, targetChanged = (target?.hash ?? null) !== p.beforeHash && target?.hash !== p.afterHash;
     const protectedText = p.before === null ? "" : p.before.replace(
       /<!-- pi-agent:managed:start -->[\s\S]*?<!-- pi-agent:managed:end -->/,
       "\uFF08\u6B64\u5904\u4E3A\u667A\u80FD\u4F53\u6258\u7BA1\u533A\uFF09"
@@ -2605,7 +2762,7 @@ function createWikiReviewReader(storage, currentNote) {
       expired,
       targetChanged,
       canApply: p.status === "pending" && !expired && !targetChanged && !sources.some((s) => s.changed),
-      expiresAt: p.createdAt + MAX_AGE,
+      expiresAt: p.createdAt + WIKI_PROPOSAL_MAX_AGE,
       scientificallyVerified: false
     };
   }
@@ -2618,7 +2775,7 @@ function createWikiReviewReader(storage, currentNote) {
       throw error;
     }
     const items = [], problems = [];
-    for (const name of names.filter((name2) => /^[0-9a-f-]{36}\.json$/.test(name2)).sort().slice(0, MAX_PENDING)) {
+    for (const name of names.filter((name2) => /^[0-9a-f-]{36}\.json$/.test(name2)).sort().slice(0, MAX_PENDING_WIKI_PROPOSALS)) {
       let p;
       try {
         p = await storage.read(`${service.binding.vaultId}/wiki-review/pending/${name}`);
@@ -2639,15 +2796,16 @@ function createWikiReviewReader(storage, currentNote) {
         if (p.vaultId !== service.binding.vaultId || p.id !== name.slice(0, -5))
           throw new Error("Proposal belongs to a different binding or filename");
         targetWikiPath(p.path, project);
-        if (immutableWikiProposalHash(p) !== p.proposalHash) throw new Error("Wiki proposal content changed");
+        if (immutableWikiProposalHash(p) !== p.proposalHash)
+          throw new Error("Wiki proposal content changed");
         items.push({
           id: p.id,
           path: p.path,
           title: p.title,
           proposalHash: p.proposalHash,
           status: p.status,
-          expiresAt: p.createdAt + MAX_AGE,
-          expired: Date.now() > p.createdAt + MAX_AGE,
+          expiresAt: p.createdAt + WIKI_PROPOSAL_MAX_AGE,
+          expired: Date.now() > p.createdAt + WIKI_PROPOSAL_MAX_AGE,
           bindingChanged: p.bindingRevision !== service.binding.revision
         });
       } catch (error) {
@@ -2658,16 +2816,12 @@ function createWikiReviewReader(storage, currentNote) {
   }
   return { loadProposal, previewWikiProposal: previewWikiProposal2, listWikiProposals: listWikiProposals2 };
 }
-var MAX_PENDING, MAX_AGE, digest4;
 var init_wiki_review_reader = __esm({
   "src/core/wiki-review-reader.ts"() {
     "use strict";
     init_files();
     init_wiki_policy();
     init_wiki_policy();
-    MAX_PENDING = 100;
-    MAX_AGE = 24 * 60 * 60 * 1e3;
-    digest4 = (text5) => createHash11("sha256").update(text5).digest("hex");
   }
 });
 
@@ -2683,157 +2837,42 @@ __export(wiki_review_exports, {
   renameWithRetry: () => renameWithRetry2,
   stageWikiProposal: () => stageWikiProposal,
   undoWikiUpdate: () => undoWikiUpdate,
-  validateWikiSourcePaths: () => validateWikiSourcePaths,
+  validateWikiSourcePaths: () => validateWikiSourcePaths2,
   wikiHistory: () => wikiHistory
 });
-import { createHash as createHash12, randomUUID as randomUUID12 } from "node:crypto";
 function createKnowledgeWikiReview(runtime, config, reviewPolicy, ui, io) {
   const { runRuntimeExclusive: runRuntimeExclusive2 } = runtime;
   const { withKnowledgeBinding: withKnowledgeBinding2 } = config;
   const { readReviewMode: readReviewMode2 } = reviewPolicy;
   const { invalidateKnowledgeUi: invalidateKnowledgeUi2 } = ui;
   const AUTOMATIC_AUTHORITY = Symbol("host-automatic-wiki");
-  const START2 = "<!-- pi-agent:managed:start -->", END2 = "<!-- pi-agent:managed:end -->";
-  const digest6 = (text5) => createHash12("sha256").update(text5).digest("hex");
-  const MAX_PENDING2 = 100, MAX_AGE2 = 24 * 60 * 60 * 1e3;
   async function exclusive(key, operation) {
     return runRuntimeExclusive2("wiki-review", key, operation);
   }
   function rootFor(service) {
     return `${service.binding.vaultId}/wiki-review`;
   }
-  function checkId(id2) {
-    if (typeof id2 !== "string" || !/^[0-9a-f-]{36}$/.test(id2)) throw new Error("Invalid Wiki proposal id");
-    return id2;
-  }
-  function immutableHash(p) {
-    return digest6(
-      JSON.stringify({
-        id: p.id,
-        vaultId: p.vaultId,
-        bindingRevision: p.bindingRevision,
-        project: p.project,
-        path: p.path,
-        title: p.title,
-        rationale: p.rationale,
-        createdAt: p.createdAt,
-        before: p.before,
-        after: p.after,
-        sources: p.sources
-      })
-    );
-  }
   async function atomicJson(path2, value) {
     const current = await io.state.read(path2);
     await io.state.write(path2, value, current?.version ?? null);
   }
   const currentNote = (service, path2) => io.files.read(service.binding, path2);
-  function normalizeCandidate(markdown) {
-    return stripManagedHeader(markdown);
-  }
-  function proposedText(original, title, body) {
-    const block = `${START2}
-${body.trim()}
-${END2}`;
-    if (original === null)
-      return `---
-type: wiki
-status: unverified
----
-
-# ${title}
-
-${block}
-
-## Human review
-
-`;
-    const { start, end } = managedParts(original);
-    return start < 0 ? `${original}${original.endsWith("\n") ? "\n" : "\n\n"}${block}
-` : original.slice(0, start) + block + original.slice(end + END2.length);
-  }
   const reader = createWikiReviewReader(
     { read: async (path2) => (await io.state.read(path2))?.value, list: (path2) => io.state.list(path2) },
     currentNote
   );
   const loadProposal = reader.loadProposal;
-  function validateWikiSourcePaths3(paths) {
-    if (!Array.isArray(paths) || !paths.length || paths.length > 12)
-      throw Object.assign(
-        new Error("source_paths: supply 1\u201312 Vault-relative Markdown notes already read this turn"),
-        { code: "source-note-required", field: "source_paths" }
-      );
-    for (let index = 0; index < paths.length; index++) {
-      try {
-        validateNote(paths[index]);
-      } catch {
-        throw Object.assign(
-          new Error(
-            `source_paths[${index}]: expected a Vault-relative Markdown source note (for example Library/Papers/source.md), not a workspace PDF or URL. Read the corresponding source note first; changing the Wiki target path cannot fix this field.`
-          ),
-          {
-            code: "source-note-required",
-            field: `source_paths[${index}]`,
-            retryable: false
-          }
-        );
-      }
-    }
-  }
   async function stageWikiProposal2(service, ticket, cwd, input) {
-    validateWikiSourcePaths3(input.source_paths);
+    validateWikiSourcePaths(input.source_paths);
     return withKnowledgeBinding2(service.binding, async () => {
       if (service.binding.depositMode === "run-only")
         throw new Error("Wiki proposals are disabled by run-only mode");
       const { project, sources } = await service.evidenceReceipts(ticket, cwd, input.source_paths);
       const path2 = targetWikiPath(input.path, project);
-      if (sources.some((source) => source.path === path2 || /[[\]#|\r\n]/.test(source.path)))
-        throw new Error("A Wiki cannot cite itself or an ambiguous link path");
-      if (sources.every(
-        (source) => /(?:^|\/)Wiki\//.test(source.path) || /(?:^|\/)(?:Home|Index|Context)\.md$/.test(source.path)
-      ))
-        throw new Error("Read at least one underlying evidence/source note, not only Wiki or navigation");
-      const { title, markdown, rationale } = input;
-      if (typeof title !== "string" || !title.trim() || title.length > 200 || /[\r\n]/.test(title))
-        throw new Error("A single-line Wiki title is required");
-      if (typeof markdown !== "string" || !markdown.trim() || markdown.length > 24e3 || markdown.includes("<!-- pi-agent:managed:"))
-        throw new Error("Wiki candidate must contain 1\u201324000 characters and no managed markers");
-      if (typeof rationale !== "string" || !rationale.trim() || rationale.length > 1e3)
-        throw new Error("A concise change rationale is required");
+      const draft = readWikiDraft(input, sources, path2);
       const original = await currentNote(service, path2);
       if (original) await service.evidenceReceipts(ticket, cwd, [path2]);
-      if (original && original.bytes > 64 * 1024)
-        throw new Error("Existing Wiki exceeds the bounded review size; split it before editing");
-      if (original && managedParts(original.text).body.length > 24e3)
-        throw new Error("Existing generated block exceeds the review size");
-      const refs = sources.map(
-        (source) => `- [[${source.path.slice(0, -3)}]] \xB7 lines ${source.startLine}\u2013${source.endLine} \xB7 sha256 ${source.hash}`
-      ).join("\n");
-      const after = proposedText(
-        original?.text ?? null,
-        title.trim(),
-        `${normalizeCandidate(markdown)}
-
-## Sources
-${refs}`
-      );
-      const proposal = {
-        id: randomUUID12(),
-        status: "pending",
-        vaultId: service.binding.vaultId,
-        bindingRevision: service.binding.revision,
-        project,
-        path: path2,
-        title: title.trim(),
-        rationale: rationale.trim(),
-        createdAt: Date.now(),
-        sources,
-        before: original?.text ?? null,
-        beforeHash: original?.hash ?? null,
-        after,
-        afterHash: digest6(after)
-      };
-      proposal.proposalHash = immutableHash(proposal);
+      const proposal = buildWikiDraft(service.binding, project, path2, draft, original, sources);
       if (Buffer.byteLength(JSON.stringify(proposal, null, 2)) + 1 > 256 * 1024)
         throw new Error("Wiki proposal exceeds the bounded review storage size");
       const root = rootFor(service);
@@ -2846,7 +2885,7 @@ ${refs}`
           if (error.code !== "ENOENT") throw error;
           names = [];
         }
-        if (names.filter((name) => name.endsWith(".json")).length >= MAX_PENDING2)
+        if (names.filter((name) => name.endsWith(".json")).length >= MAX_PENDING_WIKI_PROPOSALS)
           throw new Error("Pending Wiki review limit reached; review existing candidates first");
         await atomicJson(`${directory}/${proposal.id}.json`, proposal);
       });
@@ -2865,7 +2904,7 @@ ${refs}`
     });
   }
   async function mergeWikiProposal2(service, ticket, cwd, id2, { markdown, rationale, source_paths } = {}) {
-    checkId(id2);
+    checkWikiProposalId(id2);
     return exclusive(
       `${rootFor(service)}:${id2}`,
       () => withKnowledgeBinding2(service.binding, async () => {
@@ -2873,7 +2912,7 @@ ${refs}`
         const p = await loadProposal(service, id2, project);
         if (p.status !== "pending")
           throw new Error("Only a pending Wiki candidate can accumulate another research round");
-        if (Date.now() > p.createdAt + MAX_AGE2)
+        if (Date.now() > p.createdAt + WIKI_PROPOSAL_MAX_AGE)
           throw new Error(
             "Pending Wiki candidate expired; review or replace it before accumulating more rounds"
           );
@@ -2881,42 +2920,7 @@ ${refs}`
         if ((target?.hash ?? null) !== p.beforeHash)
           throw new Error("Wiki changed since the pending candidate was created");
         await verifySources(service, p);
-        const byPath = new Map(p.sources.map((source) => [source.path, source]));
-        for (const source of newSources) byPath.set(source.path, source);
-        const sources = [...byPath.values()];
-        if (sources.length > 12)
-          throw new Error(
-            "Pending topic reached the 12-source review budget; review it before adding another round"
-          );
-        if (typeof markdown !== "string" || !markdown.trim() || markdown.length > 12e3 || markdown.includes("<!-- pi-agent:managed:"))
-          throw new Error("Incremental topic summary must contain 1\u201312000 characters and no managed markers");
-        if (typeof rationale !== "string" || !rationale.trim() || rationale.length > 1e3)
-          throw new Error("A concise merge rationale is required");
-        const prior = managedParts(p.after).body.replace(/\n\n## Sources\n[\s\S]*$/, "").trim();
-        const update = `## Research update \xB7 ${(/* @__PURE__ */ new Date()).toISOString()}
-
-${normalizeCandidate(markdown)}`;
-        const merged = [prior, update].filter(Boolean).join("\n\n");
-        if (merged.length > 22e3)
-          throw new Error("Pending topic synthesis is too large; review it before adding another round");
-        const refs = sources.map(
-          (source) => `- [[${source.path.slice(0, -3)}]] \xB7 lines ${source.startLine}\u2013${source.endLine} \xB7 sha256 ${source.hash}`
-        ).join("\n");
-        const after = proposedText(p.before, p.title, `${merged}
-
-## Sources
-${refs}`);
-        const updated = {
-          ...p,
-          createdAt: Date.now(),
-          rationale: `${p.rationale}
-
-Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
-          sources,
-          after,
-          afterHash: digest6(after)
-        };
-        updated.proposalHash = immutableHash(updated);
+        const updated = mergeWikiDraft(p, newSources, markdown, rationale);
         if (Buffer.byteLength(JSON.stringify(updated, null, 2)) + 1 > 256 * 1024)
           throw new Error("Merged Wiki proposal exceeds the bounded review storage size");
         await exclusive(
@@ -2930,7 +2934,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
           path: p.path,
           project,
           proposalHash: updated.proposalHash,
-          sources,
+          sources: updated.sources,
           merged: true,
           roundAdded: true,
           vaultWritten: false,
@@ -2972,7 +2976,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
     invalidateKnowledgeUi2();
   }
   async function decideWikiProposal2(service, id2, project, expectedHash, decision, review2 = { actor: "human" }) {
-    checkId(id2);
+    checkWikiProposalId(id2);
     if (!["human", "model", "automatic"].includes(review2.actor) || review2.actor === "automatic" && review2.authority !== AUTOMATIC_AUTHORITY || review2.actor === "model" && (!review2.auditId || review2.verdict !== "approve" || typeof review2.checkCurrent !== "function"))
       throw new Error("Invalid model-review authority");
     return exclusive(
@@ -2990,7 +2994,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
         if (decision !== "apply") throw new Error("Unknown review decision");
         if (service.binding.depositMode === "run-only")
           throw new Error("Wiki writes are disabled by run-only mode");
-        if (Date.now() - p.createdAt > MAX_AGE2)
+        if (Date.now() - p.createdAt > WIKI_PROPOSAL_MAX_AGE)
           throw new Error("Wiki proposal expired; regenerate it from current evidence");
         return exclusive(`${service.binding.vault}:wiki:${p.path}`, async () => {
           const current = await currentNote(service, p.path);
@@ -3089,7 +3093,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
     return (await wikiHistory2(service, project)).some((p) => p.path === path2 && p.afterHash === hash4);
   }
   async function undoWikiUpdate2(service, project, id2, expectedHash) {
-    checkId(id2);
+    checkWikiProposalId(id2);
     return exclusive(
       `${rootFor(service)}:${id2}`,
       () => withKnowledgeBinding2(service.binding, async () => {
@@ -3112,7 +3116,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
     );
   }
   return {
-    validateWikiSourcePaths: validateWikiSourcePaths3,
+    validateWikiSourcePaths,
     stageWikiProposal: stageWikiProposal2,
     mergeWikiProposal: mergeWikiProposal2,
     previewWikiProposal: previewWikiProposal2,
@@ -3124,7 +3128,7 @@ Accumulated research round: ${rationale.trim()}`.slice(0, 1e3),
     renameWithRetry
   };
 }
-var compatibility2, validateWikiSourcePaths, stageWikiProposal, mergeWikiProposal, previewWikiProposal, listWikiProposals, decideWikiProposal, autoApplyWikiProposal, wikiHistory, undoWikiUpdate, renameWithRetry2;
+var compatibility2, validateWikiSourcePaths2, stageWikiProposal, mergeWikiProposal, previewWikiProposal, listWikiProposals, decideWikiProposal, autoApplyWikiProposal, wikiHistory, undoWikiUpdate, renameWithRetry2;
 var init_wiki_review = __esm({
   "src/core/wiki-review.ts"() {
     "use strict";
@@ -3134,6 +3138,7 @@ var init_wiki_review = __esm({
     init_runtime_host();
     init_ui_state();
     init_wiki_policy();
+    init_wiki_review_draft();
     init_wiki_review_node();
     init_wiki_review_reader();
     compatibility2 = createKnowledgeWikiReview(
@@ -3144,7 +3149,7 @@ var init_wiki_review = __esm({
       createLocalWikiReviewPorts(config_exports)
     );
     ({
-      validateWikiSourcePaths,
+      validateWikiSourcePaths: validateWikiSourcePaths2,
       stageWikiProposal,
       mergeWikiProposal,
       previewWikiProposal,
@@ -10830,7 +10835,7 @@ function bindingOperation(read) {
 }
 
 // src/desktop/cloud.ts
-import { createHash as createHash13 } from "node:crypto";
+import { createHash as createHash11 } from "node:crypto";
 
 // src/desktop/cloud-dav.ts
 var import_xmldom = __toESM(require_lib(), 1);
@@ -11032,7 +11037,7 @@ var CloudService = class {
     return {
       path: path2,
       text: decodeNote(response.body),
-      hash: createHash13("sha256").update(response.body).digest("hex"),
+      hash: createHash11("sha256").update(response.body).digest("hex"),
       version: strongEtag(response.headers.etag),
       bytes: response.body.byteLength,
       lastModified: response.headers["last-modified"] ?? null
@@ -11057,7 +11062,7 @@ var CloudService = class {
       path: input.path,
       status: "unknown",
       version: null,
-      hash: createHash13("sha256").update(input.text).digest("hex"),
+      hash: createHash11("sha256").update(input.text).digest("hex"),
       reason: null
     };
     let putStarted = false;
@@ -12547,7 +12552,7 @@ import { Worker } from "node:worker_threads";
 init_files();
 
 // src/core/ingest-identity.ts
-import { createHash as createHash14 } from "node:crypto";
+import { createHash as createHash12 } from "node:crypto";
 
 // src/core/ingest-frontmatter.ts
 var KNOWLEDGE_TYPES = [
@@ -12595,17 +12600,17 @@ var DAILY_DISCOVERY_SYSTEM = [
 ].join("\n");
 
 // src/core/deliverable-review.ts
-import { createHash as createHash15 } from "node:crypto";
+import { createHash as createHash13 } from "node:crypto";
 
 // src/core/delivery-claims.ts
-import { createHash as createHash16 } from "node:crypto";
-var digest5 = (text5) => createHash16("sha256").update(text5).digest("hex");
+import { createHash as createHash14 } from "node:crypto";
+var digest4 = (text5) => createHash14("sha256").update(text5).digest("hex");
 function summaryDeliveryClaims(details, markdown) {
   const receipt = details.delivery_receipt;
-  if (!receipt || receipt.version !== 1 || receipt.semanticAssessment?.status !== "model-assessed" || receipt.bodySha256 !== digest5(`${markdown.trim()}
+  if (!receipt || receipt.version !== 1 || receipt.semanticAssessment?.status !== "model-assessed" || receipt.bodySha256 !== digest4(`${markdown.trim()}
 `))
     throw new Error("Topic memory requires a current, reviewed summary delivery receipt");
-  if (!Array.isArray(details.claims) || receipt.memoryClaimsSha256 !== digest5(JSON.stringify(details.claims)))
+  if (!Array.isArray(details.claims) || receipt.memoryClaimsSha256 !== digest4(JSON.stringify(details.claims)))
     throw new Error("Topic memory claims differ from the reviewed delivery packet");
   const reviewed = receipt.semanticAssessment.memoryClaims;
   if (!Array.isArray(reviewed) || reviewed.length !== details.claims.length)
@@ -12617,7 +12622,7 @@ function summaryDeliveryClaims(details, markdown) {
     ))
       throw new Error("Topic memory claim does not reference the delivered evidence version");
     const assessment = reviewed.find((item) => item.bindingId === claim.bindingId);
-    if (!assessment || seen.has(claim.bindingId) || assessment.assessment !== "supported" || assessment.memoryClaimSha256 !== digest5(JSON.stringify(claim)))
+    if (!assessment || seen.has(claim.bindingId) || assessment.assessment !== "supported" || assessment.memoryClaimSha256 !== digest4(JSON.stringify(claim)))
       throw new Error("Topic memory claim lacks its exact supported scope assessment");
     seen.add(claim.bindingId);
     if (!Array.isArray(assessment.evidence) || !assessment.evidence.some(
@@ -12633,7 +12638,7 @@ function summaryDeliveryClaims(details, markdown) {
 // src/core/experience-store.ts
 init_config();
 init_runtime_host();
-import { createHash as createHash17, randomUUID as randomUUID14 } from "node:crypto";
+import { createHash as createHash15, randomUUID as randomUUID14 } from "node:crypto";
 import { lstat as lstat8, mkdir as mkdir9, readFile as readFile9, rename as rename8, unlink as unlink7, writeFile as writeFile9 } from "node:fs/promises";
 import { isAbsolute as isAbsolute6, join as join13, relative as relative7, resolve as resolve6, sep as sep7 } from "node:path";
 var EXPERIENCE_VERSION = 1;
@@ -12660,7 +12665,7 @@ var EXPERIENCE_LIMITS = Object.freeze({
   maxSchedulerJobIdChars: 180,
   maxQueryChars: 200
 });
-var HASH = (value) => createHash17("sha256").update(value).digest("hex");
+var HASH = (value) => createHash15("sha256").update(value).digest("hex");
 var now = () => (/* @__PURE__ */ new Date()).toISOString();
 function text3(value, limit) {
   if (typeof value !== "string" && typeof value !== "number") return "";
@@ -13382,7 +13387,7 @@ init_wiki_review();
 init_wiki_review_node();
 
 // src/core/writer-lease.ts
-import { createHash as createHash18, randomUUID as randomUUID15 } from "node:crypto";
+import { createHash as createHash16, randomUUID as randomUUID15 } from "node:crypto";
 import {
   closeSync,
   fstatSync,
@@ -13403,12 +13408,12 @@ init_layout();
 // src/core/maintenance.ts
 init_files();
 init_layout();
-import { createHash as createHash19, randomUUID as randomUUID16 } from "node:crypto";
+import { createHash as createHash17, randomUUID as randomUUID16 } from "node:crypto";
 import { mkdir as mkdir10, rename as rename9, writeFile as writeFile10 } from "node:fs/promises";
 import { dirname as dirname8 } from "node:path";
 var START = "<!-- pi-agent:managed:start -->";
 var END = "<!-- pi-agent:managed:end -->";
-var hash3 = (text5) => createHash19("sha256").update(text5).digest("hex");
+var hash3 = (text5) => createHash17("sha256").update(text5).digest("hex");
 async function updateNavigation(vault, path2, heading, body) {
   if (!["Home.md", "Wiki/Index.md", "Library/Index.md"].includes(path2) && !/^Projects\/[a-z0-9-]+\/Index\.md$/.test(path2))
     throw new Error("Not an allowed navigation target");
@@ -13760,7 +13765,7 @@ __export(publication_exports, {
   registerAnswerPublication: () => registerAnswerPublication
 });
 init_config();
-import { createHash as createHash20, randomUUID as randomUUID17 } from "node:crypto";
+import { createHash as createHash18, randomUUID as randomUUID17 } from "node:crypto";
 
 // src/core/publication-policy.ts
 var publicationNotices = {
@@ -13870,7 +13875,7 @@ function createPublicationApi(ui, reviewPolicy, ports, createState, signal = nul
     })
   );
   const FIELD = "knowledgePublication";
-  const hash4 = (content) => createHash20("sha256").update(JSON.stringify(content ?? [])).digest("hex");
+  const hash4 = (content) => createHash18("sha256").update(JSON.stringify(content ?? [])).digest("hex");
   const protocolKey = (message) => hash4({
     timestamp: message.timestamp,
     api: message.api,
@@ -14761,7 +14766,7 @@ init_topic_memory();
 
 // src/core/ui-service.ts
 init_config();
-import { createHash as createHash21, randomUUID as randomUUID18 } from "node:crypto";
+import { createHash as createHash19, randomUUID as randomUUID18 } from "node:crypto";
 import { lstat as lstat10, mkdir as mkdir11, readFile as readFile11, realpath as realpath8, stat as stat3, writeFile as writeFile11 } from "node:fs/promises";
 import { dirname as dirname9, isAbsolute as isAbsolute9, join as join16, relative as relative10, resolve as resolve11 } from "node:path";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
