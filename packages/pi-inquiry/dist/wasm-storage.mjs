@@ -1,6 +1,80 @@
 // src/wasm-storage.ts
 import initSqlJs from "./sql-wasm.cjs";
 
+// src/sqlite-fact-projection.ts
+var CURSOR_TABLE = "inquiry_fact_cursor";
+var CURSOR_SCHEMA = `
+	CREATE TABLE IF NOT EXISTS ${CURSOR_TABLE} (
+		key TEXT PRIMARY KEY NOT NULL,
+		project_id TEXT NOT NULL,
+		fact_id TEXT NOT NULL,
+		sequence INTEGER NOT NULL CHECK (sequence >= 1),
+		sha256 TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	);`;
+var SqliteFactProjection = class {
+  constructor(port) {
+    this.port = port;
+  }
+  async cursor(key) {
+    if (!this.hasCursorTable()) return void 0;
+    const row = this.port.database.prepare(`SELECT key, fact_id, sequence, sha256, updated_at FROM ${CURSOR_TABLE} WHERE key = ?`).get(key);
+    if (!row) return void 0;
+    return {
+      key: row.key,
+      factId: row.fact_id,
+      sequence: row.sequence,
+      sha256: row.sha256,
+      updatedAt: row.updated_at
+    };
+  }
+  async commit(input) {
+    return this.port.database.serialize(async () => {
+      this.port.database.exec("BEGIN IMMEDIATE");
+      try {
+        this.port.database.exec(CURSOR_SCHEMA);
+        const current = this.port.snapshotSync();
+        const updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+        for (const attempt of input.attempts ?? []) {
+          this.port.validate("attempts", attempt, current);
+          this.writeRow("attempts", attempt.id, attempt, updatedAt);
+        }
+        for (const decision of input.decisions ?? []) {
+          this.port.validate("decisions", decision, current);
+          this.writeRow("decisions", decision.id, decision, updatedAt);
+        }
+        if (input.cursor) {
+          this.writeCursor(input.cursor, updatedAt);
+          this.port.database.prepare("UPDATE inquiry_meta SET revision = revision + 1, updated_at = ? WHERE project_id = ?").run(updatedAt, this.port.projectId);
+        }
+        this.port.database.exec("COMMIT");
+      } catch (error) {
+        try {
+          this.port.database.exec("ROLLBACK");
+        } catch (rollbackError) {
+          throw new AggregateError([error, rollbackError], "Inquiry projection write and rollback failed");
+        }
+        throw error;
+      }
+    });
+  }
+  /** True once the projection wrote a marker in this database. */
+  hasCursorTable() {
+    const rows = this.port.database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").all(CURSOR_TABLE);
+    return rows.length > 0;
+  }
+  writeRow(key, id, record, updatedAt) {
+    this.port.database.prepare(
+      `INSERT INTO ${key} (id, project_id, payload, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, payload = excluded.payload, updated_at = excluded.updated_at`
+    ).run(id, this.port.projectId, JSON.stringify(record), updatedAt);
+  }
+  writeCursor(cursor, updatedAt) {
+    this.port.database.prepare(
+      `INSERT INTO ${CURSOR_TABLE} (key, project_id, fact_id, sequence, sha256, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET project_id = excluded.project_id, fact_id = excluded.fact_id, sequence = excluded.sequence, sha256 = excluded.sha256, updated_at = excluded.updated_at`
+    ).run(cursor.key, this.port.projectId, cursor.factId, cursor.sequence, cursor.sha256, updatedAt);
+  }
+};
+
 // src/lineage.ts
 var SHA256 = /^[a-f0-9]{64}$/i;
 function isSafeArtifactPath(path) {
@@ -379,6 +453,20 @@ var WasmInquiryStorage = class extends CanonicalSqliteInquiryStorage {
   }
   async close() {
     await this.connection.serialize(() => super.close());
+  }
+  /**
+   * The canonical owner owns its fact projection.
+   *
+   * The projection writes the projected rows and the consumed-fact cursor in
+   * one transaction of this database, so the two can never disagree.
+   */
+  factProjection() {
+    return new SqliteFactProjection({
+      projectId: this.projectId,
+      database: this.connection,
+      snapshotSync: () => this.snapshotSync(),
+      validate: (key, record, current) => this.validateRecord(key, record, current)
+    });
   }
 };
 async function createInquiryWasmEngine(wasmBinary) {
