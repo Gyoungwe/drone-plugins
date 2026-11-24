@@ -1,7 +1,6 @@
 {
 	"a11y/useButtonType\tpackages/pi-discovery/ui/index.tsx": 3,
 	"a11y/useButtonType\tpackages/pi-discovery/ui/KernelPanel.tsx": 5,
-	"complexity/noExcessiveLinesPerFunction\tpackages/pi-analysis/src/analysis-contract.ts": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-analysis/src/bulk-comparator.ts": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-analysis/src/bulk-results.ts": 2,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-analysis/src/bulk-rnaseq.ts": 1,
