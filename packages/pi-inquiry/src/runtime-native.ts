@@ -1,4 +1,4 @@
-import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
+import type { PluginNativeFactOwner, PluginNativeSession } from "@gyoungwe/plugin-api/native";
 import type { PluginRuntimeFactoryContext } from "@gyoungwe/plugin-api/runtime";
 import { Type } from "typebox";
 import {
@@ -14,11 +14,13 @@ export function createInquiryNativeSessionFactory(
 	context: PluginRuntimeFactoryContext,
 	read: (input: ReadInput) => Promise<unknown>,
 	write: (input: WriteInput, signal: AbortSignal) => Promise<unknown>,
+	factOwner: PluginNativeFactOwner,
 ): () => PluginNativeSession {
 	const createNativeSession = (): PluginNativeSession => {
 		let disposed = false;
 		return {
 			toolEffects: { inquiry_read: "read", inquiry_write: "write" },
+			factOwner,
 			extension(pi) {
 				pi.registerTool({
 					name: "inquiry_read",

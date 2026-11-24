@@ -21,7 +21,38 @@ export interface AttemptLedger extends LedgerCollection<AttemptRecord> {}
 export interface DecisionLedger extends LedgerCollection<DecisionRecord> {}
 export interface ArtifactRerunLedger extends LedgerCollection<ArtifactRerunRecord> {}
 
-/** Host-facing storage boundary. A backend may implement this with SQLite. */
+/**
+ * Durable marker of the consumed host-fact prefix.
+ *
+ * The marker belongs to the canonical owner's own projection store and is
+ * written in the same transaction as the projected rows, so the projection and
+ * the cursor can never disagree.
+ */
+export interface FactCursorRecord {
+	readonly key: string;
+	readonly factId: string;
+	readonly sequence: number;
+	readonly sha256: string;
+	readonly updatedAt: string;
+}
+
+/** Transactional projection store of one canonical owner. */
+export interface FactProjectionStore {
+	/** The committed cursor marker of one scope, if any. */
+	cursor(key: string): Promise<FactCursorRecord | undefined>;
+	/**
+	 * Apply the projected rows and the cursor marker atomically.
+	 *
+	 * A rejected mutation leaves both the rows and the marker unchanged.
+	 */
+	commit(input: {
+		readonly cursor?: FactCursorRecord;
+		readonly attempts?: readonly AttemptRecord[];
+		readonly decisions?: readonly DecisionRecord[];
+	}): Promise<void>;
+}
+
+/** Host-facing storage boundary. A backend may implement it with SQLite. */
 export interface InquiryStorage {
 	readonly projectId: string;
 	readonly artifacts: ArtifactLedger;
@@ -32,6 +63,13 @@ export interface InquiryStorage {
 	readonly reruns: ArtifactRerunLedger;
 	snapshot(): Promise<InquirySnapshot>;
 	close?(): Promise<void>;
+	/**
+	 * Commit projected rows and the consumed-fact cursor in one transaction.
+	 *
+	 * A store without this capability cannot own a fact projection; the host
+	 * contract requires the projection and the cursor to advance together.
+	 */
+	factProjection?(): FactProjectionStore;
 }
 
 /** Minimal shape accepted by the package so it does not import backend types. */
@@ -80,8 +118,8 @@ export function registerInquiryStorage(
 
 export type PersistedLedgerRecord =
 	| ArtifactRecord
-	| FindingRecord
-	| QuestionRecord
+	| ArtifactRerunRecord
 	| AttemptRecord
 	| DecisionRecord
-	| ArtifactRerunRecord;
+	| FindingRecord
+	| QuestionRecord;
