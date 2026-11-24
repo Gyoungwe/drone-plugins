@@ -2,6 +2,12 @@ import { createHash } from "node:crypto";
 
 export const MANAGED_START = "<!-- pi-agent:managed:start -->";
 export const MANAGED_END = "<!-- pi-agent:managed:end -->";
+export const MAX_PENDING_WIKI_PROPOSALS = 100;
+export const WIKI_PROPOSAL_MAX_AGE = 24 * 60 * 60 * 1000;
+
+export function checkWikiProposalId(id: unknown): void {
+	if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id)) throw new Error("Invalid Wiki proposal id");
+}
 
 export interface WikiProposalShape {
 	id: unknown;
@@ -37,7 +43,7 @@ export function validateSpecialistHtml(html: unknown): string {
 	return html;
 }
 
-export function validateWikiSourcePaths(paths: unknown): asserts paths is string[] {
+export function checkSources(paths: unknown, accepts: (paths: unknown[], index: number) => boolean): void {
 	if (!Array.isArray(paths) || !paths.length || paths.length > 12)
 		throw Object.assign(
 			new Error("source_paths: supply 1–12 Vault-relative Markdown notes already read this turn"),
@@ -47,16 +53,7 @@ export function validateWikiSourcePaths(paths: unknown): asserts paths is string
 			},
 		);
 	for (let index = 0; index < paths.length; index++) {
-		const path = paths[index];
-		if (
-			typeof path !== "string" ||
-			path.includes("\\") ||
-			path.startsWith("/") ||
-			!path.endsWith(".md") ||
-			path
-				.split("/")
-				.some((segment) => !segment || segment === "." || segment === ".." || segment.startsWith("."))
-		) {
+		if (!accepts(paths, index)) {
 			throw Object.assign(
 				new Error(
 					`source_paths[${index}]: expected a Vault-relative Markdown source note (for example Library/Papers/source.md), not a workspace PDF or URL. Read the corresponding source note first; changing the Wiki target path cannot fix this field.`,
@@ -65,6 +62,19 @@ export function validateWikiSourcePaths(paths: unknown): asserts paths is string
 			);
 		}
 	}
+}
+
+export function validateWikiSourcePaths(paths: unknown): asserts paths is string[] {
+	checkSources(paths, (entries, index) => {
+		const path = entries[index];
+		return (
+			typeof path === "string" &&
+			!path.includes("\\") &&
+			!path.startsWith("/") &&
+			path.endsWith(".md") &&
+			!path.split("/").some((segment) => !segment || segment.startsWith("."))
+		);
+	});
 }
 
 export function targetWikiPath(path: unknown, project: string): string {
@@ -89,24 +99,25 @@ export function targetWikiPath(path: unknown, project: string): string {
 }
 
 export function immutableWikiProposalHash(proposal: WikiProposalShape): string {
-	return createHash("sha256")
-		.update(
-			JSON.stringify({
-				id: proposal.id,
-				vaultId: proposal.vaultId,
-				bindingRevision: proposal.bindingRevision,
-				project: proposal.project,
-				path: proposal.path,
-				title: proposal.title,
-				rationale: proposal.rationale,
-				createdAt: proposal.createdAt,
-				before: proposal.before,
-				after: proposal.after,
-				sources: proposal.sources,
-			}),
-		)
-		.digest("hex");
+	return wikiContentHash(
+		JSON.stringify({
+			id: proposal.id,
+			vaultId: proposal.vaultId,
+			bindingRevision: proposal.bindingRevision,
+			project: proposal.project,
+			path: proposal.path,
+			title: proposal.title,
+			rationale: proposal.rationale,
+			createdAt: proposal.createdAt,
+			before: proposal.before,
+			after: proposal.after,
+			sources: proposal.sources,
+		}),
+	);
 }
+
+export const wikiContentHash = (text: string | Buffer): string =>
+	createHash("sha256").update(text).digest("hex");
 
 export function managedParts(text: string): ManagedParts {
 	const start = text.indexOf(MANAGED_START);
@@ -144,7 +155,11 @@ export function stripManagedHeader(body: string, pageTitle?: string): string {
 }
 
 export function proposedWikiText(original: string | null, title: string, body: string): string {
-	const block = `${MANAGED_START}\n${stripManagedHeader(body, title)}\n${MANAGED_END}`;
+	return withManagedWikiBlock(original, title, stripManagedHeader(body, title));
+}
+
+export function withManagedWikiBlock(original: string | null, title: string, body: string): string {
+	const block = `${MANAGED_START}\n${body}\n${MANAGED_END}`;
 	if (original === null)
 		return `---\ntype: wiki\nstatus: unverified\n---\n\n# ${title}\n\n${block}\n\n## Human review\n\n`;
 	const { start, end } = managedParts(original);
