@@ -14,7 +14,7 @@ The method's numerical comparator is frozen with the scientific plan before exec
 
 Assembly BUSCO evidence records tool/lineage versions, exact complete/single/duplicated/fragmented/missing counts and their one-decimal percentages. Complete includes duplicated: `C=S+D`, while `C+F+M=total`. Missing identity, inconsistent counts or percentages fail the QC gate.
 
-The published extension is a self-contained `dist/index.mjs` bundle. The package also ships `dist/host.mjs`, a versioned `AnalysisHostPort` registry/loader for Desktop composition roots. It uses the host-neutral `@gyoungwe/plugin-api` seam at type level and carries the analysis contract implementation in both bundles; the Pi coding-agent API remains a peer dependency supplied by the host.
+The published extension is a self-contained `dist/index.mjs` bundle. The package also ships `dist/host.mjs`, a versioned `AnalysisHostPort` registry/loader for Desktop composition roots. The package re-exports its shared analysis contract from the published `@gyoungwe/plugin-api` 1.2.0 ABI, bundles the runtime code it uses, and keeps adapter-specific contracts local. The Pi coding-agent API remains a peer dependency supplied by the host.
 
 ```sh
 npm install @gyoungwe/pi-analysis @earendil-works/pi-coding-agent
