@@ -1,10 +1,12 @@
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import type { InquirySqliteConnection, InquirySqliteStatement } from "./sqlite-connection.js";
+import { SqliteFactProjection } from "./sqlite-fact-projection.js";
 import {
 	CanonicalSqliteInquiryStorage,
 	configureInquirySqlite,
 	readInquirySqliteMetadata,
 } from "./sqlite-storage.js";
+import type { FactProjectionStore } from "./storage-contract.js";
 
 class WasmConnection implements InquirySqliteConnection {
 	private pending = Promise.resolve();
@@ -73,6 +75,21 @@ export class WasmInquiryStorage extends CanonicalSqliteInquiryStorage {
 	}
 	override async close(): Promise<void> {
 		await this.connection.serialize(() => super.close());
+	}
+
+	/**
+	 * The canonical owner owns its fact projection.
+	 *
+	 * The projection writes the projected rows and the consumed-fact cursor in
+	 * one transaction of this database, so the two can never disagree.
+	 */
+	factProjection(): FactProjectionStore {
+		return new SqliteFactProjection({
+			projectId: this.projectId,
+			database: this.connection,
+			snapshotSync: () => this.snapshotSync(),
+			validate: (key, record, current) => this.validateRecord(key, record, current),
+		});
 	}
 }
 

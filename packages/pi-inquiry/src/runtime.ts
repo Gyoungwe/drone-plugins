@@ -14,6 +14,8 @@ import {
 	type InquiryLocalExecutionEvent,
 	type InquiryTaskTerminalEvent,
 } from "./event-projection.js";
+import { InquiryFactOwner } from "./fact-owner.js";
+import { createInquiryFactOwnerPorts } from "./fact-owner-ports.js";
 import {
 	type InquiryBindingState,
 	InquiryLedgerOwner,
@@ -143,6 +145,19 @@ export async function createInquiryRuntimeWithEngine(
 		}
 		return current.owner;
 	};
+	/** The ledger owner of an already-bound scope, or nothing when Inquiry is unbound there. */
+	const optionalOwner = async (
+		scope: Exclude<PluginRuntimeScope, { kind: "application" }>,
+		available: readonly PluginRuntimeRootDescription[],
+	) => {
+		if (!(await lookup(scope, available))) return undefined;
+		return owned(scope, available);
+	};
+	const factOwnerPorts = createInquiryFactOwnerPorts({
+		caller,
+		roots,
+		owned: optionalOwner,
+	});
 	const read = async (input: ReadInput) => {
 		const scope = await caller();
 		const available = await roots();
@@ -330,7 +345,12 @@ export async function createInquiryRuntimeWithEngine(
 			return { value, authority: "plugin-asserted-or-imported" };
 		});
 	};
-	const createNativeSession = createInquiryNativeSessionFactory(context, read, write);
+	const createNativeSession = createInquiryNativeSessionFactory(
+		context,
+		read,
+		write,
+		new InquiryFactOwner(factOwnerPorts),
+	);
 
 	return {
 		createNativeSession,

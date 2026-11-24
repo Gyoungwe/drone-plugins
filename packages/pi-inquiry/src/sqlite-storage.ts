@@ -74,9 +74,8 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 	readonly attempts: AttemptLedger;
 	readonly decisions: DecisionLedger;
 	readonly reruns: ArtifactRerunLedger;
-	private readonly database: InquirySqliteConnection;
+	protected readonly database: InquirySqliteConnection;
 	private closed = false;
-
 	constructor(
 		readonly projectId: string,
 		database: InquirySqliteConnection,
@@ -195,7 +194,7 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 		return this.snapshotSync();
 	}
 
-	private snapshotSync(): InquirySnapshot {
+	protected snapshotSync(): InquirySnapshot {
 		this.assertOpen();
 		const meta = readInquirySqliteMetadata(this.database);
 		if (!meta || meta.project_id !== this.projectId || meta.schema_version !== INQUIRY_SCHEMA_VERSION)
@@ -248,7 +247,7 @@ export class CanonicalSqliteInquiryStorage implements InquiryStorage {
 		});
 	}
 
-	private validateRecord(
+	protected validateRecord(
 		key: SqliteLedgerKey,
 		record: PersistedLedgerRecord,
 		current: InquirySnapshot,
