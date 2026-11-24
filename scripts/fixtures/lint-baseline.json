@@ -67,7 +67,7 @@
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/wiki-model-review.ts": 2,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/wiki-review-node.ts": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/wiki-review-reader.ts": 1,
-	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/wiki-review.ts": 7,
+	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/wiki-review.ts": 2,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/core/worker-transport.ts": 2,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/desktop/index-resource.ts": 1,
 	"complexity/noExcessiveLinesPerFunction\tpackages/pi-knowledge/src/desktop/read-model.ts": 1,

@@ -1,5 +1,4 @@
 // @ts-nocheck
-import { createHash, randomUUID } from "node:crypto";
 import type { KnowledgeConfigApi } from "./config.js";
 import * as compatibilityConfig from "./config.js";
 import { canRead, validateNote } from "./files.js";
@@ -7,10 +6,11 @@ import * as compatibilityReviewPolicy from "./review-policy.js";
 import { compatibilityKnowledgeRuntimeHost, type KnowledgeRuntimeHost } from "./runtime-host.js";
 import type { createKnowledgeUi } from "./ui-state.js";
 import * as compatibilityUi from "./ui-state.js";
-import { stripManagedHeader } from "./wiki-policy.js";
+import * as wikiPolicy from "./wiki-policy.js";
+import * as drafts from "./wiki-review-draft.js";
 import { createLocalWikiReviewPorts, renameWithRetry as renameLocalWikiFile } from "./wiki-review-node.js";
 import type { WikiReviewPorts } from "./wiki-review-ports.js";
-import { createWikiReviewReader, managedParts, targetPath } from "./wiki-review-reader.js";
+import { createWikiReviewReader } from "./wiki-review-reader.js";
 
 export function createKnowledgeWikiReview(
 	runtime: Pick<KnowledgeRuntimeHost, "runRuntimeExclusive">,
@@ -24,146 +24,33 @@ export function createKnowledgeWikiReview(
 	const { readReviewMode } = reviewPolicy;
 	const { invalidateKnowledgeUi } = ui;
 	const AUTOMATIC_AUTHORITY = Symbol("host-automatic-wiki");
-	const START = "<!-- pi-agent:managed:start -->",
-		END = "<!-- pi-agent:managed:end -->";
-	const digest = (text) => createHash("sha256").update(text).digest("hex");
-	const MAX_PENDING = 100,
-		MAX_AGE = 24 * 60 * 60 * 1000;
 	async function exclusive(key, operation) {
 		return runRuntimeExclusive("wiki-review", key, operation);
 	}
 	function rootFor(service) {
 		return `${service.binding.vaultId}/wiki-review`;
 	}
-	function checkId(id) {
-		if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id)) throw new Error("Invalid Wiki proposal id");
-		return id;
-	}
-	function immutableHash(p) {
-		return digest(
-			JSON.stringify({
-				id: p.id,
-				vaultId: p.vaultId,
-				bindingRevision: p.bindingRevision,
-				project: p.project,
-				path: p.path,
-				title: p.title,
-				rationale: p.rationale,
-				createdAt: p.createdAt,
-				before: p.before,
-				after: p.after,
-				sources: p.sources,
-			}),
-		);
-	}
 	async function atomicJson(path, value) {
 		const current = await io.state.read(path);
 		await io.state.write(path, value, current?.version ?? null);
 	}
 	const currentNote = (service, path) => io.files.read(service.binding, path);
-	function normalizeCandidate(markdown) {
-		// Same rule as wiki-policy stripManagedHeader (also unwraps a ```markdown fence); no title → drop any leading H1.
-		return stripManagedHeader(markdown);
-	}
-	function proposedText(original, title, body) {
-		const block = `${START}\n${body.trim()}\n${END}`;
-		if (original === null)
-			return `---\ntype: wiki\nstatus: unverified\n---\n\n# ${title}\n\n${block}\n\n## Human review\n\n`;
-		const { start, end } = managedParts(original);
-		return start < 0
-			? `${original}${original.endsWith("\n") ? "\n" : "\n\n"}${block}\n`
-			: original.slice(0, start) + block + original.slice(end + END.length);
-	}
 	const reader = createWikiReviewReader(
 		{ read: async (path) => (await io.state.read(path))?.value, list: (path) => io.state.list(path) },
 		currentNote,
 	);
 	const loadProposal = reader.loadProposal;
-	function validateWikiSourcePaths(paths) {
-		if (!Array.isArray(paths) || !paths.length || paths.length > 12)
-			throw Object.assign(
-				new Error("source_paths: supply 1–12 Vault-relative Markdown notes already read this turn"),
-				{ code: "source-note-required", field: "source_paths" },
-			);
-		for (let index = 0; index < paths.length; index++) {
-			try {
-				validateNote(paths[index]);
-			} catch {
-				throw Object.assign(
-					new Error(
-						`source_paths[${index}]: expected a Vault-relative Markdown source note (for example Library/Papers/source.md), not a workspace PDF or URL. Read the corresponding source note first; changing the Wiki target path cannot fix this field.`,
-					),
-					{
-						code: "source-note-required",
-						field: `source_paths[${index}]`,
-						retryable: false,
-					},
-				);
-			}
-		}
-	}
 	async function stageWikiProposal(service, ticket, cwd, input) {
-		validateWikiSourcePaths(input.source_paths);
+		drafts.validateWikiSourcePaths(input.source_paths);
 		return withKnowledgeBinding(service.binding, async () => {
 			if (service.binding.depositMode === "run-only")
 				throw new Error("Wiki proposals are disabled by run-only mode");
 			const { project, sources } = await service.evidenceReceipts(ticket, cwd, input.source_paths);
-			const path = targetPath(input.path, project);
-			if (sources.some((source) => source.path === path || /[[\]#|\r\n]/.test(source.path)))
-				throw new Error("A Wiki cannot cite itself or an ambiguous link path");
-			if (
-				sources.every(
-					(source) =>
-						/(?:^|\/)Wiki\//.test(source.path) || /(?:^|\/)(?:Home|Index|Context)\.md$/.test(source.path),
-				)
-			)
-				throw new Error("Read at least one underlying evidence/source note, not only Wiki or navigation");
-			const { title, markdown, rationale } = input;
-			if (typeof title !== "string" || !title.trim() || title.length > 200 || /[\r\n]/.test(title))
-				throw new Error("A single-line Wiki title is required");
-			if (
-				typeof markdown !== "string" ||
-				!markdown.trim() ||
-				markdown.length > 24000 ||
-				markdown.includes("<!-- pi-agent:managed:")
-			)
-				throw new Error("Wiki candidate must contain 1–24000 characters and no managed markers");
-			if (typeof rationale !== "string" || !rationale.trim() || rationale.length > 1000)
-				throw new Error("A concise change rationale is required");
+			const path = wikiPolicy.targetWikiPath(input.path, project);
+			const draft = drafts.readWikiDraft(input, sources, path);
 			const original = await currentNote(service, path);
 			if (original) await service.evidenceReceipts(ticket, cwd, [path]);
-			if (original && original.bytes > 64 * 1024)
-				throw new Error("Existing Wiki exceeds the bounded review size; split it before editing");
-			if (original && managedParts(original.text).body.length > 24000)
-				throw new Error("Existing generated block exceeds the review size");
-			const refs = sources
-				.map(
-					(source) =>
-						`- [[${source.path.slice(0, -3)}]] · lines ${source.startLine}–${source.endLine} · sha256 ${source.hash}`,
-				)
-				.join("\n");
-			const after = proposedText(
-				original?.text ?? null,
-				title.trim(),
-				`${normalizeCandidate(markdown)}\n\n## Sources\n${refs}`,
-			);
-			const proposal = {
-				id: randomUUID(),
-				status: "pending",
-				vaultId: service.binding.vaultId,
-				bindingRevision: service.binding.revision,
-				project,
-				path,
-				title: title.trim(),
-				rationale: rationale.trim(),
-				createdAt: Date.now(),
-				sources,
-				before: original?.text ?? null,
-				beforeHash: original?.hash ?? null,
-				after,
-				afterHash: digest(after),
-			};
-			proposal.proposalHash = immutableHash(proposal);
+			const proposal = drafts.buildWikiDraft(service.binding, project, path, draft, original, sources);
 			if (Buffer.byteLength(JSON.stringify(proposal, null, 2)) + 1 > 256 * 1024)
 				throw new Error("Wiki proposal exceeds the bounded review storage size");
 			const root = rootFor(service);
@@ -176,7 +63,7 @@ export function createKnowledgeWikiReview(
 					if (error.code !== "ENOENT") throw error;
 					names = [];
 				}
-				if (names.filter((name) => name.endsWith(".json")).length >= MAX_PENDING)
+				if (names.filter((name) => name.endsWith(".json")).length >= wikiPolicy.MAX_PENDING_WIKI_PROPOSALS)
 					throw new Error("Pending Wiki review limit reached; review existing candidates first");
 				await atomicJson(`${directory}/${proposal.id}.json`, proposal);
 			});
@@ -200,14 +87,14 @@ export function createKnowledgeWikiReview(
 	// invalidates any stale UI preview by changing the proposal hash.
 	/** @param {any} service @param {any} ticket @param {string} cwd @param {string} id @param {Record<string, any>} [input] */
 	async function mergeWikiProposal(service, ticket, cwd, id, { markdown, rationale, source_paths } = {}) {
-		checkId(id);
+		wikiPolicy.checkWikiProposalId(id);
 		return exclusive(`${rootFor(service)}:${id}`, () =>
 			withKnowledgeBinding(service.binding, async () => {
 				const { project, sources: newSources } = await service.evidenceReceipts(ticket, cwd, source_paths);
 				const p = await loadProposal(service, id, project);
 				if (p.status !== "pending")
 					throw new Error("Only a pending Wiki candidate can accumulate another research round");
-				if (Date.now() > p.createdAt + MAX_AGE)
+				if (Date.now() > p.createdAt + wikiPolicy.WIKI_PROPOSAL_MAX_AGE)
 					throw new Error(
 						"Pending Wiki candidate expired; review or replace it before accumulating more rounds",
 					);
@@ -215,45 +102,7 @@ export function createKnowledgeWikiReview(
 				if ((target?.hash ?? null) !== p.beforeHash)
 					throw new Error("Wiki changed since the pending candidate was created");
 				await verifySources(service, p);
-				const byPath = new Map(p.sources.map((source) => [source.path, source]));
-				for (const source of newSources) byPath.set(source.path, source);
-				const sources = [...byPath.values()];
-				if (sources.length > 12)
-					throw new Error(
-						"Pending topic reached the 12-source review budget; review it before adding another round",
-					);
-				if (
-					typeof markdown !== "string" ||
-					!markdown.trim() ||
-					markdown.length > 12000 ||
-					markdown.includes("<!-- pi-agent:managed:")
-				)
-					throw new Error("Incremental topic summary must contain 1–12000 characters and no managed markers");
-				if (typeof rationale !== "string" || !rationale.trim() || rationale.length > 1000)
-					throw new Error("A concise merge rationale is required");
-				const prior = managedParts(p.after)
-					.body.replace(/\n\n## Sources\n[\s\S]*$/, "")
-					.trim();
-				const update = `## Research update · ${new Date().toISOString()}\n\n${normalizeCandidate(markdown)}`;
-				const merged = [prior, update].filter(Boolean).join("\n\n");
-				if (merged.length > 22000)
-					throw new Error("Pending topic synthesis is too large; review it before adding another round");
-				const refs = sources
-					.map(
-						(source) =>
-							`- [[${source.path.slice(0, -3)}]] · lines ${source.startLine}–${source.endLine} · sha256 ${source.hash}`,
-					)
-					.join("\n");
-				const after = proposedText(p.before, p.title, `${merged}\n\n## Sources\n${refs}`);
-				const updated = {
-					...p,
-					createdAt: Date.now(),
-					rationale: `${p.rationale}\n\nAccumulated research round: ${rationale.trim()}`.slice(0, 1000),
-					sources,
-					after,
-					afterHash: digest(after),
-				};
-				updated.proposalHash = immutableHash(updated);
+				const updated = drafts.mergeWikiDraft(p, newSources, markdown, rationale);
 				if (Buffer.byteLength(JSON.stringify(updated, null, 2)) + 1 > 256 * 1024)
 					throw new Error("Merged Wiki proposal exceeds the bounded review storage size");
 				await exclusive(rootFor(service), () =>
@@ -266,7 +115,7 @@ export function createKnowledgeWikiReview(
 					path: p.path,
 					project,
 					proposalHash: updated.proposalHash,
-					sources,
+					sources: updated.sources,
 					merged: true,
 					roundAdded: true,
 					vaultWritten: false,
@@ -320,7 +169,7 @@ export function createKnowledgeWikiReview(
 		decision,
 		review = { actor: "human" },
 	): Promise<any> {
-		checkId(id);
+		wikiPolicy.checkWikiProposalId(id);
 		if (
 			!["human", "model", "automatic"].includes(review.actor) ||
 			(review.actor === "automatic" && review.authority !== AUTOMATIC_AUTHORITY) ||
@@ -342,7 +191,7 @@ export function createKnowledgeWikiReview(
 				if (decision !== "apply") throw new Error("Unknown review decision");
 				if (service.binding.depositMode === "run-only")
 					throw new Error("Wiki writes are disabled by run-only mode");
-				if (Date.now() - p.createdAt > MAX_AGE)
+				if (Date.now() - p.createdAt > wikiPolicy.WIKI_PROPOSAL_MAX_AGE)
 					throw new Error("Wiki proposal expired; regenerate it from current evidence");
 				return exclusive(`${service.binding.vault}:wiki:${p.path}`, async () => {
 					const current = await currentNote(service, p.path);
@@ -464,7 +313,7 @@ export function createKnowledgeWikiReview(
 		id,
 		expectedHash,
 	): Promise<{ status: "reverted"; path: string }> {
-		checkId(id);
+		wikiPolicy.checkWikiProposalId(id);
 		return exclusive(`${rootFor(service)}:${id}`, () =>
 			withKnowledgeBinding(service.binding, async () => {
 				const p = await loadProposal(service, id, project);
@@ -486,7 +335,7 @@ export function createKnowledgeWikiReview(
 	}
 
 	return {
-		validateWikiSourcePaths,
+		validateWikiSourcePaths: drafts.validateWikiSourcePaths,
 		stageWikiProposal,
 		mergeWikiProposal,
 		previewWikiProposal,

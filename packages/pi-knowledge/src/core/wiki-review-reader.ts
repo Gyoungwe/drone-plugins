@@ -1,17 +1,9 @@
 // @ts-nocheck
-import { createHash } from "node:crypto";
 import { canRead, validateNote } from "./files.js";
-import {
-	immutableWikiProposalHash as immutableHash,
-	managedParts,
-	targetWikiPath as targetPath,
-} from "./wiki-policy.js";
+import * as wikiPolicy from "./wiki-policy.js";
 
 export { managedParts, targetWikiPath as targetPath } from "./wiki-policy.js";
 
-const MAX_PENDING = 100,
-	MAX_AGE = 24 * 60 * 60 * 1000;
-const digest = (text) => createHash("sha256").update(text).digest("hex");
 /** Storage is scoped by the caller; returned proposals remain untrusted persisted content. */
 export function createWikiReviewReader(
 	storage: {
@@ -21,7 +13,7 @@ export function createWikiReviewReader(
 	currentNote: (service: any, path: string) => Promise<{ hash: string } | null>,
 ) {
 	async function loadProposal(service, id, project) {
-		if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id)) throw new Error("Invalid Wiki proposal id");
+		wikiPolicy.checkWikiProposalId(id);
 		const base = `${service.binding.vaultId}/wiki-review`;
 		const pending = await storage.read(`${base}/pending/${id}.json`);
 		const p = pending === undefined ? await storage.read(`${base}/reviewed/${id}.json`) : pending;
@@ -34,11 +26,11 @@ export function createWikiReviewReader(
 			p.bindingRevision !== service.binding.revision
 		)
 			throw new Error("Proposal belongs to a different project or binding");
-		targetPath(p.path, project);
+		wikiPolicy.targetWikiPath(p.path, project);
 		if (
-			immutableHash(p) !== p.proposalHash ||
-			digest(p.after) !== p.afterHash ||
-			(p.before === null ? p.beforeHash !== null : digest(p.before) !== p.beforeHash)
+			wikiPolicy.immutableWikiProposalHash(p) !== p.proposalHash ||
+			wikiPolicy.wikiContentHash(p.after) !== p.afterHash ||
+			(p.before === null ? p.beforeHash !== null : wikiPolicy.wikiContentHash(p.before) !== p.beforeHash)
 		)
 			throw new Error("Wiki proposal content changed");
 		return p;
@@ -59,7 +51,7 @@ export function createWikiReviewReader(
 				error: null,
 			});
 		}
-		const expired = now > p.createdAt + MAX_AGE,
+		const expired = now > p.createdAt + wikiPolicy.WIKI_PROPOSAL_MAX_AGE,
 			targetChanged = (target?.hash ?? null) !== p.beforeHash && target?.hash !== p.afterHash;
 		const protectedText =
 			p.before === null
@@ -76,14 +68,14 @@ export function createWikiReviewReader(
 			proposalHash: p.proposalHash,
 			title: p.title,
 			rationale: p.rationale,
-			before: managedParts(p.before || "").body,
-			after: managedParts(p.after).body,
+			before: wikiPolicy.managedParts(p.before || "").body,
+			after: wikiPolicy.managedParts(p.after).body,
 			sources,
 			protectedText,
 			expired,
 			targetChanged,
 			canApply: p.status === "pending" && !expired && !targetChanged && !sources.some((s) => s.changed),
-			expiresAt: p.createdAt + MAX_AGE,
+			expiresAt: p.createdAt + wikiPolicy.WIKI_PROPOSAL_MAX_AGE,
 			scientificallyVerified: false as const,
 		};
 	}
@@ -100,7 +92,7 @@ export function createWikiReviewReader(
 		for (const name of names
 			.filter((name) => /^[0-9a-f-]{36}\.json$/.test(name))
 			.sort()
-			.slice(0, MAX_PENDING)) {
+			.slice(0, wikiPolicy.MAX_PENDING_WIKI_PROPOSALS)) {
 			let p;
 			try {
 				p = await storage.read(`${service.binding.vaultId}/wiki-review/pending/${name}`);
@@ -121,16 +113,17 @@ export function createWikiReviewReader(
 				if (p.project !== project) continue;
 				if (p.vaultId !== service.binding.vaultId || p.id !== name.slice(0, -5))
 					throw new Error("Proposal belongs to a different binding or filename");
-				targetPath(p.path, project);
-				if (immutableHash(p) !== p.proposalHash) throw new Error("Wiki proposal content changed");
+				wikiPolicy.targetWikiPath(p.path, project);
+				if (wikiPolicy.immutableWikiProposalHash(p) !== p.proposalHash)
+					throw new Error("Wiki proposal content changed");
 				items.push({
 					id: p.id,
 					path: p.path,
 					title: p.title,
 					proposalHash: p.proposalHash,
 					status: p.status,
-					expiresAt: p.createdAt + MAX_AGE,
-					expired: Date.now() > p.createdAt + MAX_AGE,
+					expiresAt: p.createdAt + wikiPolicy.WIKI_PROPOSAL_MAX_AGE,
+					expired: Date.now() > p.createdAt + wikiPolicy.WIKI_PROPOSAL_MAX_AGE,
 					bindingChanged: p.bindingRevision !== service.binding.revision,
 				});
 			} catch (error) {
