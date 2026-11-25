@@ -1,6 +1,6 @@
 import type { ZoteroStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { Button, getKnowledgeApi } from "../api";
+import { Button, getZoteroStatus } from "../api";
 import { ZoteroLocalWriteSection } from "./ZoteroLocalWriteSection";
 import { useZoteroText } from "./zotero-copy";
 
@@ -16,7 +16,7 @@ export function ZoteroPanel() {
 		setLoading(true);
 		setError(null);
 		try {
-			setStatus(await getKnowledgeApi().getZoteroStatus());
+			setStatus(await getZoteroStatus());
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {

@@ -1,6 +1,12 @@
 import type { WikiModelReviewResult, WikiReviewPreview } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useRef, useState } from "react";
-import { Button, getKnowledgeApi, useSessionsStore, useSettingsStore } from "../api";
+import {
+	Button,
+	cancelKnowledgeModelReview,
+	reviewKnowledgeWithModel,
+	useSessionsStore,
+	useSettingsStore,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 import { reportKnowledgeError } from "./hooks";
 
@@ -52,7 +58,7 @@ export function WikiModelReview({
 		return () => {
 			generation.current++;
 			if (active.current) {
-				void getKnowledgeApi().cancelKnowledgeModelReview(active.current).catch(reportKnowledgeError);
+				void cancelKnowledgeModelReview(active.current).catch(reportKnowledgeError);
 				active.current = null;
 			}
 		};
@@ -66,7 +72,7 @@ export function WikiModelReview({
 		onBusy(true);
 		setError(null);
 		try {
-			const value = await getKnowledgeApi().reviewKnowledgeWithModel({
+			const value = await reviewKnowledgeWithModel({
 				cwd,
 				...request,
 				token: preview.reviewToken,
@@ -147,7 +153,7 @@ export function WikiModelReview({
 					</span>
 					<Button
 						onClick={() => {
-							if (active.current) void getKnowledgeApi().cancelKnowledgeModelReview(active.current);
+							if (active.current) void cancelKnowledgeModelReview(active.current);
 						}}
 					>
 						{t("cancel")}

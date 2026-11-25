@@ -1,6 +1,6 @@
 import type { ZoteroLocalWriteStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { Button, getKnowledgeApi } from "../api";
+import { authorizeZoteroLocalWrite, Button, clearZoteroLocalWrite, getZoteroLocalWrite } from "../api";
 import { useZoteroText } from "./zotero-copy";
 
 /** 校验失败时 IPC 返回错误信封（无 authorized 字段），不能当作状态 */
@@ -34,7 +34,7 @@ export function ZoteroLocalWriteSection() {
 
 	const refresh = useCallback(async () => {
 		try {
-			const next = await getKnowledgeApi().getZoteroLocalWrite();
+			const next = await getZoteroLocalWrite();
 			if (isZoteroLocalWriteStatus(next)) setStatus(next);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
@@ -80,7 +80,7 @@ export function ZoteroLocalWriteSection() {
 					<Button
 						size="sm"
 						disabled={busy !== null}
-						onClick={() => void act("authorize", () => getKnowledgeApi().authorizeZoteroLocalWrite())}
+						onClick={() => void act("authorize", () => authorizeZoteroLocalWrite())}
 					>
 						{busy === "authorize" ? t("loading") : t("localAuthorize")}
 					</Button>
@@ -89,7 +89,7 @@ export function ZoteroLocalWriteSection() {
 					<Button
 						size="sm"
 						disabled={busy !== null}
-						onClick={() => void act("clear", () => getKnowledgeApi().clearZoteroLocalWrite())}
+						onClick={() => void act("clear", () => clearZoteroLocalWrite())}
 					>
 						{t("localClear")}
 					</Button>

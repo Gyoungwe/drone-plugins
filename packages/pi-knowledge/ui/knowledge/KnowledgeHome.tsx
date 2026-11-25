@@ -1,6 +1,13 @@
 import type { KnowledgeGraph as GraphData, KnowledgePage, WikiReviewItem } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useMemo, useState } from "react";
-import { Button, getKnowledgeApi, useKnowledgeStore, useLanguage, useSettingsStore } from "../api";
+import {
+	Button,
+	getKnowledgeGraph,
+	getKnowledgeReviews,
+	useKnowledgeStore,
+	useLanguage,
+	useSettingsStore,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 import { DailyIdeas } from "./DailyIdeas";
 import { useKnowledgeOverview } from "./hooks";
@@ -88,8 +95,8 @@ export function KnowledgeHome({
 		}
 		setReviewError(null);
 		void Promise.allSettled([
-			getKnowledgeApi().getKnowledgeReviews({ cwd, revision, offset: 0, limit: REVIEW_LIMIT }),
-			getKnowledgeApi().getKnowledgeGraph({ revision, limit: 400, view: "all", mergeMirrors: true }),
+			getKnowledgeReviews({ cwd, revision, offset: 0, limit: REVIEW_LIMIT }),
+			getKnowledgeGraph({ revision, limit: 400, view: "all", mergeMirrors: true }),
 		]).then((results) => {
 			if (!live) return;
 			const [reviewResult, graphResult] = results;

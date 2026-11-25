@@ -1,6 +1,6 @@
 import type { KnowledgeSearchResult } from "@gyoungwe/plugin-api/ui";
 import { useState } from "react";
-import { getKnowledgeApi, useKnowledgeStore } from "../api";
+import { searchKnowledge, useKnowledgeStore } from "../api";
 import { KnowledgeSearchView } from "./KnowledgeSearchView";
 import type { KnowledgeCategory } from "./knowledge-home-model";
 
@@ -53,7 +53,7 @@ export function KnowledgeSearch({
 				setError(null);
 				try {
 					setResult(
-						await getKnowledgeApi().searchKnowledge({
+						await searchKnowledge({
 							cwd,
 							bindingRevision,
 							query: text,

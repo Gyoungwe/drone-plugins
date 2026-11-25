@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import {
 	Button,
 	ChevronDownIcon,
-	getKnowledgeApi,
+	getKnowledgeOverview,
 	isDraftSessionId,
 	ObsidianIcon,
+	resumeKnowledgeCheck,
 	useKnowledgeStore,
 	useSessionsStore,
 	useSettingsStore,
@@ -47,8 +48,7 @@ export function KnowledgeFlowCard({ sessionId }: { sessionId: string | null }) {
 		setResuming(false);
 		if (!sessionId || isDraftSessionId(sessionId)) return;
 		let live = true;
-		void getKnowledgeApi()
-			.getKnowledgeOverview({ cwd, sessionId })
+		void getKnowledgeOverview({ cwd, sessionId })
 			.then((value) => {
 				if (live && value.flow) useKnowledgeStore.getState().apply({ kind: "flow", flow: value.flow });
 			})
@@ -85,7 +85,7 @@ export function KnowledgeFlowCard({ sessionId }: { sessionId: string | null }) {
 		if (resuming || !sessionId) return;
 		setResuming(true);
 		try {
-			await getKnowledgeApi().resumeKnowledgeCheck(sessionId);
+			await resumeKnowledgeCheck(sessionId);
 		} catch (e) {
 			reportKnowledgeError(e);
 		} finally {

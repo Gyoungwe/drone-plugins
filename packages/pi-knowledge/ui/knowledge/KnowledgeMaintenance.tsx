@@ -3,8 +3,14 @@ import { useEffect, useState } from "react";
 import {
 	Button,
 	COMPOSER_FOCUS_EVENT,
-	getKnowledgeApi,
+	getKnowledgeJobs,
+	getKnowledgeMaintenanceRuns,
+	getKnowledgeMaintenanceSettings,
+	maintainKnowledge,
+	openKnowledgeTarget,
+	runKnowledgeMaintenance,
 	StatePanel,
+	saveKnowledgeMaintenanceSettings,
 	useDraftStore,
 	useKnowledgeStore,
 	useSessionsStore,
@@ -56,8 +62,7 @@ export function KnowledgeMaintenance({
 	useEffect(() => {
 		let live = true;
 		setLoading(true);
-		void getKnowledgeApi()
-			.getKnowledgeJobs({ cwd, revision, offset, limit: 20 })
+		void getKnowledgeJobs({ cwd, revision, offset, limit: 20 })
 			.then(
 				(value) => {
 					if (live) setPage(value);
@@ -76,10 +81,7 @@ export function KnowledgeMaintenance({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: nonce reloads persisted maintenance settings after an action
 	useEffect(() => {
 		let live = true;
-		void Promise.all([
-			getKnowledgeApi().getKnowledgeMaintenanceSettings(),
-			getKnowledgeApi().getKnowledgeMaintenanceRuns(),
-		])
+		void Promise.all([getKnowledgeMaintenanceSettings(), getKnowledgeMaintenanceRuns()])
 			.then(([settings, history]) => {
 				if (!live) return;
 				setAutomatic({ ...settings, model: settings.model ?? null });
@@ -114,7 +116,7 @@ export function KnowledgeMaintenance({
 		setMessage(null);
 		setConfirm(false);
 		try {
-			const result = (await getKnowledgeApi().maintainKnowledge({ cwd, revision, action })) as {
+			const result = (await maintainKnowledge({ cwd, revision, action })) as {
 				navigation?: { error?: string }[];
 			};
 			const failed = result.navigation
@@ -133,7 +135,7 @@ export function KnowledgeMaintenance({
 	async function saveAutomatic(next: typeof automatic) {
 		setAutomatic(next);
 		try {
-			await getKnowledgeApi().saveKnowledgeMaintenanceSettings(next);
+			await saveKnowledgeMaintenanceSettings(next);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
 		}
@@ -142,7 +144,7 @@ export function KnowledgeMaintenance({
 		setBusy(true);
 		setError(null);
 		try {
-			const run = await getKnowledgeApi().runKnowledgeMaintenance({ cwd: cwd || "" });
+			const run = await runKnowledgeMaintenance({ cwd: cwd || "" });
 			setRuns((current) => [run, ...current]);
 			setMessage(t("automaticMaintenanceDone"));
 		} catch (e) {
@@ -235,9 +237,7 @@ export function KnowledgeMaintenance({
 										<button
 											type="button"
 											className="shrink-0 underline"
-											onClick={() =>
-												void getKnowledgeApi().openKnowledgeTarget({ cwd, path: item.id, revision })
-											}
+											onClick={() => void openKnowledgeTarget({ cwd, path: item.id, revision })}
 										>
 											{t("openTarget")}
 										</button>

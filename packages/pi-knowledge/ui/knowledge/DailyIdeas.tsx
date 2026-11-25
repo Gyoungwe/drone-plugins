@@ -1,6 +1,15 @@
 import type { DailyDiscoveryState } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { Button, getKnowledgeApi, Switch, useKnowledgeStore } from "../api";
+import {
+	Button,
+	decideDailyIdea,
+	decideDailyRadarPaper,
+	getDailyDiscovery,
+	openExternal,
+	Switch,
+	updateDailyDiscovery,
+	useKnowledgeStore,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 
 /**
@@ -48,7 +57,7 @@ export function DailyIdeas({
 
 	const load = useCallback(async () => {
 		try {
-			setState(await getKnowledgeApi().getDailyDiscovery());
+			setState(await getDailyDiscovery());
 		} catch (e) {
 			setError(String((e as Error).message || e));
 		}
@@ -87,15 +96,13 @@ export function DailyIdeas({
 					{t("dailyEnabled")}
 					<Switch
 						checked={state.enabled}
-						onCheckedChange={(enabled) =>
-							void act("toggle", () => getKnowledgeApi().updateDailyDiscovery({ enabled }))
-						}
+						onCheckedChange={(enabled) => void act("toggle", () => updateDailyDiscovery({ enabled }))}
 					/>
 				</span>
 				<Button
 					size="sm"
 					disabled={busy !== null}
-					onClick={() => void act("run", () => getKnowledgeApi().updateDailyDiscovery({ run: true }))}
+					onClick={() => void act("run", () => updateDailyDiscovery({ run: true }))}
 				>
 					{busy === "run" ? t("loading") : t("dailyRunNow")}
 				</Button>
@@ -167,9 +174,7 @@ export function DailyIdeas({
 											size="sm"
 											disabled={busy !== null}
 											onClick={() =>
-												void act(idea.id, () =>
-													getKnowledgeApi().decideDailyIdea({ id: idea.id, action: "save" }),
-												)
+												void act(idea.id, () => decideDailyIdea({ id: idea.id, action: "save" }))
 											}
 										>
 											{t("dailySave")}
@@ -178,9 +183,7 @@ export function DailyIdeas({
 											size="sm"
 											disabled={busy !== null}
 											onClick={() =>
-												void act(idea.id, () =>
-													getKnowledgeApi().decideDailyIdea({ id: idea.id, action: "dismiss" }),
-												)
+												void act(idea.id, () => decideDailyIdea({ id: idea.id, action: "dismiss" }))
 											}
 										>
 											{t("dailyDismiss")}
@@ -203,7 +206,7 @@ export function DailyIdeas({
 								<button
 									type="button"
 									className="text-left font-medium text-link hover:underline"
-									onClick={() => void getKnowledgeApi().openExternal(paper.locator)}
+									onClick={() => void openExternal(paper.locator)}
 								>
 									{paper.title}
 								</button>
@@ -219,7 +222,7 @@ export function DailyIdeas({
 									</p>
 								)}
 								<div className="mt-2 flex gap-1">
-									<Button size="sm" onClick={() => void getKnowledgeApi().openExternal(paper.locator)}>
+									<Button size="sm" onClick={() => void openExternal(paper.locator)}>
 										{t("dailyRadarOpen")}
 									</Button>
 									{paper.status === "captured" ? (
@@ -230,9 +233,7 @@ export function DailyIdeas({
 												size="sm"
 												disabled={busy !== null}
 												onClick={() =>
-													void act(paper.id, () =>
-														getKnowledgeApi().decideDailyRadarPaper({ id: paper.id, action: "capture" }),
-													)
+													void act(paper.id, () => decideDailyRadarPaper({ id: paper.id, action: "capture" }))
 												}
 											>
 												{t("dailyRadarCapture")}
@@ -241,9 +242,7 @@ export function DailyIdeas({
 												size="sm"
 												disabled={busy !== null}
 												onClick={() =>
-													void act(paper.id, () =>
-														getKnowledgeApi().decideDailyRadarPaper({ id: paper.id, action: "dismiss" }),
-													)
+													void act(paper.id, () => decideDailyRadarPaper({ id: paper.id, action: "dismiss" }))
 												}
 											>
 												{t("dailyDismiss")}

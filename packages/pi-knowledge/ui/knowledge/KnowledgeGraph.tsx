@@ -1,6 +1,7 @@
 import {
 	COMPOSER_FOCUS_EVENT,
-	getKnowledgeApi,
+	getKnowledgeGraph,
+	getKnowledgeNoteLinks,
 	useDraftStore,
 	useKnowledgeStore,
 	useSessionsStore,
@@ -22,7 +23,7 @@ export function KnowledgeGraph({
 	const nonce = useKnowledgeStore((s) => s.revision);
 	return (
 		<KnowledgeGraphView
-			api={getKnowledgeApi()}
+			api={{ getGraph: getKnowledgeGraph, getLinks: getKnowledgeNoteLinks }}
 			nonce={nonce}
 			revision={revision}
 			indexKey={indexKey}

@@ -1,9 +1,11 @@
 import type { KnowledgeOverview } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-	getKnowledgeApi,
+	getKnowledgeOverview,
 	isDraftSessionId,
+	prompt,
 	pushToast,
+	startKnowledgeSetup,
 	useKnowledgeStore,
 	useSessionsStore,
 	useSettingsStore,
@@ -26,7 +28,7 @@ export function useKnowledgeOverview(cwd: string | null, sessionId: string | nul
 		setLoading(true);
 		setError(null);
 		try {
-			const result = await getKnowledgeApi().getKnowledgeOverview({
+			const result = await getKnowledgeOverview({
 				cwd,
 				sessionId: isDraftSessionId(sessionId) ? null : sessionId,
 			});
@@ -71,7 +73,7 @@ export async function launchKnowledgeSetup(cwd: string | null, sessionId: string
 	try {
 		// Keep settings open until the slash command is accepted so confirm dialogs
 		// and failures stay visible instead of dumping the user into a blank chat.
-		await getKnowledgeApi().startKnowledgeSetup({
+		await startKnowledgeSetup({
 			sessionId: id,
 			...(path ? { path } : {}),
 		});
@@ -92,7 +94,7 @@ export async function launchZoteroSetup(cwd: string | null, sessionId: string | 
 	}
 	if (!id || isDraftSessionId(id)) throw new Error("Could not create the setup session");
 	try {
-		await getKnowledgeApi().prompt(id, "/zotero-setup");
+		await prompt(id, "/zotero-setup");
 		useSettingsStore.getState().setOpen(false);
 		useUiStore.getState().setView("chat");
 		useKnowledgeStore.getState().close();

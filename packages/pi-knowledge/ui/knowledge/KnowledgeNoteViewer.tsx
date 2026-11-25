@@ -1,5 +1,12 @@
 import { useMemo } from "react";
-import { getKnowledgeApi, legacyEvidenceNotice, Markdown, useKnowledgeStore } from "../api";
+import {
+	getKnowledgeNoteLinks,
+	legacyEvidenceNotice,
+	Markdown,
+	openKnowledgeTarget,
+	readKnowledgeNote,
+	useKnowledgeStore,
+} from "../api";
 import { openKnowledgeNote } from "./KnowledgeLinks";
 import { KnowledgeNoteView } from "./KnowledgeNoteView";
 /** Published UI v1 adapter; remove with the last legacy full-page consumer. */
@@ -18,8 +25,8 @@ export function KnowledgeNoteViewer({
 	const api = useMemo(
 		() => ({
 			readNote: (input: { path: string; revision: number; startLine: number }) =>
-				getKnowledgeApi().readKnowledgeNote({ ...input, cwd }),
-			links: getKnowledgeApi().getKnowledgeNoteLinks,
+				readKnowledgeNote({ ...input, cwd }),
+			links: getKnowledgeNoteLinks,
 		}),
 		[cwd],
 	);
@@ -32,7 +39,7 @@ export function KnowledgeNoteViewer({
 			revision={revision}
 			onClose={onClose}
 			onOpenNote={(path) => openKnowledgeNote(cwd, path, revision)}
-			onOpenExternal={() => getKnowledgeApi().openKnowledgeTarget({ cwd, path, revision })}
+			onOpenExternal={() => openKnowledgeTarget({ cwd, path, revision })}
 			evidenceNotice={legacyEvidenceNotice}
 			renderText={(text) => <Markdown text={text} />}
 		/>
