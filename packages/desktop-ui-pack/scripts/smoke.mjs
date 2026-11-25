@@ -24,14 +24,7 @@ try {
 	);
 	await run(
 		"npm",
-		[
-			"install",
-			"--ignore-scripts",
-			"--no-audit",
-			"--no-fund",
-			api.path,
-			join(temp, pack.filename),
-		],
+		["install", "--ignore-scripts", "--no-audit", "--no-fund", api.path, join(temp, pack.filename)],
 		{ cwd: temp },
 	);
 	const installed = join(temp, "node_modules/@gyoungwe/desktop-ui-pack");

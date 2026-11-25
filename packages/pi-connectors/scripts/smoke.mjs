@@ -28,16 +28,7 @@ try {
 	const tarball = join(temp, metadata.filename);
 	await execFileAsync(
 		"npm",
-		[
-			"install",
-			"--prefix",
-			installRoot,
-			"--ignore-scripts",
-			"--no-audit",
-			"--no-fund",
-			api.path,
-			tarball,
-		],
+		["install", "--prefix", installRoot, "--ignore-scripts", "--no-audit", "--no-fund", api.path, tarball],
 		{ cwd: packageRoot, maxBuffer: 16 * 1024 * 1024 },
 	);
 	const packageDir = join(installRoot, "node_modules/@gyoungwe/pi-connectors");
