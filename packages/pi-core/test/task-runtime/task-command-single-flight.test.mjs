@@ -1,5 +1,5 @@
 import { expect, vi } from "vitest";
-import { singleFlightCommand } from "../../src/task-runtime/single-flight.mjs";
+import { singleFlightCommand } from "../../src/task-runtime/single-flight.ts";
 import { it } from "./scoped-test.mjs";
 
 const ctx = (id = "session", cwd = "/project") => ({ cwd, sessionManager: { getSessionId: () => id } });

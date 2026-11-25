@@ -1,7 +1,7 @@
 import { describeAcceptance, effectiveAcceptance } from "./acceptance.mjs";
-import { TASK_TOTAL_CALLS } from "./approval-record.mjs";
-import { contractHash, hasTaskConsent, MAX_AUTO_RESUMES } from "./consent.mjs";
-import { contextUi } from "./context-ui.mjs";
+import { TASK_TOTAL_CALLS } from "./approval-record.ts";
+import { contractHash, hasTaskConsent, MAX_AUTO_RESUMES } from "./consent.ts";
+import { contextUi } from "./context-ui.ts";
 
 function computeAuthorizationDetails(compute) {
 	if (!compute || typeof compute !== "object") return null;

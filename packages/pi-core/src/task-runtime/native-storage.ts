@@ -1,28 +1,37 @@
 import { readFileSync } from "node:fs";
+import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+
+type SessionStorageReader = Pick<
+	ExtensionContext["sessionManager"],
+	"getBranch" | "getSessionFile" | "getSessionId"
+>;
+type SessionJsonlRow = Partial<Record<"id" | "type", unknown>>;
+type FsError = NodeJS.ErrnoException;
 
 /** Pinned Pi 1.1.0 public JSONL boundary. This never opens a manager or creates/flushes a file. */
-export function readNativeSessionStorage(manager) {
+export function readNativeSessionStorage(manager: SessionStorageReader) {
 	const branch = manager.getBranch();
 	const file = manager.getSessionFile();
 	const mode = file ? "persistent" : "memory";
-	const deferred = () => ({ mode, state: "deferred", entries: branch, code: null });
-	const failed = (code, entries = []) => ({ mode, state: "needs-reopen", entries, code });
+	const deferred = () => ({ mode, state: "deferred" as const, entries: branch, code: null });
+	const failed = (code: string, entries: SessionEntry[] = []) =>
+		({ mode, state: "needs-reopen", entries, code }) as const;
 	if (!file) return deferred();
-	let content;
+	let content: string;
 	try {
 		content = readFileSync(file, "utf8");
 	} catch (error) {
 		if (
-			error.code === "ENOENT" &&
+			(error as FsError).code === "ENOENT" &&
 			!branch.some((entry) => entry.type === "message" && ["user", "assistant"].includes(entry.message.role))
 		)
 			return deferred();
-		return failed(error.code === "ENOENT" ? "SESSION_FILE_MISSING" : "SESSION_FILE_UNREADABLE");
+		return failed((error as FsError).code === "ENOENT" ? "SESSION_FILE_MISSING" : "SESSION_FILE_UNREADABLE");
 	}
-	const rows = new Map();
+	const rows = new Map<string, SessionJsonlRow>();
 	for (const [index, line] of content.split("\n").entries()) {
 		if (!line.length) continue;
-		let row;
+		let row: SessionJsonlRow | null;
 		try {
 			row = JSON.parse(line);
 		} catch {
@@ -33,11 +42,11 @@ export function readNativeSessionStorage(manager) {
 		rows.set(row.id, row);
 	}
 	if (rows.get(manager.getSessionId())?.type !== "session") return failed("SESSION_FILE_IDENTITY_MISMATCH");
-	const entries = [];
+	const entries: SessionEntry[] = [];
 	for (const entry of branch) {
 		const row = rows.get(entry.id);
 		if (JSON.stringify(row) !== JSON.stringify(entry)) return failed("SESSION_BRANCH_NOT_PERSISTED", entries);
-		entries.push(row);
+		entries.push(row as SessionEntry);
 	}
-	return { mode, state: "durable", entries, code: null };
+	return { mode, state: "durable" as const, entries, code: null };
 }

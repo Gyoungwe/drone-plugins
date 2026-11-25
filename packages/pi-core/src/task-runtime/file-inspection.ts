@@ -1,19 +1,41 @@
 import { createHash } from "node:crypto";
-import { readPdfIdentity } from "./pdf-identity.mjs";
+import { type PdfIdentity, readPdfIdentity } from "./pdf-identity.ts";
 
-const error = (code, message) => Object.assign(new Error(message), { code });
+export interface TaskFileDescriptor {
+	readonly path: string;
+	readonly absolutePath: string;
+	readonly rootKind: "workspace" | "vault" | "research-run";
+}
+
+export interface TaskFileExpectation {
+	readonly kind?: string;
+	readonly doi?: string;
+	readonly title?: string;
+	readonly sha256?: string;
+}
+
+interface TaskFileInspection extends TaskFileDescriptor {
+	bytes: number;
+	sha256: string;
+	observedAt: string;
+	kind: "file" | "pdf";
+	identity: string;
+	extraction?: Pick<PdfIdentity, "pages" | "partial">;
+}
+
+const error = (code: string, message: string) => Object.assign(new Error(message), { code });
 
 /** Pure acceptance algorithm. The adapter supplies bytes and its actual scope/version descriptor.
  * Native Pi reads the bounded file itself; managed adapters must obtain a stable approved snapshot.
  * `readPdfText` returns the first pages' text; managed adapters pass the host's isolated parser.
  */
 export async function inspectTaskBytes(
-	bytes,
-	descriptor,
-	expected = {},
-	{ readPdfText = readPdfIdentity } = {},
-) {
-	const identity = {
+	bytes: Buffer,
+	descriptor: TaskFileDescriptor,
+	expected: TaskFileExpectation = {},
+	{ readPdfText = readPdfIdentity }: { readonly readPdfText?: (bytes: Buffer) => Promise<PdfIdentity> } = {},
+): Promise<TaskFileInspection> {
+	const identity: TaskFileInspection = {
 		path: descriptor.path,
 		absolutePath: descriptor.absolutePath,
 		rootKind: descriptor.rootKind,
@@ -29,7 +51,7 @@ export async function inspectTaskBytes(
 		identity.kind = "pdf";
 		if (expected.doi || expected.title) {
 			const found = await readPdfText(bytes);
-			const normalize = (value) =>
+			const normalize = (value: string | undefined) =>
 				String(value || "")
 					.toLowerCase()
 					.replace(/[^a-z0-9\u3400-\u9fff]/g, "");

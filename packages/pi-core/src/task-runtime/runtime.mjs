@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { createTaskApplicationState } from "./application-state.mjs";
+import { createTaskApplicationState } from "./application-state.ts";
 import { registerWorkbench } from "./native-adapter.mjs";
 import { bindRuntime, runtimeForHost, withHostRuntime } from "./runtime-bridge.mjs";
 import { isReadOnlyTool } from "./tool-manifest.mjs";

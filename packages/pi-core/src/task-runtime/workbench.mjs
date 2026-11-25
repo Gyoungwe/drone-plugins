@@ -9,10 +9,10 @@ import {
 	acceptanceVerifier as registeredVerifier,
 	acceptanceVerifiers as registeredVerifiers,
 } from "./acceptance.mjs";
-import { contractHash, hasTaskConsent, MAX_AUTO_RESUMES } from "./consent.mjs";
+import { contractHash, hasTaskConsent, MAX_AUTO_RESUMES } from "./consent.ts";
 import { failureObservation, failureReceipt, toolResultFailed } from "./failure-feedback.mjs";
-import { inspectTaskBytes } from "./file-inspection.mjs";
-import { bilingual } from "./host-language.mjs";
+import { inspectTaskBytes } from "./file-inspection.ts";
+import { bilingual } from "./host-language.ts";
 import { remainingExplanation } from "./remaining.mjs";
 import { isReadOnlyTool } from "./tool-manifest.mjs";
 

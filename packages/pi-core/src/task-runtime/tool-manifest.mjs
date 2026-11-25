@@ -1,4 +1,4 @@
-import { emitProcessEvent } from "./process-events.mjs";
+import { emitProcessEvent } from "./process-events.ts";
 import { bindRuntime, hasRuntimeContext, runtimeSlot, withHostRuntime } from "./runtime-bridge.mjs";
 
 const registry = runtimeSlot("tools", "manifest", () => ({

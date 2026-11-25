@@ -2,7 +2,7 @@ import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, vi } from "vitest";
-import { resolveWriteRoots } from "../../src/task-runtime/consent.mjs";
+import { resolveWriteRoots } from "../../src/task-runtime/consent.ts";
 import { createTaskWorkbench, LIMITS, registerWorkbench, WORKBENCH_ENTRY } from "./fixture.mjs";
 import { it } from "./scoped-test.mjs";
 

@@ -1,8 +1,17 @@
 import { Worker } from "node:worker_threads";
 
-async function readPdfIdentity(bytes) {
-	return new Promise((resolve, reject) => {
-		const worker = new Worker(new URL("./pdf-worker.mjs", import.meta.url), {
+export interface PdfIdentity {
+	text: string;
+	pages: number;
+	partial: boolean;
+}
+
+type PdfWorkerResult = (PdfIdentity & { error?: never }) | { error: string };
+type PdfMeta = ImportMeta & { worker?: string };
+
+async function readPdfIdentity(bytes: Buffer) {
+	return new Promise<PdfIdentity>((resolve, reject) => {
+		const worker = new Worker(new URL((import.meta as PdfMeta).worker ?? "pdf-worker.ts", import.meta.url), {
 			workerData: { bytes },
 			resourceLimits: { maxOldGenerationSizeMb: 128 },
 		});
@@ -10,11 +19,11 @@ async function readPdfIdentity(bytes) {
 			void worker.terminate();
 			reject(new Error("PDF identity inspection timed out; no file was changed."));
 		}, 3e4);
-		worker.once("message", (result) => {
+		worker.once("message", (result: PdfWorkerResult) => {
 			clearTimeout(timer);
 			void worker.terminate();
 			if (result.error) reject(new Error(`PDF identity requires manual inspection: ${result.error}`));
-			else resolve(result);
+			else resolve(result as PdfIdentity);
 		});
 		worker.once("error", () => {
 			clearTimeout(timer);

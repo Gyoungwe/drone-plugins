@@ -5,7 +5,7 @@ function hostLanguage() {
 		? "zh"
 		: "en";
 }
-function bilingual(zh, en) {
+function bilingual(zh: string, en: string) {
 	return hostLanguage() === "zh"
 		? `${zh}
 ${en}`

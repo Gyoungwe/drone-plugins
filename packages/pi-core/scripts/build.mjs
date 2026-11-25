@@ -97,6 +97,7 @@ if (!check) {
 		format: "esm",
 		platform: "node",
 		packages: "bundle",
+		define: { "import.meta.worker": JSON.stringify("./pdf-worker.mjs") },
 		metafile: true,
 		sourcemap: false,
 		logLevel: "silent",

@@ -1,7 +1,7 @@
 /** Canonical plugin-owned rules; no host implementation or copied test algorithm. */
 
-import { createTaskApplicationState } from "../../src/task-runtime/application-state.mjs";
-import { recordApproval } from "../../src/task-runtime/approval-record.mjs";
+import { createTaskApplicationState } from "../../src/task-runtime/application-state.ts";
+import { recordApproval } from "../../src/task-runtime/approval-record.ts";
 import { registerWorkbench as registerNativeWorkbench } from "../../src/task-runtime/native-adapter.mjs";
 import { createTaskWorkbench as createWorkbench } from "../../src/task-runtime/workbench.mjs";
 export function registerWorkbench(pi, options = {}) {

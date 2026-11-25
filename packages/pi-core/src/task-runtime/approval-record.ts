@@ -1,9 +1,30 @@
-import { contractHash, hasTaskConsent } from "./consent.mjs";
+import { type ConsentTask, contractHash, hasTaskConsent } from "./consent.ts";
 
 export const TASK_TOTAL_CALLS = 192;
 
+export interface TaskApprovalInput {
+	scope: string;
+	taskId: string;
+	contractHash: string;
+	binding?: string | null;
+	action: string;
+	actionId?: string;
+	expectedDoi?: string | null;
+}
+
+interface ApprovalTask extends ConsentTask {
+	state: string;
+	actions: readonly { id: string; state: string; kind: string; expected?: { doi?: string | null } | null }[];
+}
+
+interface ApprovalWorkbench<Result> {
+	scope(): string;
+	view(): { revision: number; tasks: readonly ApprovalTask[] };
+	command(input: Pick<TaskApprovalInput, "taskId" | "action" | "actionId"> & { revision: number }): Result;
+}
+
 /** Check the shown approval against the workbench that will record it, without yielding. */
-export function recordApproval(workbench, input) {
+export function recordApproval<Result>(workbench: ApprovalWorkbench<Result>, input: TaskApprovalInput) {
 	const view = workbench.view();
 	const task = view.tasks.find((task) => task.id === input.taskId);
 	if (

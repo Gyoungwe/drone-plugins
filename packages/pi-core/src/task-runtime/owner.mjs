@@ -4,7 +4,7 @@ import {
 	bindAcceptanceVerifierEvents,
 	registerAcceptanceVerifier,
 } from "./acceptance.mjs";
-import { createTaskApplicationState } from "./application-state.mjs";
+import { createTaskApplicationState } from "./application-state.ts";
 import { registerTaskRuntime, requestSharedTaskRuntime } from "./runtime.mjs";
 import { bindRuntime, createStandaloneRuntime, withHostRuntime, withRuntime } from "./runtime-bridge.mjs";
 

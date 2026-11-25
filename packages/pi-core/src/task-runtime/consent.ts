@@ -2,10 +2,32 @@ import { createHash } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, parse, relative, resolve } from "node:path";
+import type { TaskPlanMilestone } from "@gyoungwe/plugin-api/tasks";
+
+interface TaskContract {
+	id: string;
+	goal: string;
+	binding?: string | null;
+	authorizationSummary?: string | null;
+	writeRoots?: readonly string[] | null;
+	compute?: unknown;
+	milestones: readonly Pick<TaskPlanMilestone, "id" | "title" | "dependsOn" | "acceptance">[];
+}
+
+export interface ConsentTask extends TaskContract {
+	planApproved?: boolean;
+	executionConsent?: {
+		version: number;
+		contractHash: string;
+		maxCalls: number;
+		maxAutoResumes: number;
+		approvedAt: string;
+	} | null;
+}
 
 const MAX_AUTO_RESUMES = 19;
-function contractHash(task) {
-	const contract = [
+function contractHash(task: TaskContract) {
+	const contract: unknown[] = [
 		task.id,
 		task.goal,
 		task.binding ?? null,
@@ -18,7 +40,7 @@ function contractHash(task) {
 	);
 	return createHash("sha256").update(JSON.stringify(contract)).digest("hex");
 }
-function hasTaskConsent(task, maxCalls) {
+function hasTaskConsent(task: ConsentTask | null | undefined, maxCalls: number) {
 	const c = task?.executionConsent;
 	return !!(
 		task?.planApproved &&
@@ -30,9 +52,9 @@ function hasTaskConsent(task, maxCalls) {
 		typeof c.approvedAt === "string"
 	);
 }
-async function resolveWriteRoots(cwd, paths = []) {
+async function resolveWriteRoots(cwd: string, paths: unknown = []) {
 	if (!Array.isArray(paths) || paths.length > 8) throw new Error("Choose at most eight project directories.");
-	const roots = [];
+	const roots: string[] = [];
 	const home = await realpath(homedir());
 	for (const p of paths) {
 		if (typeof p !== "string" || !p.trim() || p.length > 512) throw new Error("Invalid write directory.");

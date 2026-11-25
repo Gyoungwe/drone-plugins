@@ -1,6 +1,15 @@
-import { MAX_AUTO_RESUMES } from "./consent.mjs";
+import { type ConsentTask, MAX_AUTO_RESUMES } from "./consent.ts";
 
-function shouldAskToContinue(task) {
+interface ContinuationTask extends Pick<ConsentTask, "executionConsent"> {
+	state: string;
+	milestones?: readonly { state: string }[];
+	actions?: readonly { state: string }[];
+	budget?: { autoResumes?: number };
+	progressCount?: number;
+	lastResumeProgress?: number;
+}
+
+function shouldAskToContinue(task: ContinuationTask | null | undefined) {
 	if (!task?.executionConsent) return false;
 	if (["completed", "cancelled", "archived"].includes(task.state)) return false;
 	const milestones = task.milestones || [];

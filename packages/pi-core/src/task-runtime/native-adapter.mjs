@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { resolveWriteRoots } from "./consent.mjs";
-import { contextUi } from "./context-ui.mjs";
-import { readNativeSessionStorage } from "./native-storage.mjs";
+import { resolveWriteRoots } from "./consent.ts";
+import { contextUi } from "./context-ui.ts";
+import { readNativeSessionStorage } from "./native-storage.ts";
 import { inspectTaskFile } from "./workbench.mjs";
 import { registerWorkbenchAdapter } from "./workbench-adapter.mjs";
 

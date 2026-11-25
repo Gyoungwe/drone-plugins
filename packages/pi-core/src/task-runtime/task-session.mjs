@@ -1,6 +1,6 @@
-import { recordApproval } from "./approval-record.mjs";
+import { recordApproval } from "./approval-record.ts";
 import { createEvidenceRecovery } from "./evidence.mjs";
-import { hostLanguage } from "./host-language.mjs";
+import { hostLanguage } from "./host-language.ts";
 import { createTaskWorkbench, WORKBENCH_ENTRY } from "./workbench.mjs";
 
 export const TASK_SESSION_ENTRY = "drone-task-session-v1";

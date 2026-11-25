@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { contractHash } from "../../src/task-runtime/consent.mjs";
+import { contractHash } from "../../src/task-runtime/consent.ts";
 import { harness, plan } from "./managed-harness.mjs";
 
 function heldGrant() {

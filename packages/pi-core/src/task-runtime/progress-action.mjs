@@ -1,4 +1,4 @@
-import { contextUi } from "./context-ui.mjs";
+import { contextUi } from "./context-ui.ts";
 import { remainingExplanation } from "./remaining.mjs";
 import { explainReason } from "./workbench.mjs";
 

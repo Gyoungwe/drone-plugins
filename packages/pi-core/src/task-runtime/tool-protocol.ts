@@ -1,5 +1,12 @@
-function restoreTaskToolOrder(messages) {
-	const output = [];
+interface TaskToolMessage {
+	role: string;
+	content?: string | { type: string; id?: unknown }[];
+	customType?: string;
+	toolCallId?: string;
+}
+
+function restoreTaskToolOrder<Message extends TaskToolMessage>(messages: readonly Message[]) {
+	const output: Message[] = [];
 	for (let i = 0; i < messages.length; i++) {
 		const message = messages[i];
 		output.push(message);
@@ -8,8 +15,8 @@ function restoreTaskToolOrder(messages) {
 		if (!calls.length) continue;
 		const pending = new Set(calls.map((b) => b.id));
 		if (pending.size !== calls.length || [...pending].some((id) => typeof id !== "string" || !id)) continue;
-		const results = [],
-			statuses = [];
+		const results: Message[] = [],
+			statuses: Message[] = [];
 		let j = i + 1;
 		for (; j < messages.length && pending.size; j++) {
 			const next = messages[j];

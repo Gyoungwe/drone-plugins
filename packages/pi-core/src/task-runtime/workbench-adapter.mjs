@@ -11,16 +11,16 @@ import {
 	taskProgressContext,
 	toolResultFailed,
 } from "./failure-feedback.mjs";
-import { hostLanguage } from "./host-language.mjs";
+import { hostLanguage } from "./host-language.ts";
 import { createTaskProgression } from "./progress-action.mjs";
 import { currentRuntime, withHostRuntime } from "./runtime-bridge.mjs";
-import { singleFlightCommand } from "./single-flight.mjs";
-import { isTaskStatusQuery } from "./status-query.mjs";
-import { createTaskController } from "./task-controller.mjs";
+import { singleFlightCommand } from "./single-flight.ts";
+import { isTaskStatusQuery } from "./status-query.ts";
+import { createTaskController } from "./task-controller.ts";
 import { createTaskSession } from "./task-session.mjs";
 import { isReadOnlyTool } from "./tool-manifest.mjs";
-import { restoreTaskToolOrder } from "./tool-protocol.mjs";
-import { shouldAskToContinue } from "./turn-end-prompt.mjs";
+import { restoreTaskToolOrder } from "./tool-protocol.ts";
+import { shouldAskToContinue } from "./turn-end-prompt.ts";
 import { clean } from "./workbench.mjs";
 
 /**
