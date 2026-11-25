@@ -1,6 +1,6 @@
 import type { RemainingTask, WorkbenchOperation } from "./remaining.ts";
 
-interface ToolResult {
+export interface ToolResult {
 	isError?: boolean;
 	toolCallId?: string;
 	toolName?: string;
@@ -16,7 +16,7 @@ interface ToolResult {
 	input?: { path?: unknown } | null;
 }
 
-interface FailureObservation {
+export interface FailureObservation {
 	id: string;
 	tool: string;
 	at: string;

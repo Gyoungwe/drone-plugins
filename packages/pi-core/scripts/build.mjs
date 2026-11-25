@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
 
@@ -103,18 +103,19 @@ if (!check) {
 		sourcemap: false,
 		logLevel: "silent",
 	};
+	const runtimeOptions = { ...buildOptions, minifyIdentifiers: true, keepNames: true };
 	await build({
-		...buildOptions,
+		...runtimeOptions,
 		entryPoints: [join(packageRoot, "src/index.ts")],
 		outfile: outputPath,
 	});
 	await build({
-		...buildOptions,
+		...runtimeOptions,
 		entryPoints: [join(packageRoot, "src/host.ts")],
 		outfile: hostOutputPath,
 	});
 	await build({
-		...buildOptions,
+		...runtimeOptions,
 		entryPoints: [join(packageRoot, "src/managed-runtime.ts")],
 		outfile: join(distRoot, "managed-runtime.mjs"),
 	});
@@ -139,10 +140,6 @@ if (!check) {
 	execFileSync("tsc", ["-p", join(packageRoot, "tsconfig.build.json")], {
 		stdio: "inherit",
 	});
-	await mkdir(join(distRoot, "task-runtime"), { recursive: true });
-	for (const name of await readdir(join(packageRoot, "src/task-runtime")))
-		if (name.endsWith(".d.mts"))
-			await cp(join(packageRoot, "src/task-runtime", name), join(distRoot, "task-runtime", name));
 	const output = await readFile(outputPath, "utf8");
 	if (!output.startsWith("// @ts-nocheck")) await writeFile(outputPath, `// @ts-nocheck\n${output}`);
 	await writeFile(

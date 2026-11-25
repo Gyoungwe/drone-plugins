@@ -13,10 +13,7 @@ import {
 	type WorkbenchMilestone,
 	type WorkbenchOperation,
 } from "./remaining.ts";
-// @ts-expect-error TS7016: Cluster 3 owns the workbench migration.
-import { explainReason as explainWorkbenchReason } from "./workbench.mjs";
-
-const explainReason: (reason: string) => string | null = explainWorkbenchReason;
+import { explainReason } from "./workbench.js";
 
 type ProgressInput = Pick<TaskInteractionInput, "taskId" | "revision">;
 type ProgressContext = TaskInteractionContext & Parameters<typeof contextUi.idle>[0] & { cwd: string };
@@ -66,7 +63,7 @@ interface ProgressInvocation {
 }
 
 interface ProgressScope {
-	scope: string;
+	scope: string | null;
 	generation: number;
 	binding: string | null;
 }

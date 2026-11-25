@@ -1,8 +1,4 @@
-interface TaskStorageFailure {
-	state: "needs-reopen";
-	message: string;
-	lastCommitted: unknown;
-}
+import type { TaskStorageFailure } from "./task-session-storage.js";
 
 /** A package application owns failed-storage state across native adapter reloads.
  * SDK extension subscriptions are revoked on reload and cannot retain authority.

@@ -2,8 +2,8 @@
 
 import { createTaskApplicationState } from "../../src/task-runtime/application-state.ts";
 import { recordApproval } from "../../src/task-runtime/approval-record.ts";
-import { registerWorkbench as registerNativeWorkbench } from "../../src/task-runtime/native-adapter.mjs";
-import { createTaskWorkbench as createWorkbench } from "../../src/task-runtime/workbench.mjs";
+import { registerWorkbench as registerNativeWorkbench } from "../../src/task-runtime/native-adapter.ts";
+import { createTaskWorkbench as createWorkbench } from "../../src/task-runtime/workbench.ts";
 export function registerWorkbench(pi, options = {}) {
 	return registerNativeWorkbench(pi, { ...options, application: createTaskApplicationState() });
 }
@@ -12,5 +12,5 @@ export function createTaskWorkbench(options) {
 	workbench.recordApproval = (input) => recordApproval(workbench, input);
 	return workbench;
 }
-export * from "../../src/task-runtime/runtime.mjs";
-export * from "../../src/task-runtime/workbench.mjs";
+export * from "../../src/task-runtime/runtime.ts";
+export * from "../../src/task-runtime/workbench.ts";

@@ -3,7 +3,7 @@ import { type ConsentTask, contractHash, hasTaskConsent } from "./consent.ts";
 export const TASK_TOTAL_CALLS = 192;
 
 export interface TaskApprovalInput {
-	scope: string;
+	scope: string | null;
 	taskId: string;
 	contractHash: string;
 	binding?: string | null;
@@ -18,7 +18,7 @@ interface ApprovalTask extends ConsentTask {
 }
 
 interface ApprovalWorkbench<Result> {
-	scope(): string;
+	scope(): string | null;
 	view(): { revision: number; tasks: readonly ApprovalTask[] };
 	command(input: Pick<TaskApprovalInput, "taskId" | "action" | "actionId"> & { revision: number }): Result;
 }

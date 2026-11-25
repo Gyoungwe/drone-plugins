@@ -1,5 +1,5 @@
 import type { PluginNativeRuntimeFactory } from "@gyoungwe/plugin-api/native";
-import { createManagedTaskApplication } from "./task-runtime/managed-application.mjs";
+import { createManagedTaskApplication } from "./task-runtime/managed-application.js";
 
 export { inspectTaskBytes } from "./task-runtime/file-inspection.ts";
 export { createManagedTaskApplication };

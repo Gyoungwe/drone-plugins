@@ -11,7 +11,7 @@ import type { MemoryType } from "./memory";
 import { memoryIndexPrompt as memoryIndexPromptImpl, writeMemory as writeMemoryImpl } from "./memory";
 import { normalizeTaskMilestones } from "./milestone-plan";
 import type { TaskAcceptanceVerifier } from "./task-runtime/acceptance.ts";
-import { createTaskApplication } from "./task-runtime/owner.mjs";
+import { createTaskApplication } from "./task-runtime/owner.js";
 import { makeDeliverFilesTool as makeDeliverFilesToolImpl } from "./tools/deliver-files";
 import { makeMemorySaveTool as makeMemorySaveToolImpl } from "./tools/memory-save";
 import { makeStatusTool as makeStatusToolImpl } from "./tools/status";

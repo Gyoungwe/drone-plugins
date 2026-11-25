@@ -12,7 +12,7 @@ type FsError = NodeJS.ErrnoException;
 export function readNativeSessionStorage(manager: SessionStorageReader) {
 	const branch = manager.getBranch();
 	const file = manager.getSessionFile();
-	const mode = file ? "persistent" : "memory";
+	const mode: "persistent" | "memory" = file ? "persistent" : "memory";
 	const deferred = () => ({ mode, state: "deferred" as const, entries: branch, code: null });
 	const failed = (code: string, entries: SessionEntry[] = []) =>
 		({ mode, state: "needs-reopen", entries, code }) as const;

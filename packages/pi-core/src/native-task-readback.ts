@@ -4,7 +4,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { PiCoreContext } from "./index";
 
 interface TaskJournal {
-	scope(): string;
+	scope(): string | null;
 	snapshot(): { id: string } | null;
 	readRoots(): string[];
 }

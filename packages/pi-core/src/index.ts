@@ -2,7 +2,7 @@ import type { DroneHostPort, HostCapabilities } from "@gyoungwe/plugin-api";
 import type { AskQuestion, AskRequest, AskResponse } from "./contracts";
 import { registerDroneCommands } from "./drone-commands";
 import { registerNativeTaskReadback } from "./native-task-readback";
-import { createTaskApplication } from "./task-runtime/owner.mjs";
+import { createTaskApplication } from "./task-runtime/owner.js";
 import { type AskUserToolDeps, makeAskUserTool } from "./tools/ask-user";
 import { makeDeliverFilesTool } from "./tools/deliver-files";
 import { makeMemorySaveTool } from "./tools/memory-save";

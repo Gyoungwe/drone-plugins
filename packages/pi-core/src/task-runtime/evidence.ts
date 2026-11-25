@@ -1,9 +1,6 @@
 import { resolve } from "node:path";
 import type { TaskFileDescriptor } from "./file-inspection.ts";
-// @ts-expect-error TS7016: Cluster 3 owns the workbench migration.
-import { clean as cleanWorkbenchText } from "./workbench.mjs";
-
-const clean: (value: unknown, max?: number) => string = cleanWorkbenchText;
+import { clean, type TaskEntry } from "./workbench-state.js";
 
 type EvidenceFile = Pick<TaskFileDescriptor, "path"> &
 	Partial<Pick<TaskFileDescriptor, "rootKind" | "absolutePath">> & { sha256: string };
@@ -16,20 +13,15 @@ interface EvidenceRecord extends EvidenceFile {
 	evicted: boolean;
 }
 
-interface EvidenceState {
+export interface EvidenceState {
 	version: 1;
 	scope: string | null;
-	taskId: string | null;
+	taskId: string | null | undefined;
 	records: EvidenceRecord[];
 	used: number;
 }
 
-interface EvidenceEntry {
-	customType?: string;
-	data?: Omit<EvidenceState, "version"> | null;
-}
-
-interface EvidenceEvent {
+export interface EvidenceEvent {
 	toolCallId: string;
 	input?: { path?: unknown; offset?: number; start_line?: number; limit?: number } | null;
 }
@@ -43,7 +35,7 @@ interface EvidenceFiles {
 	readText(path: string): string | Promise<string>;
 }
 
-interface EvidencePorts {
+export interface EvidencePorts {
 	authorize(cwd: string, path: string): unknown;
 	files: EvidenceFiles;
 	persist?(state: EvidenceState): unknown;
@@ -152,8 +144,8 @@ function createEvidenceRecovery({ authorize, files, persist = () => undefined }:
 		scope: () => state.scope,
 		attach(
 			nextScope: string | null,
-			nextTaskId: string | null,
-			entries: readonly EvidenceEntry[] = [],
+			nextTaskId: string | null | undefined,
+			entries: readonly TaskEntry[] = [],
 			force = false,
 		) {
 			if (!force && state.scope === nextScope && state.taskId === nextTaskId) return;
@@ -161,17 +153,19 @@ function createEvidenceRecovery({ authorize, files, persist = () => undefined }:
 			state.taskId = nextTaskId;
 			state.records = [];
 			state.used = 0;
-			for (const entry of entries)
+			for (const entry of entries) {
+				const data = entry.data as Omit<EvidenceState, "version"> | null | undefined;
 				if (
 					entry.customType === "drone-task-evidence-v1" &&
-					entry.data?.scope === state.scope &&
-					entry.data.taskId === state.taskId &&
-					Array.isArray(entry.data.records) &&
-					entry.data.records.length <= 8
+					data?.scope === state.scope &&
+					data.taskId === state.taskId &&
+					Array.isArray(data.records) &&
+					data.records.length <= 8
 				) {
-					state.records = structuredClone(entry.data.records);
-					state.used = Number(entry.data.used) || 0;
+					state.records = structuredClone(data.records);
+					state.used = Number(data.used) || 0;
 				}
+			}
 		},
 		capture: (event: EvidenceEvent, cwd: string, binding: string | null) =>
 			captureEvidence(state, event, cwd, binding, files, save),

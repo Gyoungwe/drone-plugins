@@ -11,10 +11,10 @@ export interface TaskFileExpectation {
 	readonly kind?: string;
 	readonly doi?: string;
 	readonly title?: string;
-	readonly sha256?: string;
+	readonly sha256?: string | null;
 }
 
-interface TaskFileInspection extends TaskFileDescriptor {
+export interface TaskFileInspection extends TaskFileDescriptor {
 	bytes: number;
 	sha256: string;
 	observedAt: string;

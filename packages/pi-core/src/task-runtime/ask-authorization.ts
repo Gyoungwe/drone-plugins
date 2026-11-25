@@ -15,7 +15,7 @@ export interface TaskInteractionInput {
 }
 
 export interface TaskInteractionJournal<Task> {
-	scope(): string;
+	scope(): string | null;
 	view(): { revision: number; tasks: readonly Task[] };
 	command(input: TaskInteractionInput): unknown;
 }
@@ -238,7 +238,7 @@ async function askAndRecord(
 		input: TaskInteractionInput;
 		ctx: TaskInteractionContext;
 		signal: AbortSignal | undefined;
-		scope: string;
+		scope: string | null;
 	},
 	{ checkBinding, ui }: AuthorizationPorts,
 ) {

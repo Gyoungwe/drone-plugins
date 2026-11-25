@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { EventBus } from "@earendil-works/pi-coding-agent";
+import type { TaskRuntimeRegistry } from "./runtime.js";
 
 export type RuntimeHost = { events: EventBus };
 type RuntimeDomain = "knowledge" | "tasks" | "tools";
@@ -10,6 +11,7 @@ type RuntimeResource = object & {
 type RuntimeSlots = Record<string, RuntimeResource>;
 
 interface Runtime extends Record<RuntimeDomain, RuntimeSlots> {
+	tasks: RuntimeSlots & { workbench?: TaskRuntimeRegistry };
 	scheduler: Pick<KeyedScheduler, "run">;
 	log: object;
 	registerDisposable(resource: RuntimeResource): () => void;

@@ -87,7 +87,10 @@ function bindAcceptanceVerifierEvents(pi: RuntimeHost) {
 	pi.events.emit(ACCEPTANCE_VERIFIER_REQUEST_EVENT, { version: 1 });
 	return unsubscribe;
 }
-function registerAcceptanceVerifier(kind: string, definition: TaskAcceptanceDefinition = {}) {
+function registerAcceptanceVerifier(
+	kind: string,
+	definition: TaskAcceptanceDefinition | TaskAcceptanceVerifier = {},
+) {
 	ensureRegistryShape();
 	if (!KIND.test(kind || "")) throw new Error(`Acceptance kind "${kind}" must match ${KIND}`);
 	if (CORE_ACCEPTANCE_KINDS.includes(kind)) throw new Error(`Acceptance kind "${kind}" is owned by the host`);
