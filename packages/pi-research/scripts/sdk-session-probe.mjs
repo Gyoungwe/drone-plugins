@@ -100,6 +100,20 @@ async function call(session, name, args) {
 let session = await openSession();
 const firstSession = session;
 try {
+	const listed = await call(session, "connector_list", {});
+	assert.equal(listed.isError, false);
+	assert.equal(listed.result.details.contractVersion, 1);
+	assert.deepEqual(
+		listed.result.details.connectors.map(({ id }) => id).sort(),
+		manifest.connectorDeclarations.map(({ id }) => id).sort(),
+	);
+	assert.ok(listed.result.details.connectors.every(({ permissions }) => permissions.readOnly));
+	const inspected = await call(session, "connector_get", { id: "zotero" });
+	assert.equal(inspected.isError, false);
+	assert.deepEqual(
+		inspected.result.details.connector,
+		listed.result.details.connectors.find(({ id }) => id === "zotero"),
+	);
 	const search = await call(session, "research_search_sources", {
 		query: "SDKRESEARCH",
 		source_dir: ".",
@@ -189,6 +203,7 @@ try {
 			sameWorkspace: true,
 			sharedExtensionClosure: true,
 			contextSessionManager: true,
+			connectorDiscovery: true,
 			sourcedAnswer: true,
 			candidateDepositionReadBack: true,
 			emptyClaimsBlocked,

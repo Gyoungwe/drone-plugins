@@ -1,3 +1,4 @@
+export * from "./connectors/tools.js";
 export * as claimBindings from "./core/claim-bindings.js";
 /** Research domain implementation. Hosts inject workspace, project, authorization and transport ports. */
 export {

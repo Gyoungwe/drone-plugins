@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "drone-pi-research",
-	"version": "0.3.2",
+	"version": "0.4.0",
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",
@@ -42,14 +42,24 @@
 		"desktopRuntime": "./dist/desktop-runtime.mjs",
 		"ui": "./ui/plugin.json"
 	},
-	"capabilities": ["research", "search", "evidence-context", "files", "ui"],
+	"capabilities": [
+		"research",
+		"search",
+		"evidence-context",
+		"files",
+		"ui",
+		"connectors",
+		"provenance-receipts"
+	],
 	"tools": [
 		"research_search_sources",
 		"research_read_source",
 		"research_deposit_research_note",
 		"research_answer_sources",
 		"research_status",
-		"research_loop"
+		"research_loop",
+		"connector_list",
+		"connector_get"
 	],
 	"hosts": ["native-pi", "drone-desktop"],
 	"permissions": {
@@ -81,5 +91,63 @@
 			"host-authorized Zotero item and attachment writes",
 			"host-authorized Zotero MCP and uv installation"
 		]
-	}
+	},
+	"connectorDeclarations": [
+		{
+			"id": "zotero",
+			"readOnly": true,
+			"network": "public:api.zotero.org",
+			"credentials": "optional host-secret-store/environment",
+			"externalSideEffects": []
+		},
+		{
+			"id": "webdav",
+			"readOnly": true,
+			"network": "configured endpoint",
+			"credentials": "required host-secret-store/environment",
+			"externalSideEffects": []
+		},
+		{
+			"id": "generic-mcp",
+			"readOnly": true,
+			"network": "host-configured endpoint",
+			"credentials": "optional mcp-config/host-secret-store",
+			"externalSideEffects": []
+		},
+		{
+			"id": "institutional",
+			"readOnly": true,
+			"network": "configured institutional host",
+			"credentials": "required browser-session/oauth",
+			"externalSideEffects": ["browser-navigation"]
+		},
+		{
+			"id": "search",
+			"readOnly": true,
+			"network": "declared public provider",
+			"credentials": "none",
+			"externalSideEffects": []
+		},
+		{
+			"id": "arxiv",
+			"readOnly": true,
+			"network": "public:export.arxiv.org, arxiv.org",
+			"credentials": "none",
+			"externalSideEffects": []
+		},
+		{
+			"id": "semantic-scholar",
+			"readOnly": true,
+			"network": "public:api.semanticscholar.org",
+			"credentials": "none",
+			"externalSideEffects": []
+		},
+		{
+			"id": "browser",
+			"readOnly": true,
+			"network": "host-approved navigation target",
+			"credentials": "optional browser-session",
+			"externalSideEffects": ["browser-navigation"]
+		}
+	]
 }

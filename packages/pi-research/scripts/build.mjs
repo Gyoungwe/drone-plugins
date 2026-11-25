@@ -33,6 +33,7 @@ const compiled = await build({
 	outdir: "dist",
 	outExtension: { ".js": ".mjs" },
 	sourcemap: false,
+	minifyWhitespace: true,
 	preserveSymlinks: true,
 	external: ["node:*"],
 	metafile: true,
@@ -56,6 +57,8 @@ const artifacts = new Map(
 const extension = artifacts.get("dist/index.mjs").toString("utf8");
 for (const name of manifest.tools)
 	if (!extension.includes(JSON.stringify(name))) fail(`bundle is missing ${name}`);
+for (const marker of ["drone-connector-receipt/v1", "browser-navigation"])
+	if (!extension.includes(JSON.stringify(marker))) fail(`bundle is missing ${marker}`);
 
 async function filesUnder(root, prefix = "") {
 	const files = [];
