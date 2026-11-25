@@ -29,7 +29,7 @@
 		"check": "npm run build:check && npm run typecheck && npm test && npm run smoke"
 	},
 	"peerDependencies": {
-		"@gyoungwe/plugin-api": ">=1.2.0 <2.0.0"
+		"@gyoungwe/plugin-api": ">=2.0.0 <3.0.0"
 	},
 	"peerDependenciesMeta": {
 		"@gyoungwe/plugin-api": {
