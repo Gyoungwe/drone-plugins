@@ -304,7 +304,7 @@ async function configuredResultsRoot(
 	}
 	if (config.resultsRoot !== undefined && typeof config.resultsRoot !== "string")
 		throw new Error("resultsRoot must be a path");
-	if (!config.resultsRoot || !config.resultsRoot.startsWith("/"))
+	if (!config.resultsRoot?.startsWith("/"))
 		return {
 			handle: workspaceRoot.handle,
 			path: relativePath(config.resultsRoot || "results", "resultsRoot"),

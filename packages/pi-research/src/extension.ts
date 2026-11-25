@@ -1,5 +1,5 @@
-import { CLAIM_BINDING_SCHEMA } from "./core/claim-bindings.js";
-import { createResearchReceiptJournal } from "./core/receipt-journal.js";
+import { createResearchReceiptJournal, type ResearchJournalPorts } from "./core/receipt-journal.js";
+import type { ResearchUsageSample } from "./core/research-breaker.js";
 import {
 	deliveryMemoryClaims,
 	type PreparedResearchDelivery,
@@ -9,37 +9,44 @@ import {
 	summaryReviewPacket,
 	validateSummaryAssessment,
 } from "./core/research-delivery.js";
+import type { ResearchToolStep } from "./core/research-fast-path.js";
 import { createResearchLoop, type ResearchLoopPorts } from "./core/research-loop.js";
+import { recordOf } from "./core/research-loop-state.js";
 import { observeExecutionReceipt } from "./core/run-provenance.js";
+import { type Context, researchLoopTool, startCallId, type Tool } from "./research-loop-tool.js";
 
-export interface ResearchExtensionPorts extends ResearchLoopPorts {
-	resolveSessionProject(ctx: any, requested?: string): Promise<{ project: string }>;
-	describeProject(resolution: any): unknown;
-	registerTool(pi: any, tool: any): void;
-	run<T>(operation: () => T | Promise<T>): Promise<T>;
-	reviewSummary?(ctx: any, packet: ResearchSummaryReviewPacket): Promise<unknown>;
-}
-
-const USER_QUESTION_FOCUS =
-	"Answer the user's current question. Use evidence for factual research claims, not unrelated citations for ordinary chat. For a simple factual question that can be answered from existing local knowledge, take the light path: retrieve, answer, and auto-deposit a bounded note when appropriate; do not create a task_plan or ask for write authorization just to answer. For substantive tasks, do bounded read-only preparation and consolidate scope, assumptions, needed permissions and deliverables into one task_plan for one user authorization. After authorization, carry out routine steps and recoverable checks within that scope without repeatedly asking whether to continue. Respect prior decisions, especially declined installs. New risks or scope, missing credentials and genuinely unavailable user data still require a specific request; never infer consent. At completion, explain what changed, link actual outputs or show key figures, separate execution from validation, and give one next step only if needed. Keep internal counters and tool logs out of the main answer.";
-
-type Tool = {
-	name: string;
-	label: string;
-	description: string;
-	parameters: Record<string, unknown>;
-	drone?: Record<string, unknown>;
-	execute: (...args: any[]) => Promise<unknown>;
-};
+type Listener = (event: unknown, ctx: Context) => unknown;
 type Pi = {
 	events?: {
-		on?: (event: string, listener: (...args: any[]) => any) => unknown;
-		emit?: (...args: any[]) => unknown;
+		on?(name: string, listener: (payload: unknown) => unknown): unknown;
+		emit?(...args: unknown[]): unknown;
 	};
 	registerTool(definition: Tool): void;
-	on?: (event: string, listener: (...args: any[]) => any) => unknown;
+	on?(event: string, listener: Listener): unknown;
 };
 type Loop = ReturnType<typeof createResearchLoop>;
+type Journal = ReturnType<typeof createResearchReceiptJournal>;
+type Project = { project: string };
+type Pending = ResearchToolStep & {
+	args: Record<string, unknown>;
+	admission?: "allowed" | "blocked";
+	activeRun?: string;
+};
+type Session = {
+	cwd: string;
+	journal: Journal;
+	pending: Map<string, Pending>;
+	awaitingUserStart: boolean;
+	startUsage?: { callId: string; sample: ResearchUsageSample };
+};
+
+export interface ResearchExtensionPorts extends ResearchLoopPorts {
+	resolveSessionProject(ctx: Context, requested?: string): Promise<Project>;
+	describeProject(resolution: Project): unknown;
+	registerTool(pi: Pi, tool: Tool): void;
+	run<T>(operation: () => T | Promise<T>): Promise<T>;
+	reviewSummary?(ctx: Context, packet: ResearchSummaryReviewPacket): Promise<unknown>;
+}
 
 export interface ResearchDeliveryWriterResult<T> {
 	value: T;
@@ -48,245 +55,212 @@ export interface ResearchDeliveryWriterResult<T> {
 }
 export interface ResearchExtensionHandle {
 	deliver<T>(
-		ctx: any,
+		ctx: Context,
 		input: { runDir: string; markdown: string; claims?: unknown },
 		writer: (prepared: PreparedResearchDelivery) => Promise<ResearchDeliveryWriterResult<T>>,
 	): Promise<{ value: T; receipt: ResearchDeliveryReceipt; claims: readonly Record<string, unknown>[] }>;
 }
 
-type SessionState = {
-	journals: Map<string, ReturnType<typeof createResearchReceiptJournal>>;
-	pending: Map<
-		string,
-		{ args: Record<string, unknown>; journal: ReturnType<typeof createResearchReceiptJournal>; key: string }
-	>;
-	awaitingUserStart: Set<string>;
-};
+const USER_QUESTION_FOCUS =
+	"Answer the current question. Use evidence for factual research claims. For simple questions with local literature tools, start a fast_readonly run and complete from verified local excerpts. If evidence is insufficient or a write is required, explicitly escalate before using deep research tools. For substantive tasks, do bounded read-only preparation and consolidate scope, permissions and deliverables into one task_plan for user approval. Carry out authorized steps within that scope and respect prior decisions. Request approval for new risks or scope. Link actual outputs, distinguish execution from validation, and keep internal counters out of the answer.";
 
-function sessionKey(ctx: any): string {
-	return ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || ctx?.cwd || "";
+function sessionKey(ctx: Context): string {
+	return ctx.sessionManager?.getSessionId?.() || ctx.sessionId || ctx.cwd;
 }
 
-export function registerResearchExtension(
+function controlStep(step: ResearchToolStep) {
+	return (
+		step.toolName === "research_loop" && (step.args?.action === "status" || step.args?.action === "escalate")
+	);
+}
+
+function toolEvent(raw: unknown) {
+	const event = recordOf(raw);
+	if (typeof event.toolCallId !== "string" || typeof event.toolName !== "string") return;
+	return { event, id: event.toolCallId, toolName: event.toolName };
+}
+
+async function admitTool(loop: Loop, session: Session, call: NonNullable<ReturnType<typeof toolEvent>>) {
+	const activeRun = session.journal.currentRun();
+	const step = { toolName: call.toolName, args: recordOf(call.event.input) };
+	const reserved = [...session.pending.values()].filter(
+		(item) => item.admission === "allowed" && item.activeRun === activeRun && !controlStep(item),
+	);
+	const block = activeRun ? await loop.checkTool(session.cwd, activeRun, step, reserved) : undefined;
+	session.pending.set(call.id, { ...step, activeRun, admission: block ? "blocked" : "allowed" });
+	return block;
+}
+
+async function recordToolEnd(loop: Loop, session: Session, ended: NonNullable<ReturnType<typeof toolEvent>>) {
+	const started = session.pending.get(ended.id);
+	session.pending.delete(ended.id);
+	if (
+		!started ||
+		started.toolName !== ended.toolName ||
+		started.admission === "blocked" ||
+		controlStep(started)
+	)
+		return;
+	const runDir = session.journal.currentRun();
+	const startsRun = started.toolName === "research_loop" && started.args.action === "start";
+	if (started.activeRun && started.activeRun !== runDir && !startsRun) return;
+	const result = recordOf(ended.event.result);
+	const isError = ended.event.isError === true;
+	const executed = !isError || typeof ended.event.durationMs === "number";
+	await session.journal.record({
+		toolCallId: ended.id,
+		toolName: ended.toolName,
+		args: started.args,
+		details: recordOf(result.details),
+		isError,
+		countedStep: executed && started.admission === "allowed" && Boolean(started.activeRun || startsRun),
+		...(ended.toolName === "read" && { content: result.content }),
+	});
+	if (session.startUsage?.callId === ended.id) {
+		const { sample } = session.startUsage;
+		session.startUsage = undefined;
+		if (startsRun && !isError && runDir) await loop.observeUsage(session.cwd, runDir, sample);
+	}
+}
+
+function subscribeTools(
 	pi: Pi,
 	ports: ResearchExtensionPorts,
-): ResearchExtensionHandle | undefined {
-	if (process.env.PI_SUBAGENT_CHILD === "1") return;
-	const state: SessionState = { journals: new Map(), pending: new Map(), awaitingUserStart: new Set() };
-	const owners = new Map<string, symbol>();
-	const loop: Loop = createResearchLoop(ports);
-	const run = ports.run;
-	const journalPorts = {
-		workspace: ports.workspace,
-		status: async (cwd: string, runDir: string) => loop.updateResearchLoop({ cwd, runDir, action: "status" }),
-		flush: async (cwd: string, runDir: string) => loop.flushResearchReceipts({ cwd, runDir }),
-		reset: (cwd: string, runDir: string) => loop.resetResearchReceipts({ cwd, runDir }),
-		observeExecution: (event: any) => observeExecutionReceipt(event),
-		observeResearch: (event: any) => loop.observeResearchReceipt(event),
-		owners,
+	loop: Loop,
+	sessions: Map<string, Session>,
+	sessionFor: (ctx: Context) => Session,
+) {
+	pi.on?.("tool_execution_start", (raw, ctx) =>
+		ports.run(() => {
+			const started = toolEvent(raw);
+			if (!started) return;
+			const pending = sessionFor(ctx).pending;
+			const oldest = pending.keys().next();
+			if (pending.size >= 256 && !oldest.done) pending.delete(oldest.value);
+			pending.set(started.id, { toolName: started.toolName, args: recordOf(started.event.args) });
+		}),
+	);
+	pi.on?.("tool_call", (raw, ctx) =>
+		ports.run(() => {
+			const call = toolEvent(raw);
+			return call && admitTool(loop, sessionFor(ctx), call);
+		}),
+	);
+	pi.on?.("tool_execution_end", (raw, ctx) =>
+		ports.run(() => {
+			const ended = toolEvent(raw);
+			const session = sessions.get(sessionKey(ctx));
+			return ended && session ? recordToolEnd(loop, session, ended) : undefined;
+		}),
+	);
+}
+
+function sdkUsageSample(raw: unknown): ResearchUsageSample {
+	const usage = recordOf(raw) as {
+		reported?: boolean;
+		input?: number;
+		output?: number;
+		cacheWrite?: number;
+		cacheRead?: number;
+		cost?: { total?: number };
 	};
-	const journalFor = (ctx: any) => {
-		const key = sessionKey(ctx);
-		let journal = state.journals.get(key);
-		if (!journal) {
-			journal = createResearchReceiptJournal(ctx.cwd, {
-				sessionId: key,
-				ports: journalPorts,
-			});
-			state.journals.set(key, journal);
-		}
-		return journal;
-	};
-	ports.registerTool(pi, {
-		name: "research_loop",
-		label: "Research evidence loop",
-		drone: {
-			libraryMode: true,
-			recoverySafe: true,
-			capabilities: ["research"],
-			activity: { text: "正在检查研究证据链…", phase: "verification" },
-		},
-		description:
-			"Create or inspect a scientific evidence gate. Prefer start and status; result_slug determines the topic ID. The host advances search, inspection, archive, claims and finalize from successful tools. Structured claim_bindings require claim, relationship, limitations and sources with path/start_line/end_line/quote. The host supplies source hashes and read receipt IDs; never invent them. claim_refs alone do not establish support.",
-		parameters: {
-			type: "object",
-			additionalProperties: false,
-			properties: {
-				action: {
-					type: "string",
-					enum: [
-						"start",
-						"record_local",
-						"record_external",
-						"inspect_sources",
-						"verify_archive",
-						"bind_claims",
-						"finalize",
-						"complete",
-						"status",
-					],
-				},
-				run_dir: { type: "string" },
-				project: {
-					type: "string",
-					description:
-						"Optional. The host resolves the project from the workspace (or the daily-space session choice); a different value is ignored.",
-				},
-				result_slug: { type: "string" },
-				query: { type: "string" },
-				requires_provenance: {
-					type: "boolean",
-					description:
-						'When true, call research_record_run_manifest for this run before complete/finalize, listing actual source paths in files with role="input". start does not create the manifest. This records file snapshots, not scientific validation.',
-				},
-				source_refs: { type: "array", items: { type: "string" } },
-				claim_refs: { type: "array", items: { type: "string" } },
-				claim_bindings: CLAIM_BINDING_SCHEMA,
-				outcome: { type: "string" },
-				notes: { type: "string" },
-			},
-			required: ["action"],
-		},
-		async execute(_id: string, params: any, _signal: AbortSignal, _update: unknown, ctx: any) {
-			return run(async () => {
-				const journal = journalFor(ctx);
-				const runDir = params.run_dir || journal.currentRun();
-				if (params.action === "status" && !runDir) {
-					const value = {
-						run_dir: null,
-						evidence_gate: { stage: "not-started", answerable: false },
-						next_action: "start",
-						guidance: "Call research_loop(action=start,query=the research question).",
-					};
-					return { content: [{ type: "text", text: JSON.stringify(value) }], details: value };
-				}
-				// One project identity per workspace (or per daily-space session); a different
-				// model-supplied project is ignored and reported back.
-				const projectResolution =
-					params.action === "start" ? await ports.resolveSessionProject(ctx, params.project) : null;
-				const result: any = await journal.execute(runDir, async () =>
-					params.action === "start"
-						? loop.startResearchRun({
-								cwd: ctx.cwd,
-								project: projectResolution?.project,
-								resultSlug: params.result_slug,
-								query: params.query,
-								requiresProvenance: params.requires_provenance === true,
-							})
-						: loop.updateResearchLoop({
-								cwd: ctx.cwd,
-								runDir,
-								action: params.action,
-								query: params.query,
-								sourceRefs: params.source_refs || [],
-								claimRefs: params.claim_refs || [],
-								claimBindings: params.claim_bindings || [],
-								outcome: params.outcome,
-								notes: params.notes,
-							}),
-				);
-				const gate = result?.evidence_gate;
-				const visible =
-					params.action === "status"
-						? result
-						: {
-								run_dir: result?.run_dir,
-								topic_id: result?.metadata?.topic_id,
-								evidence_gate: gate && {
-									stage: gate.stage,
-									answerable: gate.answerable,
-									archive_count: gate.archive_count,
-									reuse_count: gate.reuse_count,
-									source_refs: gate.source_refs,
-									claim_count: gate.claim_refs.length,
-									structured_claim_count: gate.claim_bindings.length,
-									warnings: gate.warnings,
-									scientificallyVerified: false,
-								},
-								receipt_journal: result?.receipt_journal,
-								...(projectResolution ? { project: ports.describeProject(projectResolution) } : {}),
-							};
-				return { content: [{ type: "text", text: JSON.stringify(visible, null, 2) }], details: result };
-			});
-		},
-	});
-	const on = pi.on?.bind(pi);
-	on?.("tool_execution_start", (event: any, ctx: any) =>
-		run(() => {
-			if (state.pending.size > 256) state.pending.delete(state.pending.keys().next().value as string);
-			state.pending.set(`${sessionKey(ctx)}:${event.toolCallId}`, {
-				args: event.args || {},
-				journal: journalFor(ctx),
-				key: sessionKey(ctx),
-			});
-		}),
-	);
-	on?.("tool_execution_end", (event: any, ctx: any) =>
-		run(async () => {
-			const started = state.pending.get(`${sessionKey(ctx)}:${event.toolCallId}`);
-			state.pending.delete(`${sessionKey(ctx)}:${event.toolCallId}`);
-			if (
-				!started ||
-				started.key !== sessionKey(ctx) ||
-				started.journal !== state.journals.get(started.key) ||
-				event.toolName === "research_loop"
-			)
-				return;
-			await started.journal.record({
-				toolCallId: event.toolCallId,
-				toolName: event.toolName,
-				args: started.args,
-				details: event.result?.details || {},
-				...(event.toolName === "read" ? { content: event.result?.content || [] } : {}),
-				isError: !!event.isError,
-			});
-		}),
-	);
-	on?.("before_agent_start", (event: any, ctx: any) =>
-		run(async () => {
-			const key = sessionKey(ctx);
-			state.awaitingUserStart.add(key);
-			const previous = state.journals.get(key);
-			state.journals.set(
-				key,
-				createResearchReceiptJournal(ctx.cwd, {
-					sessionId: key,
-					ports: journalPorts,
-				}),
-			);
-			state.pending.forEach((item, id) => {
-				if (item.key === key) state.pending.delete(id);
-			});
-			await previous?.close();
-			return {
-				systemPrompt: `${event.systemPrompt}\n\nFor substantive research, use research_loop(action=start) when a tracked run is needed. The host checks provenance, not scientific truth. ${USER_QUESTION_FOCUS}`,
-			};
-		}),
-	);
-	on?.("message_start", (event: any, ctx: any) => {
-		if (event.message?.role !== "user") return;
-		return run(async () => {
-			const key = sessionKey(ctx);
-			if (state.awaitingUserStart.delete(key)) return;
-			await state.journals.get(key)?.close();
-			state.journals.delete(key);
-		});
-	});
-	on?.("session_shutdown", (_event: any, ctx: any) =>
-		run(async () => {
-			const key = sessionKey(ctx);
-			await state.journals.get(key)?.close();
-			state.journals.delete(key);
-			state.pending.forEach((item, id) => {
-				if (item.key === key) state.pending.delete(id);
-			});
-			if (state.journals.size === 0) loop.dispose();
-		}),
+	const { input, output, cacheRead, cacheWrite } = usage;
+	const hasCounts = [input, output, cacheRead, cacheWrite].some(
+		(count) => typeof count === "number" && Number.isSafeInteger(count) && count > 0,
 	);
 	return {
+		reported: usage.reported === true || (usage.reported === undefined && hasCounts),
+		inputTokens: input,
+		outputTokens: output,
+		cacheReadTokens: cacheRead,
+		cacheWriteTokens: cacheWrite,
+		cost: usage.cost?.total || (usage.reported === true ? usage.cost?.total : undefined),
+	};
+}
+
+function subscribeTelemetry(
+	pi: Pi,
+	ports: ResearchExtensionPorts,
+	loop: Loop,
+	sessions: Map<string, Session>,
+) {
+	pi.on?.("message_end", (raw, ctx) =>
+		ports.run(async () => {
+			const message = recordOf(recordOf(raw).message);
+			const session = sessions.get(sessionKey(ctx));
+			if (!session || message.role !== "assistant") return;
+			const sample = sdkUsageSample(message.usage);
+			const runDir = session.journal.currentRun();
+			const callId = startCallId(message.content);
+			session.startUsage = !runDir && callId ? { callId, sample } : undefined;
+			if (runDir) await loop.observeUsage(ctx.cwd, runDir, sample);
+		}),
+	);
+	const eviction = (raw: unknown) =>
+		ports.run(async () => {
+			const event = recordOf(raw);
+			if (typeof event.sessionId !== "string" || !Array.isArray(event.toolCallIds)) return;
+			const session = sessions.get(event.sessionId);
+			const runDir = session?.journal.currentRun();
+			if (session && runDir)
+				await loop.observeContextEviction(session.cwd, runDir, {
+					toolCallIds: event.toolCallIds,
+					observedAt: new Date().toISOString(),
+				});
+		});
+	if (pi.events?.on) pi.events.on("drone:context-evicted", eviction);
+	else
+		pi.on?.("drone:context-evicted", (raw, ctx) =>
+			recordOf(raw).sessionId === sessionKey(ctx) ? eviction(raw) : undefined,
+		);
+}
+
+function subscribeTurns(
+	pi: Pi,
+	ports: ResearchExtensionPorts,
+	loop: Loop,
+	sessions: Map<string, Session>,
+	fresh: (ctx: Context) => Session,
+) {
+	pi.on?.("before_agent_start", (raw, ctx) =>
+		ports.run(async () => {
+			const previous = sessions.get(sessionKey(ctx));
+			fresh(ctx).awaitingUserStart = true;
+			await previous?.journal.close();
+			return { systemPrompt: `${recordOf(raw).systemPrompt}\n\n${USER_QUESTION_FOCUS}` };
+		}),
+	);
+	pi.on?.("message_start", (raw, ctx) => {
+		if (recordOf(recordOf(raw).message).role !== "user") return;
+		return ports.run(async () => {
+			const key = sessionKey(ctx);
+			const session = sessions.get(key);
+			if (session?.awaitingUserStart) session.awaitingUserStart = false;
+			else {
+				await session?.journal.close();
+				sessions.delete(key);
+			}
+		});
+	});
+	pi.on?.("session_shutdown", (_event, ctx) =>
+		ports.run(async () => {
+			const key = sessionKey(ctx);
+			await sessions.get(key)?.journal.close();
+			sessions.delete(key);
+			if (!sessions.size) loop.dispose();
+		}),
+	);
+}
+
+function deliveryHandle(
+	ports: ResearchExtensionPorts,
+	loop: Loop,
+	sessionFor: (ctx: Context) => Session,
+): ResearchExtensionHandle {
+	return {
 		deliver: (ctx, input, writer) =>
-			run(() =>
-				journalFor(ctx).execute(input.runDir, async () => {
+			ports.run(() =>
+				sessionFor(ctx).journal.execute(input.runDir, async () => {
 					const prepared = await loop.prepareResearchDelivery({ cwd: ctx.cwd, ...input });
 					const claims = deliveryMemoryClaims(input.claims, prepared);
 					const packet = summaryReviewPacket(prepared, claims);
@@ -303,9 +277,8 @@ export function registerResearchExtension(
 					)
 						throw new Error("Research evidence changed during semantic review; no summary was written");
 					const written = await writer(prepared);
-					let receipt: ResearchDeliveryReceipt;
 					try {
-						receipt = await loop.commitResearchDelivery({
+						const receipt = await loop.commitResearchDelivery({
 							cwd: ctx.cwd,
 							runDir: input.runDir,
 							prepared,
@@ -313,12 +286,52 @@ export function registerResearchExtension(
 							assessment,
 							memoryClaims: claims,
 						});
+						return { run_dir: input.runDir, value: written.value, receipt, claims };
 					} catch (error) {
 						await written.rollback();
 						throw error;
 					}
-					return { run_dir: input.runDir, value: written.value, receipt, claims };
 				}),
-			) as Promise<any>,
+			),
 	};
+}
+
+export function registerResearchExtension(
+	pi: Pi,
+	ports: ResearchExtensionPorts,
+): ResearchExtensionHandle | undefined {
+	if (process.env.PI_SUBAGENT_CHILD === "1") return;
+	const loop = createResearchLoop({
+		...ports,
+		breakerBudget: ports.breakerBudget ?? { maxBilledTokens: 24_000 },
+	});
+	const sessions = new Map<string, Session>();
+	const journalPorts: ResearchJournalPorts = {
+		workspace: ports.workspace,
+		owners: new Map<string, symbol>(),
+		observeExecution: async ({ toolCallId, toolName, ...event }) =>
+			toolCallId && toolName
+				? observeExecutionReceipt({ ...event, toolCallId, toolName, loadWorkspaceConfig: ports.workspace })
+				: null,
+		status: (cwd: string, runDir: string) => loop.updateResearchLoop({ cwd, runDir, action: "status" }),
+		flush: (cwd: string, runDir: string) => loop.flushResearchReceipts({ cwd, runDir }),
+		reset: (cwd: string, runDir: string) => loop.resetResearchReceipts({ cwd, runDir }),
+		observeResearch: loop.observeResearchReceipt,
+	};
+	const fresh = (ctx: Context) => {
+		const sessionId = sessionKey(ctx);
+		const journal = createResearchReceiptJournal(ctx.cwd, { sessionId, ports: journalPorts });
+		const session: Session = { cwd: ctx.cwd, journal, pending: new Map(), awaitingUserStart: false };
+		sessions.set(sessionId, session);
+		return session;
+	};
+	const sessionFor = (ctx: Context) => sessions.get(sessionKey(ctx)) ?? fresh(ctx);
+	ports.registerTool(
+		pi,
+		researchLoopTool(ports, loop, (ctx) => sessionFor(ctx).journal),
+	);
+	subscribeTools(pi, ports, loop, sessions, sessionFor);
+	subscribeTelemetry(pi, ports, loop, sessions);
+	subscribeTurns(pi, ports, loop, sessions, fresh);
+	return deliveryHandle(ports, loop, sessionFor);
 }

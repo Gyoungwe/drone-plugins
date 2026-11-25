@@ -36,6 +36,19 @@ each claim requires `claim`, `relationship`, `limitations`, and bounded
 host records source hashes and reading receipt IDs. `result_slug` determines
 the persisted topic ID; there is no separate `topic` input.
 
+Start with `mode: "fast_readonly"` for a question that local literature tools can
+answer. The host counts up to five executed steps, including start and completion.
+Completion requires a current-turn verified note and structured claim bindings.
+Use `action: "escalate"` with the reported reason when further research is needed.
+Escalation retains current-turn read receipts and keeps host approvals in effect.
+
+Deep research stops at its measured token or cost ceiling, after 20 tool steps,
+after three steps without evidence progress, or on a third identical tool target.
+The extension supplies a 24,000 billed-token ceiling by default. Host adapters
+can inject `breakerBudget` with a token cap and an optional cost cap. Host usage
+charges input, output, and cache writes. The stop receipt records the reason,
+preserved evidence progress, and any context evictions observed before the stop.
+
 `requires_provenance:true` adds an explicit manifest prerequisite. `start` does
 not create that manifest: in a host providing `research_record_run_manifest`,
 call it before `complete`/`finalize`, listing actual source paths in `files` with

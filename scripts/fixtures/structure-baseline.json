@@ -24,7 +24,7 @@
 	"file-lines\tpackages/pi-knowledge/ui/knowledge/KnowledgeGraphView.tsx": 1300,
 	"file-lines\tpackages/pi-knowledge/ui/knowledge/KnowledgePanel.tsx": 488,
 	"file-lines\tpackages/pi-research/src/core/open-access.ts": 463,
-	"file-lines\tpackages/pi-research/src/core/research-loop.ts": 885,
+	"file-lines\tpackages/pi-research/src/core/research-loop.ts": 796,
 	"file-lines\tpackages/pi-research/src/core/research-run-ui.ts": 415,
 	"file-lines\tpackages/pi-research/src/core/source-archive.ts": 901,
 	"file-lines\tpackages/pi-research/src/core/zotero-setup-runtime.ts": 406,
