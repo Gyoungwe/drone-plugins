@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
 	Button,
-	getKnowledgeApi,
 	type KnowledgeTab,
+	openKnowledgeTarget,
 	PageHeader,
 	PluginEntryHost,
 	UI_REGIONS,
@@ -99,9 +99,9 @@ export function KnowledgeView() {
 									disabled={!binding}
 									onClick={() => {
 										if (binding)
-											void getKnowledgeApi()
-												.openKnowledgeTarget({ cwd: dialog.cwd, revision: binding.revision })
-												.catch(reportKnowledgeError);
+											void openKnowledgeTarget({ cwd: dialog.cwd, revision: binding.revision }).catch(
+												reportKnowledgeError,
+											);
 									}}
 								>
 									{t("homeNewNote")}

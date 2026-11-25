@@ -1,6 +1,14 @@
 import type { KnowledgeTopic, KnowledgeTopicListResult } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, getKnowledgeApi, StatePanel, useAgentActive, useSessionsStore } from "../api";
+import {
+	archiveKnowledgeTopic,
+	Button,
+	getKnowledgeTopics,
+	prompt,
+	StatePanel,
+	useAgentActive,
+	useSessionsStore,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 
 export function TopicManagement({
@@ -26,7 +34,7 @@ export function TopicManagement({
 			const current = ++epoch.current;
 			setError(null);
 			try {
-				const next = await getKnowledgeApi().getKnowledgeTopics({ cwd, bindingRevision, query: filter });
+				const next = await getKnowledgeTopics({ cwd, bindingRevision, query: filter });
 				if (current === epoch.current) setData(next);
 			} catch (e) {
 				if (current === epoch.current) setError(e instanceof Error ? e.message : String(e));
@@ -46,7 +54,7 @@ export function TopicManagement({
 		setBusy(true);
 		setError(null);
 		try {
-			await getKnowledgeApi().archiveKnowledgeTopic({
+			await archiveKnowledgeTopic({
 				cwd: projectCwd,
 				bindingRevision,
 				id: topic.id,
@@ -62,9 +70,7 @@ export function TopicManagement({
 	function resume(topic: KnowledgeTopic) {
 		if (!sessionId || !session || session.readOnly || streaming) return;
 		const text = `Prepare the knowledge context for topic "${topic.id}" from its recorded sources, then call research_resume_topic with the exact quoted topic id "${topic.id}" and reread the sources before continuing research.`;
-		void getKnowledgeApi()
-			.prompt(sessionId, text)
-			.catch((e) => setError(e instanceof Error ? e.message : String(e)));
+		void prompt(sessionId, text).catch((e) => setError(e instanceof Error ? e.message : String(e)));
 	}
 	return (
 		<section className="space-y-3" data-testid="knowledge-topics">

@@ -62,7 +62,7 @@
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0",
-		"@gyoungwe/plugin-api": ">=1.2.0 <2.0.0"
+		"@gyoungwe/plugin-api": ">=2.0.0 <3.0.0"
 	},
 	"devDependencies": {
 		"@types/node": "^22.19.19",

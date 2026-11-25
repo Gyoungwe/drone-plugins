@@ -1,15 +1,15 @@
-import {
-	type KnowledgeSpecialistMode,
-	type KnowledgeSpecialistRun,
-	type KnowledgeSpecialistSettings,
-	type SubagentThinkingLevel,
+import type {
+	KnowledgeSpecialistMode,
+	KnowledgeSpecialistRun,
+	KnowledgeSpecialistSettings,
+	SubagentThinkingLevel,
 } from "@gyoungwe/plugin-api/ui";
 import { useState } from "react";
 import {
 	Button,
-	getKnowledgeApi,
 	PROTECTED_KNOWLEDGE_AGENTS,
 	SUBAGENT_THINKING_LEVELS,
+	setKnowledgeSpecialistSettings,
 	useKnowledgeStore,
 	useSessionsStore,
 	useSettingsStore,
@@ -41,7 +41,7 @@ export function KnowledgeSpecialists({
 		setBusy(true);
 		setError(null);
 		try {
-			await getKnowledgeApi().setKnowledgeSpecialistSettings({
+			await setKnowledgeSpecialistSettings({
 				mode,
 				revision: settings.revision,
 				bindingRevision,

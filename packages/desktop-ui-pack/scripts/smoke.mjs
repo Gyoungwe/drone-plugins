@@ -6,6 +6,10 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
+import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+
+const api = await candidatePluginApi();
+
 const run = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const temp = await mkdtemp(join(tmpdir(), "drone-research-status-ui-"));
@@ -18,9 +22,11 @@ try {
 		join(temp, "package.json"),
 		'{"name":"research-status-consumer","private":true,"version":"0.0.0"}',
 	);
-	await run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", join(temp, pack.filename)], {
-		cwd: temp,
-	});
+	await run(
+		"npm",
+		["install", "--ignore-scripts", "--no-audit", "--no-fund", api.path, join(temp, pack.filename)],
+		{ cwd: temp },
+	);
 	const installed = join(temp, "node_modules/@gyoungwe/desktop-ui-pack");
 	const manifest = JSON.parse(await readFile(join(installed, "ui/plugin.json"), "utf8"));
 	assert.deepEqual(

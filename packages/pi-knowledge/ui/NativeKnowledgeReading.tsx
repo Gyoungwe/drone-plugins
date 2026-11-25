@@ -22,8 +22,8 @@ export function NativeKnowledgeReading({ store, state }: { store: Store; state: 
 	const noteApi = useMemo(() => ({ readNote: store.readNote, links: store.links }), [store]);
 	const graphApi = useMemo(
 		() => ({
-			getKnowledgeGraph: store.graph,
-			getKnowledgeNoteLinks: store.links,
+			getGraph: store.graph,
+			getLinks: store.links,
 		}),
 		[store],
 	);

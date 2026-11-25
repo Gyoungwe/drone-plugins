@@ -6,6 +6,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
+import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+
+const api = await candidatePluginApi();
+
 const execFileAsync = promisify(execFile);
 const packageRoot = resolve(import.meta.dirname, "..");
 const temp = await mkdtemp(join(tmpdir(), "drone-pi-evidence-smoke-"));
@@ -30,6 +34,7 @@ try {
 			"--omit=peer",
 			"--no-audit",
 			"--no-fund",
+			api.path,
 			tarball,
 		],
 		{ cwd: packageRoot, maxBuffer: 16 * 1024 * 1024 },

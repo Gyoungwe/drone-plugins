@@ -1,9 +1,6 @@
-import type {
-	KnowledgeGraph as GraphData,
-	KnowledgeNoteLinks,
-	KnowledgeUiPort,
-} from "@gyoungwe/plugin-api/ui";
+import type { KnowledgeGraph as GraphData, KnowledgeNoteLinks } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { KnowledgeGraphApi } from "../api";
 import { Button, useLanguage } from "../runtime-api";
 import { useKnowledgeText } from "./copy";
 import {
@@ -219,7 +216,7 @@ export function KnowledgeGraphView({
 	revision,
 	indexKey = "",
 }: {
-	api: Pick<KnowledgeUiPort, "getKnowledgeGraph" | "getKnowledgeNoteLinks">;
+	api: KnowledgeGraphApi;
 	nonce: number;
 	onOpenNote: (path: string) => void;
 	onHandoff?: (path: string, prompt: string) => void;
@@ -286,7 +283,7 @@ export function KnowledgeGraphView({
 	useEffect(() => {
 		let live = true;
 		setError(null);
-		void api.getKnowledgeGraph({ revision, limit: GRAPH_LIMIT, view, mergeMirrors }).then(
+		void api.getGraph({ revision, limit: GRAPH_LIMIT, view, mergeMirrors }).then(
 			(value) => live && setData(value),
 			(e) => live && setError(String((e as Error).message || e)),
 		);
@@ -322,7 +319,7 @@ export function KnowledgeGraphView({
 			return;
 		}
 		let live = true;
-		void api.getKnowledgeNoteLinks({ path: selected, revision }).then(
+		void api.getLinks({ path: selected, revision }).then(
 			(value) => live && setLinks(value),
 			(cause) => {
 				if (live) {

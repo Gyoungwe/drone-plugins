@@ -1,7 +1,7 @@
 {
   "artifactSource": "ui/src/index.tsx",
   "inputs": {
-    "package.json": "82b9f06a99d287f48616ad5990866fa1d4cfdfb14c0c625b000c7d25369bcb85",
+    "package.json": "d6e62c1531374a426992b3d1e07265c0605dda96440dc8d03bdc2164ae3290a3",
     "plugin.manifest.json": "cbd0e65928d22d4713ddf06dff74fe18f8d798df1d83f251097a07c790c55864",
     "scripts/build-ui.mjs": "98bc65a95e03b7d6556fab9beaf7cd45146507a1c8b48a42a8299a3883dccb51",
     "ui/plugin.json": "38e0cd05b3e2b11089d6329e50a72207286239e6f8339ad09a1083069408f2c8",

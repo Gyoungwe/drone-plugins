@@ -1,6 +1,12 @@
 import type { InstitutionalStatus } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useState } from "react";
-import { Button, getKnowledgeApi } from "../api";
+import {
+	Button,
+	clearInstitutionalSession,
+	getInstitutionalStatus,
+	openInstitutionalLogin,
+	testInstitutionalAccess,
+} from "../api";
 import { useZoteroText } from "./zotero-copy";
 
 function Row({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
@@ -27,7 +33,7 @@ export function InstitutionalAccessSection() {
 		setLoading(true);
 		setError(null);
 		try {
-			const s = await getKnowledgeApi().getInstitutionalStatus();
+			const s = await getInstitutionalStatus();
 			setStatus(s);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
@@ -43,7 +49,7 @@ export function InstitutionalAccessSection() {
 	const openLogin = async (url?: string) => {
 		setError(null);
 		try {
-			await getKnowledgeApi().openInstitutionalLogin(url);
+			await openInstitutionalLogin(url);
 			setTimeout(() => void refresh(), 1500);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
@@ -53,7 +59,7 @@ export function InstitutionalAccessSection() {
 	const clear = async () => {
 		setError(null);
 		try {
-			const next = await getKnowledgeApi().clearInstitutionalSession();
+			const next = await clearInstitutionalSession();
 			setStatus(next);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
@@ -65,7 +71,7 @@ export function InstitutionalAccessSection() {
 		setTestResult(null);
 		setError(null);
 		try {
-			const res = await getKnowledgeApi().testInstitutionalAccess(testUrl);
+			const res = await testInstitutionalAccess(testUrl);
 			setTestResult(JSON.stringify(res, null, 2));
 			await refresh();
 		} catch (e) {

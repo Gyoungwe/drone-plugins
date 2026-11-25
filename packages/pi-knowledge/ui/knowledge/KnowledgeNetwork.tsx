@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, getKnowledgeApi, relativeTime, useLanguage } from "../api";
+import { Button, formalKnowledgeVault, pickDirectory, relativeTime, useLanguage } from "../api";
 import { useKnowledgeText } from "./copy";
 import { launchKnowledgeSetup, reportKnowledgeError, useKnowledgeOverview } from "./hooks";
 import { KnowledgeGraph } from "./KnowledgeGraph";
@@ -18,12 +18,10 @@ export function KnowledgeNetwork({ cwd, sessionId }: { cwd: string | null; sessi
 	useEffect(() => {
 		if (binding) return;
 		let live = true;
-		void getKnowledgeApi()
-			.formalKnowledgeVault()
-			.then(
-				(path) => live && setFormalVault(path),
-				() => live && setFormalVault(null),
-			);
+		void formalKnowledgeVault().then(
+			(path) => live && setFormalVault(path),
+			() => live && setFormalVault(null),
+		);
 		return () => {
 			live = false;
 		};
@@ -45,7 +43,7 @@ export function KnowledgeNetwork({ cwd, sessionId }: { cwd: string | null; sessi
 		if (!cwd) return;
 		setBusy(true);
 		try {
-			const path = await getKnowledgeApi().pickDirectory();
+			const path = await pickDirectory();
 			if (path) await launchKnowledgeSetup(cwd, sessionId, path);
 		} catch (cause) {
 			reportKnowledgeError(cause);

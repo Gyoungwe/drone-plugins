@@ -1,6 +1,15 @@
 import type { KnowledgeSetupPreview } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useState } from "react";
-import { Button, getKnowledgeApi, useSessionsStore, useSettingsStore } from "../api";
+import {
+	Button,
+	maintainKnowledge,
+	openExternal,
+	openKnowledgeTarget,
+	pickDirectory,
+	previewKnowledgeSetup,
+	useSessionsStore,
+	useSettingsStore,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 import { launchKnowledgeSetup, reportKnowledgeError, useKnowledgeOverview } from "./hooks";
 import { KnowledgeMaintenance } from "./KnowledgeMaintenance";
@@ -8,6 +17,15 @@ import { KnowledgeSpecialists } from "./KnowledgeSpecialists";
 import { SemanticManagement } from "./SemanticManagement";
 import { TopicManagement } from "./TopicManagement";
 import { WikiReviewPanel } from "./WikiReviewPanel";
+
+const COVERAGE_TEXT = {
+	ready: "coverageReady",
+	indexing: "coverageIndexing",
+	partial: "coveragePartial",
+	uninitialized: "coverageUninitialized",
+} as const;
+const PANEL_TABS = ["overview", "settings", "reviews", "maintenance", "semantic", "topics"] as const;
+type KnowledgePanelTab = (typeof PANEL_TABS)[number];
 export function KnowledgePanel({
 	context,
 	headless = false,
@@ -16,7 +34,7 @@ export function KnowledgePanel({
 	context?: {
 		cwd: string | null;
 		sessionId: string | null;
-		tab?: "overview" | "settings" | "reviews" | "maintenance" | "semantic" | "topics";
+		tab?: KnowledgePanelTab;
 		id?: string;
 	};
 	/** 嵌入全屏视图（KnowledgeView 自带标题栏）时不再重复渲染标题，只保留刷新按钮 */
@@ -30,9 +48,7 @@ export function KnowledgePanel({
 		sessionId = context ? context.sessionId : activeSession,
 		t = useKnowledgeText();
 	const { data, error, loading, refresh } = useKnowledgeOverview(cwd, sessionId);
-	const [tab, setTab] = useState<"overview" | "settings" | "reviews" | "maintenance" | "semantic" | "topics">(
-		context?.tab || "overview",
-	);
+	const [tab, setTab] = useState<KnowledgePanelTab>(context?.tab || "overview");
 	const [path, setPath] = useState(""),
 		[preview, setPreview] = useState<KnowledgeSetupPreview | null>(null),
 		[busy, setBusy] = useState(false),
@@ -45,43 +61,30 @@ export function KnowledgePanel({
 	}, [context?.tab]);
 	const binding = data?.binding,
 		index = data?.index;
-	const coverage =
-		index?.coverage === "ready"
-			? t("coverageReady")
-			: index?.coverage === "indexing"
-				? t("coverageIndexing")
-				: index?.coverage === "partial"
-					? t("coveragePartial")
-					: t("coverageUninitialized");
-	/** Settings tab: pick another folder and go straight into the (confirmed) setup flow for it. */
-	async function switchFolder() {
+	const coverage = t(COVERAGE_TEXT[(index?.coverage ?? "uninitialized") as keyof typeof COVERAGE_TEXT]);
+	/** Settings tab: pick a folder on disk and hand it to the caller. */
+	async function pickFolder(apply: (selected: string) => void) {
 		setActionError(null);
 		try {
-			const selected = await getKnowledgeApi().pickDirectory();
-			if (selected) setup(selected);
+			const selected = await pickDirectory();
+			if (selected) apply(selected);
 		} catch (e) {
 			setActionError(String((e as Error).message || e));
 		}
 	}
-	async function folders() {
-		setActionError(null);
-		try {
-			const selected = await getKnowledgeApi().pickDirectory();
-			if (selected) {
-				setPath(selected);
-				setPreview(null);
-			}
-		} catch (e) {
-			setActionError(String((e as Error).message || e));
-		}
-	}
+	/** Switch to another vault and go straight into the (confirmed) setup flow for it. */
+	const switchFolder = () => pickFolder(setup);
+	/** Keep the chosen folder for the setup preview instead of starting it. */
+	const folders = () =>
+		pickFolder((selected) => {
+			setPath(selected);
+			setPreview(null);
+		});
 	async function inspect() {
 		setBusy(true);
 		setActionError(null);
 		try {
-			setPreview(
-				await getKnowledgeApi().previewKnowledgeSetup({ cwd, path: path.trim() || binding?.vault || null }),
-			);
+			setPreview(await previewKnowledgeSetup({ cwd, path: path.trim() || binding?.vault || null }));
 		} catch (e) {
 			setActionError(String((e as Error).message || e));
 		} finally {
@@ -110,7 +113,7 @@ export function KnowledgePanel({
 					role="tablist"
 					aria-label={t("title")}
 				>
-					{(["overview", "settings", "reviews", "maintenance", "semantic", "topics"] as const).map((item) => (
+					{PANEL_TABS.map((item) => (
 						<button
 							key={item}
 							type="button"
@@ -145,7 +148,7 @@ export function KnowledgePanel({
 							<Button size="sm" disabled={!cwd} onClick={() => setup(binding?.vault)}>
 								{binding ? t("adjustCurrent") : t("setup")}
 							</Button>
-							<Button size="sm" disabled={busy || !cwd} onClick={() => void switchFolder()}>
+							<Button size="sm" disabled={busy || !cwd} onClick={switchFolder}>
 								{t("switchFolder")}
 							</Button>
 						</div>
@@ -207,9 +210,7 @@ export function KnowledgePanel({
 								<Button
 									size="sm"
 									onClick={() =>
-										void getKnowledgeApi()
-											.openKnowledgeTarget({ cwd, revision: binding.revision })
-											.catch(reportKnowledgeError)
+										void openKnowledgeTarget({ cwd, revision: binding.revision }).catch(reportKnowledgeError)
 									}
 								>
 									{t("openVault")}
@@ -235,9 +236,7 @@ export function KnowledgePanel({
 							<Button
 								size="sm"
 								onClick={() =>
-									void getKnowledgeApi()
-										.openExternal("https://www.zotero.org/download")
-										.catch(reportKnowledgeError)
+									void openExternal("https://www.zotero.org/download").catch(reportKnowledgeError)
 								}
 							>
 								{t("literatureDownload")}
@@ -257,7 +256,7 @@ export function KnowledgePanel({
 										setBusy(true);
 										setActionError(null);
 										try {
-											await getKnowledgeApi().maintainKnowledge({ cwd, revision: binding.revision, action });
+											await maintainKnowledge({ cwd, revision: binding.revision, action });
 											refresh();
 										} catch (err) {
 											setActionError(String(err));
@@ -294,7 +293,7 @@ export function KnowledgePanel({
 													setBusy(true);
 													setActionError(null);
 													try {
-														await getKnowledgeApi().maintainKnowledge({
+														await maintainKnowledge({
 															cwd,
 															revision: binding.revision,
 															action: "undo-wiki",
@@ -393,7 +392,7 @@ export function KnowledgePanel({
 							/>
 						</label>
 						<div className="mt-2 flex flex-wrap gap-1">
-							<Button size="sm" disabled={busy} onClick={() => void folders()}>
+							<Button size="sm" disabled={busy} onClick={folders}>
 								{t("selectFolder")}
 							</Button>
 							<Button size="sm" disabled={busy} onClick={() => void inspect()}>

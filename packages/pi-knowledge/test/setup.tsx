@@ -15,6 +15,83 @@ export function setPluginRuntime(runtime: PluginUiRuntimeClient | undefined) {
 }
 
 export const services: Record<string, (...args: unknown[]) => unknown> = {};
+
+/**
+ * The host's route tables, mirrored here so the fake host answers the same
+ * operation names the real host does.  A domain group's operation name selects
+ * the service method; the table is the authorization boundary.
+ */
+const ROUTES: Record<string, Record<string, string>> = {
+	knowledge: {
+		"cloud.status": "getKnowledgeCloudStatus",
+		"cloud.probe": "probeKnowledgeCloud",
+		"cloud.initialize": "initializeKnowledgeCloud",
+		"cloud.setPassword": "setKnowledgeCloudPassword",
+		"cloud.readNote": "readKnowledgeCloudNote",
+		"cloud.writeNote": "writeKnowledgeCloudNote",
+		"cloud.sync": "syncKnowledgeCloud",
+		"specialist.settings": "setKnowledgeSpecialistSettings",
+		overview: "getKnowledgeOverview",
+		"research.runs": "getKnowledgeResearchRuns",
+		"research.run": "runKnowledgeResearch",
+		"setup.preview": "previewKnowledgeSetup",
+		"setup.start": "startKnowledgeSetup",
+		"setup.resume": "resumeKnowledgeCheck",
+		jobs: "getKnowledgeJobs",
+		"reviews.list": "getKnowledgeReviews",
+		"reviews.preview": "previewKnowledgeReview",
+		"reviews.withModel": "reviewKnowledgeWithModel",
+		"reviews.cancelModel": "cancelKnowledgeModelReview",
+		"reviews.decide": "decideKnowledgeReview",
+		read: "readKnowledgeNote",
+		maintain: "maintainKnowledge",
+		openTarget: "openKnowledgeTarget",
+		"semantic.status": "getKnowledgeSemanticStatus",
+		"semantic.saveSettings": "saveKnowledgeSemanticSettings",
+		"semantic.testProvider": "testKnowledgeSemanticProvider",
+		"semantic.index": "indexKnowledgeSemantic",
+		"semantic.cancelIndex": "cancelKnowledgeSemanticIndex",
+		search: "searchKnowledge",
+		noteLinks: "getKnowledgeNoteLinks",
+		graph: "getKnowledgeGraph",
+		"topics.list": "getKnowledgeTopics",
+		"topics.archive": "archiveKnowledgeTopic",
+		"maintenance.settings": "getKnowledgeMaintenanceSettings",
+		"maintenance.saveSettings": "saveKnowledgeMaintenanceSettings",
+		"maintenance.run": "runKnowledgeMaintenance",
+		"maintenance.runs": "getKnowledgeMaintenanceRuns",
+	},
+	daily: {
+		state: "getDailyDiscovery",
+		update: "updateDailyDiscovery",
+		decideIdea: "decideDailyIdea",
+		decideRadarPaper: "decideDailyRadarPaper",
+	},
+	zotero: {
+		status: "getZoteroStatus",
+		"webApi.get": "getZoteroWebApi",
+		"webApi.save": "saveZoteroWebApi",
+		"webApi.clear": "clearZoteroWebApi",
+		"localWrite.get": "getZoteroLocalWrite",
+		"localWrite.authorize": "authorizeZoteroLocalWrite",
+		"localWrite.clear": "clearZoteroLocalWrite",
+	},
+};
+
+/** One domain group's routed channel, answering only the listed operations. */
+function route(domain: string) {
+	const table = ROUTES[domain];
+	return {
+		async invoke(operation: string, input?: unknown): Promise<unknown> {
+			const method = table[operation];
+			if (!method) throw new Error(`Unknown knowledge operation: ${operation}`);
+			const service = services[method];
+			if (!service) throw new Error(`Unknown knowledge operation: ${operation}`);
+			return service(input);
+		},
+	};
+}
+
 export function fixtureStore(initial: Record<string, unknown>) {
 	let state = initial;
 	const listeners = new Set<() => void>();
@@ -98,7 +175,28 @@ Object.assign(window, {
 	DroneUI: {
 		React,
 		ReactDOM,
-		knowledge: services,
+		knowledge: {
+			knowledge: route("knowledge"),
+			daily: route("daily"),
+			zotero: route("zotero"),
+		},
+		app: {
+			pickDirectory: async () => services.pickDirectory?.() ?? null,
+			formalKnowledgeVault: async () => services.formalKnowledgeVault?.() ?? null,
+		},
+		institutional: {
+			getStatus: async () => services.getInstitutionalStatus?.(),
+			saveConfig: async (input: unknown) => services.saveInstitutionalConfig?.(input),
+			openLogin: async (url?: string) => services.openInstitutionalLogin?.(url),
+			openUrl: async (url: string) => services.openInstitutionalUrl?.(url),
+			clear: async () => services.clearInstitutionalSession?.(),
+			testAccess: async (url: string) => services.testInstitutionalAccess?.(url),
+		},
+		sessions: {
+			command: async (sessionId: string, name: string, args?: string) =>
+				services.command?.(sessionId, name, args),
+			prompt: async (sessionId: string, text: string) => services.prompt?.(sessionId, text),
+		},
 		components: {
 			Button,
 			Markdown: ({ text, onLink }: { text: string; onLink?: (href: string) => void }) => (
@@ -148,6 +246,9 @@ Object.assign(window, {
 					.filter((m) => m.state === "completed" && m.evidence?.kind === "file-observed")
 					.map((m) => ({ path: m.evidence!.path, state: "observed" })),
 			pushToast: () => undefined,
+			openExternal: async (url: string) => {
+				await services.openExternal?.(url);
+			},
 		},
 		stores: {
 			useKnowledgeStore: knowledge,

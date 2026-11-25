@@ -1,7 +1,15 @@
 import type { WikiReviewPreview } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ActionSurface, Button, getKnowledgeApi, useKnowledgeStore } from "../api";
+import {
+	ActionSurface,
+	Button,
+	decideKnowledgeReview,
+	getKnowledgeOverview,
+	getKnowledgeReviews,
+	previewKnowledgeReview,
+	useKnowledgeStore,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 import { WikiModelReview } from "./WikiModelReview";
 import { WikiReviewContent } from "./WikiReviewContent";
@@ -35,19 +43,16 @@ export function WikiReviewDialog({
 		setReviewing(false);
 		setVerdict(null);
 		setPending(true);
-		void getKnowledgeApi()
-			.getKnowledgeOverview({ cwd })
+		void getKnowledgeOverview({ cwd })
 			.then((overview) => {
 				const binding = overview.binding?.revision;
 				if (binding == null) throw new Error("not-bound");
-				if (id) return getKnowledgeApi().previewKnowledgeReview({ cwd, id, revision: binding });
-				return getKnowledgeApi()
-					.getKnowledgeReviews({ cwd, revision: binding, offset: 0, limit: 1 })
-					.then((page) => {
-						const first = page.items[0];
-						if (!first) throw new Error("empty");
-						return getKnowledgeApi().previewKnowledgeReview({ cwd, id: first.id, revision: binding });
-					});
+				if (id) return previewKnowledgeReview({ cwd, id, revision: binding });
+				return getKnowledgeReviews({ cwd, revision: binding, offset: 0, limit: 1 }).then((page) => {
+					const first = page.items[0];
+					if (!first) throw new Error("empty");
+					return previewKnowledgeReview({ cwd, id: first.id, revision: binding });
+				});
 			})
 			.then(
 				(value) => {
@@ -76,7 +81,7 @@ export function WikiReviewDialog({
 		setPending(true);
 		setError(null);
 		try {
-			const value = await getKnowledgeApi().decideKnowledgeReview({
+			const value = await decideKnowledgeReview({
 				cwd,
 				token: preview.reviewToken,
 				decision,

@@ -4,7 +4,14 @@ import type {
 	KnowledgeSemanticStatus,
 } from "@gyoungwe/plugin-api/ui";
 import { useEffect, useRef, useState } from "react";
-import { Button, getKnowledgeApi } from "../api";
+import {
+	Button,
+	cancelKnowledgeSemanticIndex,
+	getKnowledgeSemanticStatus,
+	indexKnowledgeSemantic,
+	saveKnowledgeSemanticSettings,
+	testKnowledgeSemanticProvider,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 
 const EMPTY_CONFIG: KnowledgeSemanticConfig = {
@@ -38,8 +45,7 @@ export function SemanticManagement({
 		const current = ++epoch.current;
 		setStatus(null);
 		setError(null);
-		void getKnowledgeApi()
-			.getKnowledgeSemanticStatus({ cwd, bindingRevision })
+		void getKnowledgeSemanticStatus({ cwd, bindingRevision })
 			.then((next) => {
 				if (current !== epoch.current) return;
 				setStatus(next);
@@ -73,7 +79,7 @@ export function SemanticManagement({
 		setError(null);
 		setMessage(null);
 		try {
-			const safe = await getKnowledgeApi().saveKnowledgeSemanticSettings({
+			const safe = await saveKnowledgeSemanticSettings({
 				config,
 				bindingRevision,
 				expectedSettingsRevision: status?.settings.revision ?? 0,
@@ -93,7 +99,7 @@ export function SemanticManagement({
 		setError(null);
 		setMessage(null);
 		try {
-			await getKnowledgeApi().testKnowledgeSemanticProvider({ config, bindingRevision });
+			await testKnowledgeSemanticProvider({ config, bindingRevision });
 			setMessage(t("semanticTested"));
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
@@ -111,7 +117,7 @@ export function SemanticManagement({
 		setError(null);
 		setMessage(null);
 		try {
-			const next = await getKnowledgeApi().indexKnowledgeSemantic({
+			const next = await indexKnowledgeSemantic({
 				cwd: projectCwd,
 				bindingRevision,
 				requestId,
@@ -136,7 +142,7 @@ export function SemanticManagement({
 		try {
 			const requestId = requestIdRef.current;
 			if (!requestId) return;
-			await getKnowledgeApi().cancelKnowledgeSemanticIndex({ cwd, bindingRevision, requestId });
+			await cancelKnowledgeSemanticIndex({ cwd, bindingRevision, requestId });
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
 		}

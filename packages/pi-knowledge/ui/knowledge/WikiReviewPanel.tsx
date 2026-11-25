@@ -1,6 +1,13 @@
 import type { KnowledgePage, WikiReviewItem, WikiReviewPreview } from "@gyoungwe/plugin-api/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, getKnowledgeApi, StatePanel, useKnowledgeStore } from "../api";
+import {
+	Button,
+	decideKnowledgeReview,
+	getKnowledgeReviews,
+	previewKnowledgeReview,
+	StatePanel,
+	useKnowledgeStore,
+} from "../api";
 import { useKnowledgeText } from "./copy";
 import { KnowledgeNoteViewer } from "./KnowledgeNoteViewer";
 import { knowledgeLineDiff } from "./line-diff";
@@ -42,8 +49,7 @@ export function WikiReviewPanel({
 	useEffect(() => {
 		let live = true;
 		setLoading(true);
-		void getKnowledgeApi()
-			.getKnowledgeReviews({ cwd, revision, offset, limit: 12 })
+		void getKnowledgeReviews({ cwd, revision, offset, limit: 12 })
 			.then(
 				(value) => {
 					if (live) setPage(value);
@@ -71,7 +77,7 @@ export function WikiReviewPanel({
 			setReadPath(null);
 			setPending(true);
 			try {
-				const value = await getKnowledgeApi().previewKnowledgeReview({ cwd, id, revision });
+				const value = await previewKnowledgeReview({ cwd, id, revision });
 				if (seq === request.current) {
 					setPreview(value);
 					setPreviewNonce(useKnowledgeStore.getState().revision);
@@ -108,7 +114,7 @@ export function WikiReviewPanel({
 		setError(null);
 		setResult(null);
 		try {
-			const value = await getKnowledgeApi().decideKnowledgeReview({
+			const value = await decideKnowledgeReview({
 				cwd,
 				token: preview.reviewToken,
 				decision,
