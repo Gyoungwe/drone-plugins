@@ -2819,7 +2819,7 @@ function KnowledgeGraphView({
   useEffect6(() => {
     let live = true;
     setError(null);
-    void api.getKnowledgeGraph({ revision, limit: GRAPH_LIMIT, view, mergeMirrors }).then(
+    void api.getGraph({ revision, limit: GRAPH_LIMIT, view, mergeMirrors }).then(
       (value) => live && setData(value),
       (e) => live && setError(String(e.message || e))
     );
@@ -2852,7 +2852,7 @@ function KnowledgeGraphView({
       return;
     }
     let live = true;
-    void api.getKnowledgeNoteLinks({ path: selected, revision }).then(
+    void api.getLinks({ path: selected, revision }).then(
       (value) => live && setLinks(value),
       (cause) => {
         if (live) {
@@ -4168,8 +4168,8 @@ function NativeKnowledgeReading({ store, state }) {
   const noteApi = useMemo3(() => ({ readNote: store.readNote, links: store.links }), [store]);
   const graphApi = useMemo3(
     () => ({
-      getKnowledgeGraph: store.graph,
-      getKnowledgeNoteLinks: store.links
+      getGraph: store.graph,
+      getLinks: store.links
     }),
     [store]
   );
