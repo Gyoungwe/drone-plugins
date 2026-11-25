@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { createTaskApplicationState } from "./application-state.ts";
 import { inspectTaskBytes } from "./file-inspection.ts";
-import { createRemoteAcceptance } from "./remote-acceptance.mjs";
-import { bindRuntime, createStandaloneRuntime, withRuntime } from "./runtime-bridge.mjs";
+import { createRemoteAcceptance } from "./remote-acceptance.ts";
+import { bindRuntime, createStandaloneRuntime, withRuntime } from "./runtime-bridge.ts";
 import { registerWorkbenchAdapter } from "./workbench-adapter.mjs";
 
 const empty = { type: "null" };

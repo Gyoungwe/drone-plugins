@@ -1,17 +1,53 @@
+import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { emitProcessEvent } from "./process-events.ts";
-import { bindRuntime, hasRuntimeContext, runtimeSlot, withHostRuntime } from "./runtime-bridge.mjs";
+import {
+	bindRuntime,
+	hasRuntimeContext,
+	type RuntimeHost,
+	runtimeSlot,
+	withHostRuntime,
+} from "./runtime-bridge.ts";
+
+interface ToolActivity {
+	text: string;
+	phase: string;
+}
+
+interface ToolFamily {
+	match: string;
+	readOnly?: boolean;
+	activity?: ToolActivity;
+}
+
+interface ToolMetadata {
+	subagent?: "exclude" | "inherit";
+	capabilities?: readonly unknown[];
+	activity?: ToolActivity;
+	flowCards?: (...args: never[]) => unknown;
+	families?: readonly ToolFamily[];
+	readOnly?: boolean;
+}
+
+type RegisteredToolFamily = ToolFamily & { owner: string };
+type DeclaredTool = ToolDefinition & { drone?: ToolMetadata | null };
+type ToolHost = RuntimeHost & Pick<ExtensionAPI, "registerTool">;
+type ToolArguments = { server?: unknown; tool?: unknown };
 
 const registry = runtimeSlot("tools", "manifest", () => ({
-	tools: /* @__PURE__ */ new Map(),
-	families: /* @__PURE__ */ new Map(),
+	tools: /* @__PURE__ */ new Map<string, ToolMetadata>(),
+	families: /* @__PURE__ */ new Map<string, RegisteredToolFamily>(),
 }));
-const compatibilityTools = /* @__PURE__ */ new Map();
-const compatibilityFamilies = /* @__PURE__ */ new Map();
+const compatibilityTools = /* @__PURE__ */ new Map<string, ToolMetadata>();
+const compatibilityFamilies = /* @__PURE__ */ new Map<string, RegisteredToolFamily>();
 const TOOL_MANIFEST_EVENT = "drone:tool-manifest/v1";
 const TOOL_MANIFEST_REQUEST_EVENT = "drone:tool-manifest/request/v1";
-const eventBridges = runtimeSlot("tools", "manifestEventBridges", () => /* @__PURE__ */ new WeakSet());
+const eventBridges = runtimeSlot(
+	"tools",
+	"manifestEventBridges",
+	() => /* @__PURE__ */ new WeakSet<RuntimeHost>(),
+);
 const SUBAGENT_MODES = /* @__PURE__ */ new Set(["exclude", "inherit"]);
-function assertMeta(name, meta) {
+function assertMeta(name: string, meta: ToolMetadata) {
 	if (!meta || typeof meta !== "object") throw new Error(`Tool ${name}: drone metadata must be an object`);
 	if (meta.subagent !== void 0 && !SUBAGENT_MODES.has(meta.subagent))
 		throw new Error(`Tool ${name}: drone.subagent must be "exclude" or "inherit"`);
@@ -28,10 +64,10 @@ function assertMeta(name, meta) {
 		if (typeof family?.match !== "string" || !family.match)
 			throw new Error(`Tool ${name}: family.match required`);
 }
-function registration(name, meta) {
+function registration(name: string, meta: ToolMetadata) {
 	return { version: 1, name, meta };
 }
-function replayRegistrations(pi) {
+function replayRegistrations(pi: RuntimeHost) {
 	if (!pi?.events?.emit) return;
 	withHostRuntime(pi, () => {
 		for (const [name, meta] of registry.tools) {
@@ -39,14 +75,15 @@ function replayRegistrations(pi) {
 		}
 	});
 }
-function installEventBridge(pi) {
+function installEventBridge(pi: RuntimeHost) {
 	if (!pi?.events?.on || eventBridges.has(pi)) return;
 	eventBridges.add(pi);
-	pi.events.on(TOOL_MANIFEST_REQUEST_EVENT, (payload) => {
+	pi.events.on(TOOL_MANIFEST_REQUEST_EVENT, (value) => {
+		const payload = value as { version?: number } | null | undefined;
 		if (payload?.version === 1) replayRegistrations(pi);
 	});
 }
-function bindToolRuntime(pi, definition) {
+function bindToolRuntime(pi: RuntimeHost, definition: DeclaredTool): DeclaredTool {
 	if (typeof definition?.execute !== "function") return definition;
 	const execute = definition.execute;
 	return {
@@ -56,12 +93,12 @@ function bindToolRuntime(pi, definition) {
 		},
 	};
 }
-function publishRegistration(pi, name, meta) {
+function publishRegistration(pi: RuntimeHost, name: string, meta: ToolMetadata) {
 	const payload = registration(name, meta);
 	void pi?.events?.emit?.(TOOL_MANIFEST_EVENT, payload);
 	emitProcessEvent(TOOL_MANIFEST_EVENT, payload);
 }
-function defineTool(definition) {
+function defineTool<Definition extends DeclaredTool>(definition: Definition): Definition {
 	const name = definition?.name;
 	if (typeof name !== "string" || !name) throw new Error("defineTool: name required");
 	const meta = definition.drone || {};
@@ -76,7 +113,7 @@ function defineTool(definition) {
 	}
 	return definition;
 }
-function registerTools(pi, definitions) {
+function registerTools(pi: ToolHost, definitions: readonly DeclaredTool[]) {
 	bindRuntime(pi);
 	return withHostRuntime(pi, () => {
 		installEventBridge(pi);
@@ -91,16 +128,16 @@ function registerTools(pi, definitions) {
 		return registered;
 	});
 }
-function registerTool(pi, definition) {
+function registerTool(pi: ToolHost, definition: DeclaredTool) {
 	return registerTools(pi, [definition])[0] ?? null;
 }
-function toolMeta(name) {
+function toolMeta(name: string) {
 	return registry.tools.get(name) || (hasRuntimeContext() ? null : compatibilityTools.get(name)) || null;
 }
 function toolFamilies() {
 	return [...(hasRuntimeContext() ? registry.families : compatibilityFamilies).values()];
 }
-function matchToolFamily(toolName, args) {
+function matchToolFamily(toolName: string, args?: ToolArguments | null) {
 	const name = String(toolName || "").toLowerCase();
 	const server = typeof args?.server === "string" ? args.server.toLowerCase() : "";
 	const tool = typeof args?.tool === "string" ? args.tool.toLowerCase() : "";
@@ -119,19 +156,19 @@ function matchToolFamily(toolName, args) {
 }
 const CORE_READ_ONLY =
 	/^(?:read|grep|find|ls|webfetch|websearch|set_status|todo|task_status|capability_load)$/;
-function isReadOnlyTool(name, args = void 0) {
+function isReadOnlyTool(name: string, args: ToolArguments | null | undefined = void 0) {
 	if (CORE_READ_ONLY.test(name)) return true;
 	const meta = registry.tools.get(name);
 	if (meta) return meta.readOnly === true;
 	return matchToolFamily(name, args)?.readOnly === true;
 }
-function toolsWhere(predicate) {
+function toolsWhere(predicate: (meta: ToolMetadata, name: string) => boolean) {
 	return [...registry.tools.entries()].filter(([name, meta]) => predicate(meta, name)).map(([name]) => name);
 }
-function toolActivity(name, args) {
+function toolActivity(name: string, args?: ToolArguments | null) {
 	return toolMeta(name)?.activity || matchToolFamily(name, args)?.activity || null;
 }
-function flowCardBuilder(name) {
+function flowCardBuilder(name: string) {
 	const builder = toolMeta(name)?.flowCards;
 	return typeof builder === "function" ? builder : null;
 }

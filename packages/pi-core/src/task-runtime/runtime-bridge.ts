@@ -1,16 +1,37 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { EventBus } from "@earendil-works/pi-coding-agent";
 
-const contexts = new AsyncLocalStorage();
-const runtimeBindings = /* @__PURE__ */ new WeakSet();
-const hostRuntimes = /* @__PURE__ */ new WeakMap();
+export type RuntimeHost = { events: EventBus };
+type RuntimeDomain = "knowledge" | "tasks" | "tools";
+type RuntimeResource = object & {
+	dispose?(): unknown;
+	close?(): unknown;
+};
+type RuntimeSlots = Record<string, RuntimeResource>;
+
+interface Runtime extends Record<RuntimeDomain, RuntimeSlots> {
+	scheduler: Pick<KeyedScheduler, "run">;
+	log: object;
+	registerDisposable(resource: RuntimeResource): () => void;
+	dispose(): Promise<void>;
+}
+
+interface RuntimePublication {
+	version?: number;
+	runtime?: Pick<Runtime, "scheduler" | "log" | "tools">;
+}
+
+const contexts = new AsyncLocalStorage<Runtime>();
+const runtimeBindings = /* @__PURE__ */ new WeakSet<RuntimeHost>();
+const hostRuntimes = /* @__PURE__ */ new WeakMap<RuntimeHost, Runtime>();
 class KeyedScheduler {
-	#tails = /* @__PURE__ */ new Map();
+	#tails = /* @__PURE__ */ new Map<string, Promise<void>>();
 	#disposed = false;
-	async acquire(key) {
+	async acquire(key: string) {
 		if (this.#disposed) throw new Error("Runtime scheduler has been disposed");
 		const previous = this.#tails.get(key) || Promise.resolve();
-		let unlock;
-		const gate = new Promise((resolve) => {
+		let unlock: () => void;
+		const gate = new Promise<void>((resolve) => {
 			unlock = resolve;
 		});
 		const tail = previous.then(() => gate);
@@ -24,7 +45,7 @@ class KeyedScheduler {
 			if (this.#tails.get(key) === tail) this.#tails.delete(key);
 		};
 	}
-	async run(key, task) {
+	async run<Result>(key: string, task: () => Result) {
 		const release = await this.acquire(key);
 		try {
 			return await task();
@@ -38,16 +59,16 @@ class KeyedScheduler {
 		this.#tails.clear();
 	}
 }
-function createStandaloneRuntime(log = {}) {
-	const disposables = /* @__PURE__ */ new Set();
+function createStandaloneRuntime(log: object = {}): Runtime {
+	const disposables = /* @__PURE__ */ new Set<RuntimeResource>();
 	let disposed = false;
-	let disposal;
-	const registerDisposable = (resource) => {
+	let disposal: Promise<void> | undefined;
+	const registerDisposable = (resource: RuntimeResource) => {
 		if (!resource || (typeof resource.dispose !== "function" && typeof resource.close !== "function"))
-			return () => {};
+			return () => undefined;
 		if (disposed) {
 			void (resource.dispose?.() ?? resource.close?.());
-			return () => {};
+			return () => undefined;
 		}
 		disposables.add(resource);
 		return () => disposables.delete(resource);
@@ -82,17 +103,18 @@ function createStandaloneRuntime(log = {}) {
 	};
 	return runtime;
 }
-function withRuntime(runtime, operation) {
+function withRuntime<Result>(runtime: Runtime, operation: () => Result) {
 	if (!runtime || typeof runtime !== "object" || !runtime.scheduler)
 		throw new TypeError("A DroneRuntime with a scheduler is required");
 	return contexts.run(runtime, operation);
 }
-function bindRuntime(pi, ownedRuntime) {
-	if (runtimeBindings.has(pi)) return () => {};
+function bindRuntime(pi: RuntimeHost, ownedRuntime?: Runtime) {
+	if (runtimeBindings.has(pi)) return () => undefined;
 	runtimeBindings.add(pi);
 	const runtime = ownedRuntime || createStandaloneRuntime();
 	hostRuntimes.set(pi, runtime);
-	const receive = (payload) => {
+	const receive = (value: unknown) => {
+		const payload = value as RuntimePublication | null | undefined;
 		if (payload?.version !== RUNTIME_BRIDGE_VERSION || !payload.runtime?.scheduler) return;
 		// The host supplies mechanisms and immutable tool declarations. Task state
 		// and acceptance registries remain owned by this plugin session.
@@ -108,10 +130,10 @@ function bindRuntime(pi, ownedRuntime) {
 		hostRuntimes.delete(pi);
 	};
 }
-function runtimeForHost(pi) {
+function runtimeForHost(pi: RuntimeHost) {
 	return hostRuntimes.get(pi) ?? currentRuntime();
 }
-function withHostRuntime(pi, operation) {
+function withHostRuntime<Result>(pi: RuntimeHost, operation: () => Result) {
 	return withRuntime(runtimeForHost(pi), operation);
 }
 function currentRuntime() {
@@ -122,7 +144,7 @@ function currentRuntime() {
 function hasRuntimeContext() {
 	return Boolean(contexts.getStore());
 }
-function resolveSlot(domain, slot, create) {
+function resolveSlot<Slot extends RuntimeResource>(domain: RuntimeDomain, slot: string, create: () => Slot) {
 	const runtime = currentRuntime();
 	let group = runtime[domain];
 	if (!group) {
@@ -133,33 +155,31 @@ function resolveSlot(domain, slot, create) {
 		group[slot] = create();
 		runtime.registerDisposable?.(group[slot]);
 	}
-	return group[slot];
+	return group[slot] as Slot;
 }
-function runtimeSlot(domain, slot, create) {
+function runtimeSlot<Slot extends RuntimeResource>(domain: RuntimeDomain, slot: string, create: () => Slot) {
 	if (typeof create !== "function") throw new TypeError("runtimeSlot requires a factory");
-	const proxy = new Proxy(
-		{},
-		{
-			get(_target, property) {
-				const value = resolveSlot(domain, slot, create)[property];
-				return typeof value === "function" ? value.bind(resolveSlot(domain, slot, create)) : value;
-			},
-			set(_target, property, value) {
-				resolveSlot(domain, slot, create)[property] = value;
-				return true;
-			},
-			ownKeys() {
-				return Reflect.ownKeys(resolveSlot(domain, slot, create));
-			},
-			getOwnPropertyDescriptor(_target, property) {
-				const descriptor = Object.getOwnPropertyDescriptor(resolveSlot(domain, slot, create), property);
-				return descriptor ? { ...descriptor, configurable: true } : void 0;
-			},
+	const proxy = new Proxy({} as Slot, {
+		get(_target, property) {
+			const value = (resolveSlot(domain, slot, create) as Record<PropertyKey, unknown>)[property];
+			return typeof value === "function" ? value.bind(resolveSlot(domain, slot, create)) : value;
 		},
-	);
+		set(_target, property, value: unknown) {
+			const resource = resolveSlot(domain, slot, create) as Record<PropertyKey, unknown>;
+			resource[property] = value;
+			return true;
+		},
+		ownKeys() {
+			return Reflect.ownKeys(resolveSlot(domain, slot, create));
+		},
+		getOwnPropertyDescriptor(_target, property) {
+			const descriptor = Object.getOwnPropertyDescriptor(resolveSlot(domain, slot, create), property);
+			return descriptor ? { ...descriptor, configurable: true } : void 0;
+		},
+	});
 	return proxy;
 }
-function runRuntimeExclusive(namespace, key, operation) {
+function runRuntimeExclusive<Result>(namespace: string, key: string, operation: () => Result) {
 	return currentRuntime().scheduler.run(`${namespace}:${key}`, operation);
 }
 const RUNTIME_BRIDGE_VERSION = 1;

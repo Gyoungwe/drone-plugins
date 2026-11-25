@@ -10,7 +10,7 @@ import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
 import type { MemoryType } from "./memory";
 import { memoryIndexPrompt as memoryIndexPromptImpl, writeMemory as writeMemoryImpl } from "./memory";
 import { normalizeTaskMilestones } from "./milestone-plan";
-import type { TaskAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
+import type { TaskAcceptanceVerifier } from "./task-runtime/acceptance.ts";
 import { createTaskApplication } from "./task-runtime/owner.mjs";
 import { makeDeliverFilesTool as makeDeliverFilesToolImpl } from "./tools/deliver-files";
 import { makeMemorySaveTool as makeMemorySaveToolImpl } from "./tools/memory-save";

@@ -1,5 +1,5 @@
 import { it as test } from "vitest";
-import { createStandaloneRuntime, withRuntime } from "../../src/task-runtime/runtime-bridge.mjs";
+import { createStandaloneRuntime, withRuntime } from "../../src/task-runtime/runtime-bridge.ts";
 
 /** The test body itself must enter the async scope, including parameterized cases. */
 const inOwner =

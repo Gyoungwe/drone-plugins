@@ -1,15 +1,45 @@
+import type { PluginRuntimeSchema } from "@gyoungwe/plugin-api/runtime";
+import type { TaskAcceptanceDefinition, TaskAcceptanceVerifier } from "@gyoungwe/plugin-api/tasks";
+import { currentRuntime, type RuntimeHost, runtimeSlot, withRuntime } from "./runtime-bridge.ts";
+
+export type { TaskAcceptanceVerifier } from "@gyoungwe/plugin-api/tasks";
+
+export type Acceptance = Readonly<Record<string, unknown>> & { readonly kind?: string };
+
+export interface AcceptanceMilestone {
+	acceptance?: Acceptance | null;
+	bound?: { fields?: Readonly<Record<string, unknown>> | null } | null;
+}
+
+interface AcceptanceRegistration {
+	version?: number;
+	kind?: string;
+	definition?: TaskAcceptanceDefinition;
+}
+
+type Verifiers = Map<string | undefined, TaskAcceptanceVerifier>;
+
+interface AcceptanceRegistry {
+	verifiers: Verifiers;
+	kinds: string[];
+	properties: Record<string, PluginRuntimeSchema>;
+}
+
 const CORE_ACCEPTANCE_KINDS = Object.freeze(["file", "human_review"]);
 const CORE_FIELDS = Object.freeze(["kind", "path", "sha256", "rootKind"]);
 const KIND = /^[a-z][a-z0-9_]{1,40}$/;
 const FIELD = /^[a-zA-Z][a-zA-Z0-9]{0,40}$/;
 const stringField = { type: "string", minLength: 1, maxLength: 512 };
-
-import { currentRuntime, runtimeSlot, withRuntime } from "./runtime-bridge.mjs";
+const VERIFIER_HOOKS = ["label", "verify", "observe", "resolve", "identify", "consent", "pending"] as const;
 
 const ACCEPTANCE_VERIFIER_EVENT = "drone:acceptance-verifier/v1";
 const ACCEPTANCE_VERIFIER_REQUEST_EVENT = "drone:acceptance-verifier/request/v1";
-const eventBridges = runtimeSlot("tasks", "acceptanceEventBridges", () => /* @__PURE__ */ new WeakSet());
-const createRegistry = () => {
+const eventBridges = runtimeSlot(
+	"tasks",
+	"acceptanceEventBridges",
+	() => /* @__PURE__ */ new WeakSet<RuntimeHost>(),
+);
+const createRegistry = (): AcceptanceRegistry => {
 	const kinds = [...CORE_ACCEPTANCE_KINDS];
 	return {
 		verifiers: /* @__PURE__ */ new Map(),
@@ -37,29 +67,12 @@ function ensureRegistryShape() {
 		maxLength: 32,
 	};
 }
-function definitionOf(verifier) {
-	const definition = {
-		fields: [...(verifier.fields || [])],
-		evidenceKind: verifier.evidenceKind,
-		operationVerifier: verifier.operationVerifier,
-	};
-	for (const key of ["label", "verify", "observe", "resolve", "identify", "consent", "pending"])
-		if (typeof verifier[key] === "function") definition[key] = verifier[key];
-	if (verifier.acknowledgeError) definition.acknowledgeError = verifier.acknowledgeError;
-	return definition;
-}
-function registrationOf(verifier) {
-	return {
-		version: 1,
-		kind: verifier.kind,
-		definition: definitionOf(verifier),
-	};
-}
-function bindAcceptanceVerifierEvents(pi) {
-	if (eventBridges.has(pi)) return () => {};
+function bindAcceptanceVerifierEvents(pi: RuntimeHost) {
+	if (eventBridges.has(pi)) return () => undefined;
 	eventBridges.add(pi);
 	const runtime = currentRuntime();
-	const receive = (payload) => {
+	const receive = (value: unknown) => {
+		const payload = value as AcceptanceRegistration | null | undefined;
 		if (
 			payload?.version !== 1 ||
 			typeof payload.kind !== "string" ||
@@ -67,36 +80,38 @@ function bindAcceptanceVerifierEvents(pi) {
 			typeof payload.definition !== "object"
 		)
 			throw new Error("Invalid task acceptance registration event");
-		withRuntime(runtime, () => registerAcceptanceVerifier(payload.kind, payload.definition));
+		const { kind, definition } = payload;
+		withRuntime(runtime, () => registerAcceptanceVerifier(kind, definition));
 	};
 	const unsubscribe = pi.events.on(ACCEPTANCE_VERIFIER_EVENT, receive);
 	pi.events.emit(ACCEPTANCE_VERIFIER_REQUEST_EVENT, { version: 1 });
 	return unsubscribe;
 }
-function registerAcceptanceVerifier(kind, definition = {}) {
+function registerAcceptanceVerifier(kind: string, definition: TaskAcceptanceDefinition = {}) {
 	ensureRegistryShape();
 	if (!KIND.test(kind || "")) throw new Error(`Acceptance kind "${kind}" must match ${KIND}`);
 	if (CORE_ACCEPTANCE_KINDS.includes(kind)) throw new Error(`Acceptance kind "${kind}" is owned by the host`);
-	for (const fn of ["label", "verify", "observe", "resolve", "identify", "consent", "pending"])
+	for (const fn of VERIFIER_HOOKS)
 		if (definition[fn] !== void 0 && typeof definition[fn] !== "function")
 			throw new Error(`Acceptance verifier ${kind}.${fn} must be a function`);
-	const fields = [...new Set(definition.fields || [])];
+	const spec = definition as Partial<TaskAcceptanceVerifier>;
+	const fields = [...new Set(spec.fields || [])];
 	for (const field of fields)
 		if (!FIELD.test(field) || CORE_FIELDS.includes(field))
 			throw new Error(`Acceptance verifier ${kind}: invalid field "${field}"`);
-	const verifier = Object.freeze({
+	const verifier: TaskAcceptanceVerifier = Object.freeze({
 		kind,
 		fields: Object.freeze(fields),
-		evidenceKind: definition.evidenceKind || `${kind}-verified`,
-		operationVerifier: definition.operationVerifier || `${kind}-record-not-scientific-proof`,
-		label: definition.label || (() => kind),
-		verify: definition.verify || null,
-		observe: definition.observe || null,
-		resolve: definition.resolve || null,
-		identify: definition.identify || null,
-		consent: definition.consent || null,
-		pending: definition.pending || null,
-		acknowledgeError: definition.acknowledgeError || null,
+		evidenceKind: spec.evidenceKind || `${kind}-verified`,
+		operationVerifier: spec.operationVerifier || `${kind}-record-not-scientific-proof`,
+		label: spec.label || (() => kind),
+		verify: spec.verify || null,
+		observe: spec.observe || null,
+		resolve: spec.resolve || null,
+		identify: spec.identify || null,
+		consent: spec.consent || null,
+		pending: spec.pending || null,
+		acknowledgeError: spec.acknowledgeError || null,
 	});
 	registry.verifiers.set(kind, verifier);
 	if (!registry.kinds.includes(kind)) registry.kinds.push(kind);
@@ -110,7 +125,7 @@ function resetAcceptanceVerifiers() {
 	for (const field of Object.keys(registry.properties))
 		if (!CORE_FIELDS.includes(field)) delete registry.properties[field];
 }
-function acceptanceVerifier(kind) {
+function acceptanceVerifier(kind: string | undefined) {
 	ensureRegistryShape();
 	return registry.verifiers.get(kind) || null;
 }
@@ -146,31 +161,41 @@ function openAcceptanceSchema() {
 		additionalProperties: stringField,
 	};
 }
-function normalizeAcceptance(input, clean, verifiers) {
+function normalizeAcceptance(
+	input: Acceptance,
+	clean: (value: unknown, max?: number) => string,
+	verifiers?: ReadonlyMap<string | undefined, TaskAcceptanceVerifier>,
+) {
 	ensureRegistryShape();
 	const kind = input?.kind;
 	const verifier = (verifiers || registry.verifiers).get(kind) || null;
-	const acceptance = {
+	const acceptance: Record<string, unknown> & { kind?: string } = {
 		kind,
 		path: clean(input.path, 512),
-		sha256: /^[a-f0-9]{64}$/.test(input.sha256 || "") ? input.sha256 : null,
+		sha256: /^[a-f0-9]{64}$/.test((input.sha256 || "") as string) ? input.sha256 : null,
 	};
 	if (["workspace", "vault", "research-run"].includes(String(input.rootKind)))
 		acceptance.rootKind = input.rootKind;
 	for (const field of verifier?.fields || []) acceptance[field] = clean(input[field]);
 	return acceptance;
 }
-function effectiveAcceptance(milestone) {
+function effectiveAcceptance(milestone: AcceptanceMilestone | null | undefined): Acceptance {
 	const acceptance = milestone?.acceptance || {};
 	const bound = milestone?.bound?.fields;
 	return bound && typeof bound === "object" ? { ...acceptance, ...bound } : { ...acceptance };
 }
-function describeAcceptance(acceptance, verifier = acceptanceVerifier(acceptance?.kind)) {
+function describeAcceptance(
+	acceptance: Acceptance | null | undefined,
+	verifier = acceptanceVerifier(acceptance?.kind),
+) {
 	if (acceptance?.kind === "file") return `\u751F\u6210\u6587\u4EF6 ${acceptance.path || ""}`.trim();
 	if (acceptance?.kind === "human_review") return "\u7531\u4F60\u4EB2\u81EA\u786E\u8BA4\u5B8C\u6210";
 	if (verifier) {
 		try {
-			return String(verifier.label(acceptance) || verifier.kind);
+			return String(
+				(verifier.label as NonNullable<TaskAcceptanceVerifier["label"]>)(acceptance as Acceptance) ||
+					verifier.kind,
+			);
 		} catch {
 			return verifier.kind;
 		}

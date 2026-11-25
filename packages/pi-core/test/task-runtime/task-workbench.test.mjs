@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, vi } from "vitest";
-import { createEvidenceRecovery } from "../../src/task-runtime/evidence.mjs";
+import { createEvidenceRecovery } from "../../src/task-runtime/evidence.ts";
 import { createTaskWorkbench, inspectTaskFile, LIMITS, WORKBENCH_ENTRY } from "./fixture.mjs";
 import { it } from "./scoped-test.mjs";
 

@@ -1,5 +1,5 @@
 import { recordApproval } from "./approval-record.ts";
-import { createEvidenceRecovery } from "./evidence.mjs";
+import { createEvidenceRecovery } from "./evidence.ts";
 import { hostLanguage } from "./host-language.ts";
 import { createTaskWorkbench, WORKBENCH_ENTRY } from "./workbench.mjs";
 

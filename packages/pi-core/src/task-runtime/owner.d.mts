@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
-import type { TaskAcceptanceVerifier } from "./acceptance.mjs";
+import type { TaskAcceptanceVerifier } from "./acceptance.ts";
 import type { TaskJournal } from "./runtime.mjs";
 export interface TaskApplication {
 	registerAcceptanceVerifier(

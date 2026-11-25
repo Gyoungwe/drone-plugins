@@ -1,8 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { acceptanceSchema, openAcceptanceSchema } from "./acceptance.mjs";
-import { createTaskAuthorization } from "./ask-authorization.mjs";
+import { acceptanceSchema, openAcceptanceSchema } from "./acceptance.ts";
+import { createTaskAuthorization } from "./ask-authorization.ts";
 import {
 	FAILURE_EXPLANATION_POLICY,
 	failureContext,
@@ -10,15 +10,15 @@ import {
 	TASK_HANDOFF_POLICY,
 	taskProgressContext,
 	toolResultFailed,
-} from "./failure-feedback.mjs";
+} from "./failure-feedback.ts";
 import { hostLanguage } from "./host-language.ts";
-import { createTaskProgression } from "./progress-action.mjs";
-import { currentRuntime, withHostRuntime } from "./runtime-bridge.mjs";
+import { createTaskProgression } from "./progress-action.ts";
+import { currentRuntime, withHostRuntime } from "./runtime-bridge.ts";
 import { singleFlightCommand } from "./single-flight.ts";
 import { isTaskStatusQuery } from "./status-query.ts";
 import { createTaskController } from "./task-controller.ts";
 import { createTaskSession } from "./task-session.mjs";
-import { isReadOnlyTool } from "./tool-manifest.mjs";
+import { isReadOnlyTool } from "./tool-manifest.ts";
 import { restoreTaskToolOrder } from "./tool-protocol.ts";
 import { shouldAskToContinue } from "./turn-end-prompt.ts";
 import { clean } from "./workbench.mjs";

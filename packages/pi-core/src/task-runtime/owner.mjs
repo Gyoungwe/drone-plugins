@@ -3,10 +3,10 @@ import {
 	acceptanceVerifiers,
 	bindAcceptanceVerifierEvents,
 	registerAcceptanceVerifier,
-} from "./acceptance.mjs";
+} from "./acceptance.ts";
 import { createTaskApplicationState } from "./application-state.ts";
 import { registerTaskRuntime, requestSharedTaskRuntime } from "./runtime.mjs";
-import { bindRuntime, createStandaloneRuntime, withHostRuntime, withRuntime } from "./runtime-bridge.mjs";
+import { bindRuntime, createStandaloneRuntime, withHostRuntime, withRuntime } from "./runtime-bridge.ts";
 
 /** One owner per loader/session; both public entrypoints use this constructor. */
 function createTaskRuntimeOwner(definitions = [], application) {

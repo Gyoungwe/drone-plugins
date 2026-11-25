@@ -8,13 +8,13 @@ import {
 	effectiveAcceptance,
 	acceptanceVerifier as registeredVerifier,
 	acceptanceVerifiers as registeredVerifiers,
-} from "./acceptance.mjs";
+} from "./acceptance.ts";
 import { contractHash, hasTaskConsent, MAX_AUTO_RESUMES } from "./consent.ts";
-import { failureObservation, failureReceipt, toolResultFailed } from "./failure-feedback.mjs";
+import { failureObservation, failureReceipt, toolResultFailed } from "./failure-feedback.ts";
 import { inspectTaskBytes } from "./file-inspection.ts";
 import { bilingual } from "./host-language.ts";
-import { remainingExplanation } from "./remaining.mjs";
-import { isReadOnlyTool } from "./tool-manifest.mjs";
+import { remainingExplanation } from "./remaining.ts";
+import { isReadOnlyTool } from "./tool-manifest.ts";
 
 const WORKBENCH_ENTRY = "drone-task-workbench-v2";
 const LIMITS = Object.freeze({

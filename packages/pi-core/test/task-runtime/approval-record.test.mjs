@@ -1,6 +1,6 @@
 import { expect, vi } from "vitest";
-import { registerAcceptanceVerifier } from "../../src/task-runtime/acceptance.mjs";
-import { createTaskAuthorization } from "../../src/task-runtime/ask-authorization.mjs";
+import { registerAcceptanceVerifier } from "../../src/task-runtime/acceptance.ts";
+import { createTaskAuthorization } from "../../src/task-runtime/ask-authorization.ts";
 import { contractHash } from "../../src/task-runtime/consent.ts";
 import { createTaskController } from "../../src/task-runtime/task-controller.ts";
 import { createTaskSession } from "../../src/task-runtime/task-session.mjs";
