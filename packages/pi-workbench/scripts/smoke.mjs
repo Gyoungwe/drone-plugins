@@ -6,6 +6,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
+import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+
+const api = await candidatePluginApi();
+
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const temp = join(tmpdir(), `drone-pi-workbench-smoke-${process.pid}`);
@@ -22,7 +26,17 @@ try {
 	const tarball = join(temp, packed.filename);
 	await execFileAsync(
 		"npm",
-		["install", "--prefix", install, "--ignore-scripts", "--omit=peer", "--no-audit", "--no-fund", tarball],
+		[
+			"install",
+			"--prefix",
+			install,
+			"--ignore-scripts",
+			"--omit=peer",
+			"--no-audit",
+			"--no-fund",
+			api.path,
+			tarball,
+		],
 		{ cwd: root },
 	);
 	const pkg = JSON.parse(
