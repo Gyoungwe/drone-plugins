@@ -39,6 +39,10 @@
 			"knowledge.binding": {
 				"version": 1,
 				"operations": ["binding"]
+			},
+			"knowledge.failure-candidates": {
+				"version": 1,
+				"operations": ["recordFailureCandidate", "queryFailureCandidates"]
 			}
 		},
 		"recordAdoptions": {

@@ -36,6 +36,7 @@ import {
 	searchInputSchema,
 	searchResultSchema,
 } from "./contract.js";
+import { createFailureCandidateOperations } from "./failure-candidate-service.js";
 import { createKnowledgeModelReviewModel } from "./model-review.js";
 import { createKnowledgeNativeSessionFactory } from "./native-session.js";
 import { createBrokerKnowledgeState } from "./native-state.js";
@@ -205,6 +206,11 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 	return {
 		operations: {
 			binding: bindingOperation(readKnowledgeBinding),
+			...createFailureCandidateOperations({
+				stateRoot: state,
+				readBinding: readKnowledgeBinding,
+				callerProject,
+			}),
 			...createKnowledgeReviewOperations({
 				context,
 				modelReviews,

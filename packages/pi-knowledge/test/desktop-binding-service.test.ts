@@ -56,7 +56,13 @@ it("the binding service returns null when no Vault is bound", async () => {
 	expect(await read()).toBeNull();
 });
 
-it("the manifest provides the binding service with exactly that operation", async () => {
+it("the manifest provides the binding and failure-candidate services", async () => {
 	const manifest = JSON.parse(await readFile(new URL("../plugin.manifest.json", import.meta.url), "utf8"));
-	expect(manifest.drone.provides).toEqual({ "knowledge.binding": { version: 1, operations: ["binding"] } });
+	expect(manifest.drone.provides).toEqual({
+		"knowledge.binding": { version: 1, operations: ["binding"] },
+		"knowledge.failure-candidates": {
+			version: 1,
+			operations: ["recordFailureCandidate", "queryFailureCandidates"],
+		},
+	});
 });
