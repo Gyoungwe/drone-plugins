@@ -38,7 +38,7 @@
 		"@biomejs/biome": "2.5.7",
 		"@earendil-works/pi-coding-agent": "1.1.0",
 		"@gyoungwe/pi-core": "0.3.0",
-		"@gyoungwe/pi-research": "0.4.0",
+		"@gyoungwe/pi-research": "0.4.1",
 		"@gyoungwe/plugin-api": "https://github.com/Gyoungwe/Drone/releases/download/plugin-api-v2.0.0/gyoungwe-plugin-api-2.0.0.tgz",
 		"@tailwindcss/cli": "^4.3.3",
 		"@testing-library/dom": "^10.4.2",

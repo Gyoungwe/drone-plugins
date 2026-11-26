@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generator": "packages/pi-research/scripts/build.mjs",
-  "inputsSha256": "c8e632574e74ffcaf067a2bc80157c3e7fe908671ab45439e1c0b47ac2ea283e",
+  "inputsSha256": "e4c0a305d73bde7be0bd97a413d6732fcd81efc72b6c43d7fccf2ce73c49870b",
   "outputs": {
     "dist/desktop-runtime.mjs": "37bc67d781d6c72c957e8e525ae93c9c75b47967ae55eaf8e707cee8d78df7ad",
     "dist/host.mjs": "764a2f1a2049c88f609715535379e1a77c0d8598aeaef838cb17d0ca9d1d082b",

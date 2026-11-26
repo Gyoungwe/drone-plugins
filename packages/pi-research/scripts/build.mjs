@@ -6,8 +6,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { stageBundledPluginApi, verifyBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
 
 const packageRoot = resolve(import.meta.dirname, "..");
+const pluginApi = await stageBundledPluginApi(packageRoot);
 const checkOnly = process.argv.includes("--check");
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const fail = (message) => {
@@ -134,4 +136,5 @@ execFileSync(
 	[join(packageRoot, "scripts/build-ui.mjs"), ...(checkOnly ? ["--check"] : [])],
 	{ cwd: packageRoot, stdio: "inherit" },
 );
+await verifyBundledPluginApi(packageRoot, pluginApi);
 console.log(`pi-research source artifacts ${checkOnly ? "match a clean rebuild" : "built"}`);

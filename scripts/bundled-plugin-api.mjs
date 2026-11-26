@@ -59,12 +59,5 @@ export function matchesPluginApiDependency(pkg, spec) {
 	const runtime = pkg.dependencies?.[pluginApiName];
 	const peer = pkg.peerDependencies?.[pluginApiName];
 	const bundled = pkg.bundleDependencies?.includes(pluginApiName);
-	if (pkg.name === "@gyoungwe/pi-research")
-		return (
-			runtime === undefined &&
-			peer === ">=2.0.0 <3.0.0" &&
-			!bundled &&
-			pkg.peerDependenciesMeta?.[pluginApiName]?.optional === true
-		);
 	return runtime === spec && peer === undefined && bundled;
 }
