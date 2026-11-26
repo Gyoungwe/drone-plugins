@@ -34,6 +34,7 @@ const compiled = await build({
 	outExtension: { ".js": ".mjs" },
 	sourcemap: false,
 	minifyIdentifiers: true,
+	minifySyntax: true,
 	minifyWhitespace: true,
 	keepNames: true,
 	preserveSymlinks: true,

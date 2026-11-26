@@ -266,8 +266,11 @@ export {
 	zoteroLocalWriteConfig,
 	zoteroWebApiConfig,
 } from "./core/zotero-write-runtime.js";
+export { createDesktopFailureCandidateSink } from "./desktop/failure-candidate-client.js";
 export * from "./evidence-gate.js";
 export {
+	type FailureCandidateInput,
+	type FailureCandidateSink,
 	type ResearchExtensionHandle,
 	type ResearchExtensionPorts,
 	registerResearchExtension,

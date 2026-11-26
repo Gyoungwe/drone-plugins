@@ -12,6 +12,11 @@ base64 strings or `Uint8Array` values, so a host can choose its own storage
 policy. Absolute paths, traversal, credential names, `.pi`/`.drone` state and
 other private state labels are rejected at the contract boundary.
 
+`evidenceFailureCandidate` formats replay, artifact-manifest, and capsule-import
+failures as navigation diagnostics. The caller supplies an opaque receipt ID.
+The formatter uses fixed summaries, so validator errors, artifact paths, and
+private source data stay with the caller. Persistence is host-owned.
+
 The native Pi extension registers three read-only tools:
 
 - `evidence_validate_manifest`

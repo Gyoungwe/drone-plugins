@@ -33,6 +33,9 @@
 				"version": 1,
 				"operations": ["describe", "verify", "identify"]
 			}
+		},
+		"requires": {
+			"knowledgeFailures": { "service": "knowledge.failure-candidates", "version": 1 }
 		}
 	},
 	"entrypoints": {

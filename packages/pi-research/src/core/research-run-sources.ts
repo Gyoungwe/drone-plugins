@@ -2,10 +2,19 @@ import { randomUUID } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import type { ClaimReadRecord, ClaimSourceRecord } from "./claim-bindings.js";
+import { researchFailure } from "./failure-candidates.js";
 import type { LiteratureReceipt } from "./literature-receipt.js";
 import type { PreparedResearchDelivery } from "./research-delivery.js";
 import type { ResearchLoopPorts, ResearchLoopWorkspace } from "./research-loop.js";
-import { fileHash, type ResearchGate, type ReusedSource, recordOf, within } from "./research-loop-state.js";
+import {
+	advance,
+	fileHash,
+	type ResearchGate,
+	type ReusedSource,
+	recordOf,
+	requireStage,
+	within,
+} from "./research-loop-state.js";
 
 type Read = ClaimReadRecord & { receiptId: string; vault?: string | null; revision?: number };
 type Identity = Pick<LiteratureReceipt, "doi" | "zoteroKey"> & { hash: string; vault: string };
@@ -103,6 +112,35 @@ export async function archives(run: RunSources, verify = false) {
 		run_dir: run.path,
 		...(verify && { verify }),
 	})) as ArchiveStatus;
+}
+
+export async function verifyArchive(run: RunSources, gate: ResearchGate, reused?: ReusedSource[]) {
+	requireStage(gate, "sources_inspected", "verify_archive");
+	const { verification, manifest } = await archives(run, true);
+	if (verification && verification.ok !== true) {
+		const failures = verification.items?.filter((item) => item.ok !== true) || [];
+		throw researchFailure(
+			"archive-verify-failed",
+			`Archived source verification failed: ${failures.map((item) => item.reason || item.path).join(", ") || "unknown"}`,
+		);
+	}
+	const downloaded = (manifest?.items || []).filter((item) => item.status === "downloaded");
+	const fresh = reused ?? (await reusableSources(run));
+	if (!downloaded.length && !fresh.length)
+		throw researchFailure(
+			"no-available-source",
+			"No available source: read an existing Library/Papers note this turn and verify its DOI/key with research_verify_literature, or archive an authorized new source. Do not repeat imports to clear this gate.",
+		);
+	return advance(
+		{ ...gate, archive_count: downloaded.length, reuse_count: fresh.length, reused_sources: fresh },
+		downloaded.length ? "sources_archived" : "sources_reused",
+		new Date().toISOString(),
+		{
+			archived: downloaded.map(({ id, sha256, path }) => ({ id, sha256, path })),
+			reused_sources: fresh,
+			scientificallyVerified: false,
+		},
+	);
 }
 
 function aliases(run: RunSources, path: string, absolute: string) {
@@ -215,7 +253,8 @@ export function validateReusedSourceSet(gate: ResearchGate, fresh: readonly Reus
 				),
 		)
 	)
-		throw new Error(
+		throw researchFailure(
+			"reused-source-changed",
 			"Reused source changed or current-turn receipt is missing; re-read and verify the existing note, do not re-import it",
 		);
 }

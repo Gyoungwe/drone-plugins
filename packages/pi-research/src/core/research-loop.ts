@@ -2,6 +2,13 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, realpath } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { claimBindingRefs, validateClaimBindings } from "./claim-bindings.js";
+import {
+	breakerFailureCandidate,
+	type FailureCandidateSink,
+	recordFailureCandidate,
+	recordResearchFailure,
+	researchFailure,
+} from "./failure-candidates.js";
 import type { LiteratureReceipt, LiteratureReceiptOptions } from "./literature-receipt.js";
 import type { ResearchReceiptEvent } from "./receipt-journal.js";
 import {
@@ -63,7 +70,6 @@ import {
 import {
 	archivedRead,
 	archivedSourceRecords,
-	archives,
 	deliveryReads,
 	ledgerFor,
 	observeNote,
@@ -71,6 +77,7 @@ import {
 	rememberIdentity,
 	reusableSources,
 	validateReusedSourceSet,
+	verifyArchive,
 } from "./research-run-sources.js";
 import { validateRunDir } from "./source-archive-policy.js";
 
@@ -88,6 +95,7 @@ export interface ResearchLoopPorts {
 	sourceStatus(input: { cwd: string; run_dir: string; verify?: boolean }): Promise<unknown>;
 	exclusive?<T>(key: string, work: () => Promise<T>): Promise<T>;
 	breakerBudget?: ResearchBreakerBudget;
+	failureCandidateSink?: FailureCandidateSink;
 }
 
 type RunScope = { cwd?: string; runDir?: string };
@@ -151,7 +159,15 @@ async function openRun(loop: Loop, cwd: string, runDir?: string): Promise<Run> {
 
 function withRun<T>(loop: Loop, { cwd = process.cwd(), runDir }: RunScope, work: (run: Run) => Promise<T>) {
 	const key = runKey(cwd, runDir);
-	const operation = async () => work(await openRun(loop, cwd, runDir));
+	const operation = async () => {
+		const run = await openRun(loop, cwd, runDir);
+		try {
+			return await work(run);
+		} catch (error) {
+			await recordResearchFailure(loop.ports.failureCandidateSink, run.metadata, error);
+			throw error;
+		}
+	};
 	const result = (loop.queues.get(key) ?? Promise.resolve()).then(() =>
 		loop.ports.exclusive ? loop.ports.exclusive(key, operation) : operation(),
 	);
@@ -266,7 +282,7 @@ async function prepareDelivery(run: Run, markdown: string): Promise<PreparedRese
 	if (summaryHash(JSON.stringify(claims)) !== summaryHash(JSON.stringify(gate.claim_bindings)))
 		throw new Error("Claim evidence changed; complete the research loop again before delivery");
 	if (!reused.length && !archived.length)
-		throw new Error("No current verified source is available for this delivery");
+		throw researchFailure("no-available-source", "No current verified source is available for this delivery");
 	const body = summaryBody(markdown);
 	return {
 		runId: run.metadata.run_id,
@@ -350,33 +366,6 @@ function inspectSources(gate: ResearchGate, sources: string[], details = {}) {
 	);
 }
 
-async function verifyArchive(run: Run, gate: ResearchGate, reused?: ReusedSource[]) {
-	requireStage(gate, "sources_inspected", "verify_archive");
-	const { verification, manifest } = await archives(run, true);
-	if (verification && verification.ok !== true) {
-		const failures = verification.items?.filter((item) => item.ok !== true) || [];
-		throw new Error(
-			`Archived source verification failed: ${failures.map((item) => item.reason || item.path).join(", ") || "unknown"}`,
-		);
-	}
-	const downloaded = (manifest?.items || []).filter((item) => item.status === "downloaded");
-	const fresh = reused ?? (await reusableSources(run));
-	if (!downloaded.length && !fresh.length)
-		throw new Error(
-			"No available source: read an existing Library/Papers note this turn and verify its DOI/key with research_verify_literature, or archive an authorized new source. Do not repeat imports to clear this gate.",
-		);
-	return advance(
-		{ ...gate, archive_count: downloaded.length, reuse_count: fresh.length, reused_sources: fresh },
-		downloaded.length ? "sources_archived" : "sources_reused",
-		now(),
-		{
-			archived: downloaded.map(({ id, sha256, path }) => ({ id, sha256, path })),
-			reused_sources: fresh,
-			scientificallyVerified: false,
-		},
-	);
-}
-
 function hasBindings(bindings: unknown) {
 	return bindings !== undefined && (!Array.isArray(bindings) || bindings.length > 0);
 }
@@ -412,7 +401,8 @@ async function requireManifest(path: string) {
 	} catch (error) {
 		if (recordOf(error).code !== "ENOENT") throw error;
 	}
-	throw new Error(
+	throw researchFailure(
+		"missing-provenance-manifest",
 		'This run requires a reproducibility manifest before it can become answerable. Next action: call research_record_run_manifest with this run_dir and files listing actual source paths with role="input", then complete the research loop again.',
 	);
 }
@@ -571,11 +561,14 @@ async function saveSlowPath(run: Run, state: SlowPathState, nextGate?: ResearchG
 			revision: revisionOf(run.metadata) + 1,
 		},
 	);
-	return save(
+	const saved = await save(
 		run,
 		{ slow_path: state, status: "stopped_by_breaker", breaker_receipt: receipt },
 		{ ...gate, status: "failed", answerable: false },
 	);
+	if (run.ports.failureCandidateSink)
+		await recordFailureCandidate(run.ports.failureCandidateSink, breakerFailureCandidate(receipt));
+	return saved;
 }
 
 async function checkTool(

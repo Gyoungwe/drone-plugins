@@ -15,6 +15,8 @@ import { recordOf } from "./core/research-loop-state.js";
 import { observeExecutionReceipt } from "./core/run-provenance.js";
 import { type Context, researchLoopTool, startCallId, type Tool } from "./research-loop-tool.js";
 
+export type { FailureCandidateInput, FailureCandidateSink } from "./core/failure-candidates.js";
+
 type Listener = (event: unknown, ctx: Context) => unknown;
 type Pi = {
 	events?: {

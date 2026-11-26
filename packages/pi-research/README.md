@@ -49,6 +49,14 @@ can inject `breakerBudget` with a token cap and an optional cost cap. Host usage
 charges input, output, and cache writes. The stop receipt records the reason,
 preserved evidence progress, and any context evictions observed before the stop.
 
+Both research loops accept an optional `failureCandidateSink` for navigation
+diagnostics. Candidates contain fixed summaries and opaque receipt references.
+Desktop exposes a read-only `queryFailureCandidates` operation when
+`knowledge.failure-candidates` v1 is available. Desktop composition can inject
+`createDesktopFailureCandidateSink` using a scoped capability context and a
+live write-authority check. Keep the check false in read-only and fast-path
+sessions. Native Pi registration works without the sink.
+
 `requires_provenance:true` adds an explicit manifest prerequisite. `start` does
 not create that manifest: in a host providing `research_record_run_manifest`,
 call it before `complete`/`finalize`, listing actual source paths in `files` with
