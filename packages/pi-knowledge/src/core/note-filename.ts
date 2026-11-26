@@ -56,29 +56,22 @@ export function backfillNoteFilenames(database: FilenameStore): number {
 }
 
 /**
- * Adds the filename column and its index to an index written before KP5b.
- *
- * The column is rebuildable from the path, so the existing rows are filled
- * in one pass rather than by re-reading the Vault.  The fill runs in one
- * transaction, so the column is never half filled: a failure rolls it back
- * and the index keeps working without the column.
- *
- * The index is created after the fill, so the fill does not pay to maintain
- * the index it is about to fill.
+ * Backfills pre-KP5b indexes from paths before creating the filename index.
  */
 export function ensureNoteFilenameColumn(database: FilenameStore): void {
-	const columns = database
-		.prepare("PRAGMA table_info(notes)")
-		.all()
-		.map((column) => String((column as { name?: string }).name ?? ""));
-	if (columns.includes("filename")) return;
-	database.exec("ALTER TABLE notes ADD COLUMN filename TEXT NOT NULL DEFAULT ''");
-	database.exec("BEGIN IMMEDIATE");
-	try {
-		backfillNoteFilenames(database);
-		database.exec("COMMIT");
-	} catch {
-		database.exec("ROLLBACK");
+	const columns = database.prepare("PRAGMA table_info(notes)").all();
+	if (!columns.some((column) => column.name === "filename")) {
+		database.exec("BEGIN IMMEDIATE");
+		try {
+			database.exec("ALTER TABLE notes ADD COLUMN filename TEXT NOT NULL DEFAULT ''");
+			backfillNoteFilenames(database);
+			database.exec("COMMIT");
+		} catch (error) {
+			database.exec("ROLLBACK");
+			throw error;
+		}
 	}
-	database.exec("CREATE INDEX IF NOT EXISTS notes_filename ON notes(filename)");
+	// Use a new name so indexes built with the KP5b collation are replaced on open.
+	database.exec(`CREATE INDEX IF NOT EXISTS notes_filename_nocase ON notes(filename COLLATE NOCASE);
+		DROP INDEX IF EXISTS notes_filename;`);
 }

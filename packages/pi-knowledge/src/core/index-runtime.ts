@@ -62,7 +62,6 @@ export async function createKnowledgeIndexRuntime(
 	CREATE TABLE IF NOT EXISTS links(source TEXT NOT NULL, target TEXT NOT NULL, PRIMARY KEY(source,target));
 	CREATE INDEX IF NOT EXISTS links_target ON links(target);
 	CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope,kind);
-	CREATE INDEX IF NOT EXISTS notes_filename ON notes(filename);
 	CREATE TABLE IF NOT EXISTS jobs(key TEXT PRIMARY KEY, kind TEXT NOT NULL, path TEXT NOT NULL,
 	 scope TEXT NOT NULL, revision INTEGER NOT NULL, updated TEXT NOT NULL);
 	CREATE INDEX IF NOT EXISTS jobs_scope_updated ON jobs(scope,updated DESC);

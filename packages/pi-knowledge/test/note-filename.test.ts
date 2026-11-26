@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -60,14 +60,14 @@ describe("the filename column against the old query", () => {
 		backfillNoteFilenames(db);
 		db.exec("CREATE INDEX notes_filename ON notes(filename)");
 
-		const targets = ["a.md", "b.md", "c.md", "d.md", "Top.md", "root.md", "a.md.bak", "missing.md"];
+		const targets = ["a.md", "A.MD", "b.md", "c.md", "d.md", "Top.md", "root.md", "a.md.bak", "missing.md"];
 		for (const target of targets) {
 			const old = db
 				.prepare("SELECT path FROM notes WHERE path LIKE ? ORDER BY path")
 				.all(`%/${target}`)
 				.map((row) => (row as { path: string }).path);
 			const current = db
-				.prepare("SELECT path FROM notes WHERE filename=? ORDER BY path")
+				.prepare("SELECT path FROM notes WHERE filename COLLATE NOCASE=? ORDER BY path")
 				.all(target)
 				.map((row) => (row as { path: string }).path);
 			expect(current).toEqual(old);
@@ -111,7 +111,8 @@ describe("the runtime's link lookup", () => {
 	it("seeks the filename index rather than scanning the notes", async () => {
 		const root = await realpath(await mkdtemp(join(tmpdir(), "pi-knowledge-filename-")));
 		try {
-			const runtime = await openRuntime(root, 40);
+			await mkdir(join(root, "Vault"));
+			const runtime = await openRuntime(root);
 			const status = await runtime.request<{ stats: { linkLookupPlan: string } }>("status", {});
 			// The plan is a structural fact, not a timing: it does not change
 			// with the machine's speed or its load, so the guard cannot flake.
@@ -122,16 +123,57 @@ describe("the runtime's link lookup", () => {
 			await rm(root, { recursive: true, force: true });
 		}
 	}, 120000);
+
+	it.each([false, true])("opens an existing index (has filename column: %s)", async (hasFilename) => {
+		const root = await realpath(await mkdtemp(join(tmpdir(), "pi-knowledge-filename-upgrade-")));
+		try {
+			await mkdir(join(root, "Vault"));
+			seedExistingIndex(join(root, "index.sqlite"), hasFilename);
+			const runtime = await openRuntime(root);
+			try {
+				for (const project of [undefined, "alpha"]) {
+					const links = await runtime.request("noteLinks", { path: "Library/source.md", project });
+					expect(links).toMatchObject({
+						outgoing: [{ path: "Library/Alpha.md", exists: true }],
+					});
+				}
+				const status = await runtime.request<{ stats: { linkLookupPlan: string } }>("status", {});
+				expect(status.stats.linkLookupPlan).toContain("USING INDEX notes_filename");
+			} finally {
+				await runtime.close();
+			}
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
 });
 
-/** Opens a real index over a small Vault, the way the worker does. */
-async function openRuntime(root: string, noteCount: number) {
-	const vault = join(root, "Vault");
-	for (let index = 0; index < noteCount; index++) {
-		const absolute = join(vault, `Library/Papers/note-${String(index).padStart(5, "0")}.md`);
-		await mkdir(join(absolute, ".."), { recursive: true });
-		await writeFile(absolute, `# Note ${index}\n\nsynthetic material\n`);
+function seedExistingIndex(database: string, hasFilename: boolean) {
+	const db = new DatabaseSync(database);
+	try {
+		db.exec(`PRAGMA user_version=1;
+			CREATE TABLE meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL);
+			INSERT INTO meta VALUES ('revision', 1), ('titlePolicy', 1);
+			CREATE TABLE notes(id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE,
+				title TEXT NOT NULL, body TEXT NOT NULL, hash TEXT NOT NULL, signature TEXT NOT NULL,
+				scope TEXT NOT NULL, kind TEXT NOT NULL, bytes INTEGER NOT NULL);
+			CREATE TABLE links(source TEXT NOT NULL, target TEXT NOT NULL, PRIMARY KEY(source,target));
+			INSERT INTO notes VALUES
+				(1, 'Library/source.md', 'Source', 'See [[alpha]].', 'source-hash', '1:14', 'shared', 'note', 14),
+				(2, 'Library/Alpha.md', 'Alpha', 'Target', 'target-hash', '1:6', 'shared', 'note', 6);
+			INSERT INTO links VALUES ('Library/source.md', 'alpha.md');`);
+		if (hasFilename) {
+			db.exec("ALTER TABLE notes ADD COLUMN filename TEXT NOT NULL DEFAULT ''");
+			backfillNoteFilenames(db);
+			db.exec("CREATE INDEX notes_filename ON notes(filename)");
+		}
+	} finally {
+		db.close();
 	}
+}
+
+async function openRuntime(root: string) {
+	const vault = join(root, "Vault");
 	let receive:
 		| ((message: { id: number; op: string; args?: Record<string, unknown> }) => Promise<void>)
 		| null = null;
@@ -172,6 +214,5 @@ async function openRuntime(root: string, noteCount: number) {
 		await receive({ id, op, args });
 		return response;
 	};
-	await request("reconcile", { force: true });
 	return { request, close: () => runtime.close() };
 }

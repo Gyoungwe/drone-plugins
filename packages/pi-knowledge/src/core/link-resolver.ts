@@ -13,6 +13,9 @@
  * 返回 null 表示目标不在库里（未建的笔记或外部链接）。
  */
 
+// SQLite's old LIKE lookup folded ASCII case. Match that collation in the index seek.
+const BARE_LINK_LOOKUP = "SELECT path FROM notes WHERE filename COLLATE NOCASE=?";
+
 /** The database the resolver reads. */
 export interface LinkResolverDatabase {
 	prepare(sql: string): {
@@ -43,9 +46,9 @@ export function createLinkResolver(database: LinkResolverDatabase, canRead: Scop
 		if (target.includes("/")) return null;
 		const rows =
 			project === undefined
-				? database.prepare("SELECT path FROM notes WHERE filename=? LIMIT 2").all(target)
+				? database.prepare(`${BARE_LINK_LOOKUP} LIMIT 2`).all(target)
 				: database
-						.prepare("SELECT path FROM notes WHERE filename=? AND (scope='shared' OR scope=?) LIMIT 2")
+						.prepare(`${BARE_LINK_LOOKUP} AND (scope='shared' OR scope=?) LIMIT 2`)
 						.all(target, project || "");
 		return rows.length === 1 ? rows[0].path : null;
 	}
@@ -59,7 +62,7 @@ export function createLinkResolver(database: LinkResolverDatabase, canRead: Scop
 	 */
 	function lookupPlan(): string {
 		return database
-			.prepare("EXPLAIN QUERY PLAN SELECT path FROM notes WHERE filename=? LIMIT 2")
+			.prepare(`EXPLAIN QUERY PLAN ${BARE_LINK_LOOKUP} LIMIT 2`)
 			.all("")
 			.map((row) => String((row as { detail?: string }).detail ?? ""))
 			.join(" ");
