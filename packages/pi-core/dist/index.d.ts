@@ -46,4 +46,51 @@ export { deliverFilesParams, makeDeliverFilesTool } from "./tools/deliver-files"
 export { MEMORY_SAVE_TOOL, makeMemorySaveTool } from "./tools/memory-save";
 export { makeStatusTool } from "./tools/status";
 export { formatTodoList, makeTodoTool, normalizeTodos } from "./tools/todo";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { TSchema } from "typebox";
+export type TaskState = "pending" | "in_progress" | "completed" | "blocked";
+export interface WorkbenchTask {
+    id: string;
+    content: string;
+    state: TaskState;
+    updatedAt: string;
+}
+export interface WorkbenchMemory {
+    id: string;
+    title: string;
+    body: string;
+    createdAt: string;
+}
+export interface WorkbenchSnapshot {
+    tasks: WorkbenchTask[];
+    memory: WorkbenchMemory[];
+}
+export declare const emptyWorkbenchSnapshot: () => WorkbenchSnapshot;
+type WorkbenchTool = ToolDefinition<TSchema, unknown, unknown> & {
+    drone: {
+        capabilities: string[];
+        recoverySafe: true;
+        externalWrites?: false;
+        readOnly?: true;
+    };
+};
+export type PiToolRegistrar = {
+    registerTool(tool: WorkbenchTool): void;
+};
+export declare class WorkbenchStore {
+    private readonly tasks;
+    private readonly memory;
+    constructor(snapshot?: WorkbenchSnapshot);
+    plan(items: readonly string[]): WorkbenchTask[];
+    update(id: string, state: TaskState): WorkbenchTask;
+    snapshot(): WorkbenchSnapshot;
+    saveMemory(rawTitle: string, rawBody: string): WorkbenchMemory;
+}
+export declare function registerPiWorkbench(pi: PiToolRegistrar, options?: {
+    store?: WorkbenchStore;
+}): {
+    readonly tools: readonly ["workbench_plan", "workbench_status", "workbench_todo", "workbench_memory_save"];
+    readonly store: WorkbenchStore;
+};
+export {};
 export default registerPiCore;

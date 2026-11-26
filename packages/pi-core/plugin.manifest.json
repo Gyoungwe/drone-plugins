@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "drone-pi-core",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",
@@ -31,7 +31,7 @@
 		"host": "./dist/host.mjs",
 		"ui": "./ui/plugin.json"
 	},
-	"capabilities": ["core", "planning", "tasks", "files", "read-only", "evidence", "ui"],
+	"capabilities": ["core", "planning", "tasks", "files", "read-only", "evidence", "evidence-context", "ui"],
 	"tools": [
 		"ask_user",
 		"set_status",
@@ -42,7 +42,11 @@
 		"task_plan",
 		"task_wait",
 		"task_reconcile",
-		"task_evidence_restore"
+		"task_evidence_restore",
+		"workbench_plan",
+		"workbench_status",
+		"workbench_todo",
+		"workbench_memory_save"
 	],
 	"hosts": ["native-pi", "drone-desktop"],
 	"permissions": {

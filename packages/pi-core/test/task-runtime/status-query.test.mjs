@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { isTaskStatusQuery } from "../../src/task-runtime/status-query.mjs";
+import { isTaskStatusQuery } from "../../src/task-runtime/status-query.ts";
 
 it.each(["完成到哪了", "进度怎么样？", "查看任务进度", "任务状态", "task status", "What's the status?"])(
 	"recognizes task status: %s",

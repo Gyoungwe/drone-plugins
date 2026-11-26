@@ -1,7 +1,7 @@
 import { expect, vi } from "vitest";
-import { createTaskAuthorization } from "../../src/task-runtime/ask-authorization.mjs";
-import { createTaskProgression } from "../../src/task-runtime/progress-action.mjs";
-import { remainingExplanation } from "../../src/task-runtime/remaining.mjs";
+import { createTaskAuthorization } from "../../src/task-runtime/ask-authorization.ts";
+import { createTaskProgression } from "../../src/task-runtime/progress-action.ts";
+import { remainingExplanation } from "../../src/task-runtime/remaining.ts";
 import { createTaskWorkbench } from "./fixture.mjs";
 import { it } from "./scoped-test.mjs";
 

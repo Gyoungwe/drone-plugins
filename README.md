@@ -8,11 +8,13 @@ Drone 的独立插件 workspace。它承载可独立安装、升级、禁用和�
 
 | 包 | 目的 | 状态 |
 |---|---|---|
-| `@gyoungwe/pi-research` | 研究证据与来源闭环 | 公开 0.2.0，自包含核心与真实会话验收见发布记录 |
+| `@gyoungwe/pi-core` | 任务运行时及 Tasks、Workbench、Research status 面板 | 0.3.0 候选合并 Workbench 工具及面板和 Research status 面板 |
+| `@gyoungwe/pi-research` | 研究证据、来源闭环与连接器 | 公开 0.2.0；0.4.0 候选合并连接器注册表及 `connector_list`、`connector_get` |
 | `@gyoungwe/pi-knowledge` | 原生 Pi 知识 / Vault 与同包可选 UI | 公开 0.2.1；0.3.0 同包 UI 为未发布候选，见下方迁移记录 |
 | `@gyoungwe/pi-analysis` | 原生 Pi 科学分析 adapter/readiness 门禁 | 自包含 bundle、manifest、registration test、tarball + Pi loader smoke 已通过 |
-| `@gyoungwe/desktop-ui-pack` | 研究状态面板 | 公开 0.2.0 仍含历史知识 UI；0.3.0 候选把知识贡献迁给 pi-knowledge，未发布 |
-| `@gyoungwe/research-suite` | 聚合包 | 公开 0.1.11；未发布 0.2.0 候选组合 core 0.1.9 / knowledge 0.3.0 / research 0.2.0 |
+| `@gyoungwe/research-suite` | 聚合包 | 公开 0.1.11；0.3.0 候选捆绑 `pi-core@0.3.0`、`pi-knowledge@0.3.0` 和 `pi-research@0.4.0` |
+
+当前有 8 个工作区。升级到合并后的候选包前，卸载曾单独安装的 `@gyoungwe/desktop-ui-pack`、`@gyoungwe/pi-workbench` 和 `@gyoungwe/pi-connectors`，以免重复注册工具或界面贡献。
 
 2026-10-29 原生架构候选新增 `pi-inquiry@0.1.0`：原 SQLite 领域代码保留 Git 历史，同包标准 Pi 入口、受管理 runtime 与可选 UI 共用原格式 SQL/WASM owner。根构建和完整检查已登记该包；当前来源与实际 SDK/UI 范围见 [Inquiry 候选记录](docs/inquiry-sqlite-migration-candidate.md)。它尚未发布，宿主旧 Inquiry 投影/rerun 路径及正式安装包验收仍未完成。
 
@@ -24,7 +26,7 @@ npm run build
 npm run check
 ```
 
-`npm run build` 先刷新各插件 bundle；`packages/pi-knowledge` 的 `npm run build:check` 验证 bundle、worker、skill 和内容 manifest；`research-suite` 的构建会把发布版本依赖复制到包内 staging tree，确保 npm tarball 真正包含 bundled dependencies，并检查 `research-workflow` 只由 `pi-research` 提供。`npm run check` 随后运行所有包级检查、干净安装 smoke 和 tarball 形状校验。插件仓库的 CI 以后将针对 Pi `1.1.0`、Desktop 锁定版本、最新稳定版和 canary 运行兼容矩阵。
+`npm run build` 刷新各插件 bundle。`packages/pi-knowledge` 的 `npm run build:check` 验证 bundle、worker、skill 和内容 manifest。`research-suite` 将精确锁定的依赖复制到包内 staging tree，确保 npm tarball 包含这些依赖，并检查 `research-workflow` 只由 `pi-research` 提供。`npm run check` 随后运行所有包级检查、干净安装 smoke 和 tarball 形状校验。插件仓库的 CI 以后将针对 Pi `1.1.0`、Desktop 锁定版本、最新稳定版和 canary 运行兼容矩阵。
 
 Knowledge category precedence and the 0.2.1 / suite 0.1.10 source candidates are documented in [the category repair record](docs/knowledge-category-fix.md). The repair record preserves its historical scope; public release verification is recorded separately below.
 

@@ -1,8 +1,0 @@
-{
-	"version": 1,
-	"generator": "packages/pi-connectors/scripts/build.mjs",
-	"inputsSha256": "b4e7f575692664a40e5ac7c62307cf770862e8d4ebf9e08d08cf6f6710ae9696",
-	"outputs": {
-		"dist/index.mjs": "e79d645936dbb4074399350b62094d9d06d9f9c772fea9ea61902ed5d940e615"
-	}
-}

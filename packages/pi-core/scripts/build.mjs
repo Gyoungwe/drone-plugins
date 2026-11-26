@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
 
@@ -53,6 +53,27 @@ async function buildReceipt() {
 	};
 }
 
+async function inlineWorkbenchDeclarations() {
+	for (const [entry, workbench] of [
+		["index", "workbench"],
+		["host", "workbench-host"],
+	]) {
+		const entryPath = join(distRoot, `${entry}.d.ts`);
+		const workbenchPath = join(distRoot, `${workbench}.d.ts`);
+		const [entryTypes, workbenchTypes] = await Promise.all([
+			readFile(entryPath, "utf8"),
+			readFile(workbenchPath, "utf8"),
+		]);
+		const reexport = new RegExp(`^export .+ from "\\./${workbench}";$`, "mu");
+		if (!reexport.test(entryTypes)) throw new Error(`Missing ${workbench} re-export in ${entry}.d.ts`);
+		await writeFile(
+			entryPath,
+			entryTypes.replace(reexport, () => workbenchTypes.trimEnd()),
+		);
+		await rm(workbenchPath);
+	}
+}
+
 async function verify() {
 	const pkg = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 	const manifest = JSON.parse(await readFile(join(packageRoot, "plugin.manifest.json"), "utf8"));
@@ -97,22 +118,25 @@ if (!check) {
 		format: "esm",
 		platform: "node",
 		packages: "bundle",
+		minifyWhitespace: true,
+		define: { "import.meta.worker": JSON.stringify("./pdf-worker.mjs") },
 		metafile: true,
 		sourcemap: false,
 		logLevel: "silent",
 	};
+	const runtimeOptions = { ...buildOptions, minifySyntax: true, minifyIdentifiers: true, keepNames: true };
 	await build({
-		...buildOptions,
+		...runtimeOptions,
 		entryPoints: [join(packageRoot, "src/index.ts")],
 		outfile: outputPath,
 	});
 	await build({
-		...buildOptions,
+		...runtimeOptions,
 		entryPoints: [join(packageRoot, "src/host.ts")],
 		outfile: hostOutputPath,
 	});
 	await build({
-		...buildOptions,
+		...runtimeOptions,
 		entryPoints: [join(packageRoot, "src/managed-runtime.ts")],
 		outfile: join(distRoot, "managed-runtime.mjs"),
 	});
@@ -137,10 +161,7 @@ if (!check) {
 	execFileSync("tsc", ["-p", join(packageRoot, "tsconfig.build.json")], {
 		stdio: "inherit",
 	});
-	await mkdir(join(distRoot, "task-runtime"), { recursive: true });
-	for (const name of await readdir(join(packageRoot, "src/task-runtime")))
-		if (name.endsWith(".d.mts"))
-			await cp(join(packageRoot, "src/task-runtime", name), join(distRoot, "task-runtime", name));
+	await inlineWorkbenchDeclarations();
 	const output = await readFile(outputPath, "utf8");
 	if (!output.startsWith("// @ts-nocheck")) await writeFile(outputPath, `// @ts-nocheck\n${output}`);
 	await writeFile(

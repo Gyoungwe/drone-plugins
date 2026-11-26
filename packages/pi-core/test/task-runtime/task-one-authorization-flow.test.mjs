@@ -2,8 +2,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, vi } from "vitest";
-import { remainingExplanation } from "../../src/task-runtime/remaining.mjs";
-import { shouldAskToContinue } from "../../src/task-runtime/turn-end-prompt.mjs";
+import { remainingExplanation } from "../../src/task-runtime/remaining.ts";
+import { shouldAskToContinue } from "../../src/task-runtime/turn-end-prompt.ts";
 import { createTaskWorkbench, LIMITS, WORKBENCH_ENTRY } from "./fixture.mjs";
 import { it } from "./scoped-test.mjs";
 

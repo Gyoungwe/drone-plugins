@@ -1,15 +1,20 @@
 # @gyoungwe/pi-research
 
 Self-contained research evidence tools for native Pi and Drone's public host
-composition. Version 0.3.2 is a release candidate in this repository; this change
-does not publish it to npm.
+composition. Version 0.4.0 is a release candidate.
 
 The native entry registers `research_search_sources`, `research_read_source`,
 `research_deposit_research_note`, `research_answer_sources`, `research_status`,
-and `research_loop`. Source discovery and hash-checked reading stay inside the
-workspace. Candidate notes go into `.pi/research-notes`. The answer packet requires
+`research_loop`, `connector_list`, and `connector_get`. Source discovery and
+hash-checked reading stay inside the workspace. Candidate notes go into
+`.pi/research-notes`. The answer packet requires
 two distinct current-session read receipts; it is evidence to assess, not an
 independent scientific verification.
+
+`connector_list` and `connector_get` expose eight read-only connector declarations
+as text and JSON using in-memory metadata. The package root and `/host` export
+the connector registry, operation planner, and `drone-connector-receipt/v1`
+builders. Connector transport, credentials, and side effects stay with the host.
 
 The run lifecycle uses the complete persisted research core: archive integrity,
 observed reading receipts, structured claim bindings, provenance, and recovery.

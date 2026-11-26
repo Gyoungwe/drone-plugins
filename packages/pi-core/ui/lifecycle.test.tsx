@@ -70,9 +70,10 @@ it("sends the rendered row's session and exact journal revision through the publ
 	fireEvent.click(screen.getByRole("button", { name: "我看过了，这项算完成" }));
 	await act(async () => {});
 	expect(uiFixture.prompt).toHaveBeenCalledOnce();
-	const [sessionId, name, args] = uiFixture.prompt.mock.calls[0] as unknown as [string, string];
+	const [sessionId, name, args] = uiFixture.prompt.mock.calls[0];
 	expect(sessionId).toBe("shown");
 	expect(name).toBe("task-action");
+	if (args === undefined) throw new Error("Missing task action arguments");
 	const decoded = JSON.parse(
 		new TextDecoder().decode(
 			Uint8Array.from(atob(args.replaceAll("-", "+").replaceAll("_", "/")), (c) => c.charCodeAt(0)),

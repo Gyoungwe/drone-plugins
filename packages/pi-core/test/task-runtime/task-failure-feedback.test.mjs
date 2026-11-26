@@ -8,7 +8,7 @@ import {
 	TASK_HANDOFF_POLICY,
 	taskProgressContext,
 	toolResultFailed,
-} from "../../src/task-runtime/failure-feedback.mjs";
+} from "../../src/task-runtime/failure-feedback.ts";
 import { createTaskWorkbench, WORKBENCH_ENTRY } from "./fixture.mjs";
 import { it } from "./scoped-test.mjs";
 

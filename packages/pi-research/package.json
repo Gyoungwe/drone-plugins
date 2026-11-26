@@ -1,6 +1,6 @@
 {
 	"name": "@gyoungwe/pi-research",
-	"version": "0.3.2",
+	"version": "0.4.0",
 	"description": "Evidence-gated research retrieval, reading, deposition and source-grounded answer tools with optional Desktop UI",
 	"keywords": [
 		"pi-package",
@@ -38,7 +38,7 @@
 	},
 	"exports": {
 		".": {
-			"types": "./dist/index.mjs",
+			"types": "./dist/types/index.d.ts",
 			"import": "./dist/index.mjs",
 			"default": "./dist/index.mjs"
 		},

@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "drone-research-suite",
-	"version": "0.2.2",
+	"version": "0.3.0",
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",
@@ -14,13 +14,19 @@
 	"entrypoints": {
 		"extensions": [
 			"./node_modules/@gyoungwe/pi-core/dist/index.mjs",
-			"./node_modules/@gyoungwe/pi-workbench/dist/index.mjs",
 			"./node_modules/@gyoungwe/pi-knowledge/dist/index.mjs",
 			"./node_modules/@gyoungwe/pi-research/dist/index.mjs"
 		],
 		"skills": ["./node_modules/@gyoungwe/pi-knowledge/skills", "./node_modules/@gyoungwe/pi-research/skills"]
 	},
-	"capabilities": ["knowledge", "research", "search", "evidence-context"],
+	"capabilities": [
+		"knowledge",
+		"research",
+		"search",
+		"evidence-context",
+		"connectors",
+		"provenance-receipts"
+	],
 	"tools": [
 		"ask_user",
 		"set_status",
@@ -60,7 +66,9 @@
 		"research_deposit_research_note",
 		"research_answer_sources",
 		"research_status",
-		"research_loop"
+		"research_loop",
+		"connector_list",
+		"connector_get"
 	],
 	"hosts": ["native-pi", "drone-desktop"],
 	"permissions": {

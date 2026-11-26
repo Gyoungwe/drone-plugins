@@ -89,8 +89,16 @@ try {
 	await loader.reload();
 	const loaded = loader.getExtensions();
 	assert.deepEqual(loaded.errors, [], JSON.stringify(loaded.errors));
+	assert.equal(loaded.extensions.length, 3);
 	const names = loaded.extensions.flatMap((extension) => [...extension.tools.keys()]);
-	for (const name of ["task_plan", "knowledge_status", "research_search_sources", "research_loop"])
+	for (const name of [
+		"task_plan",
+		"workbench_plan",
+		"knowledge_status",
+		"research_search_sources",
+		"research_loop",
+		"connector_list",
+	])
 		assert(names.includes(name), `installed suite did not register ${name}`);
 	const receipt = {
 		status: "PASS",

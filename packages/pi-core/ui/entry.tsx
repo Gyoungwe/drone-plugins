@@ -1,6 +1,8 @@
 import type { ChatMessageProps } from "@gyoungwe/plugin-api/ui";
-import type { ReactNode } from "react";
-import { uiCompatibility } from "./api";
+import { memo, type ReactNode } from "react";
+import { getHostUi, uiCompatibility } from "./api";
+import { ResearchStatusPanelContent } from "./components/ResearchStatusPanel";
+import { WorkbenchPanelContent } from "./components/WorkbenchPanel";
 import { taskText } from "./copy";
 import { taskStyles } from "./styles/generated";
 import { TaskMessageContent } from "./TaskMessage";
@@ -22,9 +24,13 @@ function Incompatible() {
 	);
 }
 export function TaskPanel() {
-	return (
-		<Surface>{uiCompatibility().status === "compatible" ? <TaskPanelContent /> : <Incompatible />}</Surface>
-	);
+	const host = getHostUi();
+	const compatible =
+		uiCompatibility().status === "compatible" &&
+		typeof host?.hooks?.useAgentActive === "function" &&
+		typeof host.stores?.useSessionsStore === "function" &&
+		typeof host.stores?.useUiStore === "function";
+	return <Surface>{compatible ? <TaskPanelContent /> : <Incompatible />}</Surface>;
 }
 export function TaskMessage(props: ChatMessageProps) {
 	if (typeof props.renderDefault !== "function")
@@ -46,3 +52,28 @@ export function TaskMessage(props: ChatMessageProps) {
 		</Surface>
 	);
 }
+
+export const ResearchStatusPanel = memo(function ResearchStatusPanel() {
+	if (typeof getHostUi()?.hooks?.useLanguage !== "function") return null;
+	return (
+		<Surface>
+			<ResearchStatusPanelContent />
+		</Surface>
+	);
+});
+
+export const WorkbenchPanel = memo(function WorkbenchPanel() {
+	const host = getHostUi();
+	if (
+		typeof host?.hooks?.useLanguage !== "function" ||
+		typeof host.stores?.useSessionsStore !== "function" ||
+		typeof host.stores?.useTranscriptStore !== "function"
+	) {
+		return null;
+	}
+	return (
+		<Surface>
+			<WorkbenchPanelContent />
+		</Surface>
+	);
+});

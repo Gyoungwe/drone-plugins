@@ -1,10 +1,10 @@
 {
   "artifactSource": "ui/src/index.tsx",
   "inputs": {
-    "package.json": "d6e62c1531374a426992b3d1e07265c0605dda96440dc8d03bdc2164ae3290a3",
-    "plugin.manifest.json": "cbd0e65928d22d4713ddf06dff74fe18f8d798df1d83f251097a07c790c55864",
+    "package.json": "8ab54e15bf6e4b7c403bd7218001fe05d318ed7697e4b0fb7c437d310bf387ba",
+    "plugin.manifest.json": "46f70628843b4dc1de8393595ae8682aa1bf6fa27d97f243a3ab193b61d63493",
     "scripts/build-ui.mjs": "98bc65a95e03b7d6556fab9beaf7cd45146507a1c8b48a42a8299a3883dccb51",
-    "ui/plugin.json": "38e0cd05b3e2b11089d6329e50a72207286239e6f8339ad09a1083069408f2c8",
+    "ui/plugin.json": "1abeb94928468cdae53514f1c3d9e5e580a377dba06fe52557b6be1cb10ae7cd",
     "ui/src/ResearchRunsCard.tsx": "39b1a01f84119b14525bbb2ce0c12ea559af641a2a0efdb1b636b8e0ade173d9",
     "ui/src/index.tsx": "4147d7f79bb09376f49bd60b5c9971261d4f5598cff9d36d9cf1d58ea5f337cb",
     "ui/src/research-runs-copy.ts": "c6d2f6b7c9f0405bc3cb36c31b2d1a6a7eb7ca5b05c16197f518e28eda71c0ea"

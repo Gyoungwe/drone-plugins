@@ -1,5 +1,5 @@
 import { expect, vi } from "vitest";
-import { createTaskAuthorization } from "../../src/task-runtime/ask-authorization.mjs";
+import { createTaskAuthorization } from "../../src/task-runtime/ask-authorization.ts";
 import { createTaskWorkbench, WORKBENCH_ENTRY } from "./fixture.mjs";
 import { it } from "./scoped-test.mjs";
 

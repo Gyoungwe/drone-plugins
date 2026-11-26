@@ -1,5 +1,5 @@
 import { expect, vi } from "vitest";
-import { createTaskProgression } from "../../src/task-runtime/progress-action.mjs";
+import { createTaskProgression } from "../../src/task-runtime/progress-action.ts";
 import { it } from "./scoped-test.mjs";
 
 it.each(["generation", "task", "binding", "abort"])(

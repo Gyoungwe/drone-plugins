@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { afterEach } from "vitest";
-import { createManagedTaskApplication } from "../../src/task-runtime/managed-application.mjs";
+import { createManagedTaskApplication } from "../../src/task-runtime/managed-application.ts";
 
 /**
  * The managed adapter drives the same workbench through host capabilities only. The fake host

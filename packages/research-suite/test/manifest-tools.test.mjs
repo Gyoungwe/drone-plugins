@@ -7,9 +7,12 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const suite = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 const manifest = JSON.parse(await readFile(join(root, "plugin.manifest.json"), "utf8"));
 
 test("manifest tools equal the tools registered by every bundled extension", async () => {
+	assert.deepEqual(suite.pi.extensions, manifest.entrypoints.extensions);
+	assert.equal(suite.pi.extensions.length, 3);
 	const knowledgeDir = await mkdtemp(join(tmpdir(), "drone-research-suite-tools-"));
 	const previous = process.env.DRONE_KNOWLEDGE_DIR;
 	process.env.DRONE_KNOWLEDGE_DIR = knowledgeDir;
@@ -35,15 +38,8 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 		sendUserMessage() {},
 	};
 	try {
-		for (const packageName of [
-			"@gyoungwe/pi-core",
-			"@gyoungwe/pi-workbench",
-			"@gyoungwe/pi-knowledge",
-			"@gyoungwe/pi-research",
-		]) {
-			const module = await import(
-				pathToFileURL(join(root, "node_modules", ...packageName.split("/"), "dist/index.mjs")).href
-			);
+		for (const entry of suite.pi.extensions) {
+			const module = await import(pathToFileURL(join(root, entry)).href);
 			module.default(pi);
 		}
 		assert.equal(new Set(names).size, names.length, "bundled extension tools must not collide");
@@ -56,8 +52,7 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 });
 
 test("bundled versions and public research host resources match the suite pins", async () => {
-	const suite = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-	assert.equal(suite.version, "0.2.2");
+	assert.equal(suite.version, "0.3.0");
 	assert.equal(manifest.version, suite.version);
 	for (const name of suite.bundleDependencies) {
 		const dependencyRoot = join(root, "node_modules", ...name.split("/"));
@@ -68,7 +63,7 @@ test("bundled versions and public research host resources match the suite pins",
 	}
 	const researchRoot = join(root, "node_modules/@gyoungwe/pi-research");
 	const research = JSON.parse(await readFile(join(researchRoot, "package.json"), "utf8"));
-	assert.equal(research.version, "0.3.2");
+	assert.equal(research.version, "0.4.0");
 	const host = await import(pathToFileURL(join(researchRoot, research.exports["./host"].import)).href);
 	assert.equal(typeof host.createResearchLoop, "function");
 	assert.equal(typeof host.registerResearchExtension, "function");

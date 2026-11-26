@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { registerPiCore } from "../dist/index.mjs";
-import { createStandaloneRuntime } from "../src/task-runtime/runtime-bridge.mjs";
+import { createStandaloneRuntime } from "../src/task-runtime/runtime-bridge.ts";
 
 delete process.env.DRONE_TASK_WORKBENCH;
 

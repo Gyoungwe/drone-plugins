@@ -11,8 +11,6 @@ on:
           - pi-knowledge
           - research-suite
           - pi-evidence
-          - pi-connectors
-          - desktop-ui-pack
           - all-pending
         default: all-pending
 
@@ -62,18 +60,10 @@ jobs:
             pi-evidence)
               publish @gyoungwe/pi-evidence
               ;;
-            pi-connectors)
-              publish @gyoungwe/pi-connectors
-              ;;
-            desktop-ui-pack)
-              publish @gyoungwe/desktop-ui-pack
-              ;;
             all-pending)
               publish @gyoungwe/pi-knowledge
               publish @gyoungwe/research-suite
               publish @gyoungwe/pi-evidence
-              publish @gyoungwe/pi-connectors
-              publish @gyoungwe/desktop-ui-pack
               ;;
             *)
               echo "Unsupported package selection: $PACKAGE" >&2

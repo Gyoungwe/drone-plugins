@@ -15,9 +15,13 @@ assert.deepEqual(
 for (const exportName of ["ResearchHome", "ResearchCitations", "ResearchConnectors", "ResearchRunsCard"])
 	assert.ok(uiBundle.includes(exportName));
 const { default: register } = await import(pathToFileURL(join(root, "dist/index.mjs")));
-const { researchHostLoader, registerResearchHost, zoteroHostLoader, registerZoteroHost } = await import(
-	pathToFileURL(join(root, "dist/host.mjs"))
-);
+const {
+	createConnectorRegistry,
+	researchHostLoader,
+	registerResearchHost,
+	zoteroHostLoader,
+	registerZoteroHost,
+} = await import(pathToFileURL(join(root, "dist/host.mjs")));
 const { default: createDesktopRuntime } = await import(pathToFileURL(join(root, "dist/desktop-runtime.mjs")));
 const hostFiles = new Map([
 	["workspace:.pi/research-workspace.json", JSON.stringify({ resultsRoot: "results" })],
@@ -105,6 +109,7 @@ assert.equal(desktopRuntime.operations.detail.effect, "read");
 const tools = new Map();
 register({
 	registerTool(tool) {
+		assert.ok(!tools.has(tool.name), `duplicate tool registration: ${tool.name}`);
 		tools.set(tool.name, tool);
 	},
 });
@@ -117,7 +122,36 @@ assert.deepEqual(
 		"research_answer_sources",
 		"research_status",
 		"research_loop",
+		"connector_list",
+		"connector_get",
 	],
+);
+const connectorIds = [
+	"arxiv",
+	"browser",
+	"generic-mcp",
+	"institutional",
+	"search",
+	"semantic-scholar",
+	"webdav",
+	"zotero",
+];
+assert.deepEqual(
+	createConnectorRegistry()
+		.list()
+		.map(({ id }) => id),
+	connectorIds,
+);
+const listed = await tools.get("connector_list").execute("smoke", {});
+assert.deepEqual(
+	listed.details.connectors.map(({ id }) => id),
+	connectorIds,
+);
+assert.ok(listed.details.connectors.every(({ permissions }) => permissions.readOnly));
+const inspected = await tools.get("connector_get").execute("smoke", { id: "zotero" });
+assert.deepEqual(
+	inspected.details.connector,
+	listed.details.connectors.find(({ id }) => id === "zotero"),
 );
 const workspace = await mkdtemp(join(tmpdir(), "pi-research-smoke-"));
 await writeFile(join(workspace, "research.md"), "# Evidence\nLocal source text\n", "utf8");
@@ -135,6 +169,7 @@ console.log(
 	JSON.stringify({
 		uiContributions: uiManifest.contributions.map((entry) => entry.id),
 		registered: [...tools.keys()],
+		connectorIds,
 		hostOperations: [...registeredHostOperations.keys()],
 		zoteroHostOperations: [...zoteroOperations.keys()],
 		zoteroLookup: "found",

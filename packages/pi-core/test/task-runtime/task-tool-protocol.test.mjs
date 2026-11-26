@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { restoreTaskToolOrder as repair } from "../../src/task-runtime/tool-protocol.mjs";
+import { restoreTaskToolOrder as repair } from "../../src/task-runtime/tool-protocol.ts";
 import { it } from "./scoped-test.mjs";
 
 const assistant = {

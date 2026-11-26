@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 /** Public command/report contract used by native Pi and the Desktop command palette. */
 export declare const DRONE_COMMAND_SCHEMA_VERSION: 1;
-export declare const PI_CORE_PACKAGE_VERSION: "0.2.0";
+export declare const PI_CORE_PACKAGE_VERSION: "0.3.0";
 export declare const PI_HOST_RANGE: ">=1.1.0 <2.0.0";
 export type ExampleKind = "knowledge" | "research" | "analysis" | "evidence";
 type KnowledgeStatus = "configured" | "unconfigured" | "unknown";

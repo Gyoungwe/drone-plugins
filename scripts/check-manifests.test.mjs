@@ -177,7 +177,7 @@ for (const [name, changes, expected] of cases) {
 }
 
 test("allows a UI-only package to omit tools", () => {
-	const uiRoot = fileURLToPath(new URL("../packages/desktop-ui-pack/", import.meta.url));
+	const uiRoot = fileURLToPath(new URL("../packages/pi-core/", import.meta.url));
 	const manifest = {
 		...valid,
 		entrypoints: { ui: "./ui/plugin.json" },

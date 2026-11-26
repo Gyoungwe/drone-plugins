@@ -8,7 +8,7 @@ import {
 	createTaskJournal,
 	registerTaskRuntime,
 	TASK_ENTRY,
-} from "../../src/task-runtime/runtime.mjs";
+} from "../../src/task-runtime/runtime.ts";
 import { it } from "./scoped-test.mjs";
 
 let dirs = [];
