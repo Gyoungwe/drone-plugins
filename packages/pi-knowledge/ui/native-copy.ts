@@ -1,6 +1,6 @@
 import { useLanguage } from "./runtime-api";
 
-const zh = {
+export const zh = {
 	modelReview: "独立模型审核",
 	modelReviewConsent: "同意将当前候选与显示的来源范围发送给所选模型，并承担可能产生的费用。",
 	modelReviewAutoApply: "仅在此候选全部检查通过后，允许应用这次修改。",
@@ -118,7 +118,7 @@ const zh = {
 		"当前支持总览、搜索、笔记阅读、链接、图谱、索引任务查询、候选审核、历史与撤销，以及审核策略和相似内容设置。绑定编辑、自动发现及 Zotero 功能仍在迁移中。",
 	readOnly: "搜索片段仅供浏览，不代表当前会话已读取原文或完成证据核验。",
 };
-const en: Record<keyof typeof zh, string> = {
+export const en: Record<keyof typeof zh, string> = {
 	modelReview: "Independent model review",
 	modelReviewConsent:
 		"I approve sending this candidate and its displayed source ranges to the selected model, and any resulting charges.",
