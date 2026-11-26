@@ -3,9 +3,11 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 const workspace = resolve(packageRoot, "../..");
+const candidateApi = await candidatePluginApi();
 const root = mkdtempSync(join(tmpdir(), "suite-pdf-install-"));
 const home = join(root, "home");
 mkdirSync(home);
@@ -37,6 +39,7 @@ try {
 			dependencies: {
 				"@gyoungwe/research-suite": `file:${join(root, packed.filename)}`,
 				"@earendil-works/pi-coding-agent": "1.1.0",
+				"@gyoungwe/plugin-api": `file:${candidateApi.path}`,
 			},
 			overrides,
 		}),
