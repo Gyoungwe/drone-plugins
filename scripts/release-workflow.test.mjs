@@ -43,14 +43,14 @@ test("release preflight rejects a version mismatch and private candidates", () =
 	if (inquiry.private) assert.match(candidate.stderr, /marked private in package\.json/u);
 });
 
-test("only the protected-main writer receives the GitHub write token", () => {
+test("only the main-branch writer receives the GitHub write token", () => {
 	const workflow = document.toJS();
 	assert.deepEqual(workflow.permissions, {});
 	assert.deepEqual(Object.keys(workflow.jobs), ["build", "release"]);
 	assert.equal(workflow.env.DRONE_PLUGIN_API_RELEASE, "1");
 	const { build, release } = workflow.jobs;
 	for (const job of [build, release]) {
-		assert.match(job.if, /github\.ref == 'refs\/heads\/main' && github\.ref_protected/u);
+		assert.match(job.if, /^github\.ref == 'refs\/heads\/main'$/u);
 		const checkout = job.steps.find((step) => step.uses?.startsWith("actions/checkout@"));
 		assert.equal(checkout.with.ref, `\${{ github.sha }}`);
 		assert.equal(checkout.with["persist-credentials"], false);

@@ -36,7 +36,7 @@ defaults:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/main' && github.ref_protected
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -97,7 +97,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: github.ref == 'refs/heads/main' && github.ref_protected
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
     permissions:
