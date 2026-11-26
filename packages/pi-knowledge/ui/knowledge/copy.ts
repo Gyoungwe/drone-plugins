@@ -447,7 +447,7 @@ export const knowledgeZh = {
 	resumeTopicHint: "将向当前可写会话发送明确提示，然后继续指定主题。",
 	resumeUnavailable: "需要当前项目中的可写会话，且当前任务不能正在流式运行。",
 } as const;
-const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
+export const knowledgeEn: Record<keyof typeof knowledgeZh, string> = {
 	...specialistEn,
 	cancel: "Cancel",
 	modelReviewButton: "Automatic model review",
