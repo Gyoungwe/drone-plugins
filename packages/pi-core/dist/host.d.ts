@@ -9,7 +9,7 @@ import type { PluginNativeSession } from "@gyoungwe/plugin-api/native";
 import type { MemoryType } from "./memory";
 import { memoryIndexPrompt as memoryIndexPromptImpl } from "./memory";
 import { normalizeTaskMilestones } from "./milestone-plan";
-import type { TaskAcceptanceVerifier } from "./task-runtime/acceptance.mjs";
+import type { TaskAcceptanceVerifier } from "./task-runtime/acceptance.ts";
 import { makeDeliverFilesTool as makeDeliverFilesToolImpl } from "./tools/deliver-files";
 import { makeMemorySaveTool as makeMemorySaveToolImpl } from "./tools/memory-save";
 import { makeStatusTool as makeStatusToolImpl } from "./tools/status";
@@ -71,3 +71,5 @@ export declare const taskHostLoader: {
     };
 };
 export { normalizeTaskMilestones } from "./milestone-plan";
+import type { PluginRuntimeFactory } from "@gyoungwe/plugin-api/runtime";
+export declare const createWorkbenchRuntime: PluginRuntimeFactory;

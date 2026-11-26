@@ -1,6 +1,6 @@
 import type { PiCoreContext } from "./index";
 interface TaskJournal {
-    scope(): string;
+    scope(): string | null;
     snapshot(): {
         id: string;
     } | null;
