@@ -399,25 +399,15 @@ __export(semantic_settings_exports, {
   createStoredSemanticSettingsApi: () => createStoredSemanticSettingsApi,
   readSemanticSettings: () => readSemanticSettings,
   saveSemanticSettings: () => saveSemanticSettings,
-  validateSemanticConfig: () => validateSemanticConfig
+  validateSemanticConfig: () => validateSemanticConfig2
 });
 import { createHash as createHash3, randomUUID as randomUUID3 } from "node:crypto";
 import { lstat, mkdir as mkdir3, readFile as readFile4, rename as rename3, unlink as unlink2, writeFile as writeFile3 } from "node:fs/promises";
 import { dirname, join as join4 } from "node:path";
-var MAX_FILE_BYTES = 256 * 1024, ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/, SETTINGS_KEYS = /* @__PURE__ */ new Set([
-  "version",
-  "revision",
-  "updatedAt",
-  "enabled",
-  "provider",
-  "baseUrl",
-  "model",
-  "credentialEnv",
-  "remoteConsent",
-  "timeoutMs",
-  "chunkChars",
-  "minSimilarity"
-]), CONFIG_KEYS = /* @__PURE__ */ new Set([
+
+// src/core/semantic-provider.ts
+import { URL as URL2 } from "node:url";
+var MAX_BATCH = 32, MAX_CHARS = 12e4, MAX_RESPONSE = 8 * 1024 * 1024, ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/, MAX_VECTOR_COMPONENT = 1e6, MAX_VECTOR_NORM = 1e9, CONFIG_KEYS = /* @__PURE__ */ new Set([
   "enabled",
   "provider",
   "baseUrl",
@@ -429,7 +419,7 @@ var MAX_FILE_BYTES = 256 * 1024, ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/, SETTINGS
   "minSimilarity"
 ]);
 function loopback(hostname) {
-  return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname);
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 function validateSemanticConfig(input = {}) {
   if (!input || typeof input != "object" || Array.isArray(input))
@@ -485,13 +475,215 @@ function validateSemanticConfig(input = {}) {
     throw new Error("credentialEnv must be a valid environment variable name");
   let url;
   try {
-    url = new URL(trimmedBase);
+    url = new URL2(trimmedBase);
   } catch {
     throw new Error("Semantic provider base URL is invalid");
   }
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash)
     throw new Error("Semantic provider URL must be plain http(s) without credentials, query, or fragment");
   let remote = !loopback(url.hostname);
+  if (remote && url.protocol === "http:") throw new Error("Remote semantic providers require HTTPS");
+  if (remote && input.remoteConsent !== !0)
+    throw new Error("Remote semantic provider requires explicit remoteConsent");
+  if (remote && !trimmedCredential)
+    throw new Error("Remote semantic providers require a credential environment variable");
+  return {
+    enabled,
+    provider,
+    baseUrl: url.toString().replace(/\/+$/, ""),
+    model: trimmedModel,
+    credentialEnv: trimmedCredential,
+    remoteConsent: input.remoteConsent === !0,
+    timeoutMs: input.timeoutMs ?? 1e4,
+    chunkChars: input.chunkChars ?? 1200,
+    minSimilarity: input.minSimilarity ?? 0.45
+  };
+}
+function endpoint(config) {
+  let suffix = config.provider === "ollama" ? ["api/embed", "api"] : ["v1/embeddings", "v1"], base = config.baseUrl.replace(/\/+$/, "");
+  return base.endsWith(`/${suffix[0]}`) ? base : base.endsWith(`/${suffix[1]}`) ? `${base}/${suffix[0].split("/").at(-1)}` : `${base}/${suffix[0]}`;
+}
+async function readBounded(response) {
+  let length = Number(response.headers.get("content-length"));
+  if (Number.isFinite(length) && length > MAX_RESPONSE)
+    throw new Error("Semantic provider response is too large");
+  let reader = response.body?.getReader();
+  if (!reader) {
+    let text4 = await response.text();
+    if (Buffer.byteLength(text4) > MAX_RESPONSE) throw new Error("Semantic provider response is too large");
+    return text4;
+  }
+  let chunks = [], total = 0;
+  for (; ; ) {
+    let { done, value } = await reader.read();
+    if (done) break;
+    if (total += value.byteLength, total > MAX_RESPONSE)
+      throw await reader.cancel(), new Error("Semantic provider response is too large");
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+function vectors(value, expected) {
+  if (!Array.isArray(value) || value.length !== expected)
+    throw new Error("Semantic provider returned an invalid vector count");
+  let dimension = 0;
+  return { vectors: value.map((item) => {
+    if (!Array.isArray(item) || !item.length || item.length > 16384)
+      throw new Error("Semantic provider returned an invalid vector");
+    if (dimension || (dimension = item.length), item.length !== dimension)
+      throw new Error("Semantic provider returned inconsistent vector dimensions");
+    let vector = item.map((n) => n);
+    if (vector.some((n) => typeof n != "number" || !Number.isFinite(n) || Math.abs(n) > MAX_VECTOR_COMPONENT))
+      throw new Error("Semantic provider returned NaN or infinite vector values");
+    let sum = 0;
+    for (let n of vector)
+      if (sum += n * n, !Number.isFinite(sum) || sum > MAX_VECTOR_NORM ** 2)
+        throw new Error("Semantic provider returned an oversized vector norm");
+    if (!(sum > 0)) throw new Error("Semantic provider returned a zero-norm vector");
+    return vector;
+  }), dimension };
+}
+async function embedTexts(rawConfig, texts, { signal } = {}) {
+  let config = validateSemanticConfig(rawConfig);
+  if (!config.enabled) throw new Error("Semantic embeddings are disabled");
+  if (!Array.isArray(texts) || !texts.length || texts.length > MAX_BATCH || texts.some((text4) => typeof text4 != "string" || !text4.length || text4.length > 16e3) || texts.join(`
+`).length > MAX_CHARS)
+    throw new Error("Semantic embedding batch is outside bounded limits");
+  let headers = { "content-type": "application/json", accept: "application/json" };
+  if (config.credentialEnv) {
+    let token = process.env[config.credentialEnv];
+    if (!token) throw new Error(`Credential environment variable ${config.credentialEnv} is not set`);
+    headers.authorization = `Bearer ${token}`;
+  }
+  let body = config.provider === "ollama" ? { model: config.model, input: texts, truncate: !1 } : { model: config.model, input: texts, encoding_format: "float" }, controller = new AbortController(), timer = setTimeout(() => controller.abort(new Error("Semantic provider timeout")), config.timeoutMs), onAbort = () => controller.abort(signal.reason);
+  signal && (signal.aborted ? controller.abort(signal.reason) : signal.addEventListener("abort", onAbort, { once: !0 }));
+  try {
+    let response = await fetch(endpoint(config), {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      redirect: "error",
+      signal: controller.signal
+    }), raw;
+    try {
+      raw = await readBounded(response);
+    } catch (error) {
+      try {
+        await response.body?.cancel();
+      } catch {
+      }
+      throw error;
+    }
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      throw new Error(`Semantic provider returned HTTP ${response.status}`);
+    }
+    if (!response.ok) throw new Error(`Semantic provider returned HTTP ${response.status}`);
+    if (payload?.model !== void 0 && payload.model !== config.model)
+      throw new Error("Semantic provider returned an unexpected model");
+    let embeddings = config.provider === "ollama" ? payload?.embeddings : Array.isArray(payload?.data) && payload.data.length === texts.length ? [...payload.data].sort((a, b) => (a?.index ?? 0) - (b?.index ?? 0)).map((item, index) => {
+      if (!Number.isInteger(item?.index) || item.index !== index || !Object.hasOwn(item, "embedding"))
+        throw new Error("Semantic provider returned invalid embedding indexes");
+      return item.embedding;
+    }) : null;
+    return { ...vectors(embeddings, texts.length), provider: config.provider, model: config.model };
+  } finally {
+    clearTimeout(timer), signal && signal.removeEventListener("abort", onAbort);
+  }
+}
+var semanticLimits = Object.freeze({ MAX_BATCH, MAX_CHARS, MAX_RESPONSE });
+
+// src/core/semantic-settings.ts
+var MAX_FILE_BYTES = 256 * 1024, SETTINGS_KEYS = /* @__PURE__ */ new Set([
+  "version",
+  "revision",
+  "updatedAt",
+  "enabled",
+  "provider",
+  "baseUrl",
+  "model",
+  "credentialEnv",
+  "remoteConsent",
+  "timeoutMs",
+  "chunkChars",
+  "minSimilarity"
+]), CONFIG_KEYS2 = /* @__PURE__ */ new Set([
+  "enabled",
+  "provider",
+  "baseUrl",
+  "model",
+  "credentialEnv",
+  "remoteConsent",
+  "timeoutMs",
+  "chunkChars",
+  "minSimilarity"
+]);
+function loopback2(hostname) {
+  return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname);
+}
+function validateSemanticConfig2(input = {}) {
+  if (!input || typeof input != "object" || Array.isArray(input))
+    throw new Error("Semantic settings must be an object");
+  for (let key of Object.keys(input))
+    if (!CONFIG_KEYS2.has(key)) throw new Error(`Unknown semantic setting: ${key}`);
+  if (input.enabled !== void 0 && typeof input.enabled != "boolean")
+    throw new Error("enabled must be boolean");
+  if (input.provider !== void 0 && typeof input.provider != "string")
+    throw new Error("provider must be a string");
+  let provider = input.provider ?? "none";
+  if (!["none", "ollama", "openai-compatible"].includes(provider))
+    throw new Error("Unknown semantic provider");
+  if (input.remoteConsent !== void 0 && typeof input.remoteConsent != "boolean")
+    throw new Error("remoteConsent must be boolean");
+  if (input.timeoutMs !== void 0 && (!Number.isInteger(input.timeoutMs) || input.timeoutMs < 500 || input.timeoutMs > 3e4))
+    throw new Error("timeoutMs must be an integer between 500 and 30000");
+  if (input.chunkChars !== void 0 && (!Number.isInteger(input.chunkChars) || input.chunkChars < 256 || input.chunkChars > 8e3))
+    throw new Error("chunkChars must be an integer between 256 and 8000");
+  if (input.minSimilarity !== void 0 && (typeof input.minSimilarity != "number" || !Number.isFinite(input.minSimilarity) || input.minSimilarity < 0 || input.minSimilarity > 1))
+    throw new Error("minSimilarity must be a finite number between 0 and 1");
+  let enabled = input.enabled ?? provider !== "none", baseUrl = input.baseUrl === void 0 ? "" : input.baseUrl, model = input.model === void 0 ? "" : input.model, credentialEnv = input.credentialEnv === void 0 || input.credentialEnv === null ? "" : input.credentialEnv;
+  if (typeof baseUrl != "string" || typeof model != "string" || typeof credentialEnv != "string")
+    throw new Error("Semantic provider fields must be strings");
+  let trimmedBase = baseUrl.trim(), trimmedModel = model.trim(), trimmedCredential = credentialEnv.trim();
+  if (provider === "none") {
+    if (enabled) throw new Error("The none provider cannot be enabled");
+    if (input.remoteConsent === !0) throw new Error("remoteConsent is not valid for the none provider");
+    return {
+      enabled: !1,
+      provider: "none",
+      baseUrl: "",
+      model: "",
+      credentialEnv: "",
+      remoteConsent: !1
+    };
+  }
+  if (!enabled && !trimmedBase && !trimmedModel)
+    return {
+      enabled: !1,
+      provider,
+      baseUrl: "",
+      model: "",
+      credentialEnv: trimmedCredential,
+      remoteConsent: input.remoteConsent === !0,
+      timeoutMs: input.timeoutMs ?? 1e4,
+      chunkChars: input.chunkChars ?? 1200,
+      minSimilarity: input.minSimilarity ?? 0.45
+    };
+  if (!trimmedBase || trimmedBase.length > 500 || !trimmedModel || trimmedModel.length > 200)
+    throw new Error("Semantic provider base URL and model are required");
+  if (trimmedCredential && !ENV_NAME.test(trimmedCredential))
+    throw new Error("credentialEnv must be a valid environment variable name");
+  let url;
+  try {
+    url = new URL(trimmedBase);
+  } catch {
+    throw new Error("Semantic provider base URL is invalid");
+  }
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash)
+    throw new Error("Semantic provider URL must be plain http(s) without credentials, query, or fragment");
+  let remote = !loopback2(url.hostname);
   if (remote && url.protocol === "http:") throw new Error("Remote semantic providers require HTTPS");
   if (remote && input.remoteConsent !== !0)
     throw new Error("Remote semantic provider requires explicit remoteConsent");
@@ -555,7 +747,7 @@ function normalize(value, revision, updatedAt = null) {
     if (!SETTINGS_KEYS.has(key)) throw new Error(`Unknown semantic setting: ${key}`);
   if (!Number.isSafeInteger(revision) || Number(revision) < 0)
     throw new Error("Invalid semantic settings revision");
-  let raw = value, config = validateSemanticConfig({
+  let raw = value, config = validateSemanticConfig2({
     enabled: raw.enabled,
     provider: raw.provider,
     baseUrl: raw.baseUrl,
@@ -577,7 +769,7 @@ function normalize(value, revision, updatedAt = null) {
 }
 function defaultSettings(state, path) {
   let updatedAt = state.defaultUpdatedAt.get(path) || (/* @__PURE__ */ new Date()).toISOString();
-  return state.defaultUpdatedAt.set(path, updatedAt), { version: 1, revision: 0, ...validateSemanticConfig({}), updatedAt };
+  return state.defaultUpdatedAt.set(path, updatedAt), { version: 1, revision: 0, ...validateSemanticConfig2({}), updatedAt };
 }
 function createStoredSemanticSettingsApi(storage, state = createSemanticSettingsState()) {
   function unpack(vaultId, document) {
@@ -992,196 +1184,6 @@ var compatibilityKnowledgeRuntimeHost = createKnowledgeRuntimeHost(), {
   requiresPaperEvidence,
   hasPaperCitation
 } = compatibilityKnowledgeRuntimeHost;
-
-// src/core/semantic-provider.ts
-import { URL as URL2 } from "node:url";
-var MAX_BATCH = 32, MAX_CHARS = 12e4, MAX_RESPONSE = 8 * 1024 * 1024, ENV_NAME2 = /^[A-Z_][A-Z0-9_]{0,127}$/, MAX_VECTOR_COMPONENT = 1e6, MAX_VECTOR_NORM = 1e9, CONFIG_KEYS2 = /* @__PURE__ */ new Set([
-  "enabled",
-  "provider",
-  "baseUrl",
-  "model",
-  "credentialEnv",
-  "remoteConsent",
-  "timeoutMs",
-  "chunkChars",
-  "minSimilarity"
-]);
-function loopback2(hostname) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
-}
-function validateSemanticConfig2(input = {}) {
-  if (!input || typeof input != "object" || Array.isArray(input))
-    throw new Error("Semantic settings must be an object");
-  for (let key of Object.keys(input))
-    if (!CONFIG_KEYS2.has(key)) throw new Error(`Unknown semantic setting: ${key}`);
-  if (input.enabled !== void 0 && typeof input.enabled != "boolean")
-    throw new Error("enabled must be boolean");
-  if (input.provider !== void 0 && typeof input.provider != "string")
-    throw new Error("provider must be a string");
-  let provider = input.provider ?? "none";
-  if (!["none", "ollama", "openai-compatible"].includes(provider))
-    throw new Error("Unknown semantic provider");
-  if (input.remoteConsent !== void 0 && typeof input.remoteConsent != "boolean")
-    throw new Error("remoteConsent must be boolean");
-  if (input.timeoutMs !== void 0 && (!Number.isInteger(input.timeoutMs) || input.timeoutMs < 500 || input.timeoutMs > 3e4))
-    throw new Error("timeoutMs must be an integer between 500 and 30000");
-  if (input.chunkChars !== void 0 && (!Number.isInteger(input.chunkChars) || input.chunkChars < 256 || input.chunkChars > 8e3))
-    throw new Error("chunkChars must be an integer between 256 and 8000");
-  if (input.minSimilarity !== void 0 && (typeof input.minSimilarity != "number" || !Number.isFinite(input.minSimilarity) || input.minSimilarity < 0 || input.minSimilarity > 1))
-    throw new Error("minSimilarity must be a finite number between 0 and 1");
-  let enabled = input.enabled ?? provider !== "none", baseUrl = input.baseUrl === void 0 ? "" : input.baseUrl, model = input.model === void 0 ? "" : input.model, credentialEnv = input.credentialEnv === void 0 || input.credentialEnv === null ? "" : input.credentialEnv;
-  if (typeof baseUrl != "string" || typeof model != "string" || typeof credentialEnv != "string")
-    throw new Error("Semantic provider fields must be strings");
-  let trimmedBase = baseUrl.trim(), trimmedModel = model.trim(), trimmedCredential = credentialEnv.trim();
-  if (provider === "none") {
-    if (enabled) throw new Error("The none provider cannot be enabled");
-    if (input.remoteConsent === !0) throw new Error("remoteConsent is not valid for the none provider");
-    return {
-      enabled: !1,
-      provider: "none",
-      baseUrl: "",
-      model: "",
-      credentialEnv: "",
-      remoteConsent: !1
-    };
-  }
-  if (!enabled && !trimmedBase && !trimmedModel)
-    return {
-      enabled: !1,
-      provider,
-      baseUrl: "",
-      model: "",
-      credentialEnv: trimmedCredential,
-      remoteConsent: input.remoteConsent === !0,
-      timeoutMs: input.timeoutMs ?? 1e4,
-      chunkChars: input.chunkChars ?? 1200,
-      minSimilarity: input.minSimilarity ?? 0.45
-    };
-  if (!trimmedBase || trimmedBase.length > 500 || !trimmedModel || trimmedModel.length > 200)
-    throw new Error("Semantic provider base URL and model are required");
-  if (trimmedCredential && !ENV_NAME2.test(trimmedCredential))
-    throw new Error("credentialEnv must be a valid environment variable name");
-  let url;
-  try {
-    url = new URL2(trimmedBase);
-  } catch {
-    throw new Error("Semantic provider base URL is invalid");
-  }
-  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash)
-    throw new Error("Semantic provider URL must be plain http(s) without credentials, query, or fragment");
-  let remote = !loopback2(url.hostname);
-  if (remote && url.protocol === "http:") throw new Error("Remote semantic providers require HTTPS");
-  if (remote && input.remoteConsent !== !0)
-    throw new Error("Remote semantic provider requires explicit remoteConsent");
-  if (remote && !trimmedCredential)
-    throw new Error("Remote semantic providers require a credential environment variable");
-  return {
-    enabled,
-    provider,
-    baseUrl: url.toString().replace(/\/+$/, ""),
-    model: trimmedModel,
-    credentialEnv: trimmedCredential,
-    remoteConsent: input.remoteConsent === !0,
-    timeoutMs: input.timeoutMs ?? 1e4,
-    chunkChars: input.chunkChars ?? 1200,
-    minSimilarity: input.minSimilarity ?? 0.45
-  };
-}
-function endpoint(config) {
-  let suffix = config.provider === "ollama" ? ["api/embed", "api"] : ["v1/embeddings", "v1"], base = config.baseUrl.replace(/\/+$/, "");
-  return base.endsWith(`/${suffix[0]}`) ? base : base.endsWith(`/${suffix[1]}`) ? `${base}/${suffix[0].split("/").at(-1)}` : `${base}/${suffix[0]}`;
-}
-async function readBounded(response) {
-  let length = Number(response.headers.get("content-length"));
-  if (Number.isFinite(length) && length > MAX_RESPONSE)
-    throw new Error("Semantic provider response is too large");
-  let reader = response.body?.getReader();
-  if (!reader) {
-    let text4 = await response.text();
-    if (Buffer.byteLength(text4) > MAX_RESPONSE) throw new Error("Semantic provider response is too large");
-    return text4;
-  }
-  let chunks = [], total = 0;
-  for (; ; ) {
-    let { done, value } = await reader.read();
-    if (done) break;
-    if (total += value.byteLength, total > MAX_RESPONSE)
-      throw await reader.cancel(), new Error("Semantic provider response is too large");
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
-function vectors(value, expected) {
-  if (!Array.isArray(value) || value.length !== expected)
-    throw new Error("Semantic provider returned an invalid vector count");
-  let dimension = 0;
-  return { vectors: value.map((item) => {
-    if (!Array.isArray(item) || !item.length || item.length > 16384)
-      throw new Error("Semantic provider returned an invalid vector");
-    if (dimension || (dimension = item.length), item.length !== dimension)
-      throw new Error("Semantic provider returned inconsistent vector dimensions");
-    let vector = item.map((n) => n);
-    if (vector.some((n) => typeof n != "number" || !Number.isFinite(n) || Math.abs(n) > MAX_VECTOR_COMPONENT))
-      throw new Error("Semantic provider returned NaN or infinite vector values");
-    let sum = 0;
-    for (let n of vector)
-      if (sum += n * n, !Number.isFinite(sum) || sum > MAX_VECTOR_NORM ** 2)
-        throw new Error("Semantic provider returned an oversized vector norm");
-    if (!(sum > 0)) throw new Error("Semantic provider returned a zero-norm vector");
-    return vector;
-  }), dimension };
-}
-async function embedTexts(rawConfig, texts, { signal } = {}) {
-  let config = validateSemanticConfig2(rawConfig);
-  if (!config.enabled) throw new Error("Semantic embeddings are disabled");
-  if (!Array.isArray(texts) || !texts.length || texts.length > MAX_BATCH || texts.some((text4) => typeof text4 != "string" || !text4.length || text4.length > 16e3) || texts.join(`
-`).length > MAX_CHARS)
-    throw new Error("Semantic embedding batch is outside bounded limits");
-  let headers = { "content-type": "application/json", accept: "application/json" };
-  if (config.credentialEnv) {
-    let token = process.env[config.credentialEnv];
-    if (!token) throw new Error(`Credential environment variable ${config.credentialEnv} is not set`);
-    headers.authorization = `Bearer ${token}`;
-  }
-  let body = config.provider === "ollama" ? { model: config.model, input: texts, truncate: !1 } : { model: config.model, input: texts, encoding_format: "float" }, controller = new AbortController(), timer = setTimeout(() => controller.abort(new Error("Semantic provider timeout")), config.timeoutMs), onAbort = () => controller.abort(signal.reason);
-  signal && (signal.aborted ? controller.abort(signal.reason) : signal.addEventListener("abort", onAbort, { once: !0 }));
-  try {
-    let response = await fetch(endpoint(config), {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      redirect: "error",
-      signal: controller.signal
-    }), raw;
-    try {
-      raw = await readBounded(response);
-    } catch (error) {
-      try {
-        await response.body?.cancel();
-      } catch {
-      }
-      throw error;
-    }
-    let payload;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      throw new Error(`Semantic provider returned HTTP ${response.status}`);
-    }
-    if (!response.ok) throw new Error(`Semantic provider returned HTTP ${response.status}`);
-    if (payload?.model !== void 0 && payload.model !== config.model)
-      throw new Error("Semantic provider returned an unexpected model");
-    let embeddings = config.provider === "ollama" ? payload?.embeddings : Array.isArray(payload?.data) && payload.data.length === texts.length ? [...payload.data].sort((a, b) => (a?.index ?? 0) - (b?.index ?? 0)).map((item, index) => {
-      if (!Number.isInteger(item?.index) || item.index !== index || !Object.hasOwn(item, "embedding"))
-        throw new Error("Semantic provider returned invalid embedding indexes");
-      return item.embedding;
-    }) : null;
-    return { ...vectors(embeddings, texts.length), provider: config.provider, model: config.model };
-  } finally {
-    clearTimeout(timer), signal && signal.removeEventListener("abort", onAbort);
-  }
-}
-var semanticLimits = Object.freeze({ MAX_BATCH, MAX_CHARS, MAX_RESPONSE });
 
 // src/core/topic-probe.ts
 var STOP = new Set(
@@ -2337,7 +2339,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
       return queueSemantic(this.binding.vaultId, async () => {
         if (await assertBinding(this.binding), expectedBindingRevision !== this.binding.revision)
           throw new Error("Semantic settings binding revision is stale");
-        validateSemanticConfig2(input);
+        validateSemanticConfig(input);
         let value = await saveSemanticSettings2(this.binding.vaultId, input, expectedSettingsRevision);
         return await assertBinding(this.binding), { ...value, credentialEnv: value.credentialEnv };
       });
@@ -2345,7 +2347,7 @@ function createKnowledgeServicePoolApi(runtime, config, semantic, reviewPolicy, 
     async testSemanticProvider(input, expectedBindingRevision, options = {}) {
       if (await assertBinding(this.binding), expectedBindingRevision !== this.binding.revision)
         throw new Error("Semantic provider binding revision is stale");
-      let config2 = validateSemanticConfig2(input), result2 = await embedTexts(config2, ["drone semantic provider test"], options);
+      let config2 = validateSemanticConfig(input), result2 = await embedTexts(config2, ["drone semantic provider test"], options);
       return await assertBinding(this.binding), { ok: !0, provider: result2.provider, model: result2.model, dimension: result2.dimension };
     }
     /** @param {Record<string, any>} [options] */
