@@ -4749,7 +4749,7 @@ __export(semantic_settings_exports, {
 import { createHash as createHash4, randomUUID as randomUUID3 } from "node:crypto";
 import { lstat as lstat2, mkdir as mkdir3, readFile as readFile3, rename as rename3, unlink as unlink2, writeFile as writeFile3 } from "node:fs/promises";
 import { dirname, join as join4 } from "node:path";
-var MAX_FILE_BYTES = 256 * 1024, ENV_NAME2 = /^[A-Z_][A-Z0-9_]{0,127}$/, SETTINGS_KEYS = /* @__PURE__ */ new Set([
+var MAX_FILE_BYTES = 256 * 1024, SETTINGS_KEYS = /* @__PURE__ */ new Set([
   "version",
   "revision",
   "updatedAt",
@@ -4826,7 +4826,7 @@ function validateSemanticConfig2(input = {}) {
     };
   if (!trimmedBase || trimmedBase.length > 500 || !trimmedModel || trimmedModel.length > 200)
     throw new Error("Semantic provider base URL and model are required");
-  if (trimmedCredential && !ENV_NAME2.test(trimmedCredential))
+  if (trimmedCredential && !ENV_NAME.test(trimmedCredential))
     throw new Error("credentialEnv must be a valid environment variable name");
   let url;
   try {

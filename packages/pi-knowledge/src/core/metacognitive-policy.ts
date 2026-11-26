@@ -129,7 +129,7 @@ export interface MetacognitiveWarning {
 
 const MAX_FAILURES = 16;
 const MAX_TEXT = 600;
-const SHA256 = /^[a-f0-9]{64}$/i;
+export const SHA256 = /^[a-f0-9]{64}$/i;
 
 function bounded(value: unknown, max = MAX_TEXT): string {
 	const text = typeof value === "string" ? value : JSON.stringify(value);
