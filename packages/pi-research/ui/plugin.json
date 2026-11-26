@@ -1,6 +1,6 @@
 {
 	"name": "drone-research-ui",
-	"version": "0.4.0",
+	"version": "0.4.1",
 	"displayName": "Research",
 	"description": "Research entry, citation summary and connector status for Drone Desktop.",
 	"droneUi": 2,

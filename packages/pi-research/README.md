@@ -1,7 +1,8 @@
 # @gyoungwe/pi-research
 
 Self-contained research evidence tools for native Pi and Drone's public host
-composition. Version 0.4.0 is a release candidate.
+composition. Version 0.4.1 is a release candidate. The package bundles the verified
+Plugin API 2.0.0 Release archive, so consumers need no registry copy of the API.
 
 The native entry registers `research_search_sources`, `research_read_source`,
 `research_deposit_research_note`, `research_answer_sources`, `research_status`,
