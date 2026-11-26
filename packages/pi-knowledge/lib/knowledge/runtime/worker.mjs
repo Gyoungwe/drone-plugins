@@ -517,16 +517,17 @@ function backlinkContext(body, target, max = 240) {
 }
 
 // src/core/link-resolver.ts
+var BARE_LINK_LOOKUP = "SELECT path FROM notes WHERE filename COLLATE NOCASE=?";
 function createLinkResolver(database, canRead2) {
   function resolve(target, project) {
     const exact = database.prepare("SELECT path FROM notes WHERE path=?").get(target);
     if (exact && (project === void 0 || canRead2(target, project))) return target;
     if (target.includes("/")) return null;
-    const rows = project === void 0 ? database.prepare("SELECT path FROM notes WHERE filename=? LIMIT 2").all(target) : database.prepare("SELECT path FROM notes WHERE filename=? AND (scope='shared' OR scope=?) LIMIT 2").all(target, project || "");
+    const rows = project === void 0 ? database.prepare(`${BARE_LINK_LOOKUP} LIMIT 2`).all(target) : database.prepare(`${BARE_LINK_LOOKUP} AND (scope='shared' OR scope=?) LIMIT 2`).all(target, project || "");
     return rows.length === 1 ? rows[0].path : null;
   }
   function lookupPlan() {
-    return database.prepare("EXPLAIN QUERY PLAN SELECT path FROM notes WHERE filename=? LIMIT 2").all("").map((row) => String(row.detail ?? "")).join(" ");
+    return database.prepare(`EXPLAIN QUERY PLAN ${BARE_LINK_LOOKUP} LIMIT 2`).all("").map((row) => String(row.detail ?? "")).join(" ");
   }
   return { resolve, lookupPlan };
 }
@@ -545,17 +546,20 @@ function backfillNoteFilenames(database) {
   return rows.length;
 }
 function ensureNoteFilenameColumn(database) {
-  const columns = database.prepare("PRAGMA table_info(notes)").all().map((column) => String(column.name ?? ""));
-  if (columns.includes("filename")) return;
-  database.exec("ALTER TABLE notes ADD COLUMN filename TEXT NOT NULL DEFAULT ''");
-  database.exec("BEGIN IMMEDIATE");
-  try {
-    backfillNoteFilenames(database);
-    database.exec("COMMIT");
-  } catch {
-    database.exec("ROLLBACK");
+  const columns = database.prepare("PRAGMA table_info(notes)").all();
+  if (!columns.some((column) => column.name === "filename")) {
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      database.exec("ALTER TABLE notes ADD COLUMN filename TEXT NOT NULL DEFAULT ''");
+      backfillNoteFilenames(database);
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
   }
-  database.exec("CREATE INDEX IF NOT EXISTS notes_filename ON notes(filename)");
+  database.exec(`CREATE INDEX IF NOT EXISTS notes_filename_nocase ON notes(filename COLLATE NOCASE);
+		DROP INDEX IF EXISTS notes_filename;`);
 }
 
 // src/core/note-title.ts
@@ -1424,7 +1428,6 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
 	CREATE TABLE IF NOT EXISTS links(source TEXT NOT NULL, target TEXT NOT NULL, PRIMARY KEY(source,target));
 	CREATE INDEX IF NOT EXISTS links_target ON links(target);
 	CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope,kind);
-	CREATE INDEX IF NOT EXISTS notes_filename ON notes(filename);
 	CREATE TABLE IF NOT EXISTS jobs(key TEXT PRIMARY KEY, kind TEXT NOT NULL, path TEXT NOT NULL,
 	 scope TEXT NOT NULL, revision INTEGER NOT NULL, updated TEXT NOT NULL);
 	CREATE INDEX IF NOT EXISTS jobs_scope_updated ON jobs(scope,updated DESC);
