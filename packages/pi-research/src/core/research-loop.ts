@@ -1,7 +1,31 @@
-import { createHash, randomUUID } from "node:crypto";
-import { access, mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, realpath } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
 import { claimBindingRefs, validateClaimBindings } from "./claim-bindings.js";
+import {
+	breakerFailureCandidate,
+	type FailureCandidateSink,
+	recordFailureCandidate,
+	recordResearchFailure,
+	researchFailure,
+} from "./failure-candidates.js";
+import type { LiteratureReceipt, LiteratureReceiptOptions } from "./literature-receipt.js";
+import type { ResearchReceiptEvent } from "./receipt-journal.js";
+import {
+	breakerReceipt,
+	budgetTrip,
+	newSlowPath,
+	observeSlowPathStep,
+	quotaTrip,
+	type ResearchBreakerBudget,
+	type ResearchContextEviction,
+	type ResearchUsageSample,
+	observeContextEviction as recordEviction,
+	observeUsage as recordUsage,
+	SLOW_PATH_LIMITS,
+	type SlowPathState,
+	type SlowPathTrip,
+} from "./research-breaker.js";
 import {
 	type PreparedResearchDelivery,
 	type ResearchDeliveryCopy,
@@ -10,18 +34,54 @@ import {
 	summaryBody,
 	summaryHash,
 } from "./research-delivery.js";
+import {
+	completeFastPath,
+	countFastPathStep,
+	escalationGuidance,
+	FAST_PATH_LIMITS,
+	type FastPathEscalationReason,
+	fastPathAllows,
+	fastPathAtLimit,
+	fastPathReceiptReason,
+	newFastPath,
+	parseEscalationReason,
+	type ResearchExecutionMode,
+	type ResearchToolStep,
+	requireEscalation,
+} from "./research-fast-path.js";
+import {
+	advance,
+	gateOf,
+	provenanceFor,
+	RESEARCH_DOCUMENT_KIND,
+	type ResearchGate,
+	type ResearchRunMetadata,
+	type ReusedSource,
+	readResearchMetadata,
+	recordOf,
+	requireStage,
+	researchNodes,
+	revisionOf,
+	safeSlug,
+	stageIndex,
+	topicIdFromResultSlug,
+	writeResearchMetadata,
+} from "./research-loop-state.js";
+import {
+	archivedRead,
+	archivedSourceRecords,
+	deliveryReads,
+	ledgerFor,
+	observeNote,
+	type RunSources,
+	rememberIdentity,
+	reusableSources,
+	validateReusedSourceSet,
+	verifyArchive,
+} from "./research-run-sources.js";
+import { validateRunDir } from "./source-archive-policy.js";
 
-export const RESEARCH_STAGES = Object.freeze([
-	"created",
-	"local_query_recorded",
-	"external_search_recorded",
-	"sources_inspected",
-	"sources_archived",
-	"sources_reused",
-	"claims_bound",
-	"answerable",
-]);
-export const RESEARCH_DOCUMENT_KIND = "drone.research.run";
+export { RESEARCH_DOCUMENT_KIND, RESEARCH_STAGES } from "./research-loop-state.js";
 
 export interface ResearchLoopWorkspace {
 	resultsRoot: string;
@@ -31,855 +91,699 @@ export interface ResearchLoopWorkspace {
 export interface ResearchLoopPorts {
 	resolveProject(cwd: string): Promise<string>;
 	workspace(cwd: string): Promise<ResearchLoopWorkspace>;
-	verifyLiteratureReceipt(input: Record<string, unknown>): Promise<any>;
-	sourceStatus(input: { cwd: string; run_dir: string; verify?: boolean }): Promise<any>;
+	verifyLiteratureReceipt(input: LiteratureReceiptOptions): Promise<LiteratureReceipt>;
+	sourceStatus(input: { cwd: string; run_dir: string; verify?: boolean }): Promise<unknown>;
 	exclusive?<T>(key: string, work: () => Promise<T>): Promise<T>;
+	breakerBudget?: ResearchBreakerBudget;
+	failureCandidateSink?: FailureCandidateSink;
 }
-/** Each host owns one loop instance. No ledger or queue is shared across hosts. */
-export function createResearchLoop(ports: ResearchLoopPorts) {
-	const loadWorkspaceConfig = ports.workspace;
-	const verifyLiteratureReceipt = ports.verifyLiteratureReceipt;
-	const sourceStatus = ports.sourceStatus;
-	// Current-turn, host-observed receipts only; model tool arguments cannot populate this ledger.
-	// The ledger and its serial queues belong to the active DroneRuntime so separate
-	// Pi hosts cannot consume or mutate one another's evidence receipts.
-	const runtimeState: any = {
-		receiptLedger: new Map(),
-		receiptQueues: new Map(),
-		dispose() {
-			this.receiptLedger.clear();
-			this.receiptQueues.clear();
-		},
+
+type RunScope = { cwd?: string; runDir?: string };
+type StartInput = {
+	cwd?: string;
+	project?: string;
+	resultSlug?: string;
+	query?: string;
+	requiresProvenance?: boolean;
+	mode?: ResearchExecutionMode;
+};
+type UpdateInput = RunScope & {
+	action?: string;
+	query?: string;
+	notes?: string;
+	outcome?: string;
+	reason?: string;
+	sourceRefs?: string[];
+	claimRefs?: string[];
+	claimBindings?: unknown;
+	expectedRevision?: number | string;
+};
+type Receipt = RunScope & ResearchReceiptEvent;
+type Loop = {
+	ports: ResearchLoopPorts;
+	ledgers: Map<string, RunSources["ledger"]>;
+	queues: Map<string, Promise<void>>;
+};
+type Run = RunSources & {
+	ports: ResearchLoopPorts;
+	metadataPath: string;
+	metadata: ResearchRunMetadata;
+};
+type ToolBlock = { block: true; reason: string; terminate?: true };
+
+function now() {
+	return new Date().toISOString();
+}
+function runKey(cwd = process.cwd(), runDir = "") {
+	return resolve(cwd, runDir);
+}
+async function openRun(loop: Loop, cwd: string, runDir?: string): Promise<Run> {
+	if (!runDir) throw new Error("run_dir is required for this action");
+	const config = await loop.ports.workspace(cwd);
+	const path = validateRunDir(config.resultsRoot, resolve(cwd, runDir));
+	const root = await realpath(config.resultsRoot);
+	const canonical = validateRunDir(root, await realpath(path));
+	if (relative(root, canonical) !== relative(config.resultsRoot, path))
+		throw new Error("Research run path changed");
+	const metadataPath = join(canonical, "metadata.json");
+	return {
+		ports: loop.ports,
+		cwd,
+		path,
+		config,
+		metadataPath,
+		metadata: await readResearchMetadata(metadataPath),
+		ledger: ledgerFor(loop.ledgers, path),
 	};
-	const runKey = (cwd: any, runDir: any) => resolve(cwd, runDir);
-	function ledger(cwd: any, runDir: any) {
-		const key = runKey(cwd, runDir);
-		if (!runtimeState.receiptLedger.has(key)) {
-			if (runtimeState.receiptLedger.size >= 128)
-				runtimeState.receiptLedger.delete(runtimeState.receiptLedger.keys().next().value);
-			runtimeState.receiptLedger.set(key, { reads: new Map(), verified: new Map() });
+}
+
+function withRun<T>(loop: Loop, { cwd = process.cwd(), runDir }: RunScope, work: (run: Run) => Promise<T>) {
+	const key = runKey(cwd, runDir);
+	const operation = async () => {
+		const run = await openRun(loop, cwd, runDir);
+		try {
+			return await work(run);
+		} catch (error) {
+			await recordResearchFailure(loop.ports.failureCandidateSink, run.metadata, error);
+			throw error;
 		}
-		return runtimeState.receiptLedger.get(key);
-	}
-	async function flushResearchReceipts({ cwd = process.cwd(), runDir }: any = {}) {
-		await runtimeState.receiptQueues.get(runKey(cwd, runDir));
-	}
-	function resetResearchReceipts({ cwd = process.cwd(), runDir }: any = {}) {
-		if (runDir) runtimeState.receiptLedger.delete(runKey(cwd, runDir));
-	}
-	async function reusableSources(cwd: any, runDir: any) {
-		const config = await loadWorkspaceConfig(cwd);
-		if (!config.obsidianVault) return [];
-		const root = await realpath(config.obsidianVault);
-		const state = ledger(cwd, runDir),
-			result: any = [];
-		for (const [path, proof] of state.verified) {
-			const reads = state.reads.get(path) || [];
-			const read = reads.at(-1);
-			if (
-				!read ||
-				read.hash !== proof.obsidian?.hash ||
-				read.vault !== root ||
-				read.revision !== (config.knowledgeBindingRevision || 0) ||
-				proof.obsidian?.vault !== root
-			)
-				continue;
-			const current = await verifyLiteratureReceipt({
-				doi: proof.doi,
-				zotero_key: proof.zoteroKey,
-				note_path: path,
-				vault: root,
-			});
-			if (current.status !== "both-verified" || current.obsidian.hash !== read.hash) continue;
-			result.push({
-				path,
-				hash: read.hash,
-				doi: current.doi,
-				zotero_key: current.zoteroKey,
-				startLine: read.startLine,
-				endLine: read.endLine,
-				basis: "current-turn-literature-note-read-and-identity-check",
-				fulltext_status: current.zotero.fulltextStatus,
-				originalFulltextReadThisTurn: false,
-				evidence_profile: {
-					identity: "both-verified",
-					acquisition: current.zotero.fulltextStatus,
-					reading: {
-						kind: "literature-note",
-						scope: "current-turn",
-						startLine: read.startLine,
-						endLine: read.endLine,
-					},
-					read_receipts: reads.map((item: any) => ({
-						id: item.receiptId,
-						startLine: item.startLine,
-						endLine: item.endLine,
-					})),
-					claimSupport: "not-assessed",
-				},
-			});
-		}
-		return result;
-	}
-	function validateReusedSourceSet(gate: any, fresh: any[]) {
-		if (!gate.reuse_count) return;
-		if (
-			gate.reused_sources.length !== gate.reuse_count ||
-			gate.reused_sources.some(
-				(old: any) =>
-					!fresh.some(
-						(now: any) =>
-							now.path === old.path &&
-							now.hash === old.hash &&
-							now.doi === old.doi &&
-							now.zotero_key === old.zotero_key,
-					),
-			)
-		)
-			throw new Error(
-				"Reused source changed or current-turn receipt is missing; re-read and verify the existing note, do not re-import it",
-			);
-	}
-	async function validateReuse(cwd: any, runDir: any, gate: any) {
-		if (gate.reuse_count) validateReusedSourceSet(gate, await reusableSources(cwd, runDir));
-	}
-	async function validateStoredClaimBindings(cwd: any, runDir: any, gate: any) {
-		if (!Array.isArray(gate.claim_bindings) || gate.claim_bindings.length === 0)
-			throw new Error("Structured claim_bindings are required before answerable");
-		return validateClaimBindings(
-			gate.claim_bindings,
-			[...(await reusableSources(cwd, runDir)), ...(await archivedSourceRecords(cwd, runDir))],
-			ledger(cwd, runDir).reads,
-		);
-	}
+	};
+	const result = (loop.queues.get(key) ?? Promise.resolve()).then(() =>
+		loop.ports.exclusive ? loop.ports.exclusive(key, operation) : operation(),
+	);
+	const tail = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	loop.queues.set(key, tail);
+	void tail.then(() => {
+		if (loop.queues.get(key) === tail) loop.queues.delete(key);
+	});
+	return result;
+}
 
-	/** Recheck the active host's observed receipts immediately before a delivery. */
-	async function prepareResearchDelivery({
-		cwd,
-		runDir,
-		markdown,
-	}: {
-		cwd: string;
-		runDir: string;
-		markdown: string;
-	}): Promise<PreparedResearchDelivery> {
-		if (typeof markdown !== "string" || !markdown.trim() || Buffer.byteLength(markdown) > 128 * 1024)
-			throw new Error("Summary must contain 1-131072 UTF-8 bytes");
-		const { path, metadataPath } = await resolveRun(cwd, runDir);
-		const metadata = await readJson(metadataPath);
-		const gate = gateOf(metadata);
-		if (gate.stage !== "answerable" || gate.status !== "ok" || !gate.answerable)
-			throw new Error("Evidence gate is closed; complete the research loop before summarizing");
-		if (!Number.isSafeInteger(metadata.revision))
-			throw new Error("Legacy research run needs fresh completion before delivery");
-		const reused = await reusableSources(cwd, path);
-		const archived = await archivedSourceRecords(cwd, path);
-		validateReusedSourceSet(gate, reused);
-		const claims = validateClaimBindings(
-			gate.claim_bindings,
-			[...reused, ...archived],
-			ledger(cwd, path).reads,
-		);
-		if (summaryHash(JSON.stringify(claims)) !== summaryHash(JSON.stringify(gate.claim_bindings)))
-			throw new Error("Claim evidence changed; complete the research loop again before delivery");
-		if (!reused.length && !archived.length)
-			throw new Error("No current verified source is available for this delivery");
-		const body = summaryBody(markdown);
-		const readReceipts = claims
-			.flatMap((claim) =>
-				claim.sources.map((source) => {
-					const read = ledger(cwd, path)
-						.reads.get(source.path)
-						.find((item: any) => item.receiptId === source.read_receipt_id);
-					return {
-						receiptId: read.receiptId,
-						path: source.path,
-						sha256: read.hash,
-						startLine: read.startLine,
-						endLine: read.endLine,
-						text: read.text,
-					};
-				}),
-			)
-			.filter(
-				(item, index, all) =>
-					all.findIndex((other) => other.path === item.path && other.receiptId === item.receiptId) === index,
-			);
-		return {
-			runId: metadata.run_id,
-			evidenceRevision: metadata.revision,
-			gateSha256: summaryHash(JSON.stringify(gate)),
-			claimsSha256: summaryHash(JSON.stringify(claims)),
-			bodySha256: summaryHash(body),
-			body,
-			claims,
-			readReceipts,
-		};
-	}
+function statusOf(run: Run) {
+	return {
+		run_dir: run.path,
+		metadata: run.metadata,
+		evidence_gate: gateOf(run.metadata),
+		revision: revisionOf(run.metadata),
+		...(run.metadata.mode === "fast_readonly"
+			? { escalationRequired: run.metadata.fast_path?.escalation_required === true }
+			: {}),
+	};
+}
+type RunStatus = ReturnType<typeof statusOf>;
+async function save(run: Run, patch: Partial<ResearchRunMetadata>, gate?: ResearchGate): Promise<RunStatus> {
+	const at = now();
+	const metadata = {
+		...run.metadata,
+		...(gate && {
+			evidence_gate: gate,
+			research_nodes: researchNodes(gate),
+			provenance: provenanceFor(gate, at),
+			revision: revisionOf(run.metadata) + 1,
+			updated_at: at,
+			...(gate.answerable && { status: "completed" as const, finalized_at: run.metadata.finalized_at || at }),
+		}),
+		...patch,
+	};
+	await writeResearchMetadata(run.metadataPath, metadata);
+	run.metadata = metadata;
+	return statusOf(run);
+}
 
-	async function commitResearchDelivery({
-		cwd,
-		runDir,
-		prepared,
-		copies,
-		assessment,
-		memoryClaims = [],
-	}: {
-		cwd: string;
-		runDir: string;
-		prepared: PreparedResearchDelivery;
-		copies: readonly ResearchDeliveryCopy[];
-		assessment?: ResearchSummaryAssessment;
-		memoryClaims?: readonly Record<string, unknown>[];
-	}): Promise<ResearchDeliveryReceipt> {
-		const current = await prepareResearchDelivery({ cwd, runDir, markdown: prepared.body });
-		if (
-			current.evidenceRevision !== prepared.evidenceRevision ||
-			current.gateSha256 !== prepared.gateSha256 ||
-			current.claimsSha256 !== prepared.claimsSha256
-		)
-			throw new Error("Research evidence changed during delivery; no delivery receipt was committed");
-		const observed = [];
-		for (const copy of copies) {
-			const bytes = await readFile(copy.path);
-			const body = copy.bodyRegion ? bytes.subarray(copy.bodyRegion.start, copy.bodyRegion.end) : bytes;
-			const bodySha256 = summaryHash(body);
-			if (bodySha256 !== prepared.bodySha256)
-				throw new Error(`Summary readback differs from the prepared body: ${copy.path}`);
-			observed.push({ role: copy.role, path: copy.path, artifactSha256: summaryHash(bytes), bodySha256 });
-		}
-		if (!observed.some((copy) => copy.role === "run"))
-			throw new Error("Delivery requires a run SUMMARY readback");
-		const { metadataPath } = await resolveRun(cwd, runDir);
-		const metadata = await readJson(metadataPath);
-		if (metadata.revision !== prepared.evidenceRevision)
-			throw new Error("Research revision changed during readback");
-		const receipt: ResearchDeliveryReceipt = {
-			version: 1,
-			receiptScope: "current-session-current-turn",
-			id: randomUUID(),
-			runId: prepared.runId,
-			evidenceRevision: prepared.evidenceRevision,
-			committedRevision: prepared.evidenceRevision + 1,
-			gateSha256: prepared.gateSha256,
-			claimsSha256: prepared.claimsSha256,
-			bodySha256: prepared.bodySha256,
-			copies: observed,
-			semanticAssessment: assessment || { status: "not-reviewed" },
-			scientificallyVerified: false,
-			memoryClaimsSha256: summaryHash(JSON.stringify(memoryClaims)),
-			sources: prepared.readReceipts.map((read) => ({
-				path: read.path,
-				sha256: read.sha256,
-				readReceiptIds: [read.receiptId],
-			})),
-		};
-		metadata.revision = receipt.committedRevision;
-		metadata.summary_status = "written";
-		metadata.summary_updated_at = new Date().toISOString();
-		metadata.delivery_receipt = receipt;
-		await atomicJson(metadataPath, metadata);
-		return receipt;
-	}
-
-	function safeSlug(value: any, label: any) {
-		const text = String(value ?? "").trim();
-		if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(text)) throw new Error(`${label} must be lowercase kebab-case`);
-		return text;
-	}
-	function topicIdFromResultSlug(value: any) {
-		const slug = safeSlug(value || "research-question", "result_slug");
-		const stable = slug.replace(/-20\d{6}(?:\d{6})?$/, "").replace(/-run-\d+$/, "");
-		return stable || slug;
-	}
-
-	function within(root: any, target: any) {
-		const rel = relative(resolve(root), resolve(target));
-		return rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`));
-	}
-
-	function fileHash(bytes: any) {
-		return createHash("sha256").update(bytes).digest("hex");
-	}
-
-	async function archivedSourceRecords(cwd: any, runDir: any) {
-		const archive = await sourceStatus({ cwd, run_dir: resolve(cwd, runDir) });
-		const records: any[] = [];
-		for (const item of archive.manifest?.items || []) {
-			if (item.status !== "downloaded" || !item.path || !item.sha256) continue;
-			const absolute = resolve(cwd, item.path);
-			if (!within(join(resolve(cwd, runDir), "sources"), absolute)) continue;
-			try {
-				if (!within(await realpath(join(resolve(cwd, runDir), "sources")), await realpath(absolute)))
-					continue;
-				if (fileHash(await readFile(absolute)) !== item.sha256) continue;
-			} catch {
-				continue;
-			}
-			const aliases = new Set([
-				String(item.path),
-				absolute,
-				relative(cwd, absolute),
-				relative(resolve(cwd, runDir), absolute),
-			]);
-			for (const path of aliases)
-				records.push({
-					path,
-					hash: String(item.sha256),
-					doi: item.metadata?.doi || item.doi,
-					zotero_key: item.metadata?.zotero_key || item.zotero_key,
-				});
-		}
-		return records;
-	}
-
-	function rememberRead(cwd: string, runDir: string, aliases: readonly string[], read: any) {
-		const state = ledger(cwd, runDir);
-		const previous = aliases.map((alias) => state.reads.get(alias)).find(Boolean) || [];
-		const current = previous.filter(
-			(item: any) => item.hash === read.hash && item.vault === read.vault && item.revision === read.revision,
-		);
-		current.push({ ...read, receiptId: randomUUID() });
-		// A bounded set of real excerpts, never their enclosing unread range.
-		const receipts = current.slice(-16);
-		for (const alias of aliases) state.reads.set(alias, receipts);
-	}
-
-	async function recordArchivedRead(cwd: any, runDir: any, path: any, args: any, details: any, content: any) {
-		const absolute = resolve(cwd, path);
-		const sourcesRoot = join(resolve(cwd, runDir), "sources");
-		if (!within(sourcesRoot, absolute)) return false;
-		if (!within(await realpath(sourcesRoot), await realpath(absolute))) return false;
-		if (details.truncation?.firstLineExceedsLimit) return false;
-		const returned = details.truncation?.content ?? content?.find((part: any) => part.type === "text")?.text;
-		if (typeof returned !== "string" || !returned.trim()) return false;
-		const bytes = await readFile(absolute);
-		// Only complete lines actually returned to the model count as read. A disk read
-		// verifies their identity; it must never expand a partial tool response.
-		const sourceText = bytes.toString("utf8");
-		if (sourceText.includes("\0") || sourceText.startsWith("%PDF-")) return false;
-		const startLine = Number.isInteger(args.offset) && args.offset > 0 ? args.offset : 1;
-		const selected = sourceText
-			.split("\n")
-			.slice(startLine - 1, args.limit ? startLine - 1 + args.limit : undefined);
-		const visible = returned.split("\n");
-		const lines: string[] = [];
-		for (let index = 0; index < Math.min(selected.length, visible.length, 2000); index++) {
-			const shown = visible[index] ?? "";
-			if (selected[index] !== shown || lines.join("\n").length + shown.length > 90_000) break;
-			lines.push(shown);
-		}
-		const text = lines.join("\n");
-		if (!text.trim()) return false;
-		const read = { hash: fileHash(bytes), text, startLine, endLine: startLine + lines.length - 1 };
-		const aliases = new Set([
-			String(path),
-			absolute,
-			relative(cwd, absolute),
-			relative(resolve(cwd, runDir), absolute),
-		]);
-		rememberRead(cwd, runDir, [...aliases], read);
-		return true;
-	}
-
-	async function readJson(path: any) {
-		const value = JSON.parse(await readFile(path, "utf8"));
-		if (!value || typeof value !== "object" || Array.isArray(value))
-			throw new Error(`Invalid JSON object: ${path}`);
-		if (path.endsWith("metadata.json") && !value.kind) {
-			// Legacy run metadata stays readable and is upgraded in memory. The next
-			// research-loop checkpoint writes the versioned fields atomically.
-			return { ...value, kind: RESEARCH_DOCUMENT_KIND, version: 1 };
-		}
-		if (path.endsWith("metadata.json") && (value.kind !== RESEARCH_DOCUMENT_KIND || value.version !== 1))
-			throw new Error(`Unsupported research metadata document: ${path}`);
-		return value;
-	}
-
-	async function atomicJson(path: any, value: any) {
-		await mkdir(dirname(path), { recursive: true });
-		const temp = `${path}.${randomUUID()}.tmp`;
-		await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-		await rename(temp, path);
-	}
-
-	function gateOf(metadata: any) {
-		const gate =
-			metadata.evidence_gate && typeof metadata.evidence_gate === "object" ? metadata.evidence_gate : {};
-		return {
-			stage: RESEARCH_STAGES.includes(gate.stage) ? gate.stage : "created",
-			status: gate.status === "failed" ? "failed" : "ok",
-			answerable: gate.answerable === true,
-			events: Array.isArray(gate.events) ? gate.events : [],
-			claim_refs: Array.isArray(gate.claim_refs) ? gate.claim_refs : [],
-			claim_bindings: Array.isArray(gate.claim_bindings) ? gate.claim_bindings : [],
-			warnings:
-				gate.claim_refs?.length && !gate.claim_bindings?.length
-					? ["legacy-unstructured-claims: support not assessed"]
-					: [],
-			source_refs: Array.isArray(gate.source_refs) ? gate.source_refs : [],
-			archive_count: Number(gate.archive_count) || 0,
-			reuse_count: Number(gate.reuse_count) || 0,
-			reused_sources: Array.isArray(gate.reused_sources) ? gate.reused_sources : [],
-			scientificallyVerified: false,
-		};
-	}
-
-	function researchNodes(gate: any) {
-		const current = RESEARCH_STAGES.indexOf(gate.stage);
-		return RESEARCH_STAGES.map((id, index) => ({
-			id,
-			state: gate.answerable || index < current ? "completed" : index === current ? "current" : "pending",
-			observed: (gate.events || []).some((event: any) => event.type === id && !event.skipped),
-		}));
-	}
-
-	function provenanceFor(gate: any, status = "pending") {
-		return {
-			status,
-			source_refs: [...gate.source_refs],
-			claim_bindings: structuredClone(gate.claim_bindings),
-			updated_at: new Date().toISOString(),
-		};
-	}
-
-	function advance(gate: any, stage: any, details: any = {}) {
-		const current = RESEARCH_STAGES.indexOf(gate.stage);
-		const target = RESEARCH_STAGES.indexOf(stage);
-		if (target < 0) throw new Error(`Unknown research stage: ${stage}`);
-		if (target < current)
-			return {
-				...gate,
-				events: [...gate.events, { type: stage, at: new Date().toISOString(), repeated: true, ...details }],
-			};
-		return {
-			...gate,
-			stage,
-			events: [...gate.events, { type: stage, at: new Date().toISOString(), ...details }],
-		};
-	}
-
-	async function resolveRun(cwd: any, runDir: any) {
-		const config = await loadWorkspaceConfig(cwd);
-		if (!runDir) throw new Error("run_dir is required for this action");
-		const path = resolve(cwd, runDir);
-		if (!within(config.resultsRoot, path))
-			throw new Error("run_dir must stay inside the configured results root");
-		const rel = relative(config.resultsRoot, path).split(sep);
-		if (rel.length !== 2 || !rel[1]?.startsWith("run-"))
-			throw new Error("run_dir must be directly inside a result slug");
-		await access(join(path, "metadata.json"));
-		return { config, path, metadataPath: join(path, "metadata.json") };
-	}
-
-	async function startResearchRun({
-		cwd = process.cwd(),
+async function startResearchRun(ports: ResearchLoopPorts, input: StartInput) {
+	const { cwd = process.cwd(), query, mode = "deep_research", requiresProvenance = false } = input;
+	if (mode !== "fast_readonly" && mode !== "deep_research")
+		throw new Error("Unknown research execution mode");
+	if (mode === "fast_readonly" && requiresProvenance) throw new Error("Provenance requires deep_research");
+	if (typeof query !== "string" || !query.trim()) throw new Error("query is required");
+	const project = safeSlug(input.project || (await ports.resolveProject(cwd)), "project");
+	const slug = safeSlug(input.resultSlug || "research-question", "result_slug");
+	const { resultsRoot } = await ports.workspace(cwd);
+	const at = now();
+	const runId = `run-${at.replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomUUID().slice(0, 8)}`;
+	const slugDir = join(resultsRoot, slug);
+	await mkdir(slugDir, { recursive: true });
+	const root = await realpath(resultsRoot);
+	if ((await realpath(slugDir)) !== join(root, slug))
+		throw new Error("Result slug must stay inside the results root");
+	const path = join(slugDir, runId);
+	await mkdir(join(root, slug, runId));
+	const metadata: ResearchRunMetadata = {
+		kind: RESEARCH_DOCUMENT_KIND,
+		version: 1,
+		run_id: runId,
 		project,
-		resultSlug,
-		query,
-		requiresProvenance = false,
-	}: any = {}) {
-		const config = await loadWorkspaceConfig(cwd);
-		// No implicit "research-workbench": callers pass the resolved project; direct callers get the
-		// workspace identity from the shared resolver.
-		project = safeSlug(project || (await ports.resolveProject(cwd)), "project");
-		resultSlug = safeSlug(resultSlug || "research-question", "result_slug");
-		if (typeof query !== "string" || !query.trim()) throw new Error("query is required");
-		const stamp = new Date()
-			.toISOString()
-			.replace(/[-:.TZ]/g, "")
-			.slice(0, 14);
-		const runId = `run-${stamp}-${randomUUID().slice(0, 8)}`;
-		const runDir = join(config.resultsRoot, resultSlug, runId);
-		const now = new Date().toISOString();
-		const metadata: any = {
-			kind: RESEARCH_DOCUMENT_KIND,
-			version: 1,
-			run_id: runId,
-			project,
-			result_slug: resultSlug,
-			topic_id: topicIdFromResultSlug(resultSlug),
-			query: query.trim(),
-			status: "running",
-			revision: 0,
-			requires_provenance: requiresProvenance === true,
-			started_at: now,
-			evidence_gate: {
-				stage: "created",
-				status: "ok",
-				answerable: false,
-				events: [{ type: "created", at: now }],
-				claim_refs: [],
-				source_refs: [],
-				archive_count: 0,
-			},
-			research_nodes: researchNodes({ stage: "created", answerable: false, events: [{ type: "created" }] }),
-			provenance: provenanceFor({ source_refs: [], claim_bindings: [] }),
-		};
-		await mkdir(runDir, { recursive: true });
-		await atomicJson(join(runDir, "metadata.json"), metadata);
-		return { run_dir: runDir, metadata };
-	}
+		result_slug: slug,
+		topic_id: topicIdFromResultSlug(slug),
+		query: query.trim(),
+		status: "running",
+		revision: 0,
+		mode,
+		requires_provenance: requiresProvenance === true,
+		started_at: at,
+		...(mode === "fast_readonly" ? { fast_path: newFastPath() } : { slow_path: newSlowPath() }),
+		evidence_gate: { events: [{ type: "created", at }] },
+	};
+	const gate = gateOf(metadata);
+	metadata.evidence_gate = gate;
+	metadata.research_nodes = researchNodes(gate);
+	metadata.provenance = provenanceFor(gate, at);
+	await writeResearchMetadata(join(root, slug, runId, "metadata.json"), metadata);
+	return {
+		run_dir: path,
+		metadata,
+		evidence_gate: gate,
+		revision: 0,
+		escalationRequired: mode === "fast_readonly" ? false : undefined,
+	};
+}
 
-	async function updateResearchLoopUnlocked({
-		cwd = process.cwd(),
-		runDir,
-		action,
-		query,
-		sourceRefs = [],
-		claimRefs = [],
-		claimBindings = [],
-		outcome,
-		notes,
-		expectedRevision,
-	}: any = {}): Promise<any> {
-		const { path, metadataPath } = await resolveRun(cwd, runDir);
-		const metadata = await readJson(metadataPath);
-		const revision = Number.isInteger(metadata.revision) ? metadata.revision : 0;
-		if (expectedRevision != null && Number(expectedRevision) !== revision)
-			throw new Error(`research run changed; expected revision ${expectedRevision}, found ${revision}`);
-		let gate = gateOf(metadata);
-		const detail: any = {
-			...(query ? { query: String(query).trim() } : {}),
-			...(outcome ? { outcome } : {}),
-			...(notes ? { notes } : {}),
-		};
-		const requireStage = (stage: any) => {
-			if (RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf(stage))
-				throw new Error(`research loop must reach ${stage} before ${action}`);
-		};
-		if (action === "status") return { run_dir: path, metadata, evidence_gate: gate, revision };
-		if (action === "record_local") {
+async function recheckClaims(run: Run, gate: ResearchGate, bindings: unknown, reused?: ReusedSource[]) {
+	const fresh = reused ?? (await reusableSources(run));
+	validateReusedSourceSet(gate, fresh);
+	const archived = run.metadata.mode === "fast_readonly" ? [] : await archivedSourceRecords(run);
+	return { archived, claims: validateClaimBindings(bindings, [...fresh, ...archived], run.ledger.reads) };
+}
+
+async function prepareDelivery(run: Run, markdown: string): Promise<PreparedResearchDelivery> {
+	if (typeof markdown !== "string" || !markdown.trim() || Buffer.byteLength(markdown) > 128 * 1024)
+		throw new Error("Summary must contain 1-131072 UTF-8 bytes");
+	const gate = gateOf(run.metadata);
+	if (gate.stage !== "answerable" || gate.status !== "ok" || !gate.answerable)
+		throw new Error("Evidence gate is closed; complete the research loop before summarizing");
+	const revision = run.metadata.revision;
+	if (typeof revision !== "number" || !Number.isSafeInteger(revision))
+		throw new Error("Legacy research run needs fresh completion before delivery");
+	const reused = await reusableSources(run);
+	const { archived, claims } = await recheckClaims(run, gate, gate.claim_bindings, reused);
+	if (summaryHash(JSON.stringify(claims)) !== summaryHash(JSON.stringify(gate.claim_bindings)))
+		throw new Error("Claim evidence changed; complete the research loop again before delivery");
+	if (!reused.length && !archived.length)
+		throw researchFailure("no-available-source", "No current verified source is available for this delivery");
+	const body = summaryBody(markdown);
+	return {
+		runId: run.metadata.run_id,
+		evidenceRevision: revision,
+		gateSha256: summaryHash(JSON.stringify(gate)),
+		claimsSha256: summaryHash(JSON.stringify(claims)),
+		bodySha256: summaryHash(body),
+		body,
+		claims,
+		readReceipts: deliveryReads(run, claims),
+	};
+}
+
+type DeliveryInput = RunScope & {
+	prepared: PreparedResearchDelivery;
+	copies: readonly ResearchDeliveryCopy[];
+	assessment?: ResearchSummaryAssessment;
+	memoryClaims?: readonly Record<string, unknown>[];
+};
+
+async function commitDelivery(
+	run: Run,
+	{ prepared, copies, assessment, memoryClaims = [] }: DeliveryInput,
+): Promise<ResearchDeliveryReceipt> {
+	const current = await prepareDelivery(run, prepared.body);
+	if (
+		current.evidenceRevision !== prepared.evidenceRevision ||
+		current.gateSha256 !== prepared.gateSha256 ||
+		current.claimsSha256 !== prepared.claimsSha256
+	)
+		throw new Error("Research evidence changed during delivery; no delivery receipt was committed");
+	const observed = [];
+	for (const copy of copies) {
+		const bytes = await readFile(copy.path);
+		const body = copy.bodyRegion ? bytes.subarray(copy.bodyRegion.start, copy.bodyRegion.end) : bytes;
+		const bodySha256 = summaryHash(body);
+		if (bodySha256 !== prepared.bodySha256)
+			throw new Error(`Summary readback differs from the prepared body: ${copy.path}`);
+		observed.push({ role: copy.role, path: copy.path, artifactSha256: summaryHash(bytes), bodySha256 });
+	}
+	if (!observed.some((copy) => copy.role === "run"))
+		throw new Error("Delivery requires a run SUMMARY readback");
+	if ((await readResearchMetadata(run.metadataPath)).revision !== prepared.evidenceRevision)
+		throw new Error("Research revision changed during readback");
+	const receipt: ResearchDeliveryReceipt = {
+		version: 1,
+		receiptScope: "current-session-current-turn",
+		id: randomUUID(),
+		runId: prepared.runId,
+		evidenceRevision: prepared.evidenceRevision,
+		committedRevision: prepared.evidenceRevision + 1,
+		gateSha256: prepared.gateSha256,
+		claimsSha256: prepared.claimsSha256,
+		bodySha256: prepared.bodySha256,
+		copies: observed,
+		semanticAssessment: assessment || { status: "not-reviewed" },
+		scientificallyVerified: false,
+		memoryClaimsSha256: summaryHash(JSON.stringify(memoryClaims)),
+		sources: prepared.readReceipts.map((read) => ({
+			path: read.path,
+			sha256: read.sha256,
+			readReceiptIds: [read.receiptId],
+		})),
+	};
+	await save(run, {
+		revision: receipt.committedRevision,
+		summary_status: "written",
+		summary_updated_at: now(),
+		delivery_receipt: receipt,
+	});
+	return receipt;
+}
+
+function inspectSources(gate: ResearchGate, sources: string[], details = {}) {
+	if (!sources.length) throw new Error("source_refs must list inspected original sources");
+	return advance(
+		{ ...gate, source_refs: [...new Set([...gate.source_refs, ...sources])] },
+		"sources_inspected",
+		now(),
+		{ ...details, source_refs: sources },
+	);
+}
+
+function hasBindings(bindings: unknown) {
+	return bindings !== undefined && (!Array.isArray(bindings) || bindings.length > 0);
+}
+
+async function bindClaims(run: Run, gate: ResearchGate, input: UpdateInput) {
+	if (gate.stage === "sources_inspected")
+		gate = (await save(run, {}, await verifyArchive(run, gate))).evidence_gate;
+	requireStage(gate, "sources_archived", "bind_claims");
+	const bindings = hasBindings(input.claimBindings) ? input.claimBindings : gate.claim_bindings;
+	if (!hasBindings(bindings)) {
+		if (input.claimRefs?.length)
+			throw new Error(
+				"Structured claim_bindings are required; legacy claim_refs cannot make a run answerable",
+			);
+		throw new Error("Structured claim_bindings must contain at least one validated claim");
+	}
+	const { claims } = await recheckClaims(run, gate, bindings);
+	const refs = claimBindingRefs(claims);
+	return advance(
+		{ ...gate, claim_bindings: claims, claim_refs: [...new Set(refs)], warnings: [] },
+		"claims_bound",
+		now(),
+		{ claim_refs: refs },
+	);
+}
+
+async function requireManifest(path: string) {
+	try {
+		const provenance: unknown = JSON.parse(
+			await readFile(join(path, "reproducibility-manifest.json"), "utf8"),
+		);
+		if (recordOf(provenance).version === 1) return;
+	} catch (error) {
+		if (recordOf(error).code !== "ENOENT") throw error;
+	}
+	throw researchFailure(
+		"missing-provenance-manifest",
+		'This run requires a reproducibility manifest before it can become answerable. Next action: call research_record_run_manifest with this run_dir and files listing actual source paths with role="input", then complete the research loop again.',
+	);
+}
+
+async function finalize(run: Run, gate: ResearchGate, details = {}) {
+	requireStage(gate, "claims_bound", "finalize");
+	if (!gate.claim_bindings.length)
+		throw new Error("Structured claim_bindings are required before answerable");
+	const { claims } = await recheckClaims(run, gate, gate.claim_bindings);
+	const refs = claimBindingRefs(claims);
+	if (gate.archive_count + gate.reuse_count < 1 || !refs.length)
+		throw new Error("archive verification and structured claim bindings are required before answerable");
+	if (run.metadata.requires_provenance === true) await requireManifest(run.path);
+	return advance(
+		{ ...gate, claim_bindings: claims, claim_refs: refs, warnings: [], status: "ok", answerable: true },
+		"answerable",
+		now(),
+		details,
+	);
+}
+
+async function completeDeep(run: Run, gate: ResearchGate, input: UpdateInput) {
+	if (gate.reuse_count) validateReusedSourceSet(gate, await reusableSources(run));
+	requireStage(gate, "sources_inspected", "complete");
+	if (stageIndex(gate.stage) < stageIndex("sources_archived"))
+		gate = (await save(run, {}, await verifyArchive(run, gate))).evidence_gate;
+	if (!hasBindings(input.claimBindings) && !gate.claim_bindings.length)
+		throw new Error(
+			"Provide structured claim_bindings; legacy claim_refs cannot make a research run answerable",
+		);
+	if (hasBindings(input.claimBindings) || stageIndex(gate.stage) < stageIndex("claims_bound"))
+		gate = (await save(run, {}, await bindClaims(run, gate, input))).evidence_gate;
+	return finalize(run, gate);
+}
+
+async function changeDeepGate(run: Run, gate: ResearchGate, input: UpdateInput) {
+	const { action, query, notes, outcome, sourceRefs = [] } = input;
+	const detail = {
+		...(query && { query: query.trim() }),
+		...(outcome && { outcome }),
+		...(notes && { notes }),
+	};
+	switch (action) {
+		case "record_local":
 			if (!query?.trim()) throw new Error("query is required");
-			gate = advance(gate, "local_query_recorded", detail);
-		} else if (action === "record_external") {
-			requireStage("local_query_recorded");
+			return advance(gate, "local_query_recorded", now(), detail);
+		case "record_external":
+			requireStage(gate, "local_query_recorded", action);
 			if (!query?.trim() && !notes?.trim())
 				throw new Error("record the external query or why external search was skipped");
-			gate = advance(gate, "external_search_recorded", detail);
-		} else if (action === "inspect_sources") {
-			requireStage("external_search_recorded");
-			if (!Array.isArray(sourceRefs) || sourceRefs.length === 0)
-				throw new Error("source_refs must list inspected original sources");
-			gate = advance(
-				{ ...gate, source_refs: [...new Set([...gate.source_refs, ...sourceRefs.map(String)])] },
-				"sources_inspected",
-				{ ...detail, source_refs: sourceRefs },
-			);
-		} else if (action === "verify_archive") {
-			requireStage("sources_inspected");
-			const archive = await sourceStatus({ cwd, run_dir: path, verify: true });
-			if (archive.verification && archive.verification.ok !== true) {
-				const failed = archive.verification.items?.filter((item: any) => item.ok !== true) || [];
-				throw new Error(
-					`Archived source verification failed: ${failed.map((item: any) => item.reason || item.path).join(", ") || "unknown"}`,
-				);
-			}
-			const downloaded = (archive.manifest?.items || []).filter((item: any) => item.status === "downloaded");
-			const reused = await reusableSources(cwd, runDir);
-			if (!downloaded.length && !reused.length)
-				throw new Error(
-					"No available source: read an existing Library/Papers note this turn and verify its DOI/key with research_verify_literature, or archive an authorized new source. Do not repeat imports to clear this gate.",
-				);
-			gate = advance(
-				{ ...gate, archive_count: downloaded.length, reuse_count: reused.length, reused_sources: reused },
-				downloaded.length ? "sources_archived" : "sources_reused",
-				{
-					archived: downloaded.map((item: any) => ({ id: item.id, sha256: item.sha256, path: item.path })),
-					reused_sources: reused,
-					scientificallyVerified: false,
-				},
-			);
-		} else if (action === "bind_claims") {
-			if (gate.stage === "sources_inspected") {
-				const available = await updateResearchLoopUnlocked({ cwd, runDir, action: "verify_archive" });
-				gate = available.evidence_gate;
-			}
-			requireStage("sources_archived");
-			await validateReuse(cwd, runDir, gate);
-			if (claimBindings.length) {
-				const checked = validateClaimBindings(
-					claimBindings,
-					[...(await reusableSources(cwd, runDir)), ...(await archivedSourceRecords(cwd, runDir))],
-					ledger(cwd, runDir).reads,
-				);
-				gate = { ...gate, claim_bindings: checked, warnings: [] };
-				claimRefs = claimBindingRefs(checked);
-			} else if (gate.claim_bindings.length) {
-				const checked = await validateStoredClaimBindings(cwd, runDir, gate);
-				gate = { ...gate, claim_bindings: checked, claim_refs: claimBindingRefs(checked), warnings: [] };
-				claimRefs = claimBindingRefs(checked);
-			} else if (claimRefs.length) {
-				throw new Error(
-					"Structured claim_bindings are required; legacy claim_refs cannot make a run answerable",
-				);
-			}
-			if (!Array.isArray(gate.claim_bindings) || gate.claim_bindings.length === 0)
-				throw new Error("Structured claim_bindings must contain at least one validated claim");
-			gate = advance({ ...gate, claim_refs: [...new Set(claimRefs.map(String))] }, "claims_bound", {
-				claim_refs: claimRefs,
-			});
-		} else if (action === "finalize") {
-			requireStage("claims_bound");
-			await validateReuse(cwd, runDir, gate);
-			const checked = await validateStoredClaimBindings(cwd, runDir, gate);
-			const refs = claimBindingRefs(checked);
-			if (gate.archive_count + gate.reuse_count < 1 || !refs.length)
-				throw new Error("archive verification and structured claim bindings are required before answerable");
-			if (metadata.requires_provenance === true) {
-				const manifestText = await readFile(join(path, "reproducibility-manifest.json"), "utf8").catch(
-					(error: NodeJS.ErrnoException) => {
-						if (error.code !== "ENOENT") throw error;
-						throw new Error(
-							'This run requires a reproducibility manifest before it can become answerable. Next action: call research_record_run_manifest with this run_dir and files listing actual source paths with role="input", then complete the research loop again.',
-						);
-					},
-				);
-				const provenance = JSON.parse(manifestText);
-				if (provenance?.version !== 1)
-					throw new Error("This run requires a reproducibility manifest before it can become answerable");
-			}
-			gate = advance(
-				{ ...gate, claim_bindings: checked, claim_refs: refs, warnings: [], status: "ok", answerable: true },
-				"answerable",
-				detail,
-			);
-		} else if (action === "complete") {
-			return completeResearchGate({ cwd, runDir, claimRefs, claimBindings });
-		} else {
+			return advance(gate, "external_search_recorded", now(), detail);
+		case "inspect_sources":
+			requireStage(gate, "external_search_recorded", action);
+			return inspectSources(gate, Array.isArray(sourceRefs) ? sourceRefs.map(String) : [], detail);
+		case "verify_archive":
+			return verifyArchive(run, gate);
+		case "bind_claims":
+			return bindClaims(run, gate, input);
+		case "finalize":
+			return finalize(run, gate, detail);
+		case "complete":
+			return completeDeep(run, gate, input);
+		default:
 			throw new Error(`unknown research_loop action: ${action}`);
-		}
-		metadata.evidence_gate = gate;
-		metadata.research_nodes = researchNodes(gate);
-		metadata.provenance = provenanceFor(gate, gate.answerable ? "host-verified" : "pending");
-		if (gate.answerable) {
-			metadata.status = "completed";
-			metadata.finalized_at = metadata.finalized_at || new Date().toISOString();
-		}
-		metadata.updated_at = new Date().toISOString();
-		metadata.revision = revision + 1;
-		await atomicJson(metadataPath, metadata);
-		return { run_dir: path, evidence_gate: gate, revision: metadata.revision };
 	}
-	async function updateResearchLoop(input: any = {}): Promise<any> {
-		const cwd = input.cwd || process.cwd();
-		const key = runKey(cwd, input.runDir);
-		const work = () => updateResearchLoopUnlocked(input);
-		// "complete" re-enters updateResearchLoop for each step; those inner calls take the lock.
-		if (input.action === "complete" || !ports.exclusive) return work();
-		return ports.exclusive(key, work);
-	}
+}
 
-	function isWikiPath(path: any) {
-		return /(?:^|[\\/])Wiki[\\/]/i.test(String(path || ""));
-	}
+function fastProgress(run: Run) {
+	if (!run.metadata.fast_path) throw new Error("Missing fast path progress");
+	return run.metadata.fast_path;
+}
 
-	async function ensureStage(cwd: any, runDir: any, stage: any, fill: any) {
-		const current = await updateResearchLoop({ cwd, runDir, action: "status" });
-		if (RESEARCH_STAGES.indexOf(current.evidence_gate.stage) >= RESEARCH_STAGES.indexOf(stage))
-			return current;
-		return fill();
-	}
+async function markEscalation(run: Run, reason: FastPathEscalationReason) {
+	const progress = fastProgress(run);
+	const next = requireEscalation(progress, reason);
+	if (next !== progress) await save(run, { fast_path: next });
+	return escalationGuidance(next.reason ?? reason);
+}
 
-	/** Host-owned serial close: verify archive, bind claims from real refs if needed, finalize. */
-	async function completeResearchGate({
-		cwd = process.cwd(),
-		runDir,
-		claimRefs = [],
-		claimBindings = [],
-	}: any = {}): Promise<any> {
-		let status: any = await updateResearchLoop({ cwd, runDir, action: "status" });
-		let gate = status.evidence_gate;
-		await validateReuse(cwd, runDir, gate);
-		if (RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf("sources_inspected"))
-			throw new Error("research loop must inspect sources before complete");
-		if (RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf("sources_archived"))
-			status = await updateResearchLoop({ cwd, runDir, action: "verify_archive" });
-		gate = status.evidence_gate;
-		if (!claimBindings.length && !gate.claim_bindings.length)
-			throw new Error(
-				"Provide structured claim_bindings; legacy claim_refs cannot make a research run answerable",
+async function changeFastGate(run: Run, gate: ResearchGate, input: UpdateInput) {
+	const progress = fastProgress(run);
+	if (input.action === "escalate") {
+		const reason = parseEscalationReason(input.reason);
+		const next: ResearchGate = {
+			...gate,
+			answerable: false,
+			stage: gate.answerable ? "claims_bound" : gate.stage,
+			events: [
+				...gate.events,
+				{ type: "escalation", at: now(), reason, ...(progress.reason && { trigger: progress.reason }) },
+			],
+		};
+		return save(
+			run,
+			{
+				mode: "deep_research",
+				slow_path: newSlowPath(stageIndex(next.stage)),
+				status: "running",
+				finalized_at: undefined,
+			},
+			next,
+		);
+	}
+	if (!fastPathAllows({ toolName: "research_loop", args: { action: input.action } }))
+		throw new Error(await markEscalation(run, "write_or_archive_required"));
+	if (progress.escalation_required)
+		throw new Error(escalationGuidance(progress.reason ?? "step_cap_reached"));
+	if (input.action !== "complete")
+		throw new Error('Use research_loop(action="complete") for fast path claim bindings');
+	const sources = await reusableSources(run);
+	if (!sources.length) throw new Error(await markEscalation(run, "source_stale_or_changed"));
+	const local =
+		stageIndex(gate.stage) < stageIndex("local_query_recorded")
+			? advance(gate, "local_query_recorded", now())
+			: gate;
+	return save(
+		run,
+		{},
+		completeFastPath(local, progress, sources, input.claimBindings, run.ledger.reads, now()),
+	);
+}
+
+function breakerGuidance(metadata: ResearchRunMetadata) {
+	const receipt = metadata.breaker_receipt;
+	return receipt
+		? `Research stopped (${receipt.reason}). ${receipt.nextAction}`
+		: "Research run stopped by breaker.";
+}
+
+async function updateRun(run: Run, input: UpdateInput): Promise<RunStatus> {
+	const revision = revisionOf(run.metadata);
+	if (input.expectedRevision != null && Number(input.expectedRevision) !== revision)
+		throw new Error(`research run changed; expected revision ${input.expectedRevision}, found ${revision}`);
+	if (input.action === "status") return statusOf(run);
+	if (run.metadata.status === "stopped_by_breaker") throw new Error(breakerGuidance(run.metadata));
+	const gate = gateOf(run.metadata);
+	if (run.metadata.mode === "fast_readonly") return changeFastGate(run, gate, input);
+	return save(run, {}, await changeDeepGate(run, gate, input));
+}
+
+async function saveSlowPath(run: Run, state: SlowPathState, nextGate?: ResearchGate, trip?: SlowPathTrip) {
+	const gate = nextGate ?? gateOf(run.metadata);
+	const verifiedSources = gate.archive_count + gate.reuse_count;
+	const reason = trip ?? budgetTrip(state, run.ports.breakerBudget, verifiedSources);
+	if (!reason) return save(run, { slow_path: state }, nextGate);
+	const receipt = breakerReceipt(
+		reason,
+		state,
+		run.ports.breakerBudget,
+		{ id: randomUUID(), runId: run.metadata.run_id, trippedAt: now() },
+		{
+			stage: gate.stage,
+			inspectedSources: gate.source_refs.length,
+			verifiedSources,
+			boundClaims: gate.claim_bindings.length,
+			revision: revisionOf(run.metadata) + 1,
+		},
+	);
+	const saved = await save(
+		run,
+		{ slow_path: state, status: "stopped_by_breaker", breaker_receipt: receipt },
+		{ ...gate, status: "failed", answerable: false },
+	);
+	if (run.ports.failureCandidateSink)
+		await recordFailureCandidate(run.ports.failureCandidateSink, breakerFailureCandidate(receipt));
+	return saved;
+}
+
+async function checkTool(
+	run: Run,
+	step: ResearchToolStep,
+	pending: readonly ResearchToolStep[],
+): Promise<ToolBlock | undefined> {
+	const action = step.toolName === "research_loop" ? step.args?.action : undefined;
+	const requested = step.args?.run_dir;
+	if (typeof requested === "string" && resolve(run.cwd, requested) !== run.path)
+		return { block: true, reason: "Use the current turn's attached research run." };
+	if (action === "status") return;
+	if (run.metadata.status === "stopped_by_breaker")
+		return { block: true, reason: breakerGuidance(run.metadata), terminate: true };
+	if (action === "start" && (run.metadata.status === "running" || run.metadata.mode === "fast_readonly"))
+		return { block: true, reason: "Finish the active research run before starting another." };
+	if (run.metadata.mode === "fast_readonly") {
+		if (action === "escalate") return;
+		if (!fastPathAllows(step))
+			return { block: true, reason: await markEscalation(run, "write_or_archive_required") };
+		const progress = fastProgress(run);
+		if (progress.escalation_required || fastPathAtLimit(progress, step.toolName))
+			return { block: true, reason: await markEscalation(run, "step_cap_reached") };
+		const reserved = pending.reduce((total, item) => countFastPathStep(total, item.toolName), progress);
+		if (fastPathAtLimit(reserved, step.toolName))
+			return { block: true, reason: "Wait for active fast path tool receipts before taking another step." };
+	}
+	const slow = run.metadata.slow_path;
+	if (slow) {
+		const gate = gateOf(run.metadata);
+		const trip =
+			quotaTrip(run.ports.breakerBudget) ??
+			budgetTrip(slow, run.ports.breakerBudget, gate.archive_count + gate.reuse_count);
+		if (trip)
+			return {
+				block: true,
+				reason: breakerGuidance((await saveSlowPath(run, slow, undefined, trip)).metadata),
+				terminate: true,
+			};
+		if (slow.measured.steps + pending.length >= SLOW_PATH_LIMITS.maxSteps)
+			return { block: true, reason: "Wait for active research tool receipts before taking another step." };
+	}
+}
+
+function ensureLocal(gate: ResearchGate, query: string) {
+	return stageIndex(gate.stage) >= stageIndex("local_query_recorded")
+		? gate
+		: advance(gate, "local_query_recorded", now(), { query });
+}
+
+function ensureExternal(gate: ResearchGate, notes: string, query?: string) {
+	return stageIndex(gate.stage) >= stageIndex("external_search_recorded")
+		? gate
+		: advance(gate, "external_search_recorded", now(), { notes, ...(query && { query }) });
+}
+
+async function verifyAvailable(run: Run, gate: ResearchGate) {
+	const reused = await reusableSources(run);
+	return reused.length ? verifyArchive(run, gate, reused) : gate;
+}
+
+async function observedGate(run: Run, gate: ResearchGate, receipt: Receipt): Promise<ResearchGate> {
+	const { toolName, args = {}, details = {}, readBinding, content } = receipt;
+	const fast = run.metadata.mode === "fast_readonly";
+	const query = String(args.query || details.query || "").trim();
+	const path = String(args.path || details.path || "");
+	const url = String(args.url || details.url || query).trim();
+	switch (toolName) {
+		case "research_search_knowledge":
+			return query && details.complete !== false
+				? advance(gate, "local_query_recorded", now(), { query })
+				: gate;
+		case "webfetch":
+		case "fetch_content":
+		case "web_search":
+			return url
+				? advance(ensureLocal(gate, url), "external_search_recorded", now(), {
+						query: url,
+						notes: String(details.title || ""),
+					})
+				: gate;
+		case "research_read_knowledge": {
+			if (!path || /(?:^|[\\/])Wiki[\\/]/i.test(path) || details.missing === true) return gate;
+			await observeNote(run, path, details, readBinding);
+			const local = ensureLocal(gate, path);
+			const inspected = inspectSources(
+				fast ? local : ensureExternal(local, "Host: no extra web search before inspecting current sources."),
+				[path],
 			);
-		if (claimBindings.length || RESEARCH_STAGES.indexOf(gate.stage) < RESEARCH_STAGES.indexOf("claims_bound"))
-			status = await updateResearchLoop({
-				cwd,
-				runDir,
-				action: "bind_claims",
-				claimRefs,
-				claimBindings,
-			});
-		gate = status.evidence_gate;
-		status = await updateResearchLoop({ cwd, runDir, action: "finalize" });
-		return status;
-	}
-
-	/**
-	 * Advance the gate from a successful tool receipt. Missing runs or out-of-order
-	 * receipts are ignored; the host never throws into the tool pipeline.
-	 */
-	function observeResearchReceipt(options: any = {}) {
-		if (!options.runDir) return Promise.resolve(null);
-		const key = runKey(options.cwd || process.cwd(), options.runDir);
-		const work = (runtimeState.receiptQueues.get(key) || Promise.resolve())
-			.catch(() => {})
-			.then(() => observeReceipt(options));
-		runtimeState.receiptQueues.set(key, work);
-		void work
-			.finally(() => {
-				if (runtimeState.receiptQueues.get(key) === work) runtimeState.receiptQueues.delete(key);
-			})
-			.catch(() => {});
-		return work;
-	}
-	async function observeReceipt({
-		cwd = process.cwd(),
-		runDir,
-		toolName,
-		args = {},
-		details = {},
-		content = [],
-		isError = false,
-		readBinding,
-	}: any = {}) {
-		if (isError || !runDir || !toolName) return null;
-		try {
-			if (toolName === "research_reconcile_literature")
-				return observeReceipt({
-					cwd,
-					runDir,
-					toolName: "research_verify_literature",
-					args,
-					details: details.receipt || {},
-					isError,
-				});
-			const query = String(args.query || details.query || "").trim();
-			if (toolName === "research_search_knowledge" && query && details.complete !== false)
-				return await updateResearchLoop({ cwd, runDir, action: "record_local", query });
-			if (["webfetch", "fetch_content", "web_search"].includes(toolName)) {
-				const url = String(args.url || details.url || query).trim();
-				if (!url) return null;
-				await ensureStage(cwd, runDir, "local_query_recorded", () =>
-					updateResearchLoop({ cwd, runDir, action: "record_local", query: url }),
-				);
-				return await updateResearchLoop({
-					cwd,
-					runDir,
-					action: "record_external",
-					query: url,
-					notes: String(details.title || ""),
-				});
-			}
-			if (toolName === "research_read_knowledge") {
-				const path = String(args.path || details.path || "");
-				if (!path || isWikiPath(path) || details.missing === true) return null;
-				await ensureStage(cwd, runDir, "local_query_recorded", () =>
-					updateResearchLoop({ cwd, runDir, action: "record_local", query: path }),
-				);
-				await ensureStage(cwd, runDir, "external_search_recorded", () =>
-					updateResearchLoop({
-						cwd,
-						runDir,
-						action: "record_external",
-						notes: "Host: no extra web search before inspecting current sources.",
-					}),
-				);
-				if (
-					/^Library\/Papers\/.+\.md$/.test(path) &&
-					/^[a-f0-9]{64}$/i.test(details.hash || "") &&
-					typeof details.text === "string" &&
-					details.text.trim() &&
-					Number.isInteger(details.startLine) &&
-					details.endLine >= details.startLine
-				) {
-					const config = await loadWorkspaceConfig(cwd);
-					if (config.obsidianVault)
-						rememberRead(cwd, runDir, [path], {
-							hash: details.hash,
-							text: details.text,
-							vault: readBinding ? readBinding.vault : await realpath(config.obsidianVault),
-							revision: readBinding ? readBinding.revision : config.knowledgeBindingRevision || 0,
-							startLine: details.startLine,
-							endLine: details.endLine,
-						});
-				}
-				const inspected = await updateResearchLoop({
-					cwd,
-					runDir,
-					action: "inspect_sources",
-					sourceRefs: [path],
-				});
-				if ((await reusableSources(cwd, runDir)).length)
-					return await updateResearchLoop({ cwd, runDir, action: "verify_archive" });
-				return inspected;
-			}
-			if (toolName === "read") {
-				const path = String(args.path || details.path || "");
-				if (!path || details.missing === true) return null;
-				const archived = await recordArchivedRead(cwd, runDir, path, args, details, content);
-				if (!archived) return null;
-				await ensureStage(cwd, runDir, "local_query_recorded", () =>
-					updateResearchLoop({ cwd, runDir, action: "record_local", query: path }),
-				);
-				await ensureStage(cwd, runDir, "external_search_recorded", () =>
-					updateResearchLoop({
-						cwd,
-						runDir,
-						action: "record_external",
-						notes: "Host recorded a read of the archived run source.",
-					}),
-				);
-				return updateResearchLoop({ cwd, runDir, action: "inspect_sources", sourceRefs: [path] });
-			}
-			if (
-				toolName === "research_verify_literature" &&
-				details.status === "both-verified" &&
-				details.obsidian?.status === "verified" &&
-				details.zotero?.status === "verified"
-			) {
-				const path = details.obsidian.path;
-				if (!/^Library\/Papers\/.+\.md$/.test(path || "")) return null;
-				ledger(cwd, runDir).verified.set(path, structuredClone(details));
-				if ((await reusableSources(cwd, runDir)).length)
-					return await updateResearchLoop({ cwd, runDir, action: "verify_archive" });
-				return null;
-			}
-			if (toolName === "research_archive_source" && details.status === "downloaded") {
-				const ref = String(details.path || details.url || args.url || "");
-				if (!ref) return null;
-				await ensureStage(cwd, runDir, "local_query_recorded", () =>
-					updateResearchLoop({ cwd, runDir, action: "record_local", query: ref }),
-				);
-				await ensureStage(cwd, runDir, "external_search_recorded", () =>
-					updateResearchLoop({
-						cwd,
-						runDir,
-						action: "record_external",
-						query: String(args.url || details.url || ref),
-						notes: "Host recorded the archived source URL as the external lookup.",
-					}),
-				);
-				await updateResearchLoop({ cwd, runDir, action: "inspect_sources", sourceRefs: [ref] });
-				const archived = await updateResearchLoop({ cwd, runDir, action: "verify_archive" });
-				// Download success is acquisition, never automatic scientific claim support.
-				return archived;
-			}
-			if (toolName === "research_deposit_knowledge" && details.type === "claim" && details.note) return null;
-			return null;
-		} catch {
-			return null;
+			return fast ? inspected : verifyAvailable(run, inspected);
 		}
+		case "read":
+			if (!path || details.missing === true || !(await archivedRead(run, path, args, details, content)))
+				return gate;
+			return inspectSources(
+				ensureExternal(ensureLocal(gate, path), "Host recorded a read of the archived run source."),
+				[path],
+			);
+		case "research_reconcile_literature":
+		case "research_verify_literature": {
+			const identity = toolName === "research_reconcile_literature" ? recordOf(details.receipt) : details;
+			const observed = rememberIdentity(run, identity);
+			return !fast && observed ? verifyAvailable(run, gate) : gate;
+		}
+		case "research_archive_source": {
+			const ref = String(details.path || url);
+			if (!ref || details.status !== "downloaded") return gate;
+			const acquired = ensureExternal(
+				ensureLocal(gate, ref),
+				"Host recorded the archived source URL as the external lookup.",
+				url || ref,
+			);
+			return verifyArchive(run, inspectSources(acquired, [ref]));
+		}
+		default:
+			return gate;
 	}
+}
 
+async function observeFast(run: Run, gate: ResearchGate, step: ResearchToolStep, receipt: Receipt) {
+	const progress = fastProgress(run);
+	if ((!receipt.countedStep && progress.escalation_required) || !fastPathAllows(step)) return null;
+	const count =
+		receipt.countedStep === true || Boolean(receipt.toolCallId && step.toolName !== "research_loop");
+	if (count && fastPathAtLimit(progress, step.toolName)) {
+		await markEscalation(run, "step_cap_reached");
+		return null;
+	}
+	const next = receipt.isError ? gate : await observedGate(run, gate, receipt);
+	const counted = count ? countFastPathStep(progress, step.toolName) : progress;
+	const reason = receipt.isError ? undefined : fastPathReceiptReason(step.toolName, receipt.details ?? {});
+	const escalation =
+		reason ??
+		(counted.stepsUsed >= FAST_PATH_LIMITS.maxSteps && !next.answerable ? "step_cap_reached" : undefined);
+	if (!count && next === gate && !escalation) return null;
+	return save(
+		run,
+		{ fast_path: escalation ? requireEscalation(counted, escalation) : counted },
+		next === gate ? undefined : next,
+	);
+}
+
+async function observeReceipt(run: Run, receipt: Receipt): Promise<RunStatus | null> {
+	if (!receipt.toolName || run.metadata.status === "stopped_by_breaker") return null;
+	const gate = gateOf(run.metadata);
+	const step = { toolName: receipt.toolName, args: receipt.args };
+	if (run.metadata.mode === "fast_readonly") return observeFast(run, gate, step, receipt);
+	const { readCount, verified } = run.ledger;
+	const verifiedCount = verified.size;
+	const next = receipt.isError ? gate : await observedGate(run, gate, receipt);
+	const changed = next === gate ? undefined : next;
+	const slow = run.metadata.slow_path;
+	if (!slow || !receipt.countedStep || !receipt.toolCallId) return changed ? save(run, {}, changed) : null;
+	const stage = stageIndex(next.stage);
+	const progressed =
+		stage > slow.observedStage ||
+		run.ledger.readCount > readCount ||
+		verified.size > verifiedCount ||
+		next.archive_count + next.reuse_count > gate.archive_count + gate.reuse_count ||
+		(!receipt.isError && step.toolName === "research_loop" && step.args?.action === "start");
+	const observation = observeSlowPathStep({ ...slow, observedStage: stage }, step, progressed);
+	return saveSlowPath(run, observation.state, changed, observation.trip);
+}
+
+async function observeUsage(run: Run, sample: ResearchUsageSample) {
+	const slow = run.metadata.slow_path;
+	if (!slow || run.metadata.status === "stopped_by_breaker") return null;
+	const observation = recordUsage(slow, run.ports.breakerBudget, sample);
+	return saveSlowPath(run, observation.state, undefined, observation.trip);
+}
+
+async function observeContextEviction(run: Run, event: ResearchContextEviction) {
+	const slow = run.metadata.slow_path;
+	if (!slow || run.metadata.status === "stopped_by_breaker") return null;
+	const state = recordEviction(slow, event);
+	return state === slow ? null : save(run, { slow_path: state });
+}
+
+export function createResearchLoop(ports: ResearchLoopPorts) {
+	const loop: Loop = { ports, ledgers: new Map(), queues: new Map() };
 	return {
-		prepareResearchDelivery,
-		commitResearchDelivery,
-		startResearchRun,
-		updateResearchLoop,
-		completeResearchGate,
-		observeResearchReceipt,
-		flushResearchReceipts,
-		resetResearchReceipts,
+		startResearchRun: (input: StartInput = {}) => startResearchRun(ports, input),
+		updateResearchLoop: (input: UpdateInput = {}) => withRun(loop, input, (run) => updateRun(run, input)),
+		completeResearchGate: (input: Omit<UpdateInput, "action"> = {}) =>
+			withRun(loop, input, (run) => updateRun(run, { ...input, action: "complete" })),
+		prepareResearchDelivery: (input: RunScope & { markdown: string }) =>
+			withRun(loop, input, (run) => prepareDelivery(run, input.markdown)),
+		commitResearchDelivery: (input: DeliveryInput) =>
+			withRun(loop, input, (run) => commitDelivery(run, input)),
+		observeResearchReceipt: async (receipt: Receipt = {}) => {
+			if (!receipt.runDir) return null;
+			try {
+				return await withRun(loop, receipt, (run) => observeReceipt(run, receipt));
+			} catch (error) {
+				if (!receipt.countedStep && recordOf(error).code === "ENOENT") return null;
+				throw error;
+			}
+		},
+		checkTool: (
+			cwd: string,
+			runDir: string,
+			step: ResearchToolStep,
+			pending: readonly ResearchToolStep[] = [],
+		) => withRun(loop, { cwd, runDir }, (run) => checkTool(run, step, pending)),
+		observeUsage: (cwd: string, runDir: string, sample: ResearchUsageSample) =>
+			withRun(loop, { cwd, runDir }, (run) => observeUsage(run, sample)),
+		observeContextEviction: (cwd: string, runDir: string, event: ResearchContextEviction) =>
+			withRun(loop, { cwd, runDir }, (run) => observeContextEviction(run, event)),
+		flushResearchReceipts: async ({ cwd, runDir }: RunScope = {}) => {
+			await loop.queues.get(runKey(cwd, runDir));
+		},
+		resetResearchReceipts: ({ cwd, runDir }: RunScope = {}) => {
+			if (runDir) loop.ledgers.delete(runKey(cwd, runDir));
+		},
 		topicIdFromResultSlug,
-		dispose: () => runtimeState.dispose(),
+		dispose: () => loop.ledgers.clear(),
 	};
 }

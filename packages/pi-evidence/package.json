@@ -48,7 +48,7 @@
 		"build": "node scripts/build.mjs",
 		"build:check": "node scripts/build.mjs --check",
 		"typecheck": "tsc --noEmit",
-		"test": "npm run build && node --test test/registration.test.mjs test/contracts.test.mjs test/host.test.mjs test/portable-parity.test.mjs test/portable-disclosure.test.mjs test/portable-import-replay.test.mjs test/portable-limits.test.mjs",
+		"test": "npm run build && node --test test/registration.test.mjs test/contracts.test.mjs test/host.test.mjs test/portable-parity.test.mjs test/portable-disclosure.test.mjs test/portable-import-replay.test.mjs test/portable-limits.test.mjs && vitest run test/failure-diagnostic.test.ts",
 		"smoke": "node scripts/smoke.mjs",
 		"check": "npm run typecheck && npm run build:check && npm test && npm run smoke"
 	},

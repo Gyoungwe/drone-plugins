@@ -3,6 +3,7 @@ export * from "./artifacts.js";
 export * from "./capsule.js";
 export * from "./checkpoints.js";
 export * from "./digest.js";
+export * from "./failure-diagnostic.js";
 export * from "./provenance.js";
 export * from "./replay.js";
 

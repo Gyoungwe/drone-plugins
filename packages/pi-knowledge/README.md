@@ -77,6 +77,18 @@ filters by the supplied workflow and host. Results keep `navigationOnly:true`,
 `evidenceEligible:false` and `instructionEligible:false`; this mode does not
 automatically inject memory or turn a previous repair into an execution plan.
 
+The managed `knowledge.failure-candidates` service (v1) exposes `recordFailureCandidate`
+and `queryFailureCandidates`. The runtime resolves the project and bound Vault from
+the caller and stores the candidate queue under `failure-candidates/<vaultId>/<project>.json`
+in the granted application-state root. Recording takes `failureCode`, `subject`,
+`scopeKind`, `summary`, `provenance` and optional `reason`, `nextHint` and `tags`.
+The result gives the revision, candidate and `created`, `merged` or `duplicate`
+classification. Query takes an object with an optional `limit` from 1 to 16 and
+returns the revision and live candidates, ordered by effective weight and recency.
+The `./host` export `createFailureCandidateStore` also supports native Pi state at
+`<knowledgeDir>/<vaultId>/failure-candidates/<project>.json`. Both paths record bounded,
+redacted diagnostic metadata with navigation-only eligibility.
+
 The candidate managed native adapter additionally registers `/knowledge-review-model` using the official Pi command shape. Its JSON argument contains `id`, `expectedProposalHash`, `acknowledged:true`, `autoApply:boolean` and optionally `profile:"knowledge-wiki-reviewer"`; it accepts no cwd/caller/path assertion. The command runs the same owner operation as the canonical UI, then the UI reads the durable audit through `modelReviewInfo`. The handler is void; it does not invent a command-result API or a native text receipt. This enhancement requires the matching unpublished managed-command host protocol; full default CLI model-review integration remains incomplete.
 
 The 0.3 specialist thinking default intentionally changes from the old 0.2.1 implicit medium fallback: without an explicit role thinking preference, it inherits the actual parent selection (including high or off). An explicitly configured role thinking level takes precedence even when the role uses the parent model. Invalid configured values fail closed; role token/turn budgets are unchanged. No new thinking setting or requestedThinking parameter is introduced.

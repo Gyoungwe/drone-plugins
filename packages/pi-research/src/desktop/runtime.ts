@@ -6,8 +6,11 @@ import {
 	type ResearchHostPort,
 	type ResearchRunDetailInput,
 } from "../research-host.js";
+import { queryFailureCandidates } from "./failure-candidate-client.js";
 import { zoteroAcceptanceOperations, zoteroIdentifyNativeOperation } from "./zotero-acceptance.js";
 import { registerManagedZoteroTools, ZOTERO_TOOL_EFFECTS } from "./zotero-tools.js";
+
+export { createDesktopFailureCandidateSink } from "./failure-candidate-client.js";
 
 function scopeWorkspace(scope: PluginRuntimeScope): string {
 	if (scope.kind === "application") throw new Error("Research status requires a selected workspace");
@@ -116,6 +119,7 @@ const createDesktopRuntime: PluginNativeRuntimeFactory = async (context) => {
 			status: operation("status"),
 			listRuns: operation("listRuns"),
 			detail: operation("detail"),
+			queryFailureCandidates,
 			...zoteroAcceptanceOperations(),
 		},
 		createNativeSession: async () => ({

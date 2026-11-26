@@ -87,6 +87,7 @@ export {
 	sessionIdentity,
 	type TopicForContinuation,
 } from "./extension-helpers.js";
+export * from "./failure-candidate-store.js";
 export {
 	allowedSegment,
 	canRead,

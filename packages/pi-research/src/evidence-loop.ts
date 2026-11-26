@@ -1,10 +1,30 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import { access, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { WorkerMessageHandler } from "pdfjs-dist/legacy/build/pdf.worker.mjs";
+import {
+	type EvidenceLoopFailureCode,
+	evidenceLoopFailureCandidate,
+	type FailureCandidateSink,
+	recordFailureCandidate,
+} from "./core/failure-candidates.js";
 import { createEvidenceGate } from "./evidence-gate.js";
+import {
+	citationUri,
+	normalize,
+	pageRange,
+	parseFrontmatter,
+	safeSegment,
+	selectReadLines,
+	sourceId,
+	termsFor,
+	titleOf,
+} from "./evidence-loop-parse.js";
+import type { Context, Tool } from "./research-loop-tool.js";
+
+export { citationUri, pageRange } from "./evidence-loop-parse.js";
 
 // pdf.js disables worker threads in Node. Register its bundled handler so the
 // published extension can read PDFs without relying on a host checkout's worker file.
@@ -47,8 +67,19 @@ type ResearchState = {
 	searches: number;
 	deposits: number;
 };
+type Pi = { registerTool(tool: Omit<Tool, "executionMode">): void };
+type StateFor = (ctx: Context) => ResearchState;
+type ReportFailure = (code: EvidenceLoopFailureCode, receiptId: string) => Promise<void>;
 
-async function currentReads(state: ResearchState, ids: readonly string[]): Promise<ReadReceipt[]> {
+export interface EvidenceLoopOptions {
+	failureCandidateSink?: FailureCandidateSink;
+}
+
+async function currentReads(
+	state: ResearchState,
+	ids: readonly string[],
+	reportChange: () => Promise<void>,
+): Promise<ReadReceipt[]> {
 	const result: ReadReceipt[] = [];
 	for (const id of ids) {
 		const receipt = state.reads.get(id);
@@ -56,6 +87,7 @@ async function currentReads(state: ResearchState, ids: readonly string[]): Promi
 		const current = await readSource(receipt.root, receipt.path);
 		if (!current || current.hash !== receipt.hash) {
 			state.reads.delete(id);
+			await reportChange();
 			throw new Error("Source changed since reading; search and read its current version");
 		}
 		result.push(receipt);
@@ -70,47 +102,13 @@ function result(details: unknown) {
 	};
 }
 
-function sessionKey(ctx: any): string {
+function sessionKey(ctx: Context): string {
 	return String(ctx?.sessionManager?.getSessionId?.() || ctx?.sessionId || ctx?.cwd || "default");
-}
-
-function normalize(value: unknown): string {
-	return String(value ?? "")
-		.normalize("NFKC")
-		.toLowerCase();
-}
-
-function termsFor(query: string): string[] {
-	return [...new Set(normalize(query).match(/[\p{L}\p{N}][\p{L}\p{N}._+-]*/gu) || [])].slice(0, 32);
-}
-
-function safeSegment(value: unknown): string {
-	const segment = String(value ?? "").trim();
-	if (!/^[a-z0-9][a-z0-9-]{0,80}$/i.test(segment)) throw new Error("slug must be a simple path segment");
-	return segment.toLowerCase();
 }
 
 function contained(root: string, target: string): boolean {
 	const rel = relative(resolve(root), resolve(target));
 	return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !rel.includes(sep + sep));
-}
-
-function parseFrontmatter(text: string): { fields: Record<string, string>; body: string } {
-	if (!text.startsWith("---\n")) return { fields: {}, body: text };
-	const end = text.indexOf("\n---", 4);
-	if (end < 0) return { fields: {}, body: text };
-	const fields: Record<string, string> = {};
-	for (const line of text.slice(4, end).split(/\r?\n/)) {
-		const match = line.match(/^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*["']?(.+?)["']?\s*$/);
-		const key = match?.[1];
-		const value = match?.[2];
-		if (key && value) fields[key.toLowerCase()] = value.trim();
-	}
-	return { fields, body: text.slice(end + 4).replace(/^\s+/, "") };
-}
-
-function titleOf(path: string, fields: Record<string, string>, body: string): string {
-	return fields.title || body.match(/^#\s+(.+)$/m)?.[1]?.trim() || basename(path, extname(path));
 }
 
 async function readPdfText(path: string): Promise<string> {
@@ -140,18 +138,12 @@ async function readPdfText(path: string): Promise<string> {
 	return pages.join("\n\n");
 }
 
-function sourceId(relativePath: string, fields: Record<string, string>, text: string): string {
-	const declared = fields.id || fields.source_id;
-	if (declared && /^[A-Za-z0-9._:-]{1,120}$/.test(declared)) return declared;
-	return `source-${createHash("sha256").update(`${relativePath}\0${text}`).digest("hex").slice(0, 16)}`;
-}
-
 async function walk(root: string, out: string[] = []): Promise<string[]> {
 	let entries: Dirent[];
 	try {
 		entries = await readdir(root, { withFileTypes: true });
-	} catch (error: any) {
-		if (error?.code === "ENOENT") return out;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return out;
 		throw error;
 	}
 	for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
@@ -189,15 +181,16 @@ async function readSource(root: string, path: string): Promise<SourceRecord | nu
 	};
 }
 
-async function sourceRoot(ctx: any, sourceDir?: unknown): Promise<string> {
+async function sourceRoot(ctx: Context, sourceDir?: unknown): Promise<string> {
 	const cwd = resolve(String(ctx?.cwd || process.cwd()));
 	const candidate = resolve(
 		cwd,
 		String(sourceDir || process.env.DRONE_RESEARCH_SOURCE_DIR || "research-sources"),
 	);
 	if (!contained(cwd, candidate)) throw new Error("source_dir must stay inside the current workspace");
-	await access(candidate).catch((error: any) => {
-		if (error?.code === "ENOENT") throw new Error(`source_dir does not exist: ${relative(cwd, candidate)}`);
+	await access(candidate).catch((error: unknown) => {
+		if ((error as NodeJS.ErrnoException)?.code === "ENOENT")
+			throw new Error(`source_dir does not exist: ${relative(cwd, candidate)}`);
 		throw error;
 	});
 	return candidate;
@@ -214,18 +207,8 @@ function publicSource(source: SourceRecord) {
 	};
 }
 
-export function pageRange(text: string): { start: number; end: number } | undefined {
-	const pages = [...text.matchAll(/\[\[page:(\d+)\]\]/gu)].map((match) => Number(match[1]));
-	if (!pages.length || pages.some((page) => !Number.isInteger(page) || page < 1)) return undefined;
-	return { start: Math.min(...pages), end: Math.max(...pages) };
-}
-
-export function citationUri(uri: string, pages: { start: number; end: number } | undefined): string {
-	return pages ? `${uri}#page=${pages.start}` : uri;
-}
-
 async function indexSources(
-	ctx: any,
+	ctx: Context,
 	sourceDir: unknown,
 	query: string,
 	limit: number,
@@ -246,19 +229,7 @@ async function indexSources(
 		.slice(0, limit);
 }
 
-export function registerEvidenceLoop(pi: any): void {
-	if (process.env.PI_SUBAGENT_CHILD === "1") return;
-	const stateBySession = new Map<string, ResearchState>();
-	const stateFor = (ctx: any): ResearchState => {
-		const key = sessionKey(ctx);
-		let state = stateBySession.get(key);
-		if (!state) {
-			state = { index: new Map(), reads: new Map(), searches: 0, deposits: 0 };
-			stateBySession.set(key, state);
-		}
-		return state;
-	};
-
+function registerSearchTool(pi: Pi, stateFor: StateFor, report: ReportFailure) {
 	pi.registerTool({
 		name: "research_search_sources",
 		label: "Research · search sources",
@@ -277,13 +248,7 @@ export function registerEvidenceLoop(pi: any): void {
 			},
 			required: ["query"],
 		},
-		async execute(
-			_id: string,
-			params: any,
-			_signal: AbortSignal,
-			_update: (event: unknown) => void,
-			ctx: any,
-		) {
+		async execute(id, params, _signal, _update, ctx) {
 			const query = String(params?.query || "").trim();
 			if (!query) throw new Error("query is required");
 			const limit = Math.max(1, Math.min(MAX_RESULTS, Number(params?.limit) || 6));
@@ -292,6 +257,7 @@ export function registerEvidenceLoop(pi: any): void {
 			state.index.clear();
 			for (const source of hits) state.index.set(source.id, source);
 			state.searches += 1;
+			if (hits.length === 0) await report("zero-local-hits", id);
 			return result({
 				query,
 				search_id: `search-${state.searches}`,
@@ -306,7 +272,34 @@ export function registerEvidenceLoop(pi: any): void {
 			});
 		},
 	});
+}
 
+function readSourceResult(current: SourceRecord, state: ResearchState, range: ReadRange) {
+	const previous = state.reads.get(current.id);
+	const sameSource = previous?.hash === current.hash;
+	const ranges = [...(sameSource ? previous.ranges : []), range].slice(-16);
+	state.reads.set(current.id, { ...current, ...range, ranges });
+	return result({
+		...publicSource(current),
+		content: range.readText,
+		status: sameSource ? "already-read" : "read",
+		read_receipts: ranges.map((item) => ({
+			receipt_id: item.receiptId,
+			start_line: item.startLine,
+			end_line: item.endLine,
+		})),
+		read_receipt: {
+			source_id: current.id,
+			hash: current.hash,
+			receipt_id: range.receiptId,
+			start_line: range.startLine,
+			end_line: range.endLine,
+			...(range.pageStart ? { page_start: range.pageStart, page_end: range.pageEnd } : {}),
+		},
+	});
+}
+
+function registerReadTool(pi: Pi, stateFor: StateFor, report: ReportFailure) {
 	pi.registerTool({
 		name: "research_read_source",
 		label: "Research · read source",
@@ -322,71 +315,30 @@ export function registerEvidenceLoop(pi: any): void {
 			},
 			required: ["source_id"],
 		},
-		async execute(
-			_id: string,
-			params: any,
-			_signal: AbortSignal,
-			_update: (event: unknown) => void,
-			ctx: any,
-		) {
+		async execute(id, params, _signal, _update, ctx) {
 			const state = stateFor(ctx);
 			const source = state.index.get(String(params?.source_id || ""));
 			if (!source) throw new Error("source_id must come from the latest research_search_sources result");
 			const current = await readSource(source.root, source.path).catch(() => null);
-			if (!current || current.hash !== source.hash)
+			if (!current || current.hash !== source.hash) {
+				await report("source-changed-mid-read", id);
 				throw new Error("source changed after search; search again before reading");
+			}
 			const maxChars = Math.max(200, Math.min(MAX_READ_CHARS, Number(params?.max_chars) || 8000));
 			const body = parseFrontmatter(current.text).body;
-			const startLine = params?.start_line ?? 1;
-			if (!Number.isInteger(startLine) || startLine < 1)
-				throw new Error("start_line must be a positive integer");
-			const available = body.split(/\r?\n/);
-			if (startLine > available.length) throw new Error("start_line is beyond the source body");
-			const selected: string[] = [];
-			let chars = 0;
-			for (const line of available.slice(startLine - 1)) {
-				const width = line.length + (selected.length ? 1 : 0);
-				if (chars + width > maxChars) break;
-				selected.push(line);
-				chars += width;
-			}
-			if (!selected.length)
-				throw new Error("First requested line exceeds max_chars; no complete line was read");
-			const readText = selected.join("\n");
-			const pages = pageRange(readText);
-			const previous = state.reads.get(current.id);
-			const range: ReadRange = {
+			const lines = selectReadLines(body, params?.start_line ?? 1, maxChars);
+			const pages = pageRange(lines.readText);
+			return readSourceResult(current, state, {
 				receiptId: randomUUID(),
-				readText,
-				startLine,
-				endLine: startLine + selected.length - 1,
+				...lines,
 				...(pages ? { pageStart: pages.start, pageEnd: pages.end } : {}),
 				readAt: new Date().toISOString(),
-			};
-			const ranges = [...(previous?.hash === current.hash ? previous.ranges : []), range].slice(-16);
-			const receipt: ReadReceipt = { ...current, ...range, ranges };
-			state.reads.set(current.id, receipt);
-			return result({
-				...publicSource(current),
-				content: readText,
-				status: previous?.hash === current.hash ? "already-read" : "read",
-				read_receipts: ranges.map((item) => ({
-					receipt_id: item.receiptId,
-					start_line: item.startLine,
-					end_line: item.endLine,
-				})),
-				read_receipt: {
-					source_id: current.id,
-					hash: current.hash,
-					receipt_id: range.receiptId,
-					start_line: range.startLine,
-					end_line: range.endLine,
-					...(pages ? { page_start: pages.start, page_end: pages.end } : {}),
-				},
 			});
 		},
 	});
+}
 
+function registerDepositTool(pi: Pi, stateFor: StateFor, report: ReportFailure) {
 	pi.registerTool({
 		name: "research_deposit_research_note",
 		label: "Research · deposit sourced note",
@@ -403,19 +355,13 @@ export function registerEvidenceLoop(pi: any): void {
 			},
 			required: ["title", "markdown", "source_ids"],
 		},
-		async execute(
-			_id: string,
-			params: any,
-			_signal: AbortSignal,
-			_update: (event: unknown) => void,
-			ctx: any,
-		) {
+		async execute(id, params, _signal, _update, ctx) {
 			const state = stateFor(ctx);
 			const ids = Array.from(
 				new Set<string>((Array.isArray(params?.source_ids) ? params.source_ids : []).map(String)),
 			);
 			if (!ids.length) throw new Error("source_ids must contain at least one source read this session");
-			const sources = await currentReads(state, ids);
+			const sources = await currentReads(state, ids, () => report("source-changed-mid-read", id));
 			if (sources.length !== ids.length) throw new Error("every source_id must have a current read receipt");
 			const cwd = resolve(String(ctx?.cwd || process.cwd()));
 			const notesRoot = join(cwd, ".pi", "research-notes");
@@ -439,7 +385,9 @@ export function registerEvidenceLoop(pi: any): void {
 			});
 		},
 	});
+}
 
+function registerAnswerTool(pi: Pi, stateFor: StateFor, report: ReportFailure) {
 	pi.registerTool({
 		name: "research_answer_sources",
 		label: "Research · answer with sources",
@@ -454,68 +402,85 @@ export function registerEvidenceLoop(pi: any): void {
 			},
 			required: ["question"],
 		},
-		async execute(
-			_id: string,
-			params: any,
-			_signal: AbortSignal,
-			_update: (event: unknown) => void,
-			ctx: any,
-		) {
+		async execute(id, params, _signal, _update, ctx) {
 			const state = stateFor(ctx);
 			const ids = (Array.isArray(params?.source_ids) ? params.source_ids : [...state.reads.keys()]).map(
 				String,
-			) as string[];
-			const reads = await currentReads(state, [...new Set(ids)]);
-			if (reads.length < 2) throw new Error("answer requires at least two distinct read sources");
-			const gate = createEvidenceGate({ scope: "research-source-answer" });
-			gate.advance("local_query_recorded", { question: String(params?.question).trim() });
-			gate.advance("sources_inspected", { source_count: reads.length });
-			gate.advance("sources_archived", { source_count: reads.length, archive: "session-receipts" });
-			gate.advance("claims_bound", { source_ids: reads.map((read) => read.id) });
-			gate.advance("answerable", { source_count: reads.length });
-			return result({
-				question: String(params?.question).trim(),
-				answer: reads
-					.map((read) => `${read.title}: ${read.readText.replace(/\s+/g, " ").slice(0, 640)}`)
-					.join("\n\n"),
-				citations: reads.map((read) => ({
-					...publicSource(read),
-					uri: citationUri(
-						read.uri,
-						read.pageStart ? { start: read.pageStart, end: read.pageEnd ?? read.pageStart } : undefined,
-					),
-					read_hash: read.hash,
-					lines: [read.startLine, read.endLine],
-					read_receipts: read.ranges.map((item) => ({
-						receipt_id: item.receiptId,
-						start_line: item.startLine,
-						end_line: item.endLine,
-						content: item.readText,
-					})),
-					...(read.pageStart ? { pages: [read.pageStart, read.pageEnd ?? read.pageStart] } : {}),
-				})),
-				source_count: reads.length,
-				evidence_gate: gate.snapshot(),
-				limitations: [
-					"This is a source packet, not an independent scientific verification or causal conclusion.",
-				],
-			});
+			);
+			const reads = await currentReads(state, [...new Set<string>(ids)], () =>
+				report("source-changed-mid-read", id),
+			);
+			if (reads.length < 2) {
+				await report("insufficient-distinct-sources", id);
+				throw new Error("answer requires at least two distinct read sources");
+			}
+			return answerFromReads(String(params?.question).trim(), reads);
 		},
 	});
+}
 
+function answerFromReads(question: string, reads: readonly ReadReceipt[]) {
+	const gate = createEvidenceGate({ scope: "research-source-answer" });
+	gate.advance("local_query_recorded", { question });
+	gate.advance("sources_inspected", { source_count: reads.length });
+	gate.advance("sources_archived", { source_count: reads.length, archive: "session-receipts" });
+	gate.advance("claims_bound", { source_ids: reads.map((read) => read.id) });
+	gate.advance("answerable", { source_count: reads.length });
+	return result({
+		question,
+		answer: reads
+			.map((read) => `${read.title}: ${read.readText.replace(/\s+/g, " ").slice(0, 640)}`)
+			.join("\n\n"),
+		citations: reads.map((read) => ({
+			...publicSource(read),
+			uri: citationUri(
+				read.uri,
+				read.pageStart ? { start: read.pageStart, end: read.pageEnd ?? read.pageStart } : undefined,
+			),
+			read_hash: read.hash,
+			lines: [read.startLine, read.endLine],
+			read_receipts: read.ranges.map((item) => ({
+				receipt_id: item.receiptId,
+				start_line: item.startLine,
+				end_line: item.endLine,
+				content: item.readText,
+			})),
+			...(read.pageStart ? { pages: [read.pageStart, read.pageEnd ?? read.pageStart] } : {}),
+		})),
+		source_count: reads.length,
+		evidence_gate: gate.snapshot(),
+		limitations: [
+			"This is a source packet, not an independent scientific verification or causal conclusion.",
+		],
+	});
+}
+
+export function registerEvidenceLoop(pi: Pi, { failureCandidateSink }: EvidenceLoopOptions = {}): void {
+	if (process.env.PI_SUBAGENT_CHILD === "1") return;
+	const stateBySession = new Map<string, ResearchState>();
+	const stateFor = (ctx: Context): ResearchState => {
+		const key = sessionKey(ctx);
+		const existing = stateBySession.get(key);
+		if (existing) return existing;
+		const state: ResearchState = { index: new Map(), reads: new Map(), searches: 0, deposits: 0 };
+		stateBySession.set(key, state);
+		return state;
+	};
+	const report: ReportFailure = async (code, receiptId) => {
+		if (failureCandidateSink)
+			await recordFailureCandidate(failureCandidateSink, evidenceLoopFailureCandidate(code, receiptId));
+	};
+	registerSearchTool(pi, stateFor, report);
+	registerReadTool(pi, stateFor, report);
+	registerDepositTool(pi, stateFor, report);
+	registerAnswerTool(pi, stateFor, report);
 	pi.registerTool({
 		name: "research_status",
 		label: "Research · evidence status",
 		description: "Show bounded research source and evidence receipts for the current native Pi session.",
 		drone: { readOnly: true, recoverySafe: true, capabilities: ["research"] },
 		parameters: { type: "object", properties: {} },
-		async execute(
-			_id: string,
-			_params: Record<string, never>,
-			_signal: AbortSignal,
-			_update: (event: unknown) => void,
-			ctx: any,
-		) {
+		async execute(_id, _params, _signal, _update, ctx) {
 			const state = stateFor(ctx);
 			return result({
 				searches: state.searches,

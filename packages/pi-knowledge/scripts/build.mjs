@@ -70,6 +70,7 @@ if (!checkOnly) {
 		platform: "node",
 		target: "node20",
 		outfile: join(packageRoot, "dist/index.mjs"),
+		minifySyntax: true,
 		sourcemap: false,
 		external: ["node:*"],
 	});
@@ -105,6 +106,7 @@ if (!checkOnly) {
 			platform: "node",
 			target: "node20",
 			outfile: join(packageRoot, output),
+			minifySyntax: output === "dist/desktop-runtime.mjs",
 			sourcemap: false,
 			external: ["node:*"],
 		});

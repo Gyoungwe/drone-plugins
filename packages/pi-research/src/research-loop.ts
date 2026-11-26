@@ -27,20 +27,15 @@ async function workspace(cwd: string) {
 	};
 }
 
-export function registerResearchLoop(pi: any): void {
+export function registerResearchLoop(pi: unknown): void {
 	let tail: Promise<void> = Promise.resolve();
-	const run = async <T>(operation: () => T | Promise<T>): Promise<T> => {
-		const previous = tail;
-		let unlock!: () => void;
-		tail = new Promise<void>((resolve) => {
-			unlock = resolve;
-		});
-		await previous;
-		try {
-			return await operation();
-		} finally {
-			unlock();
-		}
+	const run = <T>(operation: () => T | Promise<T>): Promise<T> => {
+		const result = tail.then(operation);
+		tail = result.then(
+			() => undefined,
+			() => undefined,
+		);
+		return result;
 	};
 	const resolveProject = async (cwd: string) =>
 		basename(resolve(cwd))
@@ -54,7 +49,7 @@ export function registerResearchLoop(pi: any): void {
 		describeProject: (resolution) => resolution,
 		registerTool: (host, tool) => host.registerTool(tool),
 		run,
-		verifyLiteratureReceipt: (input) => verifyLiteratureReceipt(input as any),
+		verifyLiteratureReceipt,
 		sourceStatus: (input) =>
 			sourceStatus(input, {
 				workspace,
@@ -64,5 +59,5 @@ export function registerResearchLoop(pi: any): void {
 				},
 			}),
 	};
-	registerResearchExtension(pi, ports);
+	registerResearchExtension(pi as Parameters<typeof registerResearchExtension>[0], ports);
 }

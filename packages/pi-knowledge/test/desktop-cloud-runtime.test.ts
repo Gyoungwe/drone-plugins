@@ -146,6 +146,8 @@ it("keeps the existing desktop operation key set while adding the cloud operatio
 	).toEqual(
 		[
 			"binding",
+			"recordFailureCandidate",
+			"queryFailureCandidates",
 			"modelReviewInfo",
 			"modelReview",
 			"reviewHistory",

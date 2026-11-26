@@ -87,7 +87,28 @@ export {
 	receiptBelongsToRun,
 	shouldRecordResearchReceipt,
 } from "./core/receipt-journal-policy.js";
+export {
+	breakerLimits,
+	type ResearchBreakerBudget,
+	type ResearchContextEviction,
+	type ResearchContextPressure,
+	type ResearchUsageSample,
+	SLOW_PATH_LIMITS,
+	type SlowPathBreakerReceipt,
+	type SlowPathTrip,
+} from "./core/research-breaker.js";
 export * from "./core/research-delivery.js";
+export {
+	FAST_PATH_DENIED_TOOLS,
+	FAST_PATH_ESCALATION_REASONS,
+	FAST_PATH_LIMITS,
+	FAST_PATH_READONLY_TOOLS,
+	type FastPathEscalationReason,
+	type FastPathProgress,
+	fastPathAllows,
+	type ResearchExecutionMode,
+	type ResearchToolStep,
+} from "./core/research-fast-path.js";
 export * as researchLoop from "./core/research-loop.js";
 export {
 	createResearchLoop,
@@ -245,8 +266,11 @@ export {
 	zoteroLocalWriteConfig,
 	zoteroWebApiConfig,
 } from "./core/zotero-write-runtime.js";
+export { createDesktopFailureCandidateSink } from "./desktop/failure-candidate-client.js";
 export * from "./evidence-gate.js";
 export {
+	type FailureCandidateInput,
+	type FailureCandidateSink,
 	type ResearchExtensionHandle,
 	type ResearchExtensionPorts,
 	registerResearchExtension,

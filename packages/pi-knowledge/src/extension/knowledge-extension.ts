@@ -1,13 +1,10 @@
 import { Worker } from "node:worker_threads";
-import {
-	createKnowledgeConfigApi,
-	createKnowledgeRuntimeHost,
-	currentProject,
-	result,
-} from "../core/index.js";
+import { createKnowledgeConfigApi } from "../core/config.js";
+import { currentProject, result } from "../core/extension-helpers.js";
 import { createKnowledgeRuntime, type KnowledgeRuntime } from "../core/knowledge-runtime.js";
 import { createKnowledgeNativeAdapter } from "../core/native-session-lifecycle.js";
 import { createKnowledgePublication, createManagedKnowledgePublication } from "../core/publication.js";
+import { createKnowledgeRuntimeHost } from "../core/runtime-host.js";
 import { createKnowledgeSessionServices } from "../core/session-services.js";
 import {
 	createKnowledgeInterface,
