@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { knowledgeDirectory } from "./config.js";
+import { ENV_NAME } from "./semantic-provider.js";
 
 export type SemanticProvider = "none" | "ollama" | "openai-compatible";
 
@@ -37,7 +38,6 @@ export interface SemanticSettingsApi {
 }
 
 const MAX_FILE_BYTES = 256 * 1024;
-const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/;
 const SETTINGS_KEYS = new Set([
 	"version",
 	"revision",

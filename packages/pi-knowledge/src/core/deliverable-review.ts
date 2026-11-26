@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-
-import type {
-	MetacognitiveArtifact,
-	MetacognitiveArtifactNumber,
-	MetacognitiveSnapshot,
+import {
+	type MetacognitiveArtifact,
+	type MetacognitiveArtifactNumber,
+	type MetacognitiveSnapshot,
+	SHA256,
 } from "./metacognitive-policy.js";
 
 export type ReviewerSeverity = "low" | "medium" | "high";
@@ -127,7 +127,6 @@ export interface BackgroundReviewRequest {
 	mainProvider?: string;
 }
 
-const SHA256 = /^[a-f0-9]{64}$/i;
 const DEFAULT_TIMEOUT_MS = 20_000;
 const DEFAULT_MAX_PER_SESSION = 32;
 const NUMBER = /(?<![\w])[-+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[-+]?\d+)?%?/gi;

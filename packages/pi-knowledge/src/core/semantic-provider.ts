@@ -8,7 +8,7 @@ import { URL } from "node:url";
 const MAX_BATCH = 32;
 const MAX_CHARS = 120_000;
 const MAX_RESPONSE = 8 * 1024 * 1024;
-const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/;
+export const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/;
 const MAX_VECTOR_COMPONENT = 1_000_000;
 const MAX_VECTOR_NORM = 1_000_000_000;
 const CONFIG_KEYS = new Set([
