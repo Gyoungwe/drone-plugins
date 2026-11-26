@@ -3,9 +3,8 @@ import { constants } from "node:fs";
 import { link, lstat, mkdir, open, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { readNoteFile } from "./files.js";
+import { MANAGED_END, MANAGED_START } from "./wiki-policy.js";
 
-const MANAGED_START = "<!-- pi-agent:managed:start -->";
-const MANAGED_END = "<!-- pi-agent:managed:end -->";
 const PROJECT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const NAVIGATION_TARGETS = new Set(["Home.md", "Wiki/Index.md", "Library/Index.md"]);
 

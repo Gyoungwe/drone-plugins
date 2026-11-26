@@ -4,7 +4,7 @@
 	"file-lines\tpackages/pi-core/src/drone-commands.ts": 405,
 	"file-lines\tpackages/pi-core/test/task-runtime/task-consent.test.mjs": 592,
 	"file-lines\tpackages/pi-core/test/task-runtime/task-workbench.test.mjs": 492,
-	"file-lines\tpackages/pi-knowledge/src/core/deliverable-review.ts": 528,
+	"file-lines\tpackages/pi-knowledge/src/core/deliverable-review.ts": 527,
 	"file-lines\tpackages/pi-knowledge/src/core/experience-store.ts": 1124,
 	"file-lines\tpackages/pi-knowledge/src/core/index-runtime.ts": 1203,
 	"file-lines\tpackages/pi-knowledge/src/core/ingest-frontmatter.ts": 752,
