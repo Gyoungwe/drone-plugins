@@ -5,7 +5,8 @@
   "bundled": [
     "@gyoungwe/pi-core",
     "@gyoungwe/pi-knowledge",
-    "@gyoungwe/pi-research"
+    "@gyoungwe/pi-research",
+    "@gyoungwe/plugin-api"
   ],
-  "dependenciesSha256": "e806fb409929664d6fc500a25f37cf2b6ff230dd6972a307b7f2e1aaf5abf5f3"
+  "dependenciesSha256": "66b116380621897c2cd33896437fbd9f17c4234b107af41712928e48813f7f82"
 }

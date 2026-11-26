@@ -1,7 +1,7 @@
 {
   "artifactSource": "ui/src/index.ts",
   "inputs": {
-    "package.json": "794ec5443c78d978ff1def9a5e8babcbc62db9095bab1d7cb8ada0d74c268965",
+    "package.json": "3b12a278587791d013f0aa73b0263a582c99569fdac3a93caba582d9ad33548a",
     "plugin.manifest.json": "1f1fa6908e08cddf18baa8935227beb4a0aa9e277e5a23003f646012a8c214b9",
     "scripts/build-ui.mjs": "1e6e3a91c4907156f3adf905e2752b188f524395ec7cc130f7879c0f077d976e",
     "ui/NativeKnowledgeCloud.tsx": "3d663e339788eb6452efdaa7eb9e087230edc1402686ccc062953d876a1569c5",
