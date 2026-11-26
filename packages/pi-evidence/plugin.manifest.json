@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "drone-pi-evidence",
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"pi": {
 		"apiVersion": 1,
 		"minHostVersion": "1.1.0",

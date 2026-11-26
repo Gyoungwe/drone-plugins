@@ -2,9 +2,9 @@
 
 The suite composes the standalone pi-core, pi-knowledge and pi-research packages. Its tarball bundles exact dependencies so official Pi can discover native extensions and skills without a second package resolution. The suite contains no second domain implementation.
 
-## Unpublished 0.3.0 candidate
+## Unpublished 0.4.0 candidate
 
-This candidate pins `pi-core@0.3.0`, `pi-knowledge@0.3.0` and `pi-research@0.4.0`. The previously published suite 0.1.11 remains immutable. The three packages carry their own Desktop UI resources. The suite declares three native Pi extensions, including the Workbench tools from `pi-core` and the connector catalog tools `connector_list` and `connector_get` from `pi-research`.
+This candidate pins `pi-core@0.3.0`, `pi-knowledge@0.3.1` and `pi-research@0.4.0`. The previously published suite 0.1.11 remains immutable. The three packages carry their own Desktop UI resources. The suite declares three native Pi extensions, including the Workbench tools from `pi-core` and the connector catalog tools `connector_list` and `connector_get` from `pi-research`.
 
 Before upgrading, remove any separately installed `@gyoungwe/desktop-ui-pack`, `@gyoungwe/pi-workbench` and `@gyoungwe/pi-connectors` to avoid duplicate tools or UI. The Tasks, Workbench and Research status tabs are owned by `pi-core`. Knowledge contributions are owned by `pi-knowledge`.
 
