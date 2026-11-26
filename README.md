@@ -21,12 +21,16 @@ Drone 的独立插件 workspace。它承载可独立安装、升级、禁用和�
 ## 开发门槛
 
 ```sh
+node scripts/prepare-plugin-api.mjs
 npm ci
-npm run build
 npm run check
 ```
 
-`npm run build` 刷新各插件 bundle。`packages/pi-knowledge` 的 `npm run build:check` 验证 bundle、worker、skill 和内容 manifest。`research-suite` 将精确锁定的依赖复制到包内 staging tree，确保 npm tarball 包含这些依赖，并检查 `research-workflow` 只由 `pi-research` 提供。`npm run check` 随后运行所有包级检查、干净安装 smoke 和 tarball 形状校验。插件仓库的 CI 以后将针对 Pi `1.1.0`、Desktop 锁定版本、最新稳定版和 canary 运行兼容矩阵。
+准备脚本从 Drone GitHub Release 验证 Plugin API 的 SHA-256 和锁文件 SRI，并预填 npm 缓存。`npm run check` 构建各包，再检查构建产物、包级行为和干净安装。构建将已验证的 Plugin API 文件放入运行时包的 `bundleDependencies`，`research-suite` 还捆绑锁定的三个插件。`pi-research` 的 Plugin API peer 为宿主提供的可选类型依赖。
+
+离线安装需要已验证的绝对路径 tarball 和已缓存的第三方依赖。使用 `DRONE_PLUGIN_API_TARBALL=/absolute/plugin-api.tgz node scripts/prepare-plugin-api.mjs --offline -- npm ci --offline --ignore-scripts --no-audit --no-fund`。随后可用相同的 `--offline -- npm run check` 包装命令传递已验证的 API。未发布的同版本开发包可使用 `--worktree --sha256 <hex> -- npm run check`，脚本会在临时副本重新锁定和安装依赖。
+
+获授权的发布从 GitHub Actions 的 **Publish plugin release** 手动选择一个 workspace，填写与清单一致的 `expected_version`。工作流要求受保护的 `main` 和可公开的包，在干净安装并加载打包文件后创建 `<slug>-vX.Y.Z` 草稿，回读校验后发布 `.tgz` 与 `SHA256SUMS`。
 
 Knowledge category precedence and the 0.2.1 / suite 0.1.10 source candidates are documented in [the category repair record](docs/knowledge-category-fix.md). The repair record preserves its historical scope; public release verification is recorded separately below.
 

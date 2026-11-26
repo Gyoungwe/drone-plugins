@@ -7,9 +7,11 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
+import { stageBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
 
 const root = resolve(import.meta.dirname, "../../..");
 const packageRoot = join(root, "packages/pi-evidence");
+await stageBundledPluginApi(packageRoot);
 const distRoot = join(packageRoot, "dist");
 const check = process.argv.includes("--check");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");

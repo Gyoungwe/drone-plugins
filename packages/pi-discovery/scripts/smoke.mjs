@@ -7,9 +7,8 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
-import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+import { installPackedPlugins } from "../../../scripts/packed-plugins.mjs";
 
-const api = await candidatePluginApi();
 const exec = promisify(execFile);
 const root = await mkdtemp(join(tmpdir(), "pi-discovery-smoke-"));
 try {
@@ -23,20 +22,7 @@ try {
 	)[0];
 	assert.match(packed.filename, /\.tgz$/u);
 	const prefix = join(root, "installed");
-	await exec(
-		"npm",
-		[
-			"install",
-			"--prefix",
-			prefix,
-			"--ignore-scripts",
-			"--no-audit",
-			"--no-fund",
-			join(root, packed.filename),
-			api.path,
-		],
-		{ maxBuffer: 4 * 1024 * 1024 },
-	);
+	await installPackedPlugins(prefix, [join(root, packed.filename)]);
 	const installedRoot = join(prefix, "node_modules/@gyoungwe/pi-discovery");
 	const manifest = JSON.parse(await readFile(join(installedRoot, "plugin.manifest.json"), "utf8"));
 	const packageJson = JSON.parse(await readFile(join(installedRoot, "package.json"), "utf8"));

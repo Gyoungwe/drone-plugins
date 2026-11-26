@@ -9298,7 +9298,7 @@ var CloudService = class {
   }
 };
 
-// ../../node_modules/@gyoungwe/plugin-api/dist/analysis-lifecycle-record-validation.js
+// node_modules/@gyoungwe/plugin-api/dist/analysis-lifecycle-record-validation.js
 function plainObject(value) {
   if (typeof value != "object" || value === null || Array.isArray(value))
     return !1;
@@ -9391,7 +9391,7 @@ var text2 = (value) => typeof value == "string", boolean = oneOf(!0, !1), finite
   inputs: array(artifact)
 }, { executionContext, lineage }), ledger = shape({ version: oneOf(1), runs: dictionary(context) }, { bindings: dictionary(binding) });
 
-// ../../node_modules/@gyoungwe/plugin-api/dist/runtime-agent-slot.js
+// node_modules/@gyoungwe/plugin-api/dist/runtime-agent-slot.js
 async function withPluginAgentSlot(capabilities, signal, work) {
   let { lease } = await capabilities.call("agent.slot.acquire", {}, signal), workFailed = !1;
   try {
@@ -9406,7 +9406,7 @@ async function withPluginAgentSlot(capabilities, signal, work) {
   }
 }
 
-// ../../node_modules/@gyoungwe/plugin-api/dist/runtime-config.js
+// node_modules/@gyoungwe/plugin-api/dist/runtime-config.js
 async function readPluginEndpointConfiguration(capabilities, input, signal) {
   return await capabilities.call("config.endpoint", input, signal);
 }

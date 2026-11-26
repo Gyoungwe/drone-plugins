@@ -19,6 +19,8 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { verifyBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
+import { preparePluginApi } from "../../../scripts/prepare-plugin-api.mjs";
 
 const execFileAsync = promisify(execFile);
 const packageRoot = resolve(import.meta.dirname, "..");
@@ -64,6 +66,7 @@ const tarball = join(packRoot, pack[0]?.filename || "");
 assert(tarball.endsWith(".tgz"), "npm pack did not produce a tarball");
 await execFileAsync("tar", ["-xzf", tarball, "-C", extractRoot]);
 const artifactRoot = join(extractRoot, "package");
+await verifyBundledPluginApi(artifactRoot, await preparePluginApi());
 const worker = await readFile(join(artifactRoot, "lib/knowledge/runtime/worker.mjs"));
 const workerManifest = JSON.parse(
 	await readFile(join(artifactRoot, "lib/knowledge/runtime/.knowledge-worker-manifest.json"), "utf8"),

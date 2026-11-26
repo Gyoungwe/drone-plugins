@@ -7,9 +7,11 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+import { verifyBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
+import { blockInternalRegistry, inspectPackedPlugin } from "../../../scripts/packed-plugins.mjs";
+import { preparePluginApi } from "../../../scripts/prepare-plugin-api.mjs";
 
-const api = await candidatePluginApi();
+const api = await preparePluginApi();
 const args = process.argv.slice(2);
 assert.equal(
 	args[0],
@@ -21,6 +23,7 @@ assert.equal(workspaces.length, 3);
 const tarballArg = args.indexOf("--tarball");
 assert(tarballArg >= 0, "Pass the same tarball used by the actual host writer");
 const tarball = resolve(args[tarballArg + 1]);
+await inspectPackedPlugin(tarball, api);
 const root = mkdtempSync(join(tmpdir(), "pi-discovery-sdk-"));
 const family = [
 	"chord",
@@ -79,12 +82,17 @@ try {
 			]),
 		);
 		dependencies["@gyoungwe/pi-discovery"] = `file:${tarball}`;
-		dependencies["@gyoungwe/plugin-api"] = `file:${api.path}`;
 		writeFileSync(
 			join(prefix, "package.json"),
 			JSON.stringify({ private: true, type: "module", dependencies }),
 		);
-		run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], prefix, env);
+		run(
+			"npm",
+			["install", "--ignore-scripts", "--no-audit", "--no-fund", blockInternalRegistry],
+			prefix,
+			env,
+		);
+		await verifyBundledPluginApi(join(prefix, "node_modules/@gyoungwe/pi-discovery"), api);
 		copyFileSync(join(import.meta.dirname, "sdk-session-probe.mjs"), join(prefix, "probe.mjs"));
 		const probe = spawnSync(process.execPath, ["probe.mjs", ...workspaces], {
 			cwd: prefix,

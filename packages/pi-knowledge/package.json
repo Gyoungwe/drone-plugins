@@ -56,7 +56,7 @@
 		"check": "npm run build:check && npm run typecheck && npm test && npm run smoke"
 	},
 	"dependencies": {
-		"@gyoungwe/plugin-api": "^2.0.0",
+		"@gyoungwe/plugin-api": "https://github.com/Gyoungwe/Drone/releases/download/plugin-api-v2.0.0/gyoungwe-plugin-api-2.0.0.tgz",
 		"@xmldom/xmldom": "0.8.13",
 		"graphology": "^0.26.0",
 		"graphology-communities-louvain": "^2.0.2",
@@ -64,6 +64,9 @@
 		"graphology-types": "^0.24.8",
 		"sigma": "^3.0.3"
 	},
+	"bundleDependencies": [
+		"@gyoungwe/plugin-api"
+	],
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
 	},

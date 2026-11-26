@@ -3,10 +3,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { build } from "esbuild";
+import { stageBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
 
 const require = createRequire(import.meta.url),
 	root = resolve(import.meta.dirname, ".."),
 	check = process.argv.includes("--check");
+await stageBundledPluginApi(root);
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex"),
 	inputs = {},
 	outputs = {};

@@ -12,8 +12,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { verifyBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
+import { blockInternalRegistry, inspectPackedPlugin } from "../../../scripts/packed-plugins.mjs";
+import { preparePluginApi } from "../../../scripts/prepare-plugin-api.mjs";
 
 const run = promisify(execFile);
+const api = await preparePluginApi();
 const packageRoot = new URL("..", import.meta.url).pathname;
 const sdkFamily = [
 	"chord",
@@ -49,6 +53,7 @@ try {
 	)[0];
 	assert(packed?.filename?.endsWith(".tgz"), "research-suite did not produce an npm tarball");
 	const tarball = join(tarballRoot, packed.filename);
+	await inspectPackedPlugin(tarball, api);
 	const packageJson = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 	await writeFile(
 		join(installRoot, "package.json"),
@@ -66,11 +71,16 @@ try {
 		)}\n`,
 		"utf8",
 	);
-	await run("npm", ["install", "--ignore-scripts", "--legacy-peer-deps", "--no-audit", "--no-fund"], {
-		cwd: installRoot,
-		env,
-	});
+	await run(
+		"npm",
+		["install", "--ignore-scripts", "--legacy-peer-deps", "--no-audit", "--no-fund", blockInternalRegistry],
+		{
+			cwd: installRoot,
+			env,
+		},
+	);
 	const suiteRoot = join(installRoot, "node_modules", "@gyoungwe", "research-suite");
+	await verifyBundledPluginApi(suiteRoot, api);
 	const installed = JSON.parse(await readFile(join(suiteRoot, "package.json"), "utf8"));
 	assert.equal(installed.version, packageJson.version);
 	const extensions = installed.pi.extensions.map((entry) => join(suiteRoot, entry));
@@ -108,6 +118,7 @@ try {
 			.update(await readFile(tarball))
 			.digest("hex"),
 		installRootIsClean: true,
+		pluginApi: { source: api.source, version: api.version, sha256: api.sha256 },
 		loadedExtensions: loaded.extensions.length,
 		toolCount: names.length,
 		tools: names,

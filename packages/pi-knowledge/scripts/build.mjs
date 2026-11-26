@@ -6,8 +6,10 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { build } from "esbuild";
+import { stageBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
 
 const packageRoot = resolve(import.meta.dirname, "..");
+await stageBundledPluginApi(packageRoot);
 const workspaceRoot = resolve(packageRoot, "../..");
 const checkOnly = process.argv.includes("--check");
 const packageJson = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));

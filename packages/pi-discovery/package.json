@@ -52,11 +52,15 @@
 		"smoke": "node scripts/smoke.mjs",
 		"check": "npm run typecheck && npm run build:check && npm test && npm run smoke"
 	},
-	"dependencies": {},
 	"peerDependencies": {
-		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0",
-		"@gyoungwe/plugin-api": "^2.0.0"
+		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
 	},
+	"dependencies": {
+		"@gyoungwe/plugin-api": "https://github.com/Gyoungwe/Drone/releases/download/plugin-api-v2.0.0/gyoungwe-plugin-api-2.0.0.tgz"
+	},
+	"bundleDependencies": [
+		"@gyoungwe/plugin-api"
+	],
 	"devDependencies": {
 		"@types/node": "^22.19.19",
 		"esbuild": "^0.25.12",

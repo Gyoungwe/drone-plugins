@@ -141,14 +141,14 @@
 	},
 	"outputs": {
 		"dist/index.mjs": "81e9b1031f9bcddc7c12048ec3930f1458083e51c410db4a2c6b871e94eac5bf",
-		"dist/host.mjs": "209a600bd03269b936d37de5faaad570f4bed44155d097d2d2b30463d83e0036",
+		"dist/host.mjs": "6f16291489d96f3d8ebc040fce267f3b6102f9006fc50920d1a0803aaa402e06",
 		"dist/host.d.ts": "fb78750585e1ad9c438741f6cfd689cc709c1d30bb86b07109a5fd487882b115",
-		"dist/desktop-runtime.mjs": "d08028eb447930d35146637be2b69c65444232637d8cddda87532a349a3cbcfa",
+		"dist/desktop-runtime.mjs": "1c861dbb3943736817102bb6b3699ddc83fc8b71ce4f31e8b398a529abe703bc",
 		"lib/knowledge/runtime/desktop-index.mjs": "3b08cceea8fdbc43ca4a72bf7bd1c7c18ea30f485abed9cad3201a46ec42b1fc",
 		"lib/knowledge/runtime/worker.mjs": "4a31accbde881e5a0368591567634fd715e2094534e87d901769eec6228ebc4a",
 		"lib/knowledge/runtime/.knowledge-worker-manifest.json": "d53ae5ae6998b5a1ed6e66566becbf7d6d6a0b3828fc576595fbf8686887a0ae",
 		"ui/bundle.js": "e22eeb1ceb83ccc3619c2b37d345778aeb980e218546783931709c1e870e304d",
-		"ui/build-manifest.json": "37a00bc88e45c371de53cae2e3bea60d92fbbb9c5daddffdd47d4a38915176c8"
+		"ui/build-manifest.json": "cada6980688ba10fb9f0f8e28c264b0458c265d21f415abb95510f9cd7cec995"
 	},
 	"skills": [
 		"skills/research-vault/SKILL.md",

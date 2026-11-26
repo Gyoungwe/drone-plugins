@@ -6,8 +6,10 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { build } from "esbuild";
+import { stageBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
 
 const packageRoot = resolve(import.meta.dirname, "..");
+await stageBundledPluginApi(packageRoot);
 const distRoot = join(packageRoot, "dist");
 const outputPath = join(distRoot, "index.mjs");
 const hostOutputPath = join(distRoot, "host.mjs");

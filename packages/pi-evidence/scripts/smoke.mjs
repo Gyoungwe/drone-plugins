@@ -6,9 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
-import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
-
-const api = await candidatePluginApi();
+import { installPackedPlugins } from "../../../scripts/packed-plugins.mjs";
 
 const execFileAsync = promisify(execFile);
 const packageRoot = resolve(import.meta.dirname, "..");
@@ -24,21 +22,7 @@ try {
 	const metadata = JSON.parse(packed.stdout.trim())[0];
 	assert(metadata?.filename?.endsWith(".tgz"), "npm pack did not produce a tarball");
 	const tarball = join(temp, metadata.filename);
-	await execFileAsync(
-		"npm",
-		[
-			"install",
-			"--prefix",
-			installRoot,
-			"--ignore-scripts",
-			"--omit=peer",
-			"--no-audit",
-			"--no-fund",
-			api.path,
-			tarball,
-		],
-		{ cwd: packageRoot, maxBuffer: 16 * 1024 * 1024 },
-	);
+	await installPackedPlugins(installRoot, [tarball]);
 	const packageDir = join(installRoot, "node_modules/@gyoungwe/pi-evidence");
 	const packageJson = JSON.parse(await readFile(join(packageDir, "package.json"), "utf8"));
 	const manifest = JSON.parse(await readFile(join(packageDir, "plugin.manifest.json"), "utf8"));
