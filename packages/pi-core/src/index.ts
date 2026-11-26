@@ -8,6 +8,7 @@ import { makeDeliverFilesTool } from "./tools/deliver-files";
 import { makeMemorySaveTool } from "./tools/memory-save";
 import { makeStatusTool } from "./tools/status";
 import { makeTodoTool } from "./tools/todo";
+import { registerPiWorkbench } from "./workbench";
 
 /** The deliberately small host seam used by pi-core. */
 export type PiCoreHostPort = Pick<DroneHostPort, "host" | "capabilities" | "requestAuthorization">;
@@ -142,6 +143,7 @@ export function registerPiCore(pi: any, options: PiCoreRegistrationOptions = {})
 	pi.registerTool(makeTodoTool());
 	pi.registerTool(makeDeliverFilesTool());
 	pi.registerTool(makeMemorySaveTool() as any);
+	registerPiWorkbench(pi);
 	return {
 		host: options.host,
 		tools: ["ask_user", "set_status", "todo", "deliver_files", "memory_save"],
@@ -183,5 +185,15 @@ export { deliverFilesParams, makeDeliverFilesTool } from "./tools/deliver-files"
 export { MEMORY_SAVE_TOOL, makeMemorySaveTool } from "./tools/memory-save";
 export { makeStatusTool } from "./tools/status";
 export { formatTodoList, makeTodoTool, normalizeTodos } from "./tools/todo";
+export {
+	emptyWorkbenchSnapshot,
+	type PiToolRegistrar,
+	registerPiWorkbench,
+	type TaskState,
+	type WorkbenchMemory,
+	type WorkbenchSnapshot,
+	WorkbenchStore,
+	type WorkbenchTask,
+} from "./workbench";
 
 export default registerPiCore;

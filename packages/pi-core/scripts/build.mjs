@@ -53,6 +53,27 @@ async function buildReceipt() {
 	};
 }
 
+async function inlineWorkbenchDeclarations() {
+	for (const [entry, workbench] of [
+		["index", "workbench"],
+		["host", "workbench-host"],
+	]) {
+		const entryPath = join(distRoot, `${entry}.d.ts`);
+		const workbenchPath = join(distRoot, `${workbench}.d.ts`);
+		const [entryTypes, workbenchTypes] = await Promise.all([
+			readFile(entryPath, "utf8"),
+			readFile(workbenchPath, "utf8"),
+		]);
+		const reexport = new RegExp(`^export .+ from "\\./${workbench}";$`, "mu");
+		if (!reexport.test(entryTypes)) throw new Error(`Missing ${workbench} re-export in ${entry}.d.ts`);
+		await writeFile(
+			entryPath,
+			entryTypes.replace(reexport, () => workbenchTypes.trimEnd()),
+		);
+		await rm(workbenchPath);
+	}
+}
+
 async function verify() {
 	const pkg = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 	const manifest = JSON.parse(await readFile(join(packageRoot, "plugin.manifest.json"), "utf8"));
@@ -103,7 +124,7 @@ if (!check) {
 		sourcemap: false,
 		logLevel: "silent",
 	};
-	const runtimeOptions = { ...buildOptions, minifyIdentifiers: true, keepNames: true };
+	const runtimeOptions = { ...buildOptions, minifySyntax: true, minifyIdentifiers: true, keepNames: true };
 	await build({
 		...runtimeOptions,
 		entryPoints: [join(packageRoot, "src/index.ts")],
@@ -140,6 +161,7 @@ if (!check) {
 	execFileSync("tsc", ["-p", join(packageRoot, "tsconfig.build.json")], {
 		stdio: "inherit",
 	});
+	await inlineWorkbenchDeclarations();
 	const output = await readFile(outputPath, "utf8");
 	if (!output.startsWith("// @ts-nocheck")) await writeFile(outputPath, `// @ts-nocheck\n${output}`);
 	await writeFile(

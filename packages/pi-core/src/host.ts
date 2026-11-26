@@ -127,3 +127,4 @@ export const taskHostLoader = {
 } satisfies TaskHostLoaderContract;
 
 export { normalizeTaskMilestones } from "./milestone-plan";
+export { createWorkbenchRuntime } from "./workbench-host";
