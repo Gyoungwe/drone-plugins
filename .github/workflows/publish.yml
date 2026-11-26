@@ -1,72 +1,227 @@
-name: Publish npm plugins
+name: Publish plugin release
 
 on:
   workflow_dispatch:
     inputs:
       package:
-        description: Package to publish after the validation gate
+        description: Workspace to release
         required: true
         type: choice
         options:
-          - pi-knowledge
-          - research-suite
+          - pi-analysis
+          - pi-core
+          - pi-discovery
           - pi-evidence
-          - all-pending
-        default: all-pending
+          - pi-inquiry
+          - pi-knowledge
+          - pi-research
+          - research-suite
+      expected_version:
+        description: Exact stable version in the workspace package.json
+        required: true
+        type: string
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 concurrency:
-  group: npm-publish
+  group: publish-plugin-release
   cancel-in-progress: false
 
+env:
+  DRONE_PLUGIN_API_RELEASE: '1'
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+  build:
+    if: github.ref == 'refs/heads/main' && github.ref_protected
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      PACKAGE_SLUG: ${{ inputs.package }}
+      EXPECTED_VERSION: ${{ inputs.expected_version }}
+    outputs:
+      slug: ${{ steps.pack.outputs.slug }}
+      version: ${{ steps.pack.outputs.version }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
     steps:
       - name: Check out the exact release commit
-        uses: actions/checkout@v4
-
-      - name: Set up Node and npm trusted publishing
-        uses: actions/setup-node@v4
+        uses: actions/checkout@v6
         with:
-          node-version: 24
-          registry-url: https://registry.npmjs.org
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up the release toolchain
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.23.0'
           package-manager-cache: false
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Verify the source commit, toolchain and package version
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(npm --version)" = "10.9.8"
+          node scripts/smoke-packed-plugin.mjs --preflight "$PACKAGE_SLUG" "$EXPECTED_VERSION"
 
-      - name: Run the complete plugin gate
-        run: npm run check
+      - name: Verify and cache the Plugin API release
+        run: node scripts/prepare-plugin-api.mjs
 
-      - name: Publish the selected package through npm OIDC
+      - name: Install and check the workspace
+        run: |
+          npm ci
+          npm run check
+
+      - name: Pack and smoke-test the exact release archive
+        id: pack
+        run: |
+          slug="$PACKAGE_SLUG"
+          asset="gyoungwe-$slug-$EXPECTED_VERSION.tgz"
+          asset_dir="$RUNNER_TEMP/plugin-release"
+          pack_json="$RUNNER_TEMP/plugin-pack.json"
+          mkdir "$asset_dir"
+          npm pack --json --ignore-scripts -w "@gyoungwe/$slug" --pack-destination "$asset_dir" > "$pack_json"
+          node scripts/smoke-packed-plugin.mjs --packed "$slug" "$EXPECTED_VERSION" "$asset_dir" "$pack_json"
+          cd "$asset_dir"
+          sha256sum -- "$asset" > SHA256SUMS
+          read -r sha256 _ < SHA256SUMS
+          printf 'slug=%s\nversion=%s\nsha256=%s\n' "$slug" "$EXPECTED_VERSION" "$sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the verified release archive and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-release
+          path: ${{ runner.temp }}/plugin-release
+          if-no-files-found: error
+
+  release:
+    if: github.ref == 'refs/heads/main' && github.ref_protected
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      PACKAGE_SLUG: ${{ needs.build.outputs.slug }}
+      RELEASE_VERSION: ${{ needs.build.outputs.version }}
+      BUILD_SHA256: ${{ needs.build.outputs.sha256 }}
+    steps:
+      - name: Check out the exact release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download the verified build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-release
+          path: ${{ runner.temp }}/plugin-release
+
+      - name: Create, read back and publish the draft release
         env:
-          PACKAGE: ${{ inputs.package }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          publish() {
-            npm publish --workspace "$1" --access public --provenance
+          actual_head="$(git rev-parse HEAD)"
+          [[ "$actual_head" == "$GITHUB_SHA" ]] || echo "Expected HEAD $GITHUB_SHA, got $actual_head" >&2
+          test "$actual_head" = "$GITHUB_SHA"
+          tag="$PACKAGE_SLUG-v$RELEASE_VERSION"
+          asset="gyoungwe-$PACKAGE_SLUG-$RELEASE_VERSION.tgz"
+          asset_dir="$RUNNER_TEMP/plugin-release"
+          artifact_sha256="$(sha256sum -- "$asset_dir/$asset")"
+          artifact_sha256="${artifact_sha256%% *}"
+          [[ "$artifact_sha256" == "$BUILD_SHA256" ]] || echo "Expected artifact SHA-256 $BUILD_SHA256, got $artifact_sha256" >&2
+          test "$artifact_sha256" = "$BUILD_SHA256"
+          cmp <(printf '%s  %s\n' "$BUILD_SHA256" "$asset") "$asset_dir/SHA256SUMS"
+
+          matching_tag() {
+            gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$tag" \
+              --jq ".[] | select(.ref == \"refs/tags/$tag\") | .ref"
           }
-          case "$PACKAGE" in
-            pi-knowledge)
-              publish @gyoungwe/pi-knowledge
-              ;;
-            research-suite)
-              publish @gyoungwe/research-suite
-              ;;
-            pi-evidence)
-              publish @gyoungwe/pi-evidence
-              ;;
-            all-pending)
-              publish @gyoungwe/pi-knowledge
-              publish @gyoungwe/research-suite
-              publish @gyoungwe/pi-evidence
-              ;;
-            *)
-              echo "Unsupported package selection: $PACKAGE" >&2
-              exit 2
-              ;;
-          esac
+          tagged_release() {
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq ".[] | select(.tag_name == \"$tag\") | [.draft, .target_commitish] | @tsv"
+          }
+          tag_commit() {
+            gh api "repos/$GITHUB_REPOSITORY/commits/tags/$tag" --jq .sha
+          }
+
+          tag_ref="$(matching_tag)"
+          existing_release="$(tagged_release)"
+          if [[ -n "$tag_ref" || -n "$existing_release" ]]; then
+            echo "A tag or release already exists for $tag" >&2
+            exit 1
+          fi
+          gh release create "$tag" "$asset_dir/$asset" "$asset_dir/SHA256SUMS" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --latest=false \
+            --title "$tag" --notes "Source commit: $GITHUB_SHA"
+
+          readback="$(mktemp -d "$RUNNER_TEMP/plugin-readback.XXXXXX")"
+          expected_draft="$(printf 'true\t%s' "$GITHUB_SHA")"
+          draft_verified=false
+          for attempt in 1 2 3 4 5 6; do
+            verified="$readback/$attempt"
+            mkdir "$verified"
+            if draft="$(tagged_release)" && [[ "$draft" == "$expected_draft" ]] &&
+              gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "$verified" &&
+              [[ -f "$verified/$asset" && -f "$verified/SHA256SUMS" ]]; then
+              draft_verified=true
+              break
+            fi
+            if [[ "$attempt" -lt 6 ]]; then
+              echo "Draft $tag readback attempt $attempt/6 returned '$draft' or incomplete assets, retrying in 2s" >&2
+              sleep 2
+            fi
+          done
+          [[ "$draft_verified" == true ]] || echo "Draft $tag failed readback after six attempts, last state '$draft'" >&2
+          test "$draft_verified" = true
+          shopt -s nullglob dotglob
+          draft_assets=("$verified"/*)
+          test "${#draft_assets[@]}" = 2
+          cmp "$asset_dir/SHA256SUMS" "$verified/SHA256SUMS"
+          cmp "$asset_dir/$asset" "$verified/$asset"
+          (cd "$verified" && sha256sum --check --strict -- SHA256SUMS)
+
+          tag_ref="$(matching_tag)"
+          if [[ -n "$tag_ref" ]]; then
+            draft_commit="$(tag_commit)"
+            [[ "$draft_commit" == "$GITHUB_SHA" ]] || echo "Expected draft tag commit $GITHUB_SHA, got $draft_commit" >&2
+            test "$draft_commit" = "$GITHUB_SHA"
+          fi
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+
+      - name: Verify the public release and its tag commit
+        run: |
+          set -euo pipefail
+          tag="$PACKAGE_SLUG-v$RELEASE_VERSION"
+          asset="gyoungwe-$PACKAGE_SLUG-$RELEASE_VERSION.tgz"
+          public_url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag"
+          asset_dir="$RUNNER_TEMP/plugin-release"
+          public_dir="$(mktemp -d "$RUNNER_TEMP/plugin-public.XXXXXX")"
+          for name in "$asset" SHA256SUMS; do
+            curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+              --max-time 45 --retry 5 --retry-all-errors --retry-delay 2 "$public_url/$name" --output "$public_dir/$name"
+            cmp "$asset_dir/$name" "$public_dir/$name"
+          done
+          (cd "$public_dir" && sha256sum --check --strict -- SHA256SUMS)
+
+          tag_ref="refs/tags/$tag"
+          published_commit=""
+          for attempt in 1 2 3 4 5 6; do
+            if refs="$(GIT_TERMINAL_PROMPT=0 git -c credential.helper= ls-remote \
+              "https://github.com/$GITHUB_REPOSITORY.git" "$tag_ref" "$tag_ref^{}")"; then
+              published_commit="$(awk -v ref="$tag_ref" '$2 == ref { tag = $1 } $2 == ref "^{}" { peeled = $1 } END { print (peeled ? peeled : tag) }' <<< "$refs")"
+              if [[ "$published_commit" == "$GITHUB_SHA" ]]; then
+                break
+              fi
+            fi
+            if [[ "$attempt" -lt 6 ]]; then
+              echo "Public tag $tag attempt $attempt/6 returned '$published_commit', retrying in 2s" >&2
+              sleep 2
+            fi
+          done
+          [[ "$published_commit" == "$GITHUB_SHA" ]] || echo "Expected public tag commit $GITHUB_SHA, got $published_commit" >&2
+          test "$published_commit" = "$GITHUB_SHA"
+          echo "Verified public release $tag at $published_commit"

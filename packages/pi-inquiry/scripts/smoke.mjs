@@ -7,9 +7,8 @@ import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
-import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+import { installPackedPlugins } from "../../../scripts/packed-plugins.mjs";
 
-const api = await candidatePluginApi();
 const execFileAsync = promisify(execFile);
 const packageRoot = resolve(import.meta.dirname, "..");
 const temp = await mkdtemp(join(tmpdir(), "drone-pi-inquiry-smoke-"));
@@ -24,21 +23,7 @@ try {
 	const metadata = JSON.parse(packed.stdout.trim())[0];
 	assert(metadata?.filename?.endsWith(".tgz"), "npm pack did not produce a tarball");
 	const tarball = join(temp, metadata.filename);
-	await execFileAsync(
-		"npm",
-		[
-			"install",
-			"--prefix",
-			installRoot,
-			"--ignore-scripts",
-			"--omit=peer",
-			"--no-audit",
-			"--no-fund",
-			tarball,
-			api.path,
-		],
-		{ cwd: installRoot, maxBuffer: 16 * 1024 * 1024 },
-	);
+	await installPackedPlugins(installRoot, [tarball]);
 	const packageDir = join(installRoot, "node_modules/@gyoungwe/pi-inquiry");
 	const packageJson = JSON.parse(await readFile(join(packageDir, "package.json"), "utf8"));
 	const manifest = JSON.parse(await readFile(join(packageDir, "plugin.manifest.json"), "utf8"));

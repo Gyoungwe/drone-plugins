@@ -49,16 +49,17 @@
 	"dependencies": {
 		"@gyoungwe/pi-core": "0.3.0",
 		"@gyoungwe/pi-knowledge": "0.3.0",
-		"@gyoungwe/pi-research": "0.4.0"
+		"@gyoungwe/pi-research": "0.4.0",
+		"@gyoungwe/plugin-api": "https://github.com/Gyoungwe/Drone/releases/download/plugin-api-v2.0.0/gyoungwe-plugin-api-2.0.0.tgz"
 	},
 	"bundleDependencies": [
 		"@gyoungwe/pi-core",
 		"@gyoungwe/pi-knowledge",
-		"@gyoungwe/pi-research"
+		"@gyoungwe/pi-research",
+		"@gyoungwe/plugin-api"
 	],
 	"peerDependencies": {
-		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0",
-		"@gyoungwe/plugin-api": "^2.0.0"
+		"@earendil-works/pi-coding-agent": ">=1.1.0 <2.0.0"
 	},
 	"optionalDependencies": {
 		"@napi-rs/canvas": "^1.0.0"

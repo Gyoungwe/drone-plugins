@@ -3,11 +3,13 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+import { verifyBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
+import { blockInternalRegistry, inspectPackedPlugin } from "../../../scripts/packed-plugins.mjs";
+import { preparePluginApi } from "../../../scripts/prepare-plugin-api.mjs";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 const workspace = resolve(packageRoot, "../..");
-const candidateApi = await candidatePluginApi();
+const api = await preparePluginApi();
 const root = mkdtempSync(join(tmpdir(), "suite-pdf-install-"));
 const home = join(root, "home");
 mkdirSync(home);
@@ -30,6 +32,8 @@ try {
 	const packed = JSON.parse(
 		run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", root], packageRoot),
 	)[0];
+	const tarball = join(root, packed.filename);
+	await inspectPackedPlugin(tarball, api);
 	const { overrides } = JSON.parse(readFileSync(join(workspace, "package.json"), "utf8"));
 	writeFileSync(
 		join(root, "package.json"),
@@ -37,14 +41,14 @@ try {
 			private: true,
 			type: "module",
 			dependencies: {
-				"@gyoungwe/research-suite": `file:${join(root, packed.filename)}`,
+				"@gyoungwe/research-suite": `file:${tarball}`,
 				"@earendil-works/pi-coding-agent": "1.1.0",
-				"@gyoungwe/plugin-api": `file:${candidateApi.path}`,
 			},
 			overrides,
 		}),
 	);
-	run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"]);
+	run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", blockInternalRegistry]);
+	await verifyBundledPluginApi(join(root, "node_modules/@gyoungwe/research-suite"), api);
 	copyFileSync(join(import.meta.dirname, "pdf-probe.mjs"), join(root, "probe.mjs"));
 	const probe = spawnSync(process.execPath, ["probe.mjs"], {
 		cwd: root,

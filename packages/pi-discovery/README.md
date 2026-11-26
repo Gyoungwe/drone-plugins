@@ -1,6 +1,6 @@
 # `@gyoungwe/pi-discovery`
 
-Unpublished 0.2.0 candidate: one standard Pi package contains its native entry, optional Drone runtime and optional Desktop panel. It requires the unpublished Plugin API 1.3 candidate. No public npm release is implied.
+The 0.2.0 candidate includes a standard Pi native entry, an optional Drone runtime and an optional Desktop panel. The package bundles the workspace's verified Plugin API GitHub Release.
 
 The package owns discovery algorithms, kernel-session orchestration, critic/multipath/exploration/evaluation state and journal projections. `discoveryHostLoader.create(input)` remains the legacy composition entry and requires explicit host services. Its zero-argument loader fails closed. The new `desktopRuntime` owns a canonical-workspace pool; UI actions and native projections use the same owner and domain service.
 
@@ -34,7 +34,7 @@ The execution wiring is a candidate under actual SDK/worker and explicitly synth
 
 ## Checks
 
-`npm run check` verifies generated hashes, types, domain behavior, native tool registration, real temporary filesystem round trips, corruption/symlink bounds, mixed project rejection and clean install. Set `DRONE_PLUGIN_API_TARBALL` to the verified private API 1.3 tarball. The smoke's in-memory legacy host services remain explicitly fixture evidence.
+`npm run check` verifies generated hashes, types, domain behavior, native tool registration, real temporary filesystem round trips, corruption/symlink bounds, mixed project rejection and clean install. Run the [workspace setup](../../README.md#开发门槛) first. The smoke's in-memory legacy host services provide fixture evidence.
 
 Host `packed-discovery-owner-sdk.test.ts` clean-installs the same tarball, builds its real UI with the production builder, mounts it through the production registry/entry host, executes actual UI actions and actual managed SDK tool dispatch, and checks another Node process running a real SDK against the same root. It also checks real legacy writer competition, preservation and stale-reader rejection. Offline faux providers supply deterministic tool calls; these are real SDK dispatches without remote inference.
 

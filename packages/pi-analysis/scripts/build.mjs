@@ -10,8 +10,10 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
+import { stageBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
 
 const packageRoot = resolve(import.meta.dirname, "..");
+await stageBundledPluginApi(packageRoot);
 const workspaceRoot = resolve(packageRoot, "../..");
 const sourceRoot = join(packageRoot, "src");
 const distRoot = join(packageRoot, "dist");

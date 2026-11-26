@@ -6,7 +6,9 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
-import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+import { verifyBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
+import { blockInternalRegistry, inspectPackedPlugin } from "../../../scripts/packed-plugins.mjs";
+import { preparePluginApi } from "../../../scripts/prepare-plugin-api.mjs";
 import { smokePiCore } from "../scripts/smoke.mjs";
 
 const run = promisify(execFile);
@@ -60,14 +62,16 @@ void [registerPiCore, coreHostLoader, writeMemory, makeAskUserTool, makeDeliverF
 `;
 
 test("packed public entries provide their own declarations to a clean TypeScript consumer", async (t) => {
-	const api = await candidatePluginApi();
-	t.diagnostic(`Explicit Plugin API ${api.version} SHA-256 ${api.sha256}`);
+	const api = await preparePluginApi();
+	t.diagnostic(`Plugin API ${api.version} SHA-256 ${api.sha256} from ${api.source}`);
 	const root = await mkdtemp(join(tmpdir(), "pi-core-types-"));
 	try {
 		const packed = await run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", root], {
 			cwd: packageRoot,
 		});
 		const [{ filename }] = JSON.parse(packed.stdout);
+		const archive = join(root, filename);
+		await inspectPackedPlugin(archive, api);
 		const prefix = join(root, "consumer");
 		await run(
 			"npm",
@@ -78,7 +82,8 @@ test("packed public entries provide their own declarations to a clean TypeScript
 				"--ignore-scripts",
 				"--no-audit",
 				"--no-fund",
-				join(root, filename),
+				blockInternalRegistry,
+				archive,
 				api.path,
 				"@earendil-works/pi-coding-agent@1.1.0",
 				"@types/node@22",
@@ -87,6 +92,7 @@ test("packed public entries provide their own declarations to a clean TypeScript
 			{ maxBuffer: 8 * 1024 * 1024 },
 		);
 		const installed = join(prefix, "node_modules/@gyoungwe/pi-core");
+		await verifyBundledPluginApi(installed, api);
 		const pkg = JSON.parse(await readFile(join(installed, "package.json"), "utf8"));
 		assert.equal(pkg.version, "0.3.0");
 		assert.equal(pkg.exports["./host"].types, "./dist/host.d.ts");

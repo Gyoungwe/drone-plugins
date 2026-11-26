@@ -1,9 +1,11 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, normalize, resolve } from "node:path";
+import { matchesPluginApiDependency } from "./bundled-plugin-api.mjs";
 import { isMainModule } from "./is-main-module.mjs";
 import { approvalPermissionFailures } from "./manifest-approvals.mjs";
 import { credentialFailures, networkPolicyFailures } from "./manifest-credentials.mjs";
+import { readPluginApiPin } from "./prepare-plugin-api.mjs";
 
 export const CAPABILITIES = new Set([
 	"knowledge",
@@ -285,7 +287,7 @@ function validateRecordAdoptions(packageName, packageVersion, manifest, failures
 	}
 }
 
-export function validatePackageManifest(packageJson, manifest, packageRoot) {
+export function validatePackageManifest(packageJson, manifest, packageRoot, apiSpec) {
 	const failures = [];
 	const packageName = packageJson.name ?? packageRoot.split(/[\\/]/u).pop();
 	if (!ID_RE.test(manifest.id ?? "")) failure(failures, packageName, "id must match ^drone-[a-z0-9-]+$");
@@ -355,7 +357,9 @@ export function validatePackageManifest(packageJson, manifest, packageRoot) {
 	for (const dependency of droneDependencies)
 		if (dependency !== "@gyoungwe/plugin-api" && !bundled.has(dependency))
 			failure(failures, packageName, `must not depend on another Drone plugin: ${dependency}`);
-	for (const dependency of Object.keys(packageJson.dependencies ?? {}))
+	if (apiSpec && !matchesPluginApiDependency(packageJson, apiSpec))
+		failure(failures, packageName, "Plugin API pin or bundled runtime closure does not match the workspace");
+	for (const dependency of [...Object.keys(packageJson.dependencies ?? {}), ...bundled])
 		if (dependency.startsWith("@earendil-works/pi-"))
 			failure(failures, packageName, `Pi runtime must be a peerDependency: ${dependency}`);
 	return failures;
@@ -363,13 +367,14 @@ export function validatePackageManifest(packageJson, manifest, packageRoot) {
 
 export async function checkManifests(root = PACKAGES_ROOT) {
 	const failures = [];
+	const { spec: apiSpec } = await readPluginApiPin(resolve(root, ".."));
 	const packages = (await readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory());
 	for (const pkg of packages) {
 		const packageRoot = join(root, pkg.name);
 		try {
 			const packageJson = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 			const manifest = JSON.parse(await readFile(join(packageRoot, "plugin.manifest.json"), "utf8"));
-			failures.push(...validatePackageManifest(packageJson, manifest, packageRoot));
+			failures.push(...validatePackageManifest(packageJson, manifest, packageRoot, apiSpec));
 		} catch (error) {
 			failure(failures, pkg.name, `missing or invalid package/manifest (${error.message})`);
 		}

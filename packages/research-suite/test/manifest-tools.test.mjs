@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { verifyBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
+import { pluginApiName, preparePluginApi } from "../../../scripts/prepare-plugin-api.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const suite = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
@@ -54,7 +56,8 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 test("bundled versions and public research host resources match the suite pins", async () => {
 	assert.equal(suite.version, "0.3.0");
 	assert.equal(manifest.version, suite.version);
-	for (const name of suite.bundleDependencies) {
+	await verifyBundledPluginApi(root, await preparePluginApi());
+	for (const name of suite.bundleDependencies.filter((name) => name !== pluginApiName)) {
 		const dependencyRoot = join(root, "node_modules", ...name.split("/"));
 		const dependency = JSON.parse(await readFile(join(dependencyRoot, "package.json"), "utf8"));
 		assert.equal(dependency.version, suite.dependencies[name]);

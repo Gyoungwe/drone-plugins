@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { candidatePluginApi } from "./candidate-plugin-api.mjs";
 
 // Install every currently publishable package from real npm tarballs into a
 // clean prefix. The probe intentionally uses the native registration surface
@@ -7,11 +6,12 @@ import { candidatePluginApi } from "./candidate-plugin-api.mjs";
 
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { installPackedPlugins } from "./packed-plugins.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
@@ -22,12 +22,12 @@ const packageNames = [
 	"pi-research",
 	"pi-analysis",
 	"pi-evidence",
+	"pi-inquiry",
 	"research-suite",
 ];
 const smokeRoot = await mkdtemp(join(tmpdir(), "drone-plugin-install-smoke-"));
 const tarballRoot = join(smokeRoot, "tarballs");
 const installRoot = join(smokeRoot, "install");
-const candidateApi = await candidatePluginApi();
 await mkdir(tarballRoot, { recursive: true });
 await mkdir(installRoot, { recursive: true });
 
@@ -50,23 +50,9 @@ try {
 		tarballs[name] = { packageJson, path: join(tarballRoot, metadata.filename) };
 	}
 
-	const installPackage = {
-		name: "drone-plugin-install-smoke",
-		version: "0.0.0",
-		private: true,
-		type: "module",
-		dependencies: {
-			...Object.fromEntries(
-				packageNames.map((name) => [tarballs[name].packageJson.name, `file:${tarballs[name].path}`]),
-			),
-			"@gyoungwe/plugin-api": `file:${candidateApi.path}`,
-		},
-	};
-	await writeFile(join(installRoot, "package.json"), `${JSON.stringify(installPackage, null, 2)}\n`);
-	await execFileAsync(
-		"npm",
-		["install", "--prefix", installRoot, "--ignore-scripts", "--legacy-peer-deps", "--no-audit", "--no-fund"],
-		{ cwd: root, maxBuffer: 16 * 1024 * 1024 },
+	const api = await installPackedPlugins(
+		installRoot,
+		packageNames.map((name) => tarballs[name].path),
 	);
 
 	for (const name of packageNames) {
@@ -257,7 +243,7 @@ try {
 				packages: packageNames.map((name) => tarballs[name].packageJson.name),
 				installed: true,
 				publicRegistryInstall: false,
-				candidateApi: { version: candidateApi.version, sha256: candidateApi.sha256 },
+				pluginApi: { source: api.source, version: api.version, sha256: api.sha256 },
 				piCoreTools: [...piCore.tools.keys()],
 				piKnowledgeTools: tools.size,
 				piAnalysisTools: [...piAnalysis.tools.keys()],

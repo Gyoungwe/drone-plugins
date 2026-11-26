@@ -11,12 +11,10 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
-import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+import { installPackedPlugins } from "../../../scripts/packed-plugins.mjs";
 
-const api = await candidatePluginApi();
 const execFileAsync = promisify(execFile);
 const packageRoot = resolve(import.meta.dirname, "..");
-const workspaceRoot = resolve(packageRoot, "../..");
 const temp = await mkdtemp(join(tmpdir(), "drone-pi-analysis-smoke-"));
 const installRoot = join(temp, "install");
 await mkdir(installRoot, { recursive: true });
@@ -30,24 +28,15 @@ try {
 	const metadata = JSON.parse(packOutput.stdout.trim())[0];
 	assert(metadata?.filename?.endsWith(".tgz"), "npm pack did not produce a tarball");
 	const tarball = join(temp, metadata.filename);
-	await execFileAsync(
-		"npm",
-		["install", "--prefix", installRoot, "--ignore-scripts", "--no-audit", "--no-fund", api.path, tarball],
-		{ cwd: workspaceRoot, maxBuffer: 16 * 1024 * 1024 },
-	);
+	await installPackedPlugins(installRoot, [tarball]);
 	const packageJson = JSON.parse(
 		await readFile(join(installRoot, "node_modules/@gyoungwe/pi-analysis/package.json"), "utf8"),
 	);
 	const packageDir = join(installRoot, "node_modules/@gyoungwe/pi-analysis");
 	const manifest = JSON.parse(await readFile(join(packageDir, "plugin.manifest.json"), "utf8"));
 	assert.equal(packageJson.name, "@gyoungwe/pi-analysis");
-	assert.equal(packageJson.dependencies?.["@gyoungwe/plugin-api"], "^2.0.0");
 	assert.equal(packageJson.peerDependencies?.["@earendil-works/pi-coding-agent"], ">=1.1.0 <2.0.0");
 	assert.equal(packageJson.dependencies?.["@earendil-works/pi-coding-agent"], undefined);
-	const apiPackage = JSON.parse(
-		await readFile(join(installRoot, "node_modules/@gyoungwe/plugin-api/package.json"), "utf8"),
-	);
-	assert.equal(apiPackage.version, "2.0.0");
 	await readFile(join(installRoot, "node_modules/@gyoungwe/pi-analysis/dist/index.d.ts"), "utf8");
 	assert.deepEqual(manifest.capabilities, ["analysis", "planning", "evidence-context", "files"]);
 	assert.equal(manifest.entrypoints.host, "./dist/host.mjs");

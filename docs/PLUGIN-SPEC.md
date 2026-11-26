@@ -55,7 +55,7 @@ packages/<name>/
 | `type` | `"module"` |
 | `pi.extensions` / `pi.skills` / `pi.prompts` | 指向包内相对路径；只能指向本包文件（聚合包 §6.3 除外） |
 | `peerDependencies` | Pi 运行时 `@earendil-works/pi-coding-agent: ">=1.1.0 <2.0.0"` 只能作为 peer，**禁止**打包 Pi runtime；纯 UI 包把 `@gyoungwe/plugin-api` 也作为 peer（由宿主提供） |
-| `dependencies` | 能力插件：`@gyoungwe/plugin-api: "^1.x"`（构建时打进 `dist`）加普通 npm 库；**禁止**依赖其他 Drone 插件（§6.2） |
+| `dependencies` | 使用 Plugin API 运行时的插件固定到根工作区相同的 GitHub Release tarball，通过 `bundleDependencies` 随包提供已验证的 API；可以依赖普通 npm 库。**禁止**依赖其他 Drone 插件（§6.2） |
 | `files` | 显式白名单：`dist`、`lib`、`skills`、`prompts`、`ui`、`plugin.manifest.json`、`build-manifest.json`、`README.md`、`package.json` |
 | `keywords` | 包含 `pi-package`，便于 Pi 和用户发现 |
 | `scripts` | 必须有 `build`、`build:check`、`test`、`smoke`、`typecheck`，以及串起它们的 `check` |
@@ -228,7 +228,7 @@ commit 必须再次批准并重验 branch/id/hash、尚无该 own-source checkpo
 - **三个版本相互独立：** Pi 运行时版本、`pluginApi`（当前 1）、`resultContract`（当前 v3）。
 - **插件版本：** 修复用 patch，新增工具或字段用 minor；删除或改名工具、改变结果形状用 major，同时需要宿主同步。
 - **插件 API：** `@gyoungwe/plugin-api` 只增不删；需要删除或改名时，升到 `pluginApi: 2`，并保留一个版本周期的兼容。
-- **发布：** 只有从公共 registry 下载 tarball、核对 integrity、干净安装并加载通过后，才算发布完成（详见 drone-maintenance 技能的 npm-release 参考）。已发布的版本不覆盖；有缺陷时发新的 patch 版本并 deprecate 旧版。
+- **发布：** 受保护的 `main` 手动发布单个 workspace 到 GitHub Release，tag 为 `<slug>-vX.Y.Z`。上传前干净安装并加载同一个 tarball；草稿回读核对 tarball 和 `SHA256SUMS` 后发布，再使用公开 HTTPS 地址核验字节和 tag 对应提交。已发布的版本不可覆盖，有缺陷时发新的 patch 版本。
 - **宿主锁定：** 必需插件发布或提交后，宿主更新 `plugins.lock.json`（提交 + sha256），在干净 checkout 上不设 `DRONE_PLUGINS_DIR` 跑完全部检查。
 
 ---

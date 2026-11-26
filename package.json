@@ -27,7 +27,7 @@
 		"smoke:pi-cli": "node scripts/pi-cli-regression.mjs",
 		"typecheck": "tsc --noEmit",
 		"pack:check": "npm pack --workspaces --dry-run",
-		"check": "npm run lint && npm run build && npm run check:manifests && node --test scripts/check-manifests.test.mjs scripts/manifest-credentials.test.mjs scripts/check-approval-manifests.test.mjs scripts/check-lint-baseline.test.mjs scripts/check-structure.test.mjs scripts/check-staged.test.mjs scripts/check-bloat.test.mjs scripts/is-main-module.test.mjs && npm run check:pi-core && npm run typecheck && npm run check:pi-knowledge && npm run check:pi-research && npm run check:research-suite && npm run --workspace @gyoungwe/research-suite test && npm run --workspace @gyoungwe/research-suite test:pdf && npm run check:pi-analysis && npm run check:pi-evidence && npm run check:pi-inquiry && npm run check:pi-discovery && npm run smoke:install && npm run smoke:pi-research && npm run check:pi-format && npm run pack:check",
+		"check": "npm run lint && npm run build && npm run check:manifests && node --test scripts/*.test.mjs && npm run check:pi-core && npm run typecheck && npm run check:pi-knowledge && npm run check:pi-research && npm run check:research-suite && npm run --workspace @gyoungwe/research-suite test && npm run --workspace @gyoungwe/research-suite test:pdf && npm run check:pi-analysis && npm run check:pi-evidence && npm run check:pi-inquiry && npm run check:pi-discovery && npm run smoke:install && npm run smoke:pi-research && npm run check:pi-format && npm run pack:check",
 		"check:pi-inquiry": "npm run --workspace @gyoungwe/pi-inquiry check",
 		"check:pi-format": "node scripts/check-pi-package-format.mjs --all=packages --configure-dir-env=DRONE_KNOWLEDGE_DIR"
 	},
@@ -39,7 +39,7 @@
 		"@earendil-works/pi-coding-agent": "1.1.0",
 		"@gyoungwe/pi-core": "0.3.0",
 		"@gyoungwe/pi-research": "0.4.0",
-		"@gyoungwe/plugin-api": "file:vendor/gyoungwe-plugin-api-2.0.0-8a2240d9.tgz",
+		"@gyoungwe/plugin-api": "https://github.com/Gyoungwe/Drone/releases/download/plugin-api-v2.0.0/gyoungwe-plugin-api-2.0.0.tgz",
 		"@tailwindcss/cli": "^4.3.3",
 		"@testing-library/dom": "^10.4.2",
 		"@testing-library/react": "^16.3.3",
@@ -53,8 +53,10 @@
 		"react-dom": "^19.2.8",
 		"tailwindcss": "^4.3.3",
 		"typescript": "5.9.3",
-		"vitest": "^3.2.0"
+		"vitest": "^3.2.0",
+		"yaml": "2.9.0"
 	},
+	"dronePluginApiSha256": "8a2240d9e305fb6e029308472742a79c6fb956914c2496c7e32e1062e1de87b4",
 	"overrides": {
 		"@earendil-works/chord": "1.1.0",
 		"@earendil-works/pi-agent-core": "1.1.0",

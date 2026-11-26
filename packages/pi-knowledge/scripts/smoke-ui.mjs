@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import vm from "node:vm";
 import { build } from "esbuild";
-import { candidatePluginApi } from "../../../scripts/candidate-plugin-api.mjs";
+import { installPackedPlugins } from "../../../scripts/packed-plugins.mjs";
 
 const execFileAsync = promisify(execFile);
-const api = await candidatePluginApi();
 const root = resolve(import.meta.dirname, "..");
 const smokeRoot = await mkdtemp(join(tmpdir(), "drone-knowledge-ui-"));
 try {
@@ -28,24 +27,7 @@ try {
 			})
 		).stdout,
 	)[0];
-	await writeFile(
-		join(smokeRoot, "package.json"),
-		JSON.stringify({ private: true, name: "knowledge-ui-clean-consumer", version: "0.0.0" }),
-	);
-	await execFileAsync(
-		"npm",
-		[
-			"install",
-			"--legacy-peer-deps",
-			"--ignore-scripts",
-			"--no-audit",
-			"--no-fund",
-			tarball,
-			join(smokeRoot, companion.filename),
-			api.path,
-		],
-		{ cwd: smokeRoot, maxBuffer: 4 * 1024 * 1024 },
-	);
+	const api = await installPackedPlugins(smokeRoot, [tarball, join(smokeRoot, companion.filename)]);
 	const installed = join(smokeRoot, "node_modules/@gyoungwe/pi-knowledge");
 	const desktopRuntime = await readFile(join(installed, "dist/desktop-runtime.mjs"), "utf8");
 	assert.ok(
@@ -130,7 +112,7 @@ try {
 			tarball: packed.filename,
 			cleanInstall: true,
 			publicRegistryInstall: false,
-			candidateApi: { version: api.version, sha256: api.sha256 },
+			pluginApi: { source: api.source, version: api.version, sha256: api.sha256 },
 			exports: manifest.contributions.map((c) => c.export),
 			hostReact: true,
 			companionContributionsDistinct: true,

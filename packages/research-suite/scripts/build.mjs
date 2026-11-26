@@ -7,7 +7,9 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { stageBundledPluginApi, verifyBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
+import { pluginApiName, preparePluginApi } from "../../../scripts/prepare-plugin-api.mjs";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 const workspaceRoot = resolve(packageRoot, "../..");
@@ -19,6 +21,7 @@ const checkOnly = process.argv.includes("--check");
 const bundled = Object.keys(packageJson.dependencies || {}).filter((name) =>
 	(packageJson.bundleDependencies || []).includes(name),
 );
+const bundledPlugins = bundled.filter((name) => name !== pluginApiName);
 
 const fail = (message) => {
 	throw new Error(`[research-suite build] ${message}`);
@@ -34,24 +37,26 @@ if (manifest.drone?.resultContract !== "drone-result/v3")
 const stagedRoot = join(packageRoot, "node_modules");
 if (!checkOnly) {
 	await rm(stagedRoot, { recursive: true, force: true });
-	const copied = new Set();
-	const copyDependency = async (name, targetRoot = stagedRoot) => {
-		const key = `${targetRoot}\0${name}`;
-		if (copied.has(key)) return;
-		copied.add(key);
-		const rootSource = join(workspaceRoot, "node_modules", ...name.split("/"));
-		const nestedSource = join(packageRoot, "node_modules", ...name.split("/"));
-		// npm may keep a bundled dependency nested below the aggregate package
-		// instead of hoisting it. Both layouts are valid clean installs.
-		const source = existsSync(rootSource) ? rootSource : nestedSource;
-		const target = join(targetRoot, ...name.split("/"));
+	await stageBundledPluginApi(packageRoot);
+	const copied = new Set([pluginApiName]);
+	const copyDependency = async (name) => {
+		if (copied.has(name)) return;
+		copied.add(name);
+		const source = join(workspaceRoot, "node_modules", name);
+		const target = join(stagedRoot, name);
 		if (!existsSync(source)) fail(`dependency ${name} is unavailable; run npm ci first`);
 		await mkdir(join(target, ".."), { recursive: true });
-		await cp(source, target, { recursive: true, dereference: true });
+		await cp(source, target, {
+			recursive: true,
+			dereference: true,
+			filter: (path) => path !== join(source, "node_modules", pluginApiName),
+		});
 		const dependency = JSON.parse(await readFile(join(source, "package.json"), "utf8"));
-		for (const child of Object.keys(dependency.dependencies || {})) await copyDependency(child, stagedRoot);
+		for (const child of Object.keys(dependency.dependencies || {})) await copyDependency(child);
 	};
-	for (const name of bundled) await copyDependency(name);
+	for (const name of bundledPlugins) await copyDependency(name);
+} else {
+	await verifyBundledPluginApi(packageRoot, await preparePluginApi());
 }
 
 const packageAt = (name) => join(stagedRoot, ...name.split("/"));
@@ -65,7 +70,7 @@ const readPackage = async (name) => {
 	}
 };
 
-for (const name of bundled) {
+for (const name of bundledPlugins) {
 	const dependency = await readPackage(name);
 	if (dependency.version !== packageJson.dependencies[name])
 		fail(`${name} is ${dependency.version}; expected ${packageJson.dependencies[name]}`);
@@ -110,7 +115,7 @@ if (!researchNames.includes("research-workflow")) fail("pi-research must provide
 const overlap = knowledgeNames.filter((name) => researchNames.includes(name));
 if (overlap.length) fail(`duplicate skills across bundled packages: ${overlap.join(", ")}`);
 
-const expectedExtensions = bundled.map((name) => `./node_modules/${name}/dist/index.mjs`);
+const expectedExtensions = bundledPlugins.map((name) => `./node_modules/${name}/dist/index.mjs`);
 if (JSON.stringify(manifest.entrypoints?.extensions) !== JSON.stringify(expectedExtensions))
 	fail("manifest extensions do not match bundled package dependencies");
 const expectedSkills = [
