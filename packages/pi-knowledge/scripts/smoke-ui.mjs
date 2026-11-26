@@ -24,7 +24,7 @@ try {
 	const companion = JSON.parse(
 		(
 			await execFileAsync("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", smokeRoot], {
-				cwd: resolve(root, "../desktop-ui-pack"),
+				cwd: resolve(root, "../pi-core"),
 			})
 		).stdout,
 	)[0];
@@ -55,12 +55,13 @@ try {
 	const manifest = JSON.parse(await readFile(join(installed, "ui/plugin.json"), "utf8"));
 	assert.equal(manifest.version, "0.3.0");
 	assert.equal(manifest.droneUi, 2);
-	const researchUi = JSON.parse(
-		await readFile(join(smokeRoot, "node_modules/@gyoungwe/desktop-ui-pack/ui/plugin.json"), "utf8"),
+	const coreUi = JSON.parse(
+		await readFile(join(smokeRoot, "node_modules/@gyoungwe/pi-core/ui/plugin.json"), "utf8"),
 	);
-	assert.notEqual(manifest.name, researchUi.name);
+	assert.equal(manifest.name, "drone-knowledge-ui");
+	assert.equal(coreUi.name, "drone-task-ui");
 	assert(
-		!researchUi.contributions.some((entry) =>
+		!coreUi.contributions.some((entry) =>
 			manifest.contributions.some((knowledge) => knowledge.id === entry.id),
 		),
 		"Installed companions must not register the knowledge contributions twice",

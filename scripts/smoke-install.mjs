@@ -17,14 +17,11 @@ const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const packageNames = [
 	"pi-core",
-	"pi-workbench",
 	"pi-discovery",
 	"pi-knowledge",
 	"pi-research",
 	"pi-analysis",
 	"pi-evidence",
-	"pi-connectors",
-	"desktop-ui-pack",
 	"research-suite",
 ];
 const smokeRoot = await mkdtemp(join(tmpdir(), "drone-plugin-install-smoke-"));
@@ -102,56 +99,35 @@ try {
 		"research-suite tarball contains a duplicate pi-knowledge research-workflow skill",
 	);
 
-	const knowledgeUi = JSON.parse(
-		await readFile(join(installRoot, "node_modules/@gyoungwe/pi-knowledge/ui/plugin.json"), "utf8"),
+	const installedUis = await Promise.all(
+		["pi-core", "pi-knowledge", "pi-research"].map(async (name) =>
+			JSON.parse(
+				await readFile(join(installRoot, "node_modules", "@gyoungwe", name, "ui/plugin.json"), "utf8"),
+			),
+		),
 	);
-	const desktopUi = JSON.parse(
-		await readFile(join(installRoot, "node_modules/@gyoungwe/desktop-ui-pack/ui/plugin.json"), "utf8"),
+	const [coreUi, knowledgeUi] = installedUis;
+	assert.deepEqual(
+		installedUis.map((ui) => ui.name),
+		["drone-task-ui", "drone-knowledge-ui", "drone-research-ui"],
 	);
-	assert.notEqual(knowledgeUi.name, desktopUi.name);
 	assert.deepEqual(
 		knowledgeUi.contributions.map((entry) => entry.region),
 		["knowledge.page", "knowledge.surface"],
 	);
 	assert.deepEqual(
-		desktopUi.contributions.map((entry) => entry.region),
-		["panel.tab"],
+		coreUi.contributions.filter((entry) => entry.region === "panel.tab").map((entry) => entry.id),
+		["tasks", "workbench", "research-status"],
 	);
-	assert(
-		!desktopUi.contributions.some((entry) =>
-			knowledgeUi.contributions.some((knowledge) => knowledge.id === entry.id),
-		),
-		"installed candidates duplicate knowledge contributions",
+	const contributionIds = installedUis.flatMap((ui) => ui.contributions.map((entry) => entry.id));
+	assert.equal(
+		new Set(contributionIds).size,
+		contributionIds.length,
+		"installed UI contribution IDs collide",
 	);
 
-	const piAnalysisRoot = join(installRoot, "node_modules", "@gyoungwe", "pi-analysis");
-	const piAnalysisPackage = JSON.parse(await readFile(join(piAnalysisRoot, "package.json"), "utf8"));
-	const piAnalysisExtensionPath = join(
-		installRoot,
-		"node_modules",
-		"@gyoungwe",
-		"pi-analysis",
-		piAnalysisPackage.pi.extensions[0],
-	);
 	const { createEventBus, DefaultResourceLoader, SettingsManager } = await import(
 		"@earendil-works/pi-coding-agent"
-	);
-	const loader = new DefaultResourceLoader({
-		cwd: installRoot,
-		agentDir: join(installRoot, "agent"),
-		settingsManager: SettingsManager.inMemory(),
-		noExtensions: true,
-		noSkills: true,
-		additionalExtensionPaths: [piAnalysisExtensionPath],
-	});
-	await loader.reload();
-	const loaded = loader.getExtensions();
-	assert.deepEqual(loaded.errors, [], JSON.stringify(loaded.errors));
-	const piAnalysis = loaded.extensions.find((item) => item.path === piAnalysisExtensionPath);
-	assert(piAnalysis, "installed pi-analysis extension was not discovered by Pi loader");
-	assert.deepEqual(
-		[...piAnalysis.tools.keys()],
-		["analysis_list_adapters", "analysis_assess_readiness", "analysis_prepare_evidence"],
 	);
 
 	async function discoverInstalled(name, expectedTools) {
@@ -174,6 +150,27 @@ try {
 		assert.deepEqual([...extension.tools.keys()], expectedTools);
 		return extension;
 	}
+	const piCore = await discoverInstalled("pi-core", [
+		"task_status",
+		"task_plan",
+		"task_wait",
+		"task_reconcile",
+		"task_evidence_restore",
+		"ask_user",
+		"set_status",
+		"todo",
+		"deliver_files",
+		"memory_save",
+		"workbench_plan",
+		"workbench_status",
+		"workbench_todo",
+		"workbench_memory_save",
+	]);
+	const piAnalysis = await discoverInstalled("pi-analysis", [
+		"analysis_list_adapters",
+		"analysis_assess_readiness",
+		"analysis_prepare_evidence",
+	]);
 	const piEvidence = await discoverInstalled("pi-evidence", [
 		"evidence_validate_analysis_plan",
 		"evidence_validate_manifest",
@@ -187,8 +184,9 @@ try {
 		"research_answer_sources",
 		"research_status",
 		"research_loop",
+		"connector_list",
+		"connector_get",
 	]);
-	const piConnectors = await discoverInstalled("pi-connectors", ["connector_list", "connector_get"]);
 	const suiteRoot = join(installRoot, "node_modules", "@gyoungwe", "research-suite");
 	const suitePackage = JSON.parse(await readFile(join(suiteRoot, "package.json"), "utf8"));
 	const suiteExtensions = suitePackage.pi.extensions.map((entry) => join(suiteRoot, entry));
@@ -203,15 +201,21 @@ try {
 	await suiteLoader.reload();
 	const suiteLoaded = suiteLoader.getExtensions();
 	assert.deepEqual(suiteLoaded.errors, [], JSON.stringify(suiteLoaded.errors));
+	assert.equal(suiteLoaded.extensions.length, 3);
 	const suiteCore = suiteLoaded.extensions.find((item) =>
 		item.path.endsWith("@gyoungwe/pi-core/dist/index.mjs"),
 	);
 	const suiteKnowledge = suiteLoaded.extensions.find((item) =>
 		item.path.endsWith("@gyoungwe/pi-knowledge/dist/index.mjs"),
 	);
+	const suiteResearch = suiteLoaded.extensions.find((item) =>
+		item.path.endsWith("@gyoungwe/pi-research/dist/index.mjs"),
+	);
 	assert(suiteCore, "research-suite did not load bundled pi-core");
 	assert(suiteKnowledge, "research-suite did not load bundled pi-knowledge");
-	assert(suiteCore.tools.has("task_plan"), "bundled pi-core did not register task_plan");
+	assert(suiteResearch, "research-suite did not load bundled pi-research");
+	assert.deepEqual([...suiteCore.tools.keys()], [...piCore.tools.keys()]);
+	assert.deepEqual([...suiteResearch.tools.keys()], [...piResearch.tools.keys()]);
 	for (const name of ["task_status", "task_plan", "task_wait", "task_reconcile", "task_evidence_restore"])
 		assert(!suiteKnowledge.tools.has(name), `${name} leaked into bundled pi-knowledge`);
 
@@ -254,11 +258,11 @@ try {
 				installed: true,
 				publicRegistryInstall: false,
 				candidateApi: { version: candidateApi.version, sha256: candidateApi.sha256 },
+				piCoreTools: [...piCore.tools.keys()],
 				piKnowledgeTools: tools.size,
 				piAnalysisTools: [...piAnalysis.tools.keys()],
 				piEvidenceTools: [...piEvidence.tools.keys()],
 				piResearchTools: [...piResearch.tools.keys()],
-				piConnectorTools: [...piConnectors.tools.keys()],
 				piAnalysisLoaderDiscovered: true,
 				knowledgeStatus: status.details.status,
 			}),
