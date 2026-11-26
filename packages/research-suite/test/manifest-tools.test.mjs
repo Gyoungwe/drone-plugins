@@ -54,7 +54,7 @@ test("manifest tools equal the tools registered by every bundled extension", asy
 });
 
 test("bundled versions and public research host resources match the suite pins", async () => {
-	assert.equal(suite.version, "0.3.0");
+	assert.equal(suite.version, "0.4.0");
 	assert.equal(manifest.version, suite.version);
 	await verifyBundledPluginApi(root, await preparePluginApi());
 	for (const name of suite.bundleDependencies.filter((name) => name !== pluginApiName)) {

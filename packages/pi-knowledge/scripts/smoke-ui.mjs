@@ -35,7 +35,8 @@ try {
 		"packed Desktop runtime must expose the controlled reject operation",
 	);
 	const manifest = JSON.parse(await readFile(join(installed, "ui/plugin.json"), "utf8"));
-	assert.equal(manifest.version, "0.3.0");
+	const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+	assert.equal(manifest.version, pkg.version);
 	assert.equal(manifest.droneUi, 2);
 	const coreUi = JSON.parse(
 		await readFile(join(smokeRoot, "node_modules/@gyoungwe/pi-core/ui/plugin.json"), "utf8"),

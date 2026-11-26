@@ -1,6 +1,6 @@
 {
 	"name": "drone-knowledge-ui",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"displayName": "Knowledge workspace",
 	"description": "Read-only knowledge overview and search through the plugin-owned runtime.",
 	"droneUi": 2,

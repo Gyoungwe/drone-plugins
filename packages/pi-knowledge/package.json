@@ -1,6 +1,6 @@
 {
 	"name": "@gyoungwe/pi-knowledge",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"description": "Native Pi knowledge and Vault tools with optional Drone Desktop knowledge UI",
 	"repository": {
 		"type": "git",
