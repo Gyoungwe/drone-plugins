@@ -1,1 +1,1 @@
-export declare function registerResearchLoop(pi: any): void;
+export declare function registerResearchLoop(pi: unknown): void;
