@@ -76,6 +76,16 @@ export function vectorNorm(vector: readonly number[]): number {
 	return Math.sqrt(sum);
 }
 
+/** The squared length of a vector, accumulated in index order. */
+export function squaredNorm(vector: readonly number[]): number {
+	let sum = 0;
+	for (let index = 0; index < vector.length; index++) {
+		const component = vector[index];
+		sum += component * component;
+	}
+	return sum;
+}
+
 /**
  * Decodes a stored vector into its components.
  *
@@ -93,6 +103,21 @@ export function decodeVector(row: { bytes: Uint8Array | string; dimension: numbe
 	for (let index = 0; index < row.dimension; index++)
 		values.push(view.getFloat32(index * FLOAT32_BYTES, true));
 	return values;
+}
+
+/** Decodes a blob into a caller-owned buffer without assuming byte alignment. */
+export function decodeVectorInto(
+	row: { bytes: Uint8Array | string; dimension: number },
+	target: Float32Array,
+): boolean {
+	if (typeof row.bytes === "string") return false;
+	if (row.bytes.byteLength !== row.dimension * FLOAT32_BYTES)
+		throw new Error("Stored vector byte length does not match its dimension");
+	if (target.length !== row.dimension) throw new Error("Target vector length does not match its dimension");
+	const view = new DataView(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength);
+	for (let index = 0; index < row.dimension; index++)
+		target[index] = view.getFloat32(index * FLOAT32_BYTES, true);
+	return true;
 }
 
 /**
@@ -138,4 +163,22 @@ export function cosineSimilarity(
 		queryNorm += q * q;
 	}
 	return dot / Math.sqrt(queryNorm * storedNorm * storedNorm);
+}
+
+/** Scores a vector when the caller has already measured the query. */
+export function cosineWithQueryNorm(
+	query: readonly number[],
+	querySquaredNorm: number,
+	stored: ArrayLike<number>,
+	storedNorm: number,
+): number {
+	let dot = 0;
+	for (let index = 0; index < query.length; index++) {
+		const q = query[index];
+		const value = stored[index];
+		if (typeof q !== "number" || !Number.isFinite(q) || typeof value !== "number" || !Number.isFinite(value))
+			return Number.NaN;
+		dot += q * value;
+	}
+	return dot / Math.sqrt(querySquaredNorm * storedNorm * storedNorm);
 }
