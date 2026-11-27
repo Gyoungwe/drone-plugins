@@ -1,21 +1,26 @@
 import type { PluginRuntimeRootDescription } from "@gyoungwe/plugin-api/runtime";
 import type { DroneUiRuntime } from "@gyoungwe/plugin-api/ui";
 import { memo, useEffect, useRef, useState } from "react";
-import type { ArtifactRecord, AttemptRecord, DecisionRecord } from "../src/models.js";
+import type { AttemptRecord, DecisionRecord } from "../src/models.js";
 
 import type { InquiryService } from "../src/service.js";
+import { ArtifactRerunList } from "./artifact-rerun.js";
+import { unavailableNotices } from "./artifact-status.js";
 import { copy } from "./copy.js";
+
+export { InquiryArtifactStatus } from "./artifact-status.js";
 
 type Snapshot = Awaited<ReturnType<InquiryService["readOnlyState"]>> & {
 	attempts: readonly AttemptRecord[];
 };
 
 const host = (window as unknown as { DroneUI: DroneUiRuntime }).DroneUI;
-interface Status {
+export interface Status {
 	state: "select-workspace" | "needs-binding" | "bound" | "needs-recovery";
 	projectId?: string | null;
 	roots: readonly PluginRuntimeRootDescription[];
 	canRestoreOriginal?: boolean;
+	unavailable?: readonly string[];
 }
 function Workspace() {
 	const runtime = host.hooks.usePluginRuntime(),
@@ -30,8 +35,7 @@ function Workspace() {
 		[ack, setAck] = useState(false),
 		[questionId, setQuestionId] = useState(""),
 		[statement, setStatement] = useState(""),
-		[reason, setReason] = useState(""),
-		[provenance, setProvenance] = useState<unknown>(null);
+		[reason, setReason] = useState("");
 	const live = useRef(true),
 		active = useRef<AbortController | undefined>(undefined);
 	const read = async (input: unknown) => (await runtime.invoke("inquiry.read", input)) as { value: Snapshot };
@@ -98,14 +102,14 @@ function Workspace() {
 			},
 		});
 	};
-	const inspect = async (record: ArtifactRecord) => {
+	const readProvenance = async (id: string) => {
 		setError(null);
 		try {
 			const value = (await runtime.invoke("inquiry.read", {
 				action: "artifactProvenance",
-				id: record.id,
+				id,
 			})) as { value: unknown };
-			if (live.current) setProvenance(value.value);
+			if (live.current) return value;
 		} catch (cause) {
 			if (live.current) setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -252,33 +256,14 @@ function Workspace() {
 											</ul>
 										)}
 									</section>
-									<section>
-										<h3>
-											{t.artifacts} ({snapshot.artifacts.length})
-										</h3>
-										{snapshot.artifacts.length === 0 ? (
-											<p>{t.empty}</p>
-										) : (
-											<ul>
-												{snapshot.artifacts.map((record) => (
-													<li key={record.id} className="rounded border border-border p-2">
-														<p className="break-all">{record.path}</p>
-														<p>
-															{record.status} · {record.sha256}
-														</p>
-														<button type="button" disabled={busy} onClick={() => void inspect(record)}>
-															{t.provenance}
-														</button>
-													</li>
-												))}
-											</ul>
-										)}
-										{provenance !== null && (
-											<pre className="overflow-auto whitespace-pre-wrap break-all">
-												{JSON.stringify(provenance, null, 2)}
-											</pre>
-										)}
-									</section>
+									<ArtifactRerunList
+										artifacts={snapshot.artifacts}
+										status={status}
+										busy={busy}
+										act={act}
+										readProvenance={readProvenance}
+										t={t}
+									/>
 									<section>
 										<h3>
 											{t.decisions} ({snapshot.decisions.length})
@@ -350,7 +335,11 @@ function Workspace() {
 				</div>
 			)}
 			<p className="text-xs text-muted">{t.asserted}</p>
-			<p className="text-xs text-muted">{t.unavailable}</p>
+			{unavailableNotices(status?.unavailable, t).map((notice) => (
+				<p key={notice} className="text-xs text-muted">
+					{notice}
+				</p>
+			))}
 		</section>
 	);
 }

@@ -10,6 +10,11 @@
 			"region": "panel.tab",
 			"title": "Inquiry",
 			"export": "InquiryPanel"
+		},
+		{
+			"id": "inquiry-artifact-status",
+			"region": "panel.artifact.contribution",
+			"export": "InquiryArtifactStatus"
 		}
 	]
 }
