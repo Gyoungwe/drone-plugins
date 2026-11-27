@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { PluginNativeRuntimeFactory, PluginNativeRuntimeInstance } from "@gyoungwe/plugin-api/native";
 import type {
-	PluginBinaryStateReadResult,
 	PluginRuntimeRootDescription,
 	PluginRuntimeScope,
 	PluginStateReadResult,
@@ -15,13 +14,7 @@ import {
 } from "./event-projection.js";
 import { InquiryFactOwner } from "./fact-owner.js";
 import { createInquiryFactOwnerPorts } from "./fact-owner-ports.js";
-import {
-	type InquiryBindingState,
-	InquiryLedgerOwner,
-	type InquiryWasmEngine,
-	inquiryBindingPath,
-	parseInquiryBinding,
-} from "./ledger-owner.js";
+import { type InquiryWasmEngine, inquiryBindingPath, parseInquiryBinding } from "./ledger-owner.js";
 import type {
 	ArtifactRecord,
 	AttemptRecord,
@@ -30,6 +23,8 @@ import type {
 	QuestionRecord,
 } from "./models.js";
 import { createInquiryNativeSessionFactory } from "./runtime-native.js";
+import { createRuntimeOwners, type RuntimeOwner } from "./runtime-owners.js";
+import { createRuntimeRead } from "./runtime-read.js";
 import * as runtimeRerun from "./runtime-rerun.js";
 import { type ReadInput, readSchema, type WriteInput, writeSchema } from "./runtime-schema.js";
 import { createInquiryWasmEngine } from "./wasm-storage.js";
@@ -42,7 +37,7 @@ export async function createInquiryRuntimeWithEngine(
 	engine: InquiryWasmEngine,
 ): Promise<PluginNativeRuntimeInstance> {
 	const { capabilities, rerunExecutor } = context,
-		owners = new Map<string, { owner: InquiryLedgerOwner; root: string; metadataRoot: string }>(),
+		owners = new Map<string, RuntimeOwner>(),
 		queues = new Map<string, Promise<void>>();
 	let stopped = false;
 	const roots = () =>
@@ -76,149 +71,23 @@ export async function createInquiryRuntimeWithEngine(
 		);
 		return pending;
 	};
-	const lookup = async (
-		scope: Exclude<PluginRuntimeScope, { kind: "application" }>,
-		available: readonly PluginRuntimeRootDescription[],
-	): Promise<InquiryBindingState | null> => {
-		const found: InquiryBindingState[] = [];
-		const path = inquiryBindingPath();
-		for (const root of available.filter((root) => root.kind === "state")) {
-			const result = (await capabilities.call("state.readJson", {
-				root: root.handle,
-				path,
-			})) as PluginStateReadResult;
-			const value = parseInquiryBinding(result, scope.workspaceId);
-			if (value && result.kind === "value")
-				found.push({ root: root.handle, path, value, version: result.version });
-		}
-		if (found.length > 1)
-			throw new Error("Multiple approved Inquiry bindings match this workspace; no first-root adoption");
-		return found[0] ?? null;
-	};
-	const inspect = async (root: PluginRuntimeRootDescription) => {
-		for (const path of ["ledger.sqlite-wal", "ledger.sqlite-shm", "ledger.sqlite-journal"])
-			if (
-				(
-					(await capabilities.call("state.readBinary", {
-						root: root.handle,
-						path,
-					})) as PluginBinaryStateReadResult
-				).kind !== "missing"
-			)
-				throw new Error(`Inquiry SQLite sidecar must be closed before import: ${path}`);
-		const raw = (await capabilities.call("state.readBinary", {
-			root: root.handle,
-			path: "ledger.sqlite",
-		})) as PluginBinaryStateReadResult;
-		return {
-			raw,
-			metadata:
-				raw.kind === "value" ? engine.inspect(new Uint8Array(Buffer.from(raw.base64, "base64"))) : null,
-		};
-	};
-	const owned = async (
-		scope: Exclude<PluginRuntimeScope, { kind: "application" }>,
-		available: readonly PluginRuntimeRootDescription[],
-		reconcileMetadata = false,
-	) => {
-		const binding = await lookup(scope, available);
-		if (!binding) throw new Error("Inquiry workspace needs an explicit root binding");
-		const root = available.find(
-			(root) => root.kind === "binary-state" && root.path === binding.value.binaryPath,
-		);
-		if (!root) throw new Error("Reselect the original bound Inquiry directory; saved paths grant no access");
-		let current = owners.get(scope.workspaceId);
-		if (current && (current.root !== root.handle || current.metadataRoot !== binding.root))
-			throw new Error("Inquiry workspace already has another active root owner");
-		if (current && current.owner.bindingVersion !== binding.version) {
-			if (!reconcileMetadata)
-				throw new Error("Inquiry metadata changed; explicit reconciliation is required");
-			await current.owner.dispose();
-			owners.delete(scope.workspaceId);
-			current = undefined;
-		}
-		if (!current) {
-			current = {
-				owner: new InquiryLedgerOwner(engine, capabilities, binding, root),
-				root: root.handle,
-				metadataRoot: binding.root,
-			};
-			owners.set(scope.workspaceId, current);
-		}
-		return current.owner;
-	};
-	/** The ledger owner of an already-bound scope, or nothing when Inquiry is unbound there. */
-	const optionalOwner = async (
-		scope: Exclude<PluginRuntimeScope, { kind: "application" }>,
-		available: readonly PluginRuntimeRootDescription[],
-	) => {
-		if (!(await lookup(scope, available))) return undefined;
-		return owned(scope, available);
-	};
+	const { lookup, inspect, owned, optionalOwner } = createRuntimeOwners({ capabilities, owners, engine });
 	const factOwnerPorts = createInquiryFactOwnerPorts({
 		caller,
 		roots,
 		owned: optionalOwner,
 	});
-	const read = async (input: ReadInput) => {
-		const scope = await caller();
-		const available = await roots();
-		if (input.action === "status") {
-			if (scope.kind === "application")
-				return {
-					state: "select-workspace",
-					roots: available,
-					authority: "plugin-asserted-or-imported",
-				};
-			return serialize(scope.workspaceId, async () => {
-				const binding = await lookup(scope, available);
-				return {
-					state: binding
-						? binding.value.intent?.status === "pending"
-							? "needs-recovery"
-							: "bound"
-						: "needs-binding",
-					scope,
-					roots: available,
-					projectId: binding?.value.projectId ?? null,
-					canRestoreOriginal: binding !== null && binding.value.originalVersion !== null,
-					authority: "plugin-asserted-or-imported",
-					unavailable: [...(rerunExecutor ? [] : ["rerun-executor"]), "workspace-promotion-file-port"],
-				};
-			});
-		}
-		const actual = workspace(scope);
-		return serialize(actual.workspaceId, async () => {
-			if (input.action === "inspect") {
-				const { raw, metadata } = await inspect(selected(available, input.root, "binary-state"));
-				return {
-					kind: raw.kind,
-					version: raw.version,
-					metadata,
-					authority: "imported-unverified",
-				};
-			}
-			const owner = await owned(actual, available);
-			const value = await owner.read(async (service) => {
-				switch (input.action) {
-					case "snapshot":
-						return {
-							...(await service.readOnlyState()),
-							attempts: (await service.snapshot()).attempts,
-						};
-					case "listDecisions":
-						return service.listDecisions();
-					case "cleanupDryRun":
-						return service.cleanupDryRun();
-					case "pendingReruns":
-						return service.pendingReruns();
-					case "artifactProvenance":
-						return (await service.artifactProvenance(input.id)) ?? null;
-				}
-			});
-			return { value, authority: "plugin-asserted-or-imported" };
-		});
-	};
+	const read = createRuntimeRead({
+		caller,
+		roots,
+		workspace,
+		selected,
+		serialize,
+		rerunExecutor,
+		lookup,
+		inspect,
+		owned,
+	});
 	const write = async (input: WriteInput, signal: AbortSignal) => {
 		const executor = runtimeRerun.executorFor(input, rerunExecutor);
 		const scope = await caller();
