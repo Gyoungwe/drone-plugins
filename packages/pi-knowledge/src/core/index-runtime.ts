@@ -17,15 +17,10 @@ import { prepareNote } from "./note-write.js";
 import { applyUpdate, createNoteWriteSink } from "./note-write-runtime.js";
 import { reconcileInBatches } from "./reconcile-batch.js";
 import { buildKnowledgeSearchExpression, tokenizeKnowledgeText } from "./search-policy.js";
+import { semanticCandidates } from "./semantic-candidates.js";
 import { createSemanticModel } from "./semantic-model.js";
 import { createSemanticScanState, scanSemanticBatch } from "./semantic-scan.js";
-import {
-	cosineSimilarity,
-	decodeVector,
-	encodeVector,
-	storedVectorNorm,
-	vectorNorm,
-} from "./vector-codec.js";
+import { encodeVector, vectorNorm } from "./vector-codec.js";
 import { migrateVectorStorageOnOpen } from "./vector-migration.js";
 import { createWriteBatcher } from "./write-batch.js";
 
@@ -727,76 +722,6 @@ export async function createKnowledgeIndexRuntime(
 		}
 		return status();
 	}
-	function semanticCandidates(args) {
-		if (
-			!Array.isArray(args.vector) ||
-			!args.vector.length ||
-			args.vector.some((n) => typeof n !== "number" || !Number.isFinite(n) || Math.abs(n) > 1_000_000)
-		)
-			throw new Error("Invalid semantic query vector");
-		const fingerprint = String(args.fingerprint || "");
-		if (!fingerprint || fingerprint.length > 300) throw new Error("Invalid semantic fingerprint");
-		const minSimilarity = args.minSimilarity === undefined ? 0.45 : args.minSimilarity;
-		if (
-			typeof minSimilarity !== "number" ||
-			!Number.isFinite(minSimilarity) ||
-			minSimilarity < 0 ||
-			minSimilarity > 1
-		)
-			throw new Error("Invalid semantic similarity threshold");
-		const query = args.vector,
-			limit = Math.max(1, Math.min(12, Math.floor(args.limit || 5)));
-		/** @type {any[]} */
-		const rows = db
-			.prepare(
-				"SELECT s.path,s.hash,s.vector,s.dimension,s.norm,s.chunk_index,s.start_char,s.end_char,n.title,n.kind FROM semantic_chunks s JOIN notes n ON n.path=s.path AND n.hash=s.hash WHERE s.fingerprint=? AND (n.scope='shared' OR n.scope=?) AND n.kind!='explainer' ORDER BY s.path LIMIT 5000",
-			)
-			.all(fingerprint, args.project || "");
-		const totalEligible = Number(
-			db
-				.prepare(
-					"SELECT COUNT(*) AS count FROM semantic_chunks s JOIN notes n ON n.path=s.path AND n.hash=s.hash WHERE s.fingerprint=? AND (n.scope='shared' OR n.scope=?) AND n.kind!='explainer'",
-				)
-				.get(fingerprint, args.project || "").count,
-		);
-		const best = new Map();
-		for (const row of rows) {
-			if (row.dimension !== query.length) continue;
-			let vector: number[];
-			try {
-				vector = decodeVector({ bytes: row.vector, dimension: row.dimension });
-			} catch {
-				continue;
-			}
-			if (vector.length !== query.length) continue;
-			// KP2 — the stored norm replaces measuring the vector.
-			const norm = storedVectorNorm(vector, { bytes: row.vector, dimension: row.dimension }, row.norm);
-			const score = cosineSimilarity(query, vector, norm);
-			if (!Number.isFinite(score) || score < minSimilarity) continue;
-			const current = best.get(row.path);
-			if (!current || score > current.score)
-				best.set(row.path, {
-					path: row.path,
-					title: row.title,
-					hash: row.hash,
-					kind: row.kind,
-					score,
-					chunkIndex: row.chunk_index,
-					startChar: row.start_char,
-					endChar: row.end_char,
-				});
-		}
-		const result = [...best.values()]
-			.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
-			.slice(0, limit);
-		return {
-			items: result,
-			partial: totalEligible > rows.length,
-			scanned: rows.length,
-			totalEligible,
-			nextCursor: null,
-		};
-	}
 	// KP5b — a bare `[[name]]` link is resolved through the filename index
 	// rather than by matching every path.  See `link-resolver.ts`.
 	const linkResolver = createLinkResolver(db, canRead);
@@ -1090,7 +1015,7 @@ export async function createKnowledgeIndexRuntime(
 		if (op === "hydrateCandidates") return hydrateCandidates(args);
 		if (op === "semanticBatch") return semanticBatch(args);
 		if (op === "semanticStore") return semanticStore(args);
-		if (op === "semanticCandidates") return semanticCandidates(args);
+		if (op === "semanticCandidates") return semanticCandidates(db, args);
 		if (op === "warm") {
 			if (options.backgroundReconcile === false) await beginReconcile();
 			else void beginReconcile();

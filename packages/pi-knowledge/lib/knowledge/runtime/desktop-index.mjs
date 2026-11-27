@@ -769,6 +769,118 @@ async function reconcileInBatches(paths, sink) {
   flush();
 }
 
+// src/core/vector-codec.ts
+var FLOAT32_BYTES = 4;
+function encodeVector(vector) {
+  const bytes = new Uint8Array(vector.length * FLOAT32_BYTES);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < vector.length; index++)
+    view.setFloat32(index * FLOAT32_BYTES, vector[index], true);
+  return bytes;
+}
+function vectorNorm(vector) {
+  let sum = 0;
+  for (const component of vector) sum += component * component;
+  return Math.sqrt(sum);
+}
+function decodeVector(row) {
+  if (typeof row.bytes === "string") {
+    const parsed = JSON.parse(row.bytes);
+    if (!Array.isArray(parsed)) throw new Error("Stored vector is not an array");
+    return parsed.map((component) => Number(component));
+  }
+  const view = new DataView(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength);
+  const values = [];
+  for (let index = 0; index < row.dimension; index++)
+    values.push(view.getFloat32(index * FLOAT32_BYTES, true));
+  return values;
+}
+function storedVectorNorm(decoded, row, norm) {
+  if (typeof row.bytes !== "string" && typeof norm === "number" && Number.isFinite(norm)) return norm;
+  return vectorNorm(decoded);
+}
+function cosineSimilarity(query, stored, storedNorm) {
+  let dot = 0;
+  let queryNorm = 0;
+  for (let index = 0; index < query.length; index++) {
+    const q = query[index];
+    const v = stored[index];
+    if (typeof q !== "number" || !Number.isFinite(q) || typeof v !== "number" || !Number.isFinite(v))
+      return Number.NaN;
+    dot += q * v;
+    queryNorm += q * q;
+  }
+  return dot / Math.sqrt(queryNorm * storedNorm * storedNorm);
+}
+
+// src/core/semantic-candidates.ts
+var BATCH_SIZE = 1e3;
+var CHUNK_KEY = "chunks.path, chunks.chunk_index, chunks.hash, chunks.fingerprint";
+var SELECT_ELIGIBLE = `SELECT ${CHUNK_KEY}, chunks.vector, chunks.dimension, chunks.norm,
+		chunks.start_char, chunks.end_char, notes.title, notes.kind
+	FROM semantic_chunks AS chunks INDEXED BY sqlite_autoindex_semantic_chunks_1
+	CROSS JOIN notes ON notes.path = chunks.path AND notes.hash = chunks.hash
+	WHERE chunks.fingerprint = ? AND (notes.scope = 'shared' OR notes.scope = ?) AND notes.kind != 'explainer'`;
+var ORDER_BATCH = `ORDER BY ${CHUNK_KEY} LIMIT ?`;
+function scoreChunk(row, query) {
+  if (row.dimension !== query.length) return Number.NaN;
+  const stored = { bytes: row.vector, dimension: row.dimension };
+  let vector;
+  try {
+    vector = decodeVector(stored);
+  } catch {
+    return Number.NaN;
+  }
+  if (vector.length !== query.length) return Number.NaN;
+  return cosineSimilarity(query, vector, storedVectorNorm(vector, stored, row.norm));
+}
+function toCandidate(row, score) {
+  return {
+    path: row.path,
+    title: row.title,
+    hash: row.hash,
+    kind: row.kind,
+    score,
+    chunkIndex: row.chunk_index,
+    startChar: row.start_char,
+    endChar: row.end_char
+  };
+}
+function semanticCandidates(db, args) {
+  if (!Array.isArray(args.vector) || !args.vector.length || args.vector.some(
+    (component) => typeof component !== "number" || !Number.isFinite(component) || Math.abs(component) > 1e6
+  ))
+    throw new Error("Invalid semantic query vector");
+  const fingerprint = String(args.fingerprint || "");
+  if (!fingerprint || fingerprint.length > 300) throw new Error("Invalid semantic fingerprint");
+  const minSimilarity = args.minSimilarity === void 0 ? 0.45 : args.minSimilarity;
+  if (typeof minSimilarity !== "number" || !Number.isFinite(minSimilarity) || minSimilarity < 0 || minSimilarity > 1)
+    throw new Error("Invalid semantic similarity threshold");
+  const query = args.vector;
+  const limit = Math.max(1, Math.min(24, Math.floor(args.limit || 5)));
+  const scope = args.project || "";
+  const first = db.prepare(`${SELECT_ELIGIBLE} ${ORDER_BATCH}`);
+  const next = db.prepare(`${SELECT_ELIGIBLE} AND (${CHUNK_KEY}) > (?, ?, ?, ?) ${ORDER_BATCH}`);
+  const best = /* @__PURE__ */ new Map();
+  let scanned = 0;
+  let cursor;
+  for (; ; ) {
+    const rows = cursor ? next.all(fingerprint, scope, ...cursor, BATCH_SIZE) : first.all(fingerprint, scope, BATCH_SIZE);
+    scanned += rows.length;
+    for (const row of rows) {
+      const score = scoreChunk(row, query);
+      if (!Number.isFinite(score) || score < minSimilarity) continue;
+      const current = best.get(row.path);
+      if (!current || score > current.score) best.set(row.path, toCandidate(row, score));
+    }
+    if (rows.length < BATCH_SIZE) break;
+    const last = rows[rows.length - 1];
+    cursor = [last.path, last.chunk_index, last.hash, last.fingerprint];
+  }
+  const items = [...best.values()].sort((left, right) => right.score - left.score || left.path.localeCompare(right.path)).slice(0, limit);
+  return { items, partial: false, scanned, totalEligible: scanned, nextCursor: null };
+}
+
 // src/core/semantic-model.ts
 var WIDTH = 720;
 var HEIGHT = 440;
@@ -1246,50 +1358,6 @@ async function scanSemanticBatch(state, db, request, hooks) {
   cursor.path = handled;
   cursor.chunk = handledChunk;
   return { items, partial: false };
-}
-
-// src/core/vector-codec.ts
-var FLOAT32_BYTES = 4;
-function encodeVector(vector) {
-  const bytes = new Uint8Array(vector.length * FLOAT32_BYTES);
-  const view = new DataView(bytes.buffer);
-  for (let index = 0; index < vector.length; index++)
-    view.setFloat32(index * FLOAT32_BYTES, vector[index], true);
-  return bytes;
-}
-function vectorNorm(vector) {
-  let sum = 0;
-  for (const component of vector) sum += component * component;
-  return Math.sqrt(sum);
-}
-function decodeVector(row) {
-  if (typeof row.bytes === "string") {
-    const parsed = JSON.parse(row.bytes);
-    if (!Array.isArray(parsed)) throw new Error("Stored vector is not an array");
-    return parsed.map((component) => Number(component));
-  }
-  const view = new DataView(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength);
-  const values = [];
-  for (let index = 0; index < row.dimension; index++)
-    values.push(view.getFloat32(index * FLOAT32_BYTES, true));
-  return values;
-}
-function storedVectorNorm(decoded, row, norm) {
-  if (typeof row.bytes !== "string" && typeof norm === "number" && Number.isFinite(norm)) return norm;
-  return vectorNorm(decoded);
-}
-function cosineSimilarity(query, stored, storedNorm) {
-  let dot = 0;
-  let queryNorm = 0;
-  for (let index = 0; index < query.length; index++) {
-    const q = query[index];
-    const v = stored[index];
-    if (typeof q !== "number" || !Number.isFinite(q) || typeof v !== "number" || !Number.isFinite(v))
-      return Number.NaN;
-    dot += q * v;
-    queryNorm += q * q;
-  }
-  return dot / Math.sqrt(queryNorm * storedNorm * storedNorm);
 }
 
 // src/core/vector-migration.ts
@@ -1923,58 +1991,6 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     }
     return status();
   }
-  function semanticCandidates(args) {
-    if (!Array.isArray(args.vector) || !args.vector.length || args.vector.some((n) => typeof n !== "number" || !Number.isFinite(n) || Math.abs(n) > 1e6))
-      throw new Error("Invalid semantic query vector");
-    const fingerprint = String(args.fingerprint || "");
-    if (!fingerprint || fingerprint.length > 300) throw new Error("Invalid semantic fingerprint");
-    const minSimilarity = args.minSimilarity === void 0 ? 0.45 : args.minSimilarity;
-    if (typeof minSimilarity !== "number" || !Number.isFinite(minSimilarity) || minSimilarity < 0 || minSimilarity > 1)
-      throw new Error("Invalid semantic similarity threshold");
-    const query = args.vector, limit = Math.max(1, Math.min(12, Math.floor(args.limit || 5)));
-    const rows = db.prepare(
-      "SELECT s.path,s.hash,s.vector,s.dimension,s.norm,s.chunk_index,s.start_char,s.end_char,n.title,n.kind FROM semantic_chunks s JOIN notes n ON n.path=s.path AND n.hash=s.hash WHERE s.fingerprint=? AND (n.scope='shared' OR n.scope=?) AND n.kind!='explainer' ORDER BY s.path LIMIT 5000"
-    ).all(fingerprint, args.project || "");
-    const totalEligible = Number(
-      db.prepare(
-        "SELECT COUNT(*) AS count FROM semantic_chunks s JOIN notes n ON n.path=s.path AND n.hash=s.hash WHERE s.fingerprint=? AND (n.scope='shared' OR n.scope=?) AND n.kind!='explainer'"
-      ).get(fingerprint, args.project || "").count
-    );
-    const best = /* @__PURE__ */ new Map();
-    for (const row of rows) {
-      if (row.dimension !== query.length) continue;
-      let vector;
-      try {
-        vector = decodeVector({ bytes: row.vector, dimension: row.dimension });
-      } catch {
-        continue;
-      }
-      if (vector.length !== query.length) continue;
-      const norm = storedVectorNorm(vector, { bytes: row.vector, dimension: row.dimension }, row.norm);
-      const score = cosineSimilarity(query, vector, norm);
-      if (!Number.isFinite(score) || score < minSimilarity) continue;
-      const current = best.get(row.path);
-      if (!current || score > current.score)
-        best.set(row.path, {
-          path: row.path,
-          title: row.title,
-          hash: row.hash,
-          kind: row.kind,
-          score,
-          chunkIndex: row.chunk_index,
-          startChar: row.start_char,
-          endChar: row.end_char
-        });
-    }
-    const result = [...best.values()].sort((a, b) => b.score - a.score || a.path.localeCompare(b.path)).slice(0, limit);
-    return {
-      items: result,
-      partial: totalEligible > rows.length,
-      scanned: rows.length,
-      totalEligible,
-      nextCursor: null
-    };
-  }
   const linkResolver = createLinkResolver(db, canRead);
   const resolveLinkTarget = linkResolver.resolve;
   function noteTitle(path) {
@@ -2212,7 +2228,7 @@ async function createKnowledgeIndexRuntime(options, files, transport) {
     if (op === "hydrateCandidates") return hydrateCandidates(args);
     if (op === "semanticBatch") return semanticBatch(args);
     if (op === "semanticStore") return semanticStore(args);
-    if (op === "semanticCandidates") return semanticCandidates(args);
+    if (op === "semanticCandidates") return semanticCandidates(db, args);
     if (op === "warm") {
       if (options.backgroundReconcile === false) await beginReconcile();
       else void beginReconcile();
