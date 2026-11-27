@@ -21,7 +21,13 @@
 	"tools": ["inquiry_read", "inquiry_write"],
 	"hosts": ["drone-desktop", "native-pi"],
 	"permissions": {
-		"filesystem": ["application-state", "application-state-write", "binary-state-read", "binary-state-write"],
+		"filesystem": [
+			"application-state",
+			"application-state-write",
+			"binary-state-read",
+			"binary-state-write",
+			"workspace-write"
+		],
 		"network": [],
 		"subprocess": [],
 		"externalWrites": false
