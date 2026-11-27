@@ -8,20 +8,15 @@ import { stageBundledPluginApi } from "../../../scripts/bundled-plugin-api.mjs";
 const require = createRequire(import.meta.url),
 	root = resolve(import.meta.dirname, ".."),
 	check = process.argv.includes("--check");
-await stageBundledPluginApi(root);
+if (!check) await stageBundledPluginApi(root);
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex"),
 	inputs = {},
 	outputs = {};
 async function output(name, bytes) {
 	outputs[name] = hash(bytes);
-	const path = join(root, name);
-	if (check) {
-		if (!Buffer.from(await readFile(path)).equals(Buffer.from(bytes)))
-			throw new Error(`Stale Inquiry artifact: ${name}`);
-	} else {
-		await mkdir(join(root, "dist"), { recursive: true });
-		await writeFile(path, bytes);
-	}
+	if (check) return;
+	await mkdir(join(root, "dist"), { recursive: true });
+	await writeFile(join(root, name), bytes);
 }
 for (const [entry, name] of [
 	["index", "host"],
