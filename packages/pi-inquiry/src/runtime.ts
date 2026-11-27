@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import type { PluginNativeRuntimeFactory, PluginNativeRuntimeInstance } from "@gyoungwe/plugin-api/native";
 import type {
 	PluginBinaryStateReadResult,
-	PluginRuntimeFactoryContext,
 	PluginRuntimeRootDescription,
 	PluginRuntimeScope,
 	PluginStateReadResult,
@@ -31,15 +30,18 @@ import type {
 	QuestionRecord,
 } from "./models.js";
 import { createInquiryNativeSessionFactory } from "./runtime-native.js";
+import * as runtimeRerun from "./runtime-rerun.js";
 import { type ReadInput, readSchema, type WriteInput, writeSchema } from "./runtime-schema.js";
 import { createInquiryWasmEngine } from "./wasm-storage.js";
 
+export type { RerunExecutorPort } from "./runtime-rerun.js";
+
 /** Actual optional provider implementation; all data/root/session authority remains in the host ports. */
 export async function createInquiryRuntimeWithEngine(
-	context: PluginRuntimeFactoryContext,
+	context: runtimeRerun.InquiryRuntimeContext,
 	engine: InquiryWasmEngine,
 ): Promise<PluginNativeRuntimeInstance> {
-	const capabilities = context.capabilities,
+	const { capabilities, rerunExecutor } = context,
 		owners = new Map<string, { owner: InquiryLedgerOwner; root: string; metadataRoot: string }>(),
 		queues = new Map<string, Promise<void>>();
 	let stopped = false;
@@ -181,7 +183,7 @@ export async function createInquiryRuntimeWithEngine(
 					projectId: binding?.value.projectId ?? null,
 					canRestoreOriginal: binding !== null && binding.value.originalVersion !== null,
 					authority: "plugin-asserted-or-imported",
-					unavailable: ["rerun-executor", "workspace-promotion-file-port"],
+					unavailable: [...(rerunExecutor ? [] : ["rerun-executor"]), "workspace-promotion-file-port"],
 				};
 			});
 		}
@@ -218,9 +220,13 @@ export async function createInquiryRuntimeWithEngine(
 		});
 	};
 	const write = async (input: WriteInput, signal: AbortSignal) => {
+		const executor = runtimeRerun.executorFor(input, rerunExecutor);
 		const scope = await caller();
 		if (scope.kind !== "session") throw new Error("Inquiry writes require the actual creator SDK session");
 		const available = await roots();
+		const active = runtimeRerun.activeRerun(input, owners.get(scope.workspaceId), available);
+		if (active && !stopped && !context.signal.aborted && !signal.aborted)
+			return { value: active, authority: "plugin-asserted-or-imported" };
 		return serialize(scope.workspaceId, async () => {
 			signal.throwIfAborted();
 			if (input.action === "bind") {
@@ -277,6 +283,8 @@ export async function createInquiryRuntimeWithEngine(
 			let value: unknown;
 			if (input.action === "reconcile") value = await owner.reconcile(signal);
 			else if (input.action === "restoreOriginal") value = await owner.restoreOriginal(signal);
+			else if (executor && runtimeRerun.isRerunAction(input))
+				value = await runtimeRerun.writeRerun(owner, input, executor, signal);
 			else
 				value = await owner.write(
 					input.action,
@@ -382,9 +390,9 @@ export async function createInquiryRuntimeWithEngine(
 		},
 	};
 }
-export const createInquiryRuntime: PluginNativeRuntimeFactory = async (context) =>
+export const createInquiryRuntime = (async (context: runtimeRerun.InquiryRuntimeContext) =>
 	createInquiryRuntimeWithEngine(
 		context,
 		await createInquiryWasmEngine(await readFile(new URL("./sql-wasm.wasm", import.meta.url))),
-	);
+	)) satisfies PluginNativeRuntimeFactory;
 export default createInquiryRuntime;

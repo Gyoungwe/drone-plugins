@@ -1,4 +1,4 @@
-import type { AttemptRecord, DecisionRecord, InquirySnapshot } from "./models.js";
+import type { InquirySnapshot } from "./models.js";
 import type { InquirySqliteConnection } from "./sqlite-connection.js";
 import type { FactCursorRecord, FactProjectionStore, PersistedLedgerRecord } from "./storage-contract.js";
 
@@ -10,13 +10,15 @@ import type { FactCursorRecord, FactProjectionStore, PersistedLedgerRecord } fro
  * projection and the acknowledgement disagree after a crash.
  */
 
+type ProjectionTable = "artifacts" | "attempts" | "decisions";
+
 export interface SqliteFactProjectionPort {
 	readonly projectId: string;
 	readonly database: InquirySqliteConnection;
 	/** Read the current rows inside the open transaction. */
 	snapshotSync(): InquirySnapshot;
 	/** Validate one row against the current rows. */
-	validate(key: "attempts" | "decisions", record: PersistedLedgerRecord, current: InquirySnapshot): void;
+	validate(key: ProjectionTable, record: PersistedLedgerRecord, current: InquirySnapshot): void;
 }
 
 interface CursorRow {
@@ -63,17 +65,20 @@ export class SqliteFactProjection implements FactProjectionStore {
 		};
 	}
 
-	async commit(input: {
-		readonly cursor?: FactCursorRecord;
-		readonly attempts?: readonly AttemptRecord[];
-		readonly decisions?: readonly DecisionRecord[];
-	}): Promise<void> {
+	async commit(input: Parameters<FactProjectionStore["commit"]>[0]): Promise<void> {
 		return this.port.database.serialize(async () => {
 			this.port.database.exec("BEGIN IMMEDIATE");
 			try {
 				this.port.database.exec(CURSOR_SCHEMA);
-				const current = this.port.snapshotSync();
+				const snapshot = this.port.snapshotSync();
+				const artifacts = [...snapshot.artifacts];
+				const current = { ...snapshot, artifacts };
 				const updatedAt = new Date().toISOString();
+				for (const artifact of input.artifacts ?? []) {
+					this.port.validate("artifacts", artifact, current);
+					this.writeRow("artifacts", artifact.id, artifact, updatedAt);
+					artifacts.push(artifact);
+				}
 				for (const attempt of input.attempts ?? []) {
 					this.port.validate("attempts", attempt, current);
 					this.writeRow("attempts", attempt.id, attempt, updatedAt);
@@ -108,7 +113,7 @@ export class SqliteFactProjection implements FactProjectionStore {
 		return rows.length > 0;
 	}
 
-	private writeRow(key: "attempts" | "decisions", id: string, record: unknown, updatedAt: string): void {
+	private writeRow(key: ProjectionTable, id: string, record: PersistedLedgerRecord, updatedAt: string): void {
 		this.port.database
 			.prepare(
 				`INSERT INTO ${key} (id, project_id, payload, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, payload = excluded.payload, updated_at = excluded.updated_at`,
