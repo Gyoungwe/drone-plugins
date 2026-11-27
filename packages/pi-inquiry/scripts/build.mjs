@@ -35,6 +35,7 @@ for (const [entry, name] of [
 		absWorkingDir: root,
 		entryPoints: [`src/${entry}.ts`],
 		bundle: true,
+		minify: true,
 		external: ["@gyoungwe/plugin-api", "@gyoungwe/plugin-api/*"],
 		platform: "node",
 		format: "esm",
