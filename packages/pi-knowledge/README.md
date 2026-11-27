@@ -105,3 +105,7 @@ proofs are restored. Cancellation, malformed data, foreign scope, a changed
 binding or a non-durable write cannot report success. Remove this command and
 its `recordAdoptions` declaration before 0.4.0. Managed actual-context eviction
 and a later genuine reread remain separate unfinished work.
+
+## Semantic candidate benchmark
+
+Run `npm run bench:semantic -- [--sizes 1000,10000,100000] [--dims 64,384,768] [--queries 20] [--repeat 3] [--chunks-per-note 4] [--seed 1] [--out <file>]`. Sizes and dimensions form a matrix; each cell runs in its own Vitest process. The report records its dataset SHA-256, scan count, recall, p50/p95/mean query time, build time, database bytes and peak RSS, plus runtime and machine details. Recall@5 and recall@12 are the average overlap with the float64 brute-force top paths divided by 5 and 12; p95 uses nearest-rank percentile over all query/repeat timings. The benchmark is excluded from `npm test` and CI. Run the full 1k/10k/100k × 64/384/768 matrix separately on the reference machine without other heavy workloads.

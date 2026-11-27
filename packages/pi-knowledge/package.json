@@ -53,6 +53,7 @@
 		"typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
 		"test": "vitest run",
 		"test:styles": "node scripts/check-styles.mjs",
+		"bench:semantic": "node bench/run.mjs",
 		"check": "npm run build:check && npm run typecheck && npm test && npm run smoke"
 	},
 	"dependencies": {
