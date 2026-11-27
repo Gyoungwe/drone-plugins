@@ -75,6 +75,13 @@ export const writeSchema = Type.Union([
 	),
 	Type.Object(
 		{
+			action: Type.Union([Type.Literal("rerunArtifact"), Type.Literal("collectRerun")]),
+			id: Type.String({ minLength: 1 }),
+		},
+		{ additionalProperties: false },
+	),
+	Type.Object(
+		{
 			action: Type.Literal("markRerunRunning"),
 			id: Type.String({ minLength: 1 }),
 		},
