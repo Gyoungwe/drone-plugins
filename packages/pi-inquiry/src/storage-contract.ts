@@ -47,6 +47,7 @@ export interface FactProjectionStore {
 	 */
 	commit(input: {
 		readonly cursor?: FactCursorRecord;
+		readonly artifacts?: readonly ArtifactRecord[];
 		readonly attempts?: readonly AttemptRecord[];
 		readonly decisions?: readonly DecisionRecord[];
 	}): Promise<void>;

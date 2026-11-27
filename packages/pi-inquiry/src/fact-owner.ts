@@ -1,4 +1,5 @@
 import type { FactsResult, HostFactDeliveryAcknowledgement } from "@gyoungwe/plugin-api/p5-inquiry";
+import { artifactRecordForFact, orderValidFactArtifacts } from "./fact-artifact.js";
 import {
 	type AcceptedFact,
 	type CommittedFactCursor,
@@ -16,7 +17,7 @@ import {
 	projectsAttempt,
 } from "./fact-projection.js";
 import type { InquiryLedgerOwner } from "./ledger-owner.js";
-import type { AttemptRecord, DecisionRecord } from "./models.js";
+import type { ArtifactRecord, AttemptRecord, DecisionRecord } from "./models.js";
 import type { InquiryService } from "./service.js";
 
 /** What the owner needs to reach its scope and the ledger owner of that scope. */
@@ -105,10 +106,14 @@ export class InquiryFactOwner {
 		const snapshot = await service.storage.snapshot();
 		const attempts = new Map(snapshot.attempts.map((record) => [record.id, record]));
 		const decisions = new Map(snapshot.decisions.map((record) => [record.id, record]));
+		const projectedArtifacts: ArtifactRecord[] = [];
 		const projectedAttempts: AttemptRecord[] = [];
 		const projectedDecisions: DecisionRecord[] = [];
 		for (const item of accepted) {
 			signal.throwIfAborted();
+			for (const artifact of item.fact.artifactRefs) {
+				projectedArtifacts.push(artifactRecordForFact(item.fact, artifact, service.storage.projectId));
+			}
 			if (projectsAttempt(item.fact)) {
 				const next = attemptRecordForFact(item.fact, service.storage.projectId);
 				const existing = attempts.get(next.id);
@@ -129,6 +134,7 @@ export class InquiryFactOwner {
 		const last = accepted.at(-1);
 		if (!last) return;
 		await store.commit({
+			artifacts: orderValidFactArtifacts(projectedArtifacts, snapshot.artifacts),
 			attempts: projectedAttempts,
 			decisions: projectedDecisions,
 			cursor: {
