@@ -18,7 +18,13 @@ interface CandidateArgs {
 	minSimilarity?: unknown;
 }
 
+export interface SemanticCandidateObserver {
+	batchSize?: number;
+	onBatch?: (batch: { fetched: number; decoded: number }) => void;
+}
+
 type ChunkKey = [path: string, chunkIndex: number, hash: string, fingerprint: string];
+type DecodeCounter = { decoded: number };
 
 type ChunkRow = {
 	path: string;
@@ -34,11 +40,12 @@ type ChunkRow = {
 	kind: string;
 };
 
-function scoreChunk(row: ChunkRow, query: readonly number[]): number {
+function scoreChunk(row: ChunkRow, query: readonly number[], counter: DecodeCounter): number {
 	if (row.dimension !== query.length) return Number.NaN;
 	const stored = { bytes: row.vector, dimension: row.dimension };
 	let vector: number[];
 	try {
+		counter.decoded += 1;
 		vector = decodeVector(stored);
 	} catch {
 		return Number.NaN;
@@ -60,7 +67,13 @@ function toCandidate(row: ChunkRow, score: number) {
 	};
 }
 
-export function semanticCandidates(db: DatabaseSync, args: CandidateArgs) {
+export function semanticCandidates(
+	db: DatabaseSync,
+	args: CandidateArgs,
+	observer: SemanticCandidateObserver = {},
+) {
+	const batchSize = observer.batchSize ?? BATCH_SIZE;
+	if (!Number.isInteger(batchSize) || batchSize < 1) throw new Error("Invalid semantic batch size");
 	if (
 		!Array.isArray(args.vector) ||
 		!args.vector.length ||
@@ -89,17 +102,19 @@ export function semanticCandidates(db: DatabaseSync, args: CandidateArgs) {
 	let scanned = 0;
 	let cursor: ChunkKey | undefined;
 	for (;;) {
-		const rows = (
-			cursor ? next.all(fingerprint, scope, ...cursor, BATCH_SIZE) : first.all(fingerprint, scope, BATCH_SIZE)
-		) as ChunkRow[];
+		const counter = { decoded: 0 };
+		let rows: ChunkRow[];
+		if (cursor) rows = next.all(fingerprint, scope, ...cursor, batchSize) as ChunkRow[];
+		else rows = first.all(fingerprint, scope, batchSize) as ChunkRow[];
 		scanned += rows.length;
 		for (const row of rows) {
-			const score = scoreChunk(row, query);
+			const score = scoreChunk(row, query, counter);
 			if (!Number.isFinite(score) || score < minSimilarity) continue;
 			const current = best.get(row.path);
 			if (!current || score > current.score) best.set(row.path, toCandidate(row, score));
 		}
-		if (rows.length < BATCH_SIZE) break;
+		observer.onBatch?.({ fetched: rows.length, decoded: counter.decoded });
+		if (rows.length < batchSize) break;
 		const last = rows[rows.length - 1];
 		cursor = [last.path, last.chunk_index, last.hash, last.fingerprint];
 	}
