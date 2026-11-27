@@ -783,6 +783,14 @@ function vectorNorm(vector) {
   for (const component of vector) sum += component * component;
   return Math.sqrt(sum);
 }
+function squaredNorm(vector) {
+  let sum = 0;
+  for (let index = 0; index < vector.length; index++) {
+    const component = vector[index];
+    sum += component * component;
+  }
+  return sum;
+}
 function decodeVector(row) {
   if (typeof row.bytes === "string") {
     const parsed = JSON.parse(row.bytes);
@@ -794,6 +802,16 @@ function decodeVector(row) {
   for (let index = 0; index < row.dimension; index++)
     values.push(view.getFloat32(index * FLOAT32_BYTES, true));
   return values;
+}
+function decodeVectorInto(row, target) {
+  if (typeof row.bytes === "string") return false;
+  if (row.bytes.byteLength !== row.dimension * FLOAT32_BYTES)
+    throw new Error("Stored vector byte length does not match its dimension");
+  if (target.length !== row.dimension) throw new Error("Target vector length does not match its dimension");
+  const view = new DataView(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength);
+  for (let index = 0; index < row.dimension; index++)
+    target[index] = view.getFloat32(index * FLOAT32_BYTES, true);
+  return true;
 }
 function storedVectorNorm(decoded, row, norm) {
   if (typeof row.bytes !== "string" && typeof norm === "number" && Number.isFinite(norm)) return norm;
@@ -812,6 +830,17 @@ function cosineSimilarity(query, stored, storedNorm) {
   }
   return dot / Math.sqrt(queryNorm * storedNorm * storedNorm);
 }
+function cosineWithQueryNorm(query, querySquaredNorm, stored, storedNorm) {
+  let dot = 0;
+  for (let index = 0; index < query.length; index++) {
+    const q = query[index];
+    const value = stored[index];
+    if (typeof q !== "number" || !Number.isFinite(q) || typeof value !== "number" || !Number.isFinite(value))
+      return Number.NaN;
+    dot += q * value;
+  }
+  return dot / Math.sqrt(querySquaredNorm * storedNorm * storedNorm);
+}
 
 // src/core/semantic-candidates.ts
 var BATCH_SIZE = 1e3;
@@ -822,18 +851,29 @@ var SELECT_ELIGIBLE = `SELECT ${CHUNK_KEY}, chunks.vector, chunks.dimension, chu
 	CROSS JOIN notes ON notes.path = chunks.path AND notes.hash = chunks.hash
 	WHERE chunks.fingerprint = ? AND (notes.scope = 'shared' OR notes.scope = ?) AND notes.kind != 'explainer'`;
 var ORDER_BATCH = `ORDER BY ${CHUNK_KEY} LIMIT ?`;
-function scoreChunk(row, query, counter) {
+function float32VectorNorm(vector) {
+  let sum = 0;
+  for (let index = 0; index < vector.length; index++) {
+    const component = vector[index];
+    sum += component * component;
+  }
+  return Math.sqrt(sum);
+}
+function scoreChunk(row, query, querySquaredNorm, decodeBuffer, counter) {
   if (row.dimension !== query.length) return Number.NaN;
   const stored = { bytes: row.vector, dimension: row.dimension };
-  let vector;
   try {
     counter.decoded += 1;
-    vector = decodeVector(stored);
+    if (decodeVectorInto(stored, decodeBuffer)) {
+      const norm = typeof row.norm === "number" && Number.isFinite(row.norm) ? row.norm : float32VectorNorm(decodeBuffer);
+      return cosineWithQueryNorm(query, querySquaredNorm, decodeBuffer, norm);
+    }
+    const vector = decodeVector(stored);
+    if (vector.length !== query.length) return Number.NaN;
+    return cosineSimilarity(query, vector, storedVectorNorm(vector, stored, row.norm));
   } catch {
     return Number.NaN;
   }
-  if (vector.length !== query.length) return Number.NaN;
-  return cosineSimilarity(query, vector, storedVectorNorm(vector, stored, row.norm));
 }
 function toCandidate(row, score) {
   return {
@@ -860,6 +900,8 @@ function semanticCandidates(db, args, observer = {}) {
   if (typeof minSimilarity !== "number" || !Number.isFinite(minSimilarity) || minSimilarity < 0 || minSimilarity > 1)
     throw new Error("Invalid semantic similarity threshold");
   const query = args.vector;
+  const querySquaredNorm = squaredNorm(query);
+  const decodeBuffer = new Float32Array(query.length);
   const limit = Math.max(1, Math.min(24, Math.floor(args.limit || 5)));
   const scope = args.project || "";
   const first = db.prepare(`${SELECT_ELIGIBLE} ${ORDER_BATCH}`);
@@ -874,7 +916,7 @@ function semanticCandidates(db, args, observer = {}) {
     else rows = first.all(fingerprint, scope, batchSize);
     scanned += rows.length;
     for (const row of rows) {
-      const score = scoreChunk(row, query, counter);
+      const score = scoreChunk(row, query, querySquaredNorm, decodeBuffer, counter);
       if (!Number.isFinite(score) || score < minSimilarity) continue;
       const current = best.get(row.path);
       if (!current || score > current.score) best.set(row.path, toCandidate(row, score));

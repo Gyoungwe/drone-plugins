@@ -3,7 +3,7 @@
 	"generator": "packages/pi-knowledge/scripts/build.mjs",
 	"output": "worker.mjs",
 	"source": "src/extension/knowledge-worker.ts",
-	"inputsSha256": "c58e844e23742f4f95d4c63d882db8c93a00dd2081b73ce7e0c1319aa8bdd9d1",
-	"knowledgeSourceSha256": "c58e844e23742f4f95d4c63d882db8c93a00dd2081b73ce7e0c1319aa8bdd9d1",
-	"outputSha256": "1f846857f06640a6c674df17f11f1ea717c2e7714397d913aa6eee8b9b526820"
+	"inputsSha256": "c52810a0d2a979f1bbf14aeee1769a9b023fb5aed985541850198c027bac6f82",
+	"knowledgeSourceSha256": "c52810a0d2a979f1bbf14aeee1769a9b023fb5aed985541850198c027bac6f82",
+	"outputSha256": "c2c9e5bec554465d2dbc8aa088fb9998c42c5f408a8198817b3d1e422928e8f2"
 }
