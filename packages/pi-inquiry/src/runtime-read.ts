@@ -1,5 +1,6 @@
 import type { PluginRuntimeRootDescription, PluginRuntimeScope } from "@gyoungwe/plugin-api/runtime";
 import type { createRuntimeOwners } from "./runtime-owners.js";
+import { readPromotionPlan } from "./runtime-promotion.js";
 import type { RerunExecutorPort } from "./runtime-rerun.js";
 import type { ReadInput } from "./runtime-schema.js";
 
@@ -40,6 +41,9 @@ export function createRuntimeRead({
 				};
 			return serialize(scope.workspaceId, async () => {
 				const binding = await lookup(scope, available);
+				const promotionAvailable = available.some(
+					(root) => root.kind === "files" && root.access === "read-write",
+				);
 				return {
 					state: binding
 						? binding.value.intent?.status === "pending"
@@ -51,7 +55,10 @@ export function createRuntimeRead({
 					projectId: binding?.value.projectId ?? null,
 					canRestoreOriginal: binding !== null && binding.value.originalVersion !== null,
 					authority: "plugin-asserted-or-imported",
-					unavailable: [...(rerunExecutor ? [] : ["rerun-executor"]), "workspace-promotion-file-port"],
+					unavailable: [
+						...(rerunExecutor ? [] : ["rerun-executor"]),
+						...(promotionAvailable ? [] : ["workspace-promotion-file-port"]),
+					],
 				};
 			});
 		}
@@ -67,6 +74,7 @@ export function createRuntimeRead({
 				};
 			}
 			const owner = await owned(actual, available);
+			if (input.action === "planPromotion") return readPromotionPlan(owner, available, input);
 			const value = await owner.read(async (service) => {
 				switch (input.action) {
 					case "snapshot":

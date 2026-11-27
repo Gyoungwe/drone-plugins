@@ -24,6 +24,7 @@ import type {
 } from "./models.js";
 import { createInquiryNativeSessionFactory } from "./runtime-native.js";
 import { createRuntimeOwners, type RuntimeOwner } from "./runtime-owners.js";
+import * as runtimePromotion from "./runtime-promotion.js";
 import { createRuntimeRead } from "./runtime-read.js";
 import * as runtimeRerun from "./runtime-rerun.js";
 import { type ReadInput, readSchema, type WriteInput, writeSchema } from "./runtime-schema.js";
@@ -154,6 +155,8 @@ export async function createInquiryRuntimeWithEngine(
 			else if (input.action === "restoreOriginal") value = await owner.restoreOriginal(signal);
 			else if (executor && runtimeRerun.isRerunAction(input))
 				value = await runtimeRerun.writeRerun(owner, input, executor, signal);
+			else if (input.action === "promoteRun")
+				value = await runtimePromotion.promoteRun(owner, available, capabilities, input, signal);
 			else
 				value = await owner.write(
 					input.action,
