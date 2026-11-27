@@ -822,11 +822,12 @@ var SELECT_ELIGIBLE = `SELECT ${CHUNK_KEY}, chunks.vector, chunks.dimension, chu
 	CROSS JOIN notes ON notes.path = chunks.path AND notes.hash = chunks.hash
 	WHERE chunks.fingerprint = ? AND (notes.scope = 'shared' OR notes.scope = ?) AND notes.kind != 'explainer'`;
 var ORDER_BATCH = `ORDER BY ${CHUNK_KEY} LIMIT ?`;
-function scoreChunk(row, query) {
+function scoreChunk(row, query, counter) {
   if (row.dimension !== query.length) return Number.NaN;
   const stored = { bytes: row.vector, dimension: row.dimension };
   let vector;
   try {
+    counter.decoded += 1;
     vector = decodeVector(stored);
   } catch {
     return Number.NaN;
@@ -846,7 +847,9 @@ function toCandidate(row, score) {
     endChar: row.end_char
   };
 }
-function semanticCandidates(db, args) {
+function semanticCandidates(db, args, observer = {}) {
+  const batchSize = observer.batchSize ?? BATCH_SIZE;
+  if (!Number.isInteger(batchSize) || batchSize < 1) throw new Error("Invalid semantic batch size");
   if (!Array.isArray(args.vector) || !args.vector.length || args.vector.some(
     (component) => typeof component !== "number" || !Number.isFinite(component) || Math.abs(component) > 1e6
   ))
@@ -865,15 +868,19 @@ function semanticCandidates(db, args) {
   let scanned = 0;
   let cursor;
   for (; ; ) {
-    const rows = cursor ? next.all(fingerprint, scope, ...cursor, BATCH_SIZE) : first.all(fingerprint, scope, BATCH_SIZE);
+    const counter = { decoded: 0 };
+    let rows;
+    if (cursor) rows = next.all(fingerprint, scope, ...cursor, batchSize);
+    else rows = first.all(fingerprint, scope, batchSize);
     scanned += rows.length;
     for (const row of rows) {
-      const score = scoreChunk(row, query);
+      const score = scoreChunk(row, query, counter);
       if (!Number.isFinite(score) || score < minSimilarity) continue;
       const current = best.get(row.path);
       if (!current || score > current.score) best.set(row.path, toCandidate(row, score));
     }
-    if (rows.length < BATCH_SIZE) break;
+    observer.onBatch?.({ fetched: rows.length, decoded: counter.decoded });
+    if (rows.length < batchSize) break;
     const last = rows[rows.length - 1];
     cursor = [last.path, last.chunk_index, last.hash, last.fingerprint];
   }
