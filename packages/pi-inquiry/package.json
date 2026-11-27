@@ -49,7 +49,7 @@
 		"build:check": "node scripts/build.mjs --check",
 		"check:domain": "npm run typecheck && npm run build:check && npm test",
 		"smoke": "node scripts/smoke.mjs",
-		"check": "npm run typecheck && npm run build:check && npm test && npm run smoke"
+		"check": "npm run typecheck && npm run build:check && npm run build && npm test && npm run smoke"
 	},
 	"dependencies": {
 		"sql.js": "1.15.2",
