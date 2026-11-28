@@ -22,6 +22,7 @@ import type {
 	FindingRecord,
 	QuestionRecord,
 } from "./models.js";
+import { InquiryHostEventBuffer } from "./runtime-host-events.js";
 import { createInquiryNativeSessionFactory } from "./runtime-native.js";
 import { createRuntimeOwners, type RuntimeOwner } from "./runtime-owners.js";
 import * as runtimePromotion from "./runtime-promotion.js";
@@ -41,6 +42,15 @@ export async function createInquiryRuntimeWithEngine(
 		owners = new Map<string, RuntimeOwner>(),
 		queues = new Map<string, Promise<void>>();
 	let stopped = false;
+	const hostRerunCapability = context.hostRerunCapability ?? false;
+	let hostRerunUnavailable = false;
+	const hostEvents = new InquiryHostEventBuffer(context.hostEvents, context.signal, () => {
+		try {
+			context.events.changed();
+		} catch (error) {
+			void error;
+		}
+	});
 	const roots = () =>
 		capabilities.call("roots.describe", null) as Promise<readonly PluginRuntimeRootDescription[]>;
 	const caller = () => capabilities.call("caller.scope", null) as Promise<PluginRuntimeScope>;
@@ -85,12 +95,20 @@ export async function createInquiryRuntimeWithEngine(
 		selected,
 		serialize,
 		rerunExecutor,
+		hostRerunCapability,
+		hostRerunUnavailable: () => hostRerunUnavailable,
+		hostEvents,
 		lookup,
 		inspect,
 		owned,
 	});
 	const write = async (input: WriteInput, signal: AbortSignal) => {
-		const executor = runtimeRerun.executorFor(input, rerunExecutor);
+		const executor = runtimeRerun.executorFor(
+			input,
+			rerunExecutor,
+			hostRerunCapability,
+			hostRerunUnavailable,
+		);
 		const scope = await caller();
 		if (scope.kind !== "session") throw new Error("Inquiry writes require the actual creator SDK session");
 		const available = await roots();
@@ -153,8 +171,18 @@ export async function createInquiryRuntimeWithEngine(
 			let value: unknown;
 			if (input.action === "reconcile") value = await owner.reconcile(signal);
 			else if (input.action === "restoreOriginal") value = await owner.restoreOriginal(signal);
+			else if (input.action === "drainHostEvents") value = await hostEvents.drain(owner, signal);
 			else if (executor && runtimeRerun.isRerunAction(input))
 				value = await runtimeRerun.writeRerun(owner, input, executor, signal);
+			else if (input.action === "rerunArtifact")
+				value = await runtimeRerun.requestHostRerun(owner, input.id, capabilities, signal, () => {
+					hostRerunUnavailable = true;
+					try {
+						context.events.changed();
+					} catch (error) {
+						void error;
+					}
+				});
 			else if (input.action === "promoteRun")
 				value = await runtimePromotion.promoteRun(owner, available, capabilities, input, signal);
 			else
@@ -250,21 +278,27 @@ export async function createInquiryRuntimeWithEngine(
 		},
 		async dispose() {
 			stopped = true;
+			let hostEventFailure: unknown;
+			try {
+				hostEvents.dispose();
+			} catch (error) {
+				hostEventFailure = error;
+			}
 			await Promise.all(queues.values());
 			const results = await Promise.allSettled([...owners.values()].map((value) => value.owner.dispose()));
 			const failures = results.filter((result) => result.status === "rejected");
-			if (failures.length)
+			owners.clear();
+			if (failures.length || hostEventFailure)
 				throw new AggregateError(
-					failures.map((result) => result.reason),
+					[...failures.map((result) => result.reason), ...(hostEventFailure ? [hostEventFailure] : [])],
 					"Inquiry owners could not close; retain writer leases",
 				);
-			owners.clear();
 		},
 	};
 }
 export const createInquiryRuntime = (async (context: runtimeRerun.InquiryRuntimeContext) =>
 	createInquiryRuntimeWithEngine(
-		context,
+		{ ...context, hostRerunCapability: context.hostRerunCapability ?? true },
 		await createInquiryWasmEngine(await readFile(new URL("./sql-wasm.wasm", import.meta.url))),
 	)) satisfies PluginNativeRuntimeFactory;
 export default createInquiryRuntime;

@@ -41,6 +41,7 @@ export const readSchema = Type.Union([
 ]);
 export const writeSchema = Type.Union([
 	assertedEventWriteSchema,
+	Type.Object({ action: Type.Literal("drainHostEvents") }, { additionalProperties: false }),
 	Type.Object(
 		{
 			action: Type.Literal("promoteRun"),

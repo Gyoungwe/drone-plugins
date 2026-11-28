@@ -1,4 +1,5 @@
 import type { PluginRuntimeRootDescription, PluginRuntimeScope } from "@gyoungwe/plugin-api/runtime";
+import type { InquiryHostEventBuffer } from "./runtime-host-events.js";
 import type { createRuntimeOwners } from "./runtime-owners.js";
 import { readPromotionPlan } from "./runtime-promotion.js";
 import type { RerunExecutorPort } from "./runtime-rerun.js";
@@ -16,6 +17,9 @@ interface RuntimeReadDeps
 	): PluginRuntimeRootDescription;
 	serialize<T>(workspaceId: string, execute: () => Promise<T>): Promise<T>;
 	rerunExecutor: RerunExecutorPort | undefined;
+	hostRerunCapability: boolean;
+	hostRerunUnavailable(): boolean;
+	hostEvents?: InquiryHostEventBuffer;
 }
 
 export function createRuntimeRead({
@@ -25,6 +29,9 @@ export function createRuntimeRead({
 	selected,
 	serialize,
 	rerunExecutor,
+	hostRerunCapability,
+	hostRerunUnavailable,
+	hostEvents,
 	lookup,
 	inspect,
 	owned,
@@ -38,6 +45,7 @@ export function createRuntimeRead({
 					state: "select-workspace",
 					roots: available,
 					authority: "plugin-asserted-or-imported",
+					...(hostEvents ? { hostEvents: hostEvents.diagnostics(undefined) } : {}),
 				};
 			return serialize(scope.workspaceId, async () => {
 				const binding = await lookup(scope, available);
@@ -56,9 +64,10 @@ export function createRuntimeRead({
 					canRestoreOriginal: binding !== null && binding.value.originalVersion !== null,
 					authority: "plugin-asserted-or-imported",
 					unavailable: [
-						...(rerunExecutor ? [] : ["rerun-executor"]),
+						...(rerunExecutor || (hostRerunCapability && !hostRerunUnavailable()) ? [] : ["rerun-executor"]),
 						...(promotionAvailable ? [] : ["workspace-promotion-file-port"]),
 					],
+					...(hostEvents ? { hostEvents: hostEvents.diagnostics(binding?.value.projectId) } : {}),
 				};
 			});
 		}
