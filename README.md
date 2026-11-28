@@ -12,11 +12,12 @@ Drone 的独立插件 workspace。它承载可独立安装、升级、禁用和�
 | `@gyoungwe/pi-research` | 研究证据、来源闭环与连接器 | 公开 0.2.0；0.4.0 候选合并连接器注册表及 `connector_list`、`connector_get` |
 | `@gyoungwe/pi-knowledge` | 原生 Pi 知识 / Vault 与同包可选 UI | 公开 0.2.1；0.3.0 同包 UI 为未发布候选，见下方迁移记录 |
 | `@gyoungwe/pi-analysis` | 原生 Pi 科学分析 adapter/readiness 门禁 | 自包含 bundle、manifest、registration test、tarball + Pi loader smoke 已通过 |
+| `@gyoungwe/pi-inquiry` | 规范 Inquiry 账本、宿主事件运行时与可选 Desktop UI | `0.1.0` 已取消 `private`，接入 4 路宿主事件桥、`inquiry.rerun` 与 `workspace-write` promotion，就绪通过 GitHub Release 分发（不发 npm）；正式 DMG GUI 验收仍为 `NOT_RUN` |
 | `@gyoungwe/research-suite` | 聚合包 | 公开 0.1.11；0.3.0 候选捆绑 `pi-core@0.3.0`、`pi-knowledge@0.3.0` 和 `pi-research@0.4.0` |
 
 当前有 8 个工作区。升级到合并后的候选包前，卸载曾单独安装的 `@gyoungwe/desktop-ui-pack`、`@gyoungwe/pi-workbench` 和 `@gyoungwe/pi-connectors`，以免重复注册工具或界面贡献。
 
-2026-10-29 原生架构候选新增 `pi-inquiry@0.1.0`：原 SQLite 领域代码保留 Git 历史，同包标准 Pi 入口、受管理 runtime 与可选 UI 共用原格式 SQL/WASM owner。根构建和完整检查已登记该包；当前来源与实际 SDK/UI 范围见 [Inquiry 候选记录](docs/inquiry-sqlite-migration-candidate.md)。它尚未发布，宿主旧 Inquiry 投影/rerun 路径及正式安装包验收仍未完成。
+`@gyoungwe/pi-inquiry@0.1.0`：原 SQLite 领域代码保留 Git 历史，同包标准 Pi 入口、受管理 `inquiry.runtime@1` 与可选 UI 共用原格式 SQL/WASM owner，已接入 4 路宿主事件桥（`inquiry.compute`、`inquiry.decision`、`inquiry.local-execution`、`inquiry.task-terminal`）、两阶段 `inquiry.rerun` 宿主能力与 `workspace-write` promotion 权限，已取消 `private` 标志并就绪通过 GitHub Release 分发（不发 npm，不加入宿主默认锁定插件）；来源与迁移背景见 [Inquiry 候选记录](docs/inquiry-sqlite-migration-candidate.md)，正式 DMG GUI 验收仍为 `NOT_RUN`。
 
 ## 开发门槛
 

@@ -1,7 +1,6 @@
 {
 	"name": "@gyoungwe/pi-inquiry",
 	"version": "0.1.0",
-	"private": true,
 	"type": "module",
 	"main": "./dist/index.mjs",
 	"types": "./src/native-entry.ts",
@@ -66,7 +65,16 @@
 		"@types/sql.js": "1.4.11",
 		"@types/react": "^19.2.0"
 	},
-	"description": "Unpublished canonical Inquiry domain migration candidate",
+	"description": "Canonical Inquiry ledger, host-event runtime, and optional Drone Desktop UI plugin",
+	"keywords": [
+		"pi-package",
+		"inquiry"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Gyoungwe/drone-plugins.git",
+		"directory": "packages/pi-inquiry"
+	},
 	"files": [
 		"src",
 		"dist",
