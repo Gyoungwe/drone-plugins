@@ -1,7 +1,16 @@
-import type { PluginRuntimeFactoryContext, PluginRuntimeRootDescription } from "@gyoungwe/plugin-api/runtime";
+import type {
+	PluginRuntimeCapabilities,
+	PluginRuntimeFactoryContext,
+	PluginRuntimeRootDescription,
+} from "@gyoungwe/plugin-api/runtime";
 import type { InquiryLedgerOwner } from "./ledger-owner.js";
 import { validateArtifactLineage } from "./lineage.js";
-import type { ArtifactProvenance, ArtifactRecord, ArtifactRerunRecord } from "./models.js";
+import type {
+	ArtifactProvenance,
+	ArtifactRecord,
+	ArtifactRerunRecord,
+	ArtifactRerunResult,
+} from "./models.js";
 import { rerunResult } from "./rerun-result.js";
 import type { WriteInput } from "./runtime-schema.js";
 import type { InquiryService } from "./service.js";
@@ -16,6 +25,7 @@ export interface RerunExecutorPort {
 
 export interface InquiryRuntimeContext extends PluginRuntimeFactoryContext {
 	readonly rerunExecutor?: RerunExecutorPort;
+	readonly hostRerunCapability?: boolean;
 }
 
 type RerunAction = Extract<WriteInput, { action: "rerunArtifact" | "collectRerun" }>;
@@ -25,10 +35,119 @@ export function isRerunAction(input: WriteInput): input is RerunAction {
 	return input.action === "rerunArtifact" || input.action === "collectRerun";
 }
 
-export function executorFor(input: WriteInput, executor: RerunExecutorPort | undefined) {
+export function executorFor(
+	input: WriteInput,
+	executor: RerunExecutorPort | undefined,
+	hostRerunCapability = false,
+	hostRerunUnavailable = false,
+) {
 	if (!isRerunAction(input)) return;
-	if (!executor) throw new Error("Native Inquiry capability is unavailable: rerun-executor");
-	return executor;
+	if (executor) return executor;
+	if (input.action === "collectRerun" || !hostRerunCapability || hostRerunUnavailable)
+		throw new Error("Native Inquiry capability is unavailable: rerun-executor");
+}
+
+function validHostResult(value: unknown, provenance: ArtifactProvenance): value is ArtifactRerunResult {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+	const result = value as Record<string, unknown>;
+	const keys = new Set(
+		"status jobId previousArtifactId previousSha256 artifactId sha256 difference error".split(" "),
+	);
+	if (Object.keys(result).some((key) => !keys.has(key))) return false;
+	if (
+		!(["submitted", "running", "reproduced", "superseded", "failed"] as const).includes(
+			result.status as ArtifactRerunResult["status"],
+		) ||
+		typeof result.jobId !== "string" ||
+		!result.jobId.trim() ||
+		result.previousArtifactId !== provenance.artifact.id ||
+		result.previousSha256 !== provenance.artifact.sha256
+	)
+		return false;
+	for (const key of ["artifactId", "sha256", "difference", "error"])
+		if (Object.hasOwn(result, key) && typeof result[key] !== "string") return false;
+	return true;
+}
+
+function notRegistered(error: unknown): boolean {
+	const message = error instanceof Error ? error.message : String(error);
+	return [
+		"Plugin capability is not registered: inquiry.rerun",
+		"Fixture capability unavailable: inquiry.rerun",
+		"Native Inquiry capability is unavailable: inquiry.rerun",
+	].includes(message);
+}
+
+async function hostPreflight(owner: InquiryLedgerOwner, artifactId: string) {
+	return owner.read(async (service) => {
+		const provenance = await service.artifactProvenance(artifactId);
+		if (!provenance) throw new Error(`Artifact not found: ${artifactId}`);
+		if (provenance.reproducibility !== "reproducible") throw new Error("Artifact is not reproducible");
+		const existing = [...(await service.storage.reruns.list())]
+			.filter((item) => item.sourceArtifactId === provenance.artifact.id)
+			.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+		return { provenance, existing };
+	});
+}
+
+export async function requestHostRerun(
+	owner: InquiryLedgerOwner,
+	artifactId: string,
+	capabilities: PluginRuntimeCapabilities,
+	signal: AbortSignal,
+	onUnavailable: () => void,
+): Promise<ArtifactRerunResult> {
+	const preflight = await hostPreflight(owner, artifactId);
+	if (preflight.existing?.status === "submitted" || preflight.existing?.status === "running")
+		return rerunResult(preflight.existing);
+	let raw: unknown;
+	try {
+		raw = await capabilities.call(
+			"inquiry.rerun",
+			{ artifactId: preflight.provenance.artifact.id, provenance: preflight.provenance },
+			signal,
+		);
+	} catch (error) {
+		if (notRegistered(error)) {
+			onUnavailable();
+			throw new Error("Native Inquiry capability is unavailable: rerun-executor");
+		}
+		throw error;
+	}
+	if (!validHostResult(raw, preflight.provenance))
+		throw new Error("Host returned an invalid ArtifactRerunResult");
+	return owner.write(
+		"rerunArtifact",
+		async (service) => {
+			const result = raw;
+			const now = new Date().toISOString();
+			const rerun: ArtifactRerunRecord = {
+				id: `rerun:${preflight.provenance.artifact.id}:${result.jobId}`,
+				schemaVersion: 2,
+				projectId: service.storage.projectId,
+				sourceArtifactId: preflight.provenance.artifact.id,
+				artifact: preflight.provenance.artifact,
+				jobId: result.jobId,
+				status: result.status,
+				previousSha256: preflight.provenance.artifact.sha256,
+				...(result.artifactId !== undefined ? { resultArtifactId: result.artifactId } : {}),
+				...(result.sha256 !== undefined ? { sha256: result.sha256 } : {}),
+				...(result.difference !== undefined ? { difference: result.difference } : {}),
+				...(result.error !== undefined ? { error: result.error } : {}),
+				submittedAt: now,
+				updatedAt: now,
+			};
+			await service.storage.reruns.put(rerun);
+			if (result.status === "superseded" && preflight.provenance.artifact.status !== "superseded")
+				await service.storage.artifacts.put({
+					...preflight.provenance.artifact,
+					status: "superseded",
+					updatedAt: now,
+				});
+			return result;
+		},
+		signal,
+	);
 }
 
 export function activeRerun(

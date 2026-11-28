@@ -10,7 +10,9 @@
 				"version": 1,
 				"operations": ["inquiry.read", "inquiry.write"]
 			}
-		}
+		},
+		"hostEvents": ["inquiry.compute", "inquiry.decision", "inquiry.local-execution", "inquiry.task-terminal"],
+		"inquiryRerun": "request"
 	},
 	"entrypoints": {
 		"desktopRuntime": "./dist/runtime.mjs",

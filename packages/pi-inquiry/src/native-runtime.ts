@@ -289,6 +289,7 @@ export async function nativeInquiryExtension(
 	};
 	const runtime = await createInquiryRuntime({
 		applicationId: randomUUID(),
+		hostRerunCapability: false,
 		signal: abort.signal,
 		resources: [],
 		capabilities,

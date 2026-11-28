@@ -54,7 +54,7 @@ const common = {
 	runProvenance: Type.Optional(provenance),
 	artifacts: Type.Optional(artifacts),
 };
-const compute = Type.Object(
+export const computeEventSchema = Type.Object(
 	{
 		...common,
 		jobId: text,
@@ -76,7 +76,7 @@ const compute = Type.Object(
 	},
 	{ additionalProperties: false },
 );
-const task = Type.Object(
+export const taskTerminalEventSchema = Type.Object(
 	{
 		...common,
 		taskId: text,
@@ -95,7 +95,7 @@ const task = Type.Object(
 	},
 	{ additionalProperties: false },
 );
-const local = Type.Object(
+export const localExecutionEventSchema = Type.Object(
 	{
 		...common,
 		toolName: text,
@@ -113,12 +113,37 @@ const local = Type.Object(
 /** Exact external event shape, deliberately ordinary asserted JSON rather than an execution proof. */
 export const assertedEventWriteSchema = Type.Union([
 	Type.Object(
-		{ action: Type.Literal("recordComputeEvent"), event: compute },
+		{ action: Type.Literal("recordComputeEvent"), event: computeEventSchema },
 		{ additionalProperties: false },
 	),
-	Type.Object({ action: Type.Literal("recordTaskTerminal"), event: task }, { additionalProperties: false }),
 	Type.Object(
-		{ action: Type.Literal("recordLocalExecution"), event: local },
+		{ action: Type.Literal("recordTaskTerminal"), event: taskTerminalEventSchema },
+		{ additionalProperties: false },
+	),
+	Type.Object(
+		{ action: Type.Literal("recordLocalExecution"), event: localExecutionEventSchema },
 		{ additionalProperties: false },
 	),
 ]);
+
+export const decisionEventSchema = Type.Object(
+	{
+		id: text,
+		kind: Type.Union(
+			[
+				"task-authorization",
+				"workflow-repair",
+				"subagent-dispatch",
+				"compute-submit",
+				"zotero-write",
+				"rebind",
+			].map((value) => Type.Literal(value)),
+		),
+		summary: text,
+		basis: Type.Optional(Type.Array(text, { maxItems: 256 })),
+		affectedArtifactIds: Type.Optional(Type.Array(text, { maxItems: 256 })),
+		at: Type.Optional(timestamp),
+		projectId: Type.Optional(text),
+	},
+	{ additionalProperties: false },
+);

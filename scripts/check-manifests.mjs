@@ -5,6 +5,7 @@ import { matchesPluginApiDependency } from "./bundled-plugin-api.mjs";
 import { isMainModule } from "./is-main-module.mjs";
 import { approvalPermissionFailures } from "./manifest-approvals.mjs";
 import { credentialFailures, networkPolicyFailures } from "./manifest-credentials.mjs";
+import { hostDeclarationFailures } from "./manifest-host-declarations.mjs";
 import { readPluginApiPin } from "./prepare-plugin-api.mjs";
 
 export const CAPABILITIES = new Set([
@@ -348,6 +349,7 @@ export function validatePackageManifest(packageJson, manifest, packageRoot, apiS
 	validateNativeChildSessions(packageName, manifest, failures);
 	validateManagedReads(packageName, manifest, failures);
 	validateNetworkReads(packageName, manifest, failures);
+	for (const message of hostDeclarationFailures(manifest)) failure(failures, packageName, message);
 	for (const message of credentialFailures(manifest)) failure(failures, packageName, message);
 	for (const message of networkPolicyFailures(manifest)) failure(failures, packageName, message);
 	const droneDependencies = Object.keys(packageJson.dependencies ?? {}).filter((name) =>
