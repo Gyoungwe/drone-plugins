@@ -39,7 +39,7 @@
 		"@earendil-works/pi-coding-agent": "1.1.0",
 		"@gyoungwe/pi-core": "0.3.0",
 		"@gyoungwe/pi-research": "0.4.1",
-		"@gyoungwe/plugin-api": "https://github.com/Gyoungwe/Drone/releases/download/plugin-api-v2.0.0/gyoungwe-plugin-api-2.0.0.tgz",
+		"@gyoungwe/plugin-api": "https://github.com/Gyoungwe/Drone/releases/download/plugin-api-v2.1.0/gyoungwe-plugin-api-2.1.0.tgz",
 		"@tailwindcss/cli": "^4.3.3",
 		"@testing-library/dom": "^10.4.2",
 		"@testing-library/react": "^16.3.3",
@@ -56,7 +56,7 @@
 		"vitest": "^3.2.0",
 		"yaml": "2.9.0"
 	},
-	"dronePluginApiSha256": "8a2240d9e305fb6e029308472742a79c6fb956914c2496c7e32e1062e1de87b4",
+	"dronePluginApiSha256": "70da7311836055fbaa9209646a0b4b546e1837d9fb76bb663cba4207eaa6524f",
 	"overrides": {
 		"@earendil-works/chord": "1.1.0",
 		"@earendil-works/pi-agent-core": "1.1.0",

@@ -58,7 +58,7 @@
 		"smoke": "node scripts/smoke.mjs"
 	},
 	"dependencies": {
-		"@gyoungwe/plugin-api": "https://github.com/Gyoungwe/Drone/releases/download/plugin-api-v2.0.0/gyoungwe-plugin-api-2.0.0.tgz",
+		"@gyoungwe/plugin-api": "https://github.com/Gyoungwe/Drone/releases/download/plugin-api-v2.1.0/gyoungwe-plugin-api-2.1.0.tgz",
 		"pdfjs-dist": "6.3.289"
 	},
 	"bundleDependencies": [
